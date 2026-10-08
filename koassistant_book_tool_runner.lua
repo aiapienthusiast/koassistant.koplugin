@@ -42,9 +42,9 @@ When answering questions about the current book, use the local book tools when y
 local SCOPE_NOTE_CURRENT = " The tools can only read pages up to the user's current reading position; do not request or claim access to later pages."
 local SCOPE_NOTE_FULL = " The tools can read the entire document."
 
-local FINAL_INSTRUCTIONS = [[
-
-Use the gathered local book tool results to answer the user's question. Do not describe the lookups, their caps, hit counts, partial matches or cut passages. If a part of the book was out of reach for this question, say so in one sentence rather than filling the gap from memory.]]
+-- The interactive final pass's own wording. It rides the user message that pass appends,
+-- never the system text: the system prompt stays the tool rounds' (B416, see requestFinal).
+local FINAL_INSTRUCTIONS = "Use the gathered local book tool results to answer the user's question; do not call more tools. Do not describe the lookups, their caps, hit counts, partial matches or cut passages. If a part of the book was out of reach for this question, say so in one sentence rather than filling the gap from memory."
 
 local FINAL_NOTE_CURRENT = " Do not use or reveal any information about events or plot developments beyond the user's current reading position."
 
@@ -305,23 +305,23 @@ local function buildToolConfig(config, mode, reading_scope)
     end
 
     -- Append the spoiler-scope clause so the instructions match the structural clamp in BookTools.
+    -- "final" keeps the tool rounds' text, word for word: the Claude 5.5 family accepts a
+    -- returned thinking block only while the system prompt it was made under is unchanged
+    -- (a 400 on accounts created from 2026-08-31, B416). Its own wording rides the message
+    -- requestFinal appends.
     local spoiler_safe = reading_scope ~= "full"
     local instructions
-    if mode == "final" then
-        instructions = FINAL_INSTRUCTIONS .. (spoiler_safe and FINAL_NOTE_CURRENT or "")
-    elseif mode == "gather" then
+    if mode == "gather" then
         instructions = GATHER_INSTRUCTIONS .. (spoiler_safe and SCOPE_NOTE_CURRENT or SCOPE_NOTE_FULL)
     else
         instructions = TOOL_INSTRUCTIONS .. (spoiler_safe and SCOPE_NOTE_CURRENT or SCOPE_NOTE_FULL)
     end
     -- Budget-aware prompt (tools_ux_plan.md §2): tell the model its total lookup budget
     -- up front so it plans (broad → narrow, deliberate done) instead of being cut off by
-    -- an invisible cap. Skipped for "final" (no further calls allowed there anyway).
-    if mode ~= "final" then
-        local budget = budgetFor(tool_config.features)
-        instructions = instructions
-            .. string.format(" You may use at most %d lookups in total, across at most %d rounds.", budget.calls, budget.turns)
-    end
+    -- an invisible cap. Kept on "final" too, for the same unchanged system text.
+    local budget = budgetFor(tool_config.features)
+    instructions = instructions
+        .. string.format(" You may use at most %d lookups in total, across at most %d rounds.", budget.calls, budget.turns)
     tool_config.system = tool_config.system or {}
     tool_config.system.text = (tool_config.system.text or "") .. instructions
     return tool_config
@@ -1280,12 +1280,15 @@ function BookToolRunner.run(params)
         end
     end
 
+    -- The interactive loop used up its lookups: one more request, calls forbidden. It only
+    -- appends (the system text stays the rounds', see buildToolConfig), so the thinking
+    -- blocks the history replays stay valid.
     local function requestFinal()
         local final_config = buildToolConfig(config, "final", reading_scope)
         final_config.features.loading_message = _("Book tools\nPreparing answer...")
         table.insert(messages, {
             role = "user",
-            content = "Answer the user's question using the gathered tool results. Do not call more tools.",
+            content = FINAL_INSTRUCTIONS .. (reading_scope ~= "full" and FINAL_NOTE_CURRENT or ""),
         })
         return query_fn(messages, final_config, function(success, answer, err, reasoning, web_search_used, usage)
             token_usage = mergeUsage(token_usage, usage)

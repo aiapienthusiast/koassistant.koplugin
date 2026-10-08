@@ -1762,4 +1762,72 @@ TestRunner:test("liveSpoilerLine: substitutes the live position when stats allow
     TestRunner:assertEqual(line:find("{reading_progress}", 1, true), nil, "placeholder resolved")
 end)
 
+-- B416: on the Claude 5.5 family a replayed thinking block is valid only while the system
+-- prompt, the tools and every earlier message are unchanged (a 400 on accounts created from
+-- 2026-08-31). The interactive final pass used to swap the system instructions.
+TestRunner:test("interactive: the final pass only appends (system text and history unchanged)", function()
+    -- Deterministic dump of a message, so an edit in place is caught, not just a swap
+    local function dump(v)
+        if type(v) ~= "table" then return tostring(v) end
+        local keys = {}
+        for k in pairs(v) do keys[#keys + 1] = k end
+        table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+        local parts = {}
+        for _i, k in ipairs(keys) do parts[#parts + 1] = tostring(k) .. "=" .. dump(v[k]) end
+        return "{" .. table.concat(parts, ",") .. "}"
+    end
+    local seen = {}
+    local calls = 0
+    local function query_fn(messages, config, callback)
+        calls = calls + 1
+        local snapshot = {}
+        for i, m in ipairs(messages) do snapshot[i] = dump(m) end
+        seen[calls] = { messages = messages, snapshot = snapshot, config = config }
+        if calls <= 2 then  -- quick effort = 2 rounds, then the final pass
+            local id = "toolu_" .. calls
+            callback(true, {
+                _tool_calls = true,
+                calls = { { id = id, name = "search_book", args = { query = "Daisy" } } },
+                raw_assistant_turn = { role = "assistant", content = {
+                    { type = "thinking", thinking = "", signature = "sig" .. calls },
+                    { type = "tool_use", id = id, name = "search_book", input = { query = "Daisy" } } } },
+            })
+        else
+            callback(true, "Daisy is mentioned in a letter.")
+        end
+    end
+    local ok
+    BookToolRunner.run({
+        query_fn = query_fn,
+        messages = { { role = "user", content = "Where is Daisy?" } },
+        config = { provider = "anthropic", features = { is_book_context = true, tool_mode = "interactive",
+            tool_lookup_effort = "quick", spoiler_free_chat = true, tool_whole_text = false } },
+        ui = makeUi(),
+        on_complete = function(success) ok = success end,
+    })
+    TestRunner:assertEqual(calls, 3, "two tool rounds, then the final pass")
+    TestRunner:assertTrue(ok, "answered")
+    local round, final = seen[2], seen[3]
+    TestRunner:assertEqual(final.config.system.text, round.config.system.text, "same system text")
+    TestRunner:assertEqual(final.config.system.text, seen[1].config.system.text, "same as round one")
+    TestRunner:assertEqual(final.config.tools.mode, "NONE", "no more calls")
+    TestRunner:assertEqual(#final.config.tools.specs, #round.config.tools.specs, "same tools declared")
+    for i, before in ipairs(round.snapshot) do
+        TestRunner:assertEqual(dump(final.messages[i]), before, "message " .. i .. " unchanged")
+    end
+    local thinking = 0
+    for _i, m in ipairs(final.messages) do
+        if m.role == "assistant" and type(m.content) == "table" and m.content[1].type == "thinking" then
+            thinking = thinking + 1
+        end
+    end
+    TestRunner:assertEqual(thinking, 2, "both thinking blocks replayed")
+    local last = final.messages[#final.messages]
+    TestRunner:assertEqual(last.role, "user", "the final wording is the last message")
+    TestRunner:assertTrue(last.content:find("do not call more tools", 1, true) ~= nil, "no more calls, in words")
+    TestRunner:assertTrue(last.content:find("Do not describe the lookups", 1, true) ~= nil, "final instructions")
+    TestRunner:assertTrue(last.content:find("beyond the user's current reading position", 1, true) ~= nil,
+        "spoiler rule under the current-position scope")
+end)
+
 return TestRunner:summary()
