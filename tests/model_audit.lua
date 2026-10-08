@@ -237,6 +237,13 @@ ModelAudit.DELIBERATE_SKIPS = {
 -- curated or abandoned.
 ModelAudit.WATCH = {}
 
+-- Providers whose no_sampling_params rows follow a vendor's documented deprecation
+-- while the models still accept a temperature: the strip is deliberate, so the
+-- recheck does not grade it "possibly stale" on every model.
+ModelAudit.SAMPLING_DEPRECATED = {
+    gemini = "Google deprecated sampling params for every Gemini 3 model (changelog 2026-07-21)",
+}
+
 -- Reviewed catalogs, for lists that carry no release dates (every id shares
 -- one `created` value: Perplexity 0, NVIDIA 1993, A2Agent one constant). Such a
 -- list cannot split new from old, so everything uncurated would print as NEW
@@ -1029,8 +1036,12 @@ local DISCOVERY = {
     },
     openai   = { headers = bearerHeaders, parse = parseOpenAIShapedList },
     deepseek = { headers = bearerHeaders, parse = parseOpenAIShapedList },
+    -- Mistral's list leaves out what the key's plan cannot run (2026-10-08: no Large
+    -- model listed, while mistral-large-latest, -2512 and Large 4 all answered 403
+    -- "not available in your subscription tier", not "invalid model").
     mistral  = {
         headers = bearerHeaders,
+        incomplete_list = true,
         parse = function(data)
             local models, err = parseOpenAIShapedList(data)
             if not models then return nil, err end
@@ -1459,9 +1470,13 @@ end
 -- (bit a gemini-3.5-flash battery: free-tier per-minute quota mid-ladder).
 local function verdict(code)
     if code == 200 then return true end
-    if code == 429 then return nil end
+    -- A rate limit, a server error the retries could not outlast, or no answer at
+    -- all says nothing about the request: only a 4xx is a refusal (NVIDIA's 503
+    -- "Service temporarily overloaded" read as a refused temperature, 2026-10-08).
+    if code == 429 or code == nil or (tonumber(code) or 0) >= 500 then return nil end
     return false
 end
+ModelAudit.verdict = verdict
 
 local function recordProbe(facts, name, ok, detail)
     table.insert(facts.probes, { name = name, ok = ok, detail = detail })
@@ -1469,7 +1484,7 @@ local function recordProbe(facts, name, ok, detail)
     if ok then
         mark = C.green .. "OK" .. C.off
     elseif ok == nil then
-        mark = C.yellow .. "INCONCLUSIVE (quota/rate limit - retry)" .. C.off
+        mark = C.yellow .. "INCONCLUSIVE (rate limit or server error - retry)" .. C.off
     else
         mark = C.red .. "REJECTED" .. C.off
     end
@@ -2285,6 +2300,7 @@ function ModelAudit.currentResolution(provider, model)
         profile = ModelConstraints.getReasoningProfile(provider, model),
         caps = caps,
         temp_after_apply = params and params.temperature,
+        sampling_deprecated = caps.no_sampling_params and ModelAudit.SAMPLING_DEPRECATED[provider] or nil,
         clamped = ModelConstraints.clampMaxTokens(provider, model, ABSURD_MAX_TOKENS),
         resolved_default = ModelConstraints.resolveMaxTokens(provider, model, 8192),
         minimal_params = minimal_params,
@@ -3057,14 +3073,22 @@ function ModelAudit.recheckCompare(obs, current)
         end
         -- Key-tier limitations (free-tier quota on paid-only models, staged
         -- rollouts, a lapsed plan, a new account locked out of an old family,
-        -- spent credits) are about OUR key, not the curation - warn, don't drift.
-        local err = tostring(obs.err or "?")
+        -- spent credits, a refused key) are about OUR key, not the curation -
+        -- warn, don't drift. Redacted: SambaNova's refusal echoes a masked key.
+        local err = ModelAudit.redact(obs.err or "?", 400)
         local lower = err:lower()
         for _i, frag in ipairs({ "quota", "permission", "billing", "subscription",
-                                  "new users", "credit" }) do
+                                  "new users", "credit", "api key" }) do
             if lower:find(frag, 1, true) then
                 return "warn", { "not probeable with this key (quota/permission): " .. err:sub(1, 100) }
             end
+        end
+        -- Busy, a server error the retries could not outlast, or no answer: says
+        -- nothing about whether the model is served (Z.AI's glm-4.7-flash 429
+        -- "temporarily overloaded" read as not served, 2026-10-08; it answered next).
+        if (obs.code ~= nil and ModelAudit.verdict(obs.code) == nil) or lower:find("^network:") then
+            return "warn", { "inconclusive (busy, server error or no answer: " .. tostring(obs.code) .. "): "
+                .. err:sub(1, 100) }
         end
         return "drift", { "not served: " .. err:sub(1, 120) }
     end
@@ -3117,12 +3141,13 @@ function ModelAudit.recheckCompare(obs, current)
         end
         -- rejected while constraints strip/force it = consistent
     elseif obs.temp_ok == true then
-        if not we_send_temp then
+        -- (a strip that follows a documented deprecation is deliberate, not stale)
+        if not we_send_temp and not current.sampling_deprecated then
             warn("temperature accepted but constraints modify/strip it (possibly stale)")
         end
     elseif not obs.temp_skipped then
         -- (skipped = nothing to compare: a Perplexity preset never takes one)
-        warn("temperature probe inconclusive (rate limit)")
+        warn("temperature probe inconclusive (rate limit or server error)")
     end
     -- Output-ceiling comparison (--ceilings leg). Only the harmful directions:
     -- a clamp BELOW the stated ceiling is often a deliberate known-good floor
@@ -3200,7 +3225,7 @@ local function recheckObserve(provider, model, api_key, opts)
         local headers = { ["x-api-key"] = api_key, ["anthropic-version"] = "2023-06-01" }
         local code, decoded, raw = httpPostJson(url, headers, { model = model, max_tokens = 1024,
             messages = { { role = "user", content = REASONING_PROBE_PROMPT } } })
-        if code ~= 200 then obs.err = ModelAudit.errText(decoded, raw); return obs end
+        if code ~= 200 then obs.err = ModelAudit.errText(decoded, raw); obs.code = code; return obs end
         obs.served = true
         obs.default_reasoning = anthropicThinks(decoded)
         if not obs.default_reasoning and profileSaysOn(provider, model) then
@@ -3229,7 +3254,7 @@ local function recheckObserve(provider, model, api_key, opts)
         local code, decoded, raw = httpPostJson(url, nil, {
             contents = { { parts = { { text = REASONING_PROBE_PROMPT } } } },
             generationConfig = { maxOutputTokens = 1024 } })
-        if code ~= 200 then obs.err = ModelAudit.errText(decoded, raw); return obs end
+        if code ~= 200 then obs.err = ModelAudit.errText(decoded, raw); obs.code = code; return obs end
         obs.served = true
         local um = type(decoded.usageMetadata) == "table" and decoded.usageMetadata
         local thoughts = um and type(um.thoughtsTokenCount) == "number" and um.thoughtsTokenCount or 0
@@ -3260,7 +3285,7 @@ local function recheckObserve(provider, model, api_key, opts)
         -- a direct model gets the temperature/ceiling legs, on the model alone.
         local code, decoded, raw = perplexitySend(perplexityBuilt(model, api_key,
             { prompt = SEARCH_PROBE_PROMPT, api_params = { max_tokens = 512 } }))
-        if code ~= 200 then obs.err = ModelAudit.errText(decoded, raw); return obs end
+        if code ~= 200 then obs.err = ModelAudit.errText(decoded, raw); obs.code = code; return obs end
         obs.served = true
         if not model:find("/", 1, true) then
             obs.temp_skipped = true
@@ -3299,7 +3324,7 @@ local function recheckObserve(provider, model, api_key, opts)
             token_key = "max_completion_tokens"
             code, decoded, raw = req(nil, 1024, REASONING_PROBE_PROMPT)
         end
-        if code ~= 200 then obs.err = ModelAudit.errText(decoded, raw); return obs end
+        if code ~= 200 then obs.err = ModelAudit.errText(decoded, raw); obs.code = code; return obs end
         obs.served = true
         -- Same weak-signal rule as the full battery: a handful of reasoning
         -- tokens on a math prompt is bookkeeping noise, not a reasoning default.

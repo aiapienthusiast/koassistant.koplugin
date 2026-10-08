@@ -288,7 +288,7 @@ ModelOverrides._setUserForTests(false)
 
 -- Clearing re-exposes curated
 ModelOverrides.setGuiTiers(nil)
-TestRunner.assert(ModelLists.getModelForTier("anthropic", "ultrafast", false) == "claude-haiku-4-5-20251001",
+TestRunner.assert(ModelLists.getModelForTier("anthropic", "ultrafast", false) == "claude-haiku-5-5",
     "setGuiTiers(nil) clears the GUI layer")
 
 -- Custom provider with only a GUI placement: tier hints + fastest walk work
@@ -302,7 +302,7 @@ TestRunner.assert(ModelLists.resolveTierModel("custom_lm_studio", "fastest") == 
 ModelOverrides.setGuiTiers({ anthropic = { ultrafast = "claude-haiku-gui" } })
 TestRunner.assert(ModelLists.getTierForModel("anthropic", "claude-haiku-gui") == "ultrafast",
     "getTierForModel labels a GUI-placed model with its tier")
-TestRunner.assert(ModelLists.getTierForModel("anthropic", "claude-haiku-4-5-20251001") == "fast",
+TestRunner.assert(ModelLists.getTierForModel("anthropic", "claude-haiku-5-5") == "fast",
     "model in two tiers labels as the higher one (TIER_ORDER walk)")
 ModelOverrides.setGuiTiers(nil)
 
@@ -325,7 +325,7 @@ TestRunner.assert(p == "anthropic",
 -- Walk order: each STEP consults pin then ladder — an ultrafast LADDER hit
 -- beats a fast PIN in the fastest walk (ultrafast step resolves first)
 p, m = ModelLists.resolveTierTarget("anthropic", "fastest")
-TestRunner.assert(p == "anthropic" and m == "claude-haiku-4-5-20251001",
+TestRunner.assert(p == "anthropic" and m == "claude-haiku-5-5",
     "fastest: anthropic's own ultrafast beats a later-step fast pin")
 ModelOverrides.setGlobalTierPins({ ultrafast = { provider = "groq", model = "llama-3.1-8b-instant" } })
 p, m = ModelLists.resolveTierTarget("anthropic", "fastest")
@@ -335,7 +335,7 @@ TestRunner.assert(p == "groq",
 -- Key checker gates pins (revoked key → pin invisible, ladder applies)
 ModelOverrides.setKeyChecker(function(pid) return pid ~= "groq" end)
 p, m = ModelLists.resolveTierTarget("anthropic", "fastest")
-TestRunner.assert(p == "anthropic" and m == "claude-haiku-4-5-20251001",
+TestRunner.assert(p == "anthropic" and m == "claude-haiku-5-5",
     "unusable pin is invisible — ladder fallback")
 ModelOverrides.setKeyChecker(nil)
 
@@ -364,9 +364,9 @@ TestRunner.assert(ModelLists.resolveTierTarget("anthropic", "none") == nil,
 
 -- The ladder-only resolvers never see pins
 ModelOverrides.setGlobalTierPins({ ultrafast = { provider = "groq", model = "llama-3.1-8b-instant" } })
-TestRunner.assert(ModelLists.resolveTierModel("anthropic", "fastest") == "claude-haiku-4-5-20251001",
+TestRunner.assert(ModelLists.resolveTierModel("anthropic", "fastest") == "claude-haiku-5-5",
     "resolveTierModel stays ladder-only (per-provider GUI default rows depend on it)")
-TestRunner.assert(ModelLists.getModelForTier("anthropic", "ultrafast", false) == "claude-haiku-4-5-20251001",
+TestRunner.assert(ModelLists.getModelForTier("anthropic", "ultrafast", false) == "claude-haiku-5-5",
     "getModelForTier stays ladder-only")
 ModelOverrides.setGlobalTierPins(nil)
 

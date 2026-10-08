@@ -399,6 +399,34 @@ TestRunner:check("temp rejected while constraints force 1.0 -> consistent ok (gp
 TestRunner:check("temp accepted while constraints strip it -> warn (over-strict, not harmful)",
     rlevel({ served = true, default_reasoning = false, temp_ok = true },
         { profile = { axis = "none" }, temp_after_apply = nil }) == "warn")
+TestRunner:check("temp accepted, stripped after a vendor deprecation -> ok (Gemini 3 class)",
+    rlevel({ served = true, default_reasoning = true, temp_ok = true },
+        { profile = { axis = "effort", default_state = "on" }, temp_after_apply = 0.7,
+          caps = { no_sampling_params = true }, sampling_deprecated = "deprecated" }) == "ok")
+TestRunner:check("the Gemini 3 strip is marked deliberate in the resolution",
+    ModelAudit.currentResolution("gemini", "gemini-3.8-flash").sampling_deprecated ~= nil
+    and ModelAudit.currentResolution("gemini", "gemini-2.5-flash").sampling_deprecated == nil)
+TestRunner:check("a refused key is the key's limitation, never drift, and its echo is redacted",
+    (function()
+        local level, reasons = ModelAudit.recheckCompare(
+            { served = nil, err = "Incorrect API key provided: ab12cd*****9z8y." }, {})
+        return level == "warn" and not reasons[1]:find("ab12cd", 1, true)
+    end)())
+TestRunner:check("a busy or failing server is inconclusive, never 'not served'",
+    (function()
+        local busy = ModelAudit.recheckCompare({ served = nil, code = 429,
+            err = "The service may be temporarily overloaded, please try again later" }, {})
+        local down = ModelAudit.recheckCompare({ served = nil, code = 503,
+            err = "Service temporarily overloaded" }, {})
+        local gone = ModelAudit.recheckCompare({ served = nil, code = 404,
+            err = "model_not_found" }, {})
+        local silent = ModelAudit.recheckCompare({ served = nil, err = "network: timeout" }, {})
+        return busy == "warn" and down == "warn" and gone == "drift" and silent == "warn"
+    end)())
+TestRunner:check("only a 4xx is a refusal: 429, 5xx and no answer are inconclusive",
+    ModelAudit.verdict(200) == true and ModelAudit.verdict(400) == false
+    and ModelAudit.verdict(404) == false and ModelAudit.verdict(429) == nil
+    and ModelAudit.verdict(503) == nil and ModelAudit.verdict(nil) == nil)
 TestRunner:check("temp inconclusive (quota) -> warn, never drift",
     rlevel({ served = true, default_reasoning = false, temp_ok = nil },
         { profile = { axis = "none" }, temp_after_apply = 0.7 }) == "warn")

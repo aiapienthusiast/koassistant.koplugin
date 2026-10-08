@@ -145,6 +145,22 @@ function GeminiHandler:buildRequestBody(message_history, config)
     request_body.generationConfig, constrained = ModelConstraints.apply("gemini", model, request_body.generationConfig)
     for param, adj in pairs(constrained) do adjustments[param] = adj end
 
+    -- Google deprecated temperature/topP/topK for every Gemini 3 model (changelog
+    -- 2026-07-21: "remove these parameters from all requests"); still accepted
+    -- (recheck 2026-10-08), so this is ahead of the refusal, as on Anthropic.
+    if ModelConstraints.supportsCapability("gemini", model, "no_sampling_params") then
+        if request_body.generationConfig.temperature ~= nil then
+            adjustments.temperature = {
+                from = request_body.generationConfig.temperature,
+                to = nil,
+                reason = "Gemini 3 models no longer take sampling params",
+            }
+            request_body.generationConfig.temperature = nil
+        end
+        request_body.generationConfig.topP = nil
+        request_body.generationConfig.topK = nil
+    end
+
     if api_params.thinking_level and
        ModelConstraints.supportsCapability("gemini", model, "thinking") then
         -- Gemini 3: thinkingLevel

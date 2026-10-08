@@ -23,7 +23,8 @@ local ModelLists = {
         "claude-fable-5",               -- previous frontier; adaptive thinking ALWAYS-ON (no disable), rejects sampling, premium price
         "claude-sonnet-4-6",            -- previous flagship (kept available), 1M context
         "claude-opus-4-8",              -- deep reasoning / agentic (adaptive thinking)
-        "claude-haiku-4-5-20251001",    -- fast
+        "claude-haiku-5-5",             -- fast (2026-10-07, $0.10/$0.50 up to 100K prompt tokens, 5x above); adaptive thinking on, disable ok
+                                        -- (replaces claude-haiku-4-5-20251001, still served: saved picks keep working)
     },
 
     openai = {
@@ -200,7 +201,7 @@ local ModelLists = {
         "anthropic/claude-fable-5",     -- previous frontier
         "anthropic/claude-sonnet-4.6",
         "anthropic/claude-opus-4.8",
-        "anthropic/claude-haiku-4.5",
+        "anthropic/claude-haiku-5.5",   -- fast (2026-10-07; battery 2026-10-08: reasons by default, turns off here)
 
         -- OpenAI (gpt-6: astra > sol > luna, reason by default; battery 2026-09-28)
         "openai/gpt-6.1-sol",           -- cannot turn reasoning off (battery 2026-09-30)
@@ -283,7 +284,7 @@ local ModelLists = {
         "anthropic/claude-opus-5",      -- previous flagship (no dotted version, so the hyphenation rule is moot)
         "anthropic/claude-fable-5",     -- previous frontier (verified in catalog 2026-07-28)
         "anthropic/claude-sonnet-4-6",
-        "anthropic/claude-haiku-4-5",
+        "anthropic/claude-haiku-5-5",   -- in the catalog 2026-10-08 (hyphenated, like Sonnet/Opus 5.5)
 
         -- Google
         "google/gemini-2.5-flash",
@@ -805,7 +806,7 @@ local ModelLists = {
 
         -- Optimized for speed and lower cost
         fast = {
-            anthropic = "claude-haiku-4-5-20251001",
+            anthropic = "claude-haiku-5-5",          -- thinks by default; the fast-tier actions and Quick send off (disable accepted)
             openai = "gpt-5.6-luna",
             openai_codex = "gpt-5.6-luna",
             deepseek = "deepseek-flash",
@@ -827,7 +828,7 @@ local ModelLists = {
 
         -- Smallest/cheapest models for basic tasks
         ultrafast = {
-            anthropic = "claude-haiku-4-5-20251001",
+            anthropic = "claude-haiku-5-5",
             openai = "gpt-5.4-nano",
             openai_codex = "gpt-5.4-mini", -- smallest slug served on ALL plans (nano 400s on free accounts; still pickable manually)
             deepseek = "deepseek-flash",

@@ -66,6 +66,7 @@ ModelConstraints.capabilities = {
             "claude-sonnet-5-5",      -- Sonnet 5.5 (adaptive ON at API default, off = "between_tools")
             "claude-opus-5-5",        -- Opus 5.5 (adaptive ON at API default, disable REJECTED)
             "claude-fable-5-1",       -- Fable 5.1 (off at API default, disable REJECTED: off = send nothing)
+            "claude-haiku-5-5",       -- Haiku 5.5 (adaptive ON at API default, disable accepted)
             "claude-opus-5",          -- Opus 5 (adaptive ON at API default, disable accepted)
             "claude-fable-5",         -- Fable 5 (frontier; adaptive ALWAYS-ON, no disable)
             "claude-sonnet-5",        -- 5 Sonnet
@@ -82,6 +83,7 @@ ModelConstraints.capabilities = {
             "claude-sonnet-5-5",
             "claude-opus-5-5",
             "claude-fable-5-1",
+            "claude-haiku-5-5",
             "claude-opus-5",
             "claude-fable-5",
             "claude-sonnet-5",
@@ -177,6 +179,10 @@ ModelConstraints.capabilities = {
         -- budget 0 rejected "only works in thinking mode") but its curated axis is
         -- thinkingLevel like all 3.x — deliberately NOT listed here.
         thinking_budget = { "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite" },
+        -- Sampling params deprecated for every Gemini 3 model (changelog 2026-07-21:
+        -- "remove these parameters from all requests"); gemini.lua strips them. Every
+        -- curated 3.x id still accepted a temperature on 2026-10-08.
+        no_sampling_params = { "gemini-3" },
         -- Google Search grounding ("gemini-3" = family fallback)
         google_search = {
             "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-3.1-flash-lite",
@@ -596,6 +602,7 @@ ModelConstraints._max_output_tokens = {
         ["claude-sonnet-5"] = 128000,    -- 128K max output
         ["claude-fable-5"] = 128000,     -- 128K (OpenRouter catalog 2026-08-06; matches 5-family)
         ["claude-opus-4-8"] = 128000,    -- 128K max output
+        ["claude-haiku-5-5"] = 128000,   -- oversized-request error text (battery 2026-10-08); docs agree
         ["claude-sonnet-4-6"] = 64000,
         ["claude-haiku-4-5"] = 64000,
     },
@@ -645,6 +652,7 @@ ModelConstraints._max_output_tokens = {
         ["anthropic/claude-fable-5"] = 128000,
         ["anthropic/claude-sonnet-4.6"] = 128000,
         ["anthropic/claude-opus-4.8"] = 128000,
+        ["anthropic/claude-haiku-5.5"] = 128000,   -- largest endpoint cap (battery 2026-10-08)
         ["anthropic/claude-haiku-4.5"] = 64000,
         ["openai/gpt-6"] = 128000,       -- prefix: sol/luna/astra, 6.1-sol (catalog 2026-09-30)
         ["openai/gpt-5"] = 128000,       -- prefix: 5.6-sol/terra/luna, 5.5, 5.4, 5.4-mini
@@ -774,6 +782,7 @@ ModelConstraints._context_windows = {
         ["claude-fable-5"]    = 1000000, -- [docs]
         ["claude-sonnet-4-6"] = 1000000, -- [docs]; [OR] agrees
         ["claude-opus-4-8"]   = 1000000, -- [docs]; [OR] agrees
+        ["claude-haiku-5-5"]  = 1000000, -- [docs] Haiku 5.5 overview (2026-10-07); [OR] agrees
         ["claude-haiku-4-5"]  = 200000,  -- [docs] models overview; [OR] agrees
         -- Conservative family floor for uncurated claude-* ids: a future 1M
         -- model loses a little scope headroom; a 200K model wrongly called 1M
@@ -850,6 +859,7 @@ ModelConstraints._context_windows = {
         ["anthropic/claude-fable-5"]    = 1000000,
         ["anthropic/claude-sonnet-4.6"] = 1000000,
         ["anthropic/claude-opus-4.8"]   = 1000000,
+        ["anthropic/claude-haiku-5.5"]  = 1000000,
         ["anthropic/claude-haiku-4.5"]  = 200000,
         ["openai/gpt-5.6"]              = 922000,
         ["openai/gpt-5.5"]              = 922000,
@@ -1100,6 +1110,15 @@ ModelConstraints.reasoning_profiles = {
           options = { "low", "medium", "high" }, default_option = "high",
           stance_map = { minimal = { state = "off" }, maximum = { state = "on", option = "high" } },
           needs_temp_1 = true },
+        -- Haiku 5.5 (2026-10-07, battery 2026-10-08): the Sonnet 5 / Opus 5 shape. Adaptive
+        -- thinking ON at the API default (thinking block with nothing sent; default effort
+        -- medium per the docs), disable accepted, effort low..max, budget mode rejected,
+        -- rejects sampling, 128K out, forced tool calls accepted (no thinking block then).
+        { match = "claude-haiku-5-5", axis = "adaptive_effort", default_state = "on",
+          can_disable = true, can_enable = true,
+          options = { "low", "medium", "high", "xhigh", "max" }, default_option = "high",
+          stance_map = { minimal = { state = "off" }, maximum = { state = "on", option = "max" } },
+          needs_no_sampling = true },
         -- Haiku 4.5: extended thinking (manual budget) only, requires temp=1.0 when on.
         { match = "claude-haiku-4-5", axis = "budget", default_state = "off",
           can_disable = true, can_enable = true,
@@ -1336,6 +1355,12 @@ ModelConstraints.reasoning_profiles = {
         { match = "anthropic/claude-fable-5", axis = "effort", default_state = "on", can_disable = false, can_enable = true,
           options = { "low", "medium", "high", "xhigh", "max" }, default_option = "high",
           stance_map = { minimal = { option = "low" }, maximum = { option = "max" } } },
+        -- Haiku 5.5 (battery 2026-10-08): reasons by default as on its own API, and
+        -- unlike Sonnet 5.5 here it turns off (none and enabled=false accepted); every
+        -- effort accepted. The catch-all would read it as off by default and cap at high.
+        { match = "anthropic/claude-haiku-5.5", axis = "effort", default_state = "on", can_disable = true, can_enable = true,
+          options = { "low", "medium", "high", "xhigh", "max" }, default_option = "high",
+          stance_map = { minimal = { state = "off" }, maximum = { state = "on", option = "max" } } },
         { match = "openai/gpt-6-astra", axis = "effort", default_state = "on", can_disable = false, can_enable = true,
           options = { "low", "medium", "high", "xhigh" }, default_option = "medium",
           stance_map = { minimal = { option = "low" }, maximum = { option = "xhigh" } } },
@@ -1425,6 +1450,10 @@ ModelConstraints.reasoning_profiles = {
         { match = "anthropic/claude-fable-5", axis = "effort", default_state = "on", can_disable = false, can_enable = true,
           options = { "low", "medium", "high", "xhigh", "max" }, default_option = "high",
           stance_map = { minimal = { option = "low" }, maximum = { option = "max" } } },
+        -- Haiku 5.5 mirrors the OpenRouter row (enabled=false accepted there; unprobed here).
+        { match = "anthropic/claude-haiku-5-5", axis = "effort", default_state = "on", can_disable = true, can_enable = true,
+          options = { "low", "medium", "high", "xhigh", "max" }, default_option = "high",
+          stance_map = { minimal = { state = "off" }, maximum = { state = "on", option = "max" } } },
         -- Same sonar split as openrouter (requesty uses "perplexity/" ids too).
         { match = "perplexity/sonar-reasoning", axis = "effort", default_state = "on", can_disable = false, can_enable = true,
           options = { "low", "medium", "high" }, default_option = "high",
