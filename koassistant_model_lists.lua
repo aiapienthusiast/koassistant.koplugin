@@ -14,50 +14,48 @@ local ModelLists = {
     ---------------------------------------------------------------------------
 
     anthropic = {
-        -- Claude 5 / 4.x (current generation)
-        "claude-sonnet-5-5",            -- default (2026-09-28, $2/$10, balanced); adaptive thinking on, off = "between_tools", no forced tool calls
-        "claude-opus-5-5",              -- deep reasoning flagship (2026-09-22, $4/$20); thinking on, NO disable, no forced tool calls
-        "claude-fable-5-1",             -- most capable / frontier (2026-09-01, $10/$50); thinks only when asked, no forced tool calls
+        -- Order (maintainer 2026-10-11): the default first, then the other tier
+        -- picks (flagship, frontier, fast), then one previous version per line.
+        "claude-sonnet-5-5",            -- default + standard (2026-09-28, $2/$10, balanced); adaptive thinking on, off = "between_tools", no forced tool calls
+        "claude-opus-5-5",              -- flagship: deep reasoning (2026-09-22, $4/$20); thinking on, NO disable, no forced tool calls
+        "claude-fable-5-1",             -- frontier: most capable (2026-09-01, $10/$50); thinks only when asked, no forced tool calls
+        "claude-haiku-5-5",             -- fast + ultrafast (2026-10-07, $0.10/$0.50 up to 100K prompt tokens, 5x above); adaptive thinking on, disable ok
+                                        -- (replaces claude-haiku-4-5-20251001, still served: saved picks keep working)
+        -- Previous generation, one per line. Still served, so an explicit pick of an id
+        -- that left the picker is kept (resolveModelRefresh); a default baked long ago
+        -- moves to today's default. Left 2026-10-11: claude-sonnet-4-6, claude-opus-4-8.
         "claude-sonnet-5",              -- previous default; adaptive thinking on, disable ok, rejects sampling params
         "claude-opus-5",                -- previous flagship (2026-07-24, $5/$25); adaptive thinking on, disable ok, rejects sampling
         "claude-fable-5",               -- previous frontier; adaptive thinking ALWAYS-ON (no disable), rejects sampling, premium price
-        "claude-sonnet-4-6",            -- previous flagship (kept available), 1M context
-        "claude-opus-4-8",              -- deep reasoning / agentic (adaptive thinking)
-        "claude-haiku-5-5",             -- fast (2026-10-07, $0.10/$0.50 up to 100K prompt tokens, 5x above); adaptive thinking on, disable ok
-                                        -- (replaces claude-haiku-4-5-20251001, still served: saved picks keep working)
     },
 
     openai = {
-        -- GPT-5.6 (current generation), tiered by price/perf: sol (flagship) >
-        -- terra (balanced) > luna (cost). Default = terra (balanced), not the priciest.
-        -- All: reasoning opt-in (OFF by default; none..xhigh, NO max), 128K output,
-        -- tools + web search (Responses API), ~1M context, temperature=1.0 only.
-        "gpt-5.6-terra",                -- balanced (default)
-        -- GPT-6 (2026-09): astra (frontier, $10/$50) > sol ($2/$10) > luna ($0.10/$0.50).
-        -- Unlike 5.6 they REASON BY DEFAULT (medium; sol and luna turn off with "none",
-        -- astra cannot), temperature=1.0 only, 128K output, tools + web search on the
-        -- Responses API (probed 2026-09-28).
-        -- GPT-6.1 Sol (2026-09-29, $2/$10 like 6-sol): the same shape except that it
-        -- cannot turn reasoning off (low..xhigh; battery 2026-09-30).
-        "gpt-6.1-sol",                  -- flagship (most capable of the everyday models)
-        "gpt-6-sol",                    -- previous sol; turns reasoning off
-        "gpt-6-luna",                   -- cost-optimized
-        "gpt-6-astra",                  -- frontier, premium price
-        "gpt-5.6-sol",
-        "gpt-5.6-luna",                 -- cost-optimized, reasoning opt-in
-        -- GPT-5.5 (previous flagship; reasons by default at medium, cannot disable)
-        "gpt-5.5",
-        -- GPT-5.4 (affordable tier)
-        "gpt-5.4",
-        "gpt-5.4-mini",                 -- standard
-        "gpt-5.4-nano",                 -- fast/ultrafast
-        -- NOTE: *-pro variants are v1/responses only (not chat-completions) — excluded.
+        -- Order (maintainer 2026-10-11): the default first, then the other tier
+        -- picks (flagship, frontier, fast + ultrafast), then one previous version
+        -- per line. GPT-5.6 (sol > terra > luna): reasoning opt-in (OFF by default;
+        -- none..xhigh, NO max), 128K output, ~1M context, temperature=1.0 only, tools
+        -- + web search (Responses API). GPT-6 (astra > sol > luna, 2026-09; 6.1 Sol
+        -- 2026-09-29): REASON BY DEFAULT (medium; sol and luna turn off with "none",
+        -- astra and 6.1 cannot), otherwise the same shape (probed 2026-09-28 and
+        -- 2026-09-30). No GPT-6 terra exists: 5.6 terra stays the balanced default.
+        -- Prices per M tokens from OpenRouter's catalog, 2026-10-11.
+        "gpt-5.6-terra",                -- default + standard: balanced ($2/$12)
+        "gpt-6.1-sol",                  -- flagship ($2/$10, like 6-sol); cannot turn reasoning off
+        "gpt-6-astra",                  -- frontier ($10/$50); cannot turn reasoning off
+        "gpt-6-luna",                   -- fast + ultrafast: the cheapest OpenAI model ($0.10/$0.50; half of 5.6-luna, below 5.4-nano); off = "none"
+        -- Previous generation, one per line. Still served on the API, so an explicit
+        -- pick of an id that left the picker is kept (resolveModelRefresh). Left
+        -- 2026-10-11: gpt-5.6-sol, gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.4-nano.
+        "gpt-6-sol",                    -- previous sol ($2/$10); turns reasoning off
+        "gpt-5.6-luna",                 -- previous luna ($0.20/$1.20); reasoning opt-in
+        -- NOTE: *-pro variants are v1/responses only (not chat-completions): excluded.
     },
 
     openai_codex = {
         -- OpenAI ChatGPT subscription (Codex OAuth) reuses the same curated
         -- subscription model slugs as direct OpenAI, but authenticates with
-        -- device-code OAuth against ChatGPT's Codex backend.
+        -- device-code OAuth against ChatGPT's Codex backend. Same order as the
+        -- direct list: the default, the tier picks, one previous version per line.
         -- Probed live on a FREE ChatGPT account on 2026-08-15 and 2026-10-11
         -- (the handler's exact wire): terra, 6-luna, 5.6-luna and 5.5 answer;
         -- every sol, astra and the 5.4 ids are refused ("not supported when
@@ -66,18 +64,18 @@ local ModelLists = {
         -- Refused slugs stay listed (paid plans serve more: OpenAI's Codex
         -- models page gives 6-sol and 6.1-sol to Plus and up). The default and
         -- the standard, fast and ultrafast picks use free-served slugs only
-        -- (maintainer ruling 2026-08-15); flagship may need a paid plan
-        -- (maintainer 2026-10-11: free users should not expect flagship, and
-        -- the refusal names the plan). Gone from the Codex backend on every
+        -- (maintainer ruling 2026-08-15); flagship and frontier may need a paid
+        -- plan (maintainer 2026-10-11: free users should not expect flagship,
+        -- and the refusal names the plan). Gone from the Codex backend on every
         -- plan and moved to _retired: the 5.4 ids (2026-08-31) and 5.5
-        -- (OpenAI's date 2026-10-14; retired three days early, B417).
-        "gpt-5.6-terra",                -- balanced (default; served on free accounts)
+        -- (OpenAI's date 2026-10-14; retired three days early, B417). 5.6-sol
+        -- left the picker 2026-10-11 (one previous sol is enough).
+        "gpt-5.6-terra",                -- default + standard; served on free accounts
         "gpt-6.1-sol",                  -- flagship; refused on free accounts (Plus and up, per OpenAI's Codex models page)
-        "gpt-6-sol",                    -- refused on free accounts (Plus and up)
-        "gpt-6-luna",                   -- cost-optimized; served on free accounts (OpenAI's pick for Free and Go); the fast and ultrafast pick
         "gpt-6-astra",                  -- frontier; refused on free accounts
-        "gpt-5.6-sol",                  -- refused on free accounts
-        "gpt-5.6-luna",                 -- cost-optimized; served on free accounts
+        "gpt-6-luna",                   -- fast + ultrafast; served on free accounts (OpenAI's pick for Free and Go)
+        "gpt-6-sol",                    -- previous sol; refused on free accounts (Plus and up)
+        "gpt-5.6-luna",                 -- previous luna; served on free accounts
     },
 
     deepseek = {
@@ -775,6 +773,7 @@ local ModelLists = {
         frontier = {
             anthropic = "claude-fable-5-1",
             openai = "gpt-6-astra",                  -- $10/$50; cannot turn reasoning off
+            openai_codex = "gpt-6-astra",            -- opt-in like every frontier pick; needs a paid plan (refused on free accounts with the plan tip, 2026-10-11)
             gemini = "gemini-3.1-pro-preview",       -- paid-only deep reasoning
         },
 
@@ -825,7 +824,7 @@ local ModelLists = {
         -- Optimized for speed and lower cost
         fast = {
             anthropic = "claude-haiku-5-5",          -- thinks by default; the fast-tier actions and Quick send off (disable accepted)
-            openai = "gpt-5.6-luna",
+            openai = "gpt-6-luna",   -- cheapest ($0.10/$0.50, half of 5.6-luna) and newer; the fast-tier actions and Quick send reasoning off ("none"); probe 2026-10-11
             openai_codex = "gpt-6-luna",   -- served on free accounts; the fast-tier actions send reasoning off ("none", accepted on the Codex wire), then as quick as 5.6-luna (probe 2026-10-11)
             deepseek = "deepseek-flash",
             gemini = "gemini-3.5-flash-lite",   -- lite = the no-default-thinking class; 3.6-flash here duplicated standard and can't turn thinking off (floor = minimal)
@@ -847,7 +846,7 @@ local ModelLists = {
         -- Smallest/cheapest models for basic tasks
         ultrafast = {
             anthropic = "claude-haiku-5-5",
-            openai = "gpt-5.4-nano",
+            openai = "gpt-6-luna",   -- cheaper than 5.4-nano ($0.20/$1.25) and newer; no smaller GPT-6 exists (maintainer 2026-10-11)
             openai_codex = "gpt-6-luna",   -- no mini or nano on the Codex backend (the 5.4 ids left it 2026-08-31): luna fills fast and ultrafast, as on other providers
             deepseek = "deepseek-flash",
             gemini = "gemini-3.5-flash-lite",

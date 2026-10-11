@@ -1393,7 +1393,7 @@ Don't like how a built-in action behaves? Clone and customize it:
      - **Fast/cheap models** for Dictionary, Quick Define, Translate (speed matters, task is simple)
      - **Standard models** for Explain, Summarize, ELI5 (balanced quality and cost)
      - **Reasoning models** for Deep Analysis, Key Arguments, academic tasks (complex thinking)
-   - **Examples:** claude-haiku-5-5/gpt-5.4-nano/llama3.2:3b for lookups; claude-sonnet-5/gpt-5.4-mini/llama3.3 for general use; claude-opus-4-8/gpt-5.5/deepseek-v4-pro for analysis
+   - **Examples:** claude-haiku-5-5/gpt-6-luna/llama3.2:3b for lookups; claude-sonnet-5-5/gpt-5.6-terra/llama3.3 for general use; claude-opus-5-5/gpt-6.1-sol/deepseek-v4-pro for analysis
 
 3. **Want action without domain/language?**
    - **Example:** Translate action giving unexpected results due to your domain
@@ -3220,7 +3220,7 @@ return {
         -- Per-model overrides are keyed "provider/model". Usually set this in the UI instead.
         reasoning_prefs = {
             stance = "default",
-            -- models = { ["anthropic/claude-opus-4-8"] = { state = "on", effort = "high" } },
+            -- models = { ["anthropic/claude-opus-5-5"] = { state = "on", effort = "high" } },
         },
     },
 }
@@ -4015,8 +4015,8 @@ The first model in each provider's list is its default. Current defaults (subjec
 
 | Provider | Default | Notable alternatives |
 |----------|---------|----------------------|
-| **Anthropic** | `claude-sonnet-5-5` | `claude-opus-5-5` (deep reasoning), `claude-fable-5-1` (most capable, premium price), `claude-sonnet-5` (previous default), `claude-haiku-5-5` (fast), `claude-sonnet-4-6` (1M context) |
-| **OpenAI** | `gpt-5.6-terra` | `gpt-6.1-sol` (most capable, can't turn reasoning off), `gpt-6-sol` (previous sol, reasons by default), `gpt-6-luna` (cost-saver), `gpt-6-astra` (frontier, premium price), `gpt-5.6-sol`, `gpt-5.6-luna`, `gpt-5.5` |
+| **Anthropic** | `claude-sonnet-5-5` | `claude-opus-5-5` (deep reasoning), `claude-fable-5-1` (most capable, premium price), `claude-haiku-5-5` (fast), `claude-sonnet-5` / `claude-opus-5` / `claude-fable-5` (previous versions) |
+| **OpenAI** | `gpt-5.6-terra` | `gpt-6.1-sol` (most capable, can't turn reasoning off), `gpt-6-astra` (frontier, premium price), `gpt-6-luna` (cheapest; the fast pick), `gpt-6-sol` / `gpt-5.6-luna` (previous versions) |
 | **DeepSeek** | `deepseek-flash` | `deepseek-v4-pro` (most capable; both 1M context, thinking on by default). `deepseek-flash` is DeepSeek's new name for the V4 flash model |
 | **Gemini** | `gemini-3.8-flash` | `gemini-3.7-flash`, `gemini-3.1-pro-preview` (paid only), `gemini-3.5-flash-lite` (ultrafast), `gemini-2.5-flash/pro` (older accounts only) |
 | **Groq** | `openai/gpt-oss-120b` | `openai/gpt-oss-20b` (fast), `qwen/qwen3.8-27b` |

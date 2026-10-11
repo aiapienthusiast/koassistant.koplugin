@@ -163,8 +163,10 @@ end
 -- DELETE an entry to resurface the id. Reviewed 2026-07-25.
 ModelAudit.DELIBERATE_SKIPS = {
     anthropic = {
-        ["claude-opus-4-6"] = "superseded by opus-4-8 (custom-add if wanted)",
-        ["claude-opus-4-7"] = "superseded by opus-4-8 (custom-add if wanted)",
+        ["claude-opus-4-6"] = "superseded by opus-5-5 (custom-add if wanted)",
+        ["claude-opus-4-7"] = "superseded by opus-5-5 (custom-add if wanted)",
+        ["claude-opus-4-8"] = "left the picker 2026-10-11: one previous version per line (opus-5)",
+        ["claude-sonnet-4-6"] = "left the picker 2026-10-11: one previous version per line (sonnet-5)",
     },
     gemini = {
         ["gemini-3-flash-preview"] = "3.0 preview, superseded by 3.1+ stable",
@@ -181,6 +183,11 @@ ModelAudit.DELIBERATE_SKIPS = {
     openai = {
         ["chat-latest"] = "ChatGPT-tuned rolling alias",
         ["gpt-5.3-chat-latest"] = "ChatGPT-tuned rolling alias",
+        ["gpt-5.6-sol"] = "left the picker 2026-10-11: one previous sol per line (6-sol)",
+        ["gpt-5.5"] = "left the picker 2026-10-11: previous flagship, pricier than 6.1-sol",
+        ["gpt-5.4"] = "left the picker 2026-10-11: the 5.4 line ended, 6-luna is cheaper",
+        ["gpt-5.4-mini"] = "left the picker 2026-10-11: the 5.4 line ended, 6-luna is cheaper",
+        ["gpt-5.4-nano"] = "left the picker 2026-10-11: the 5.4 line ended, 6-luna is cheaper",
     },
     mistral = {
         ["mistral-medium"] = "curated via mistral-medium-latest",

@@ -282,7 +282,7 @@ TestRunner.assert(ModelOverrides.userTierOverride("anthropic", "ultrafast") == "
 ModelOverrides.setGuiTiers({ anthropic = { ultrafast = "" }, openai = "not-a-table" })
 TestRunner.assert(ModelOverrides.tierOverride("anthropic", "ultrafast") == "claude-haiku-file",
     "empty-string GUI value falls through to the file layer")
-TestRunner.assert(ModelLists.getModelForTier("openai", "fast", false) == "gpt-5.6-luna",
+TestRunner.assert(ModelLists.getModelForTier("openai", "fast", false) == "gpt-6-luna",
     "non-table GUI provider entry is ignored (curated applies)")
 ModelOverrides._setUserForTests(false)
 
