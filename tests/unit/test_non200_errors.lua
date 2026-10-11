@@ -597,6 +597,26 @@ TestRunner:test("decorateRequestError: size errors still get the context tip", f
 end)
 
 --------------------------------------------------------------------------------
+-- Test: the OpenAI Subscription's plan refusal (2026-10-11)
+--------------------------------------------------------------------------------
+
+TestRunner:suite("decorateRequestError: a model the ChatGPT plan does not include")
+
+TestRunner:test("the plan tip fires once, names the default, and only on the subscription", function()
+    local refusal = "HTTP 400: The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account."
+    local out = ModelConstraints.decorateRequestError(refusal, "openai_codex", "gpt-6.1-sol", nil)
+    TestRunner:assertContains(out, ModelConstraints.HINT_HEADS.plan, "the plan tip fired")
+    TestRunner:assertContains(out, "gpt-5.6-terra", "names the model every plan serves")
+    TestRunner:assertTrue(not out:find(ModelConstraints.HINT_HEADS.burst, 1, true), "no wait tip")
+    TestRunner:assertTrue(not out:find(ModelConstraints.HINT_HEADS.billing, 1, true), "no account-wall tip")
+    TestRunner:assertEqual(ModelConstraints.decorateRequestError(out, "openai_codex", "gpt-6.1-sol", nil), out,
+        "idempotent")
+    -- The direct OpenAI provider never answers with this sentence; the tip is the subscription's alone.
+    local api = ModelConstraints.decorateRequestError(refusal, "openai", "gpt-6.1-sol", nil)
+    TestRunner:assertTrue(not api:find(ModelConstraints.HINT_HEADS.plan, 1, true), "not on the API provider")
+end)
+
+--------------------------------------------------------------------------------
 -- Summary
 --------------------------------------------------------------------------------
 

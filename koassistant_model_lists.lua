@@ -58,25 +58,26 @@ local ModelLists = {
         -- OpenAI ChatGPT subscription (Codex OAuth) reuses the same curated
         -- subscription model slugs as direct OpenAI, but authenticates with
         -- device-code OAuth against ChatGPT's Codex backend.
-        -- Probed live 2026-08-15 on a FREE ChatGPT account: terra/luna/5.5/
-        -- 5.4-mini answer; sol, 5.4 and 5.4-nano are refused there ("not
-        -- supported when using Codex with a ChatGPT account") with a clear
-        -- error. ALL slugs stay listed (paid plans unverified, may serve
-        -- more); default + tier picks use free-served slugs only, so
-        -- auto-selection never 400s (maintainer ruling 2026-08-15).
+        -- Probed live on a FREE ChatGPT account on 2026-08-15 and 2026-10-11
+        -- (the handler's exact wire): terra, 6-luna, 5.6-luna and 5.5 answer;
+        -- every sol, astra and the 5.4 ids are refused ("not supported when
+        -- using Codex with a ChatGPT account") with a clear error, which the
+        -- plugin follows with the plan tip (ModelConstraints.HINT_HEADS.plan).
+        -- Refused slugs stay listed (paid plans serve more: OpenAI's Codex
+        -- models page gives 6-sol and 6.1-sol to Plus and up). The default and
+        -- the standard, fast and ultrafast picks use free-served slugs only
+        -- (maintainer ruling 2026-08-15); flagship may need a paid plan
+        -- (maintainer 2026-10-11: free users should not expect flagship, and
+        -- the refusal names the plan). Gone from the Codex backend on every
+        -- plan and moved to _retired: the 5.4 ids (2026-08-31) and 5.5
+        -- (OpenAI's date 2026-10-14; retired three days early, B417).
         "gpt-5.6-terra",                -- balanced (default; served on free accounts)
-        -- Listed by the Codex client catalogue (2026-10-11). Availability is
-        -- account-dependent; retain the free-served default and tier picks.
-        "gpt-6.1-sol",
-        "gpt-6-sol",
-        "gpt-6-luna",
-        "gpt-6-astra",
-        "gpt-5.6-sol",                  -- flagship (most capable; refused on free accounts)
-        "gpt-5.6-luna",                 -- cost-optimized (served on free accounts)
-        "gpt-5.5",                      -- served on free accounts
-        "gpt-5.4",                      -- refused on free accounts
-        "gpt-5.4-mini",                 -- served on free accounts
-        "gpt-5.4-nano",                 -- refused on free accounts
+        "gpt-6.1-sol",                  -- flagship; refused on free accounts (Plus and up, per OpenAI's Codex models page)
+        "gpt-6-sol",                    -- refused on free accounts (Plus and up)
+        "gpt-6-luna",                   -- cost-optimized; served on free accounts (OpenAI's pick for Free and Go); the fast and ultrafast pick
+        "gpt-6-astra",                  -- frontier; refused on free accounts
+        "gpt-5.6-sol",                  -- refused on free accounts
+        "gpt-5.6-luna",                 -- cost-optimized; served on free accounts
     },
 
     deepseek = {
@@ -704,6 +705,17 @@ local ModelLists = {
             ["sonar-reasoning-pro"] = "perplexity/sonar",
             ["sonar-deep-research"] = "perplexity/sonar",
         },
+        -- Gone from Codex with ChatGPT sign-in on every plan: the 5.4 ids on 2026-08-31
+        -- (OpenAI's Codex models page names 5.4 and 5.4-mini; nano was refused on the free
+        -- account in both sweeps and is read as gone with its family) and 5.5 on 2026-10-14
+        -- (retired here three days early, B417). Saved picks move to the slugs the free
+        -- account serves (sweep 2026-10-11).
+        openai_codex = {
+            ["gpt-5.4"] = "gpt-5.6-terra",
+            ["gpt-5.4-mini"] = "gpt-6-luna",
+            ["gpt-5.4-nano"] = "gpt-6-luna",
+            ["gpt-5.5"] = "gpt-5.6-terra",
+        },
         -- Stopped serving 2026-09 (recheck 2026-09-28): NVIDIA's are HTTP 410 end of
         -- life; Fireworks' still list but answer "not found ... not deployed"; Groq
         -- decommissioned the compound pair 2026-09-21 (deprecations page).
@@ -770,7 +782,7 @@ local ModelLists = {
         flagship = {
             anthropic = "claude-opus-5-5",           -- deep-reasoning flagship; sonnet-5-5 is the standard tier
             openai = "gpt-6.1-sol",                  -- same price as 6-sol; reasons by default and cannot turn it off
-            openai_codex = "gpt-5.6-terra", -- best slug served on ALL plans (sol 400s on free accounts; still pickable manually)
+            openai_codex = "gpt-6.1-sol",   -- needs a paid plan: refused on free accounts with the plan tip (maintainer 2026-10-11, amending the 2026-08-15 ruling for flagship alone)
             deepseek = "deepseek-v4-pro",
             gemini = "gemini-3.8-flash",             -- Pro models are paid-only; keep tier free-tier usable (3.8-flash answers on a free key 2026-09-28)
             groq = "openai/gpt-oss-120b",            -- llama picks deprecated by Groq 2026-08-16
@@ -814,7 +826,7 @@ local ModelLists = {
         fast = {
             anthropic = "claude-haiku-5-5",          -- thinks by default; the fast-tier actions and Quick send off (disable accepted)
             openai = "gpt-5.6-luna",
-            openai_codex = "gpt-5.6-luna",
+            openai_codex = "gpt-6-luna",   -- served on free accounts; the fast-tier actions send reasoning off ("none", accepted on the Codex wire), then as quick as 5.6-luna (probe 2026-10-11)
             deepseek = "deepseek-flash",
             gemini = "gemini-3.5-flash-lite",   -- lite = the no-default-thinking class; 3.6-flash here duplicated standard and can't turn thinking off (floor = minimal)
             groq = "openai/gpt-oss-20b",        -- 8b-instant deprecated 2026-08-16; gpt-oss-20b is Groq's own replacement (reasons at medium by default — no non-reasoning production model remains)
@@ -836,7 +848,7 @@ local ModelLists = {
         ultrafast = {
             anthropic = "claude-haiku-5-5",
             openai = "gpt-5.4-nano",
-            openai_codex = "gpt-5.4-mini", -- smallest slug served on ALL plans (nano 400s on free accounts; still pickable manually)
+            openai_codex = "gpt-6-luna",   -- no mini or nano on the Codex backend (the 5.4 ids left it 2026-08-31): luna fills fast and ultrafast, as on other providers
             deepseek = "deepseek-flash",
             gemini = "gemini-3.5-flash-lite",
             groq = "openai/gpt-oss-20b",            -- see fast-tier note: Groq retired every non-reasoning production model 2026-08-16

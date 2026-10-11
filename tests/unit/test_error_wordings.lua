@@ -129,6 +129,17 @@ local CORPUS = {
         ladder = { kind = "too_large", transient = false },
     },
     {
+        id = "codex_plan_model",
+        provider = "openai_codex",
+        status = 400,
+        source = "the Codex backend to a free ChatGPT account, sweeps of 2026-08-15 and 2026-10-11 "
+            .. "(model_tooling_plan.md, OpenAI Subscription section)",
+        text = "HTTP 400: The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account.",
+        expect = { kind = "other", rate_limit = false },
+        hint = "plan",
+        ladder = { kind = "other", transient = false },
+    },
+    {
         id = "anthropic_output_cap",
         provider = "anthropic",
         status = 400,

@@ -2697,6 +2697,27 @@ function ModelConstraints.prefixProviderModel(err_msg, provider, model)
     return label .. ": " .. err_msg
 end
 
+--- The OpenAI Subscription's refusal of a model the ChatGPT plan does not include
+--- (HINT_HEADS.plan is its first words). The Codex backend's wording blames "a
+--- ChatGPT account", which reads as a broken login; it is the plan. Names the
+--- default and the Luna models, which every plan serves (sweeps of 2026-08-15 and
+--- 2026-10-11 on a free account); the Sol and Astra models need a paid plan
+--- (OpenAI's Codex models page). The flagship tier points at such a model.
+local CODEX_PLAN_NEEDLE = "not supported when using Codex with a ChatGPT account"
+function ModelConstraints.maybeAppendSubscriptionPlanHint(err_msg, provider, model, config)
+    if type(err_msg) ~= "string" or err_msg == "" then return err_msg end
+    if provider ~= "openai_codex" then return err_msg end
+    if err_msg:find(ModelConstraints.HINT_HEADS.plan, 1, true) then return err_msg end  -- already said
+    if not err_msg:find(CODEX_PLAN_NEEDLE, 1, true) then return err_msg end
+    local lists = require("koassistant_model_lists")
+    local default_id = type(lists.openai_codex) == "table" and lists.openai_codex[1] or "gpt-5.6-terra"
+    local tip = "Tip: your ChatGPT plan's Codex access does not include this model, so the request " ..
+        "never ran. Every plan serves " .. default_id .. " (the default) and the Luna models, free " ..
+        "accounts included; the Sol and Astra models need a paid plan (Plus and up). Pick one of " ..
+        "those in the model menu."
+    return err_msg .. "\n\n" .. tip
+end
+
 --- The phrase that identifies each hint in a decorated error, one per branch and
 --- pairwise exclusive, so a test can assert WHICH tip fired and that no second
 --- one did (audit B2's invariant: exactly one tip per refusal). Not a UI string:
@@ -2714,6 +2735,8 @@ ModelConstraints.HINT_HEADS = {
     grounding = GROUNDING_TIP_HEAD,
     -- an account wall: credits, balance or a spending cap (isBillingWall)
     billing = "Tip: this is an account limit",
+    -- the OpenAI Subscription refusing a model the ChatGPT plan does not include
+    plan = "Tip: your ChatGPT plan",
 }
 
 --- Single decoration point for API request failures: name the model, then append
@@ -2729,6 +2752,7 @@ function ModelConstraints.decorateRequestError(err_msg, provider, model, config)
     out = ModelConstraints.maybeAppendGemini3GroundingHint(out, provider, model, config)
     out = ModelConstraints.maybeAppendRateLimitHint(out, provider, model, config)
     out = ModelConstraints.maybeAppendContextLimitHint(out, provider, model, config)
+    out = ModelConstraints.maybeAppendSubscriptionPlanHint(out, provider, model, config)
     return out
 end
 
