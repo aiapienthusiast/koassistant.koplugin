@@ -65,6 +65,12 @@ local ModelLists = {
         -- more); default + tier picks use free-served slugs only, so
         -- auto-selection never 400s (maintainer ruling 2026-08-15).
         "gpt-5.6-terra",                -- balanced (default; served on free accounts)
+        -- Listed by the Codex client catalogue (2026-10-11). Availability is
+        -- account-dependent; retain the free-served default and tier picks.
+        "gpt-6.1-sol",
+        "gpt-6-sol",
+        "gpt-6-luna",
+        "gpt-6-astra",
         "gpt-5.6-sol",                  -- flagship (most capable; refused on free accounts)
         "gpt-5.6-luna",                 -- cost-optimized (served on free accounts)
         "gpt-5.5",                      -- served on free accounts

@@ -392,6 +392,17 @@ TestRunner.assert(ModelLists.getModelForTier("gemini", "fast", false) == "gemini
     "a GUI tier pick is what the tag names")
 ModelOverrides.setGuiTiers(nil)
 
+print("== subscription catalogue includes current Codex models ==")
+do
+    local listed = {}
+    for _, model in ipairs(ModelLists.openai_codex) do listed[model] = true end
+    for _, model in ipairs({ "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-6-astra" }) do
+        TestRunner.assert(listed[model], "subscription picker includes " .. model)
+    end
+    TestRunner.assert(ModelLists.openai_codex[1] == "gpt-5.6-terra",
+        "adding paid-account models does not change the free-served default")
+end
+
 -- Summary
 print(string.format("\n%d passed, %d failed", TestRunner.passed, TestRunner.failed))
 return TestRunner.failed == 0
