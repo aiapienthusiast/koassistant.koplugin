@@ -1,14 +1,25 @@
 #!/bin/sh
 # Publishes wiki/ to the GitHub wiki (the recipe runs it after the release).
-#   scripts/push_wiki.sh vX.Y.Z [--dry-run]
+#   scripts/push_wiki.sh vX.Y.Z [--dry-run] [--accept-edits]
 # The wiki clone is docs/wiki/ (cloned from the wiki remote if absent). The
 # script refuses to run over a clone with local changes, and refuses when the
 # wiki has commits it did not make (edits made on GitHub): merge those into
-# wiki/ by hand first. Every page is copied, Home and the footer are stamped
-# with the version, the commit is "docs for vX" and is pushed, unless --dry-run.
+# wiki/ by hand first, then run again with --accept-edits. Every page is
+# copied, pages that no longer exist in wiki/ are removed, Home and the footer
+# are stamped with the version, the commit is "docs for vX" and is pushed,
+# unless --dry-run.
 set -eu
-version=${1:?usage: scripts/push_wiki.sh vX.Y.Z [--dry-run]}
-dry=${2:-}
+version=${1:?usage: scripts/push_wiki.sh vX.Y.Z [--dry-run] [--accept-edits]}
+shift
+dry=""
+accept=""
+for arg in "$@"; do
+    case $arg in
+        --dry-run) dry=1 ;;
+        --accept-edits) accept=1 ;;
+        *) echo "unknown option: $arg (usage: scripts/push_wiki.sh vX.Y.Z [--dry-run] [--accept-edits])" >&2; exit 2 ;;
+    esac
+done
 root=$(cd "$(dirname "$0")/.." && pwd)
 # KOA_WIKI_CLONE and KOA_WIKI_REMOTE exist for trying the script against a local bare repository
 clone="${KOA_WIKI_CLONE:-$root/docs/wiki}"
@@ -33,8 +44,8 @@ if [ -n "$last" ]; then
 else
     foreign=""
 fi
-if [ -n "$foreign" ]; then
-    echo "the wiki has edits made on GitHub since the last sync; merge them into wiki/ first:" >&2
+if [ -n "$foreign" ] && [ -z "$accept" ]; then
+    echo "the wiki has edits made on GitHub since the last sync; merge them into wiki/ first, then run again with --accept-edits:" >&2
     echo "$foreign" >&2
     exit 1
 fi
@@ -46,12 +57,13 @@ for f in "$clone"/*.md; do
     [ -e "$root/wiki/$name" ] || rm -f "$f"
 done
 cp "$root"/wiki/*.md "$clone"/
-# stamp the version
+# stamp the version (no sed -i: its syntax differs between BSD and GNU sed)
 for f in "$clone/Home.md" "$clone/_Footer.md"; do
     [ -e "$f" ] || continue
-    sed -i '' "s#<!-- koa-version -->.*<!-- /koa-version -->#<!-- koa-version -->$version<!-- /koa-version -->#" "$f"
+    sed "s#<!-- koa-version -->.*<!-- /koa-version -->#<!-- koa-version -->$version<!-- /koa-version -->#" "$f" > "$f.tmp"
+    mv "$f.tmp" "$f"
 done
-if [ "$dry" = "--dry-run" ]; then
+if [ -n "$dry" ]; then
     git -C "$clone" status --short
     git -C "$clone" diff --stat
     git -C "$clone" checkout -q -- . 2>/dev/null || true

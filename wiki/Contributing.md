@@ -15,7 +15,7 @@ Code changes are welcome as pull requests. The plugin is Lua on the KOReader plu
 
 ## Editing this wiki
 
-The pages you are reading are the `wiki/` folder of the [repository](https://github.com/zeeyado/koassistant.koplugin), one Markdown file per page, published to the GitHub wiki with every release. To fix or extend a page:
+The pages you are reading are the `wiki/` folder of the [repository](https://github.com/zeeyado/koassistant.koplugin), one Markdown file per page, published to the GitHub wiki with every release. GitHub's own wiki editor is not the route: the published pages are replaced from `wiki/` at each release. To fix or extend a page:
 
 1. Edit the page's file under `wiki/` on a fork of the repository, or open an issue quoting the sentence that is wrong.
 2. Open a pull request. It is reviewed like a code change and lands on the next release's wiki.
