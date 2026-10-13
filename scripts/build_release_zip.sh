@@ -38,6 +38,7 @@ rsync -a --exclude='.git' \
          --exclude='scripts' \
          --exclude='hooks' \
          --exclude='screenshots' \
+         --exclude='wiki' \
          --exclude='.gitignore' \
          "$work/src/" "$work/build/koassistant.koplugin/"
 

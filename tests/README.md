@@ -35,7 +35,7 @@ The test suite must run from within a **KOReader installation** where KOAssistan
 4. **Add your API keys** via Settings → API Keys (or create `apikeys.lua`)
 5. **Run tests** from the plugin directory
 
-**Pro tip:** If you already have KOAssistant configured on your e-reader, use [Backup & Restore](../README.md#backup--restore) to export your settings and import them on your computer.
+**Pro tip:** If you already have KOAssistant configured on your e-reader, use [Backups and Updates](https://github.com/zeeyado/koassistant.koplugin/wiki/Backups-and-Updates) to export your settings and import them on your computer.
 
 ## Quick Start
 
