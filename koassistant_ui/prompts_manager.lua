@@ -1947,7 +1947,7 @@ function PromptsManager:showStep3_Settings(state)
                     local features = self.plugin.settings:readSetting("features") or {}
                     if not features.enable_book_text_extraction then
                         UIManager:show(InfoMessage:new{
-                            text = _("Text extraction enabled. Note: Enable in Settings → Advanced first."),
+                            text = _("Text extraction enabled. Note: Allow Text Extraction must be on (Settings → Privacy & Data → Text Extraction)."),
                             timeout = 4,
                         })
                     end
@@ -2029,7 +2029,7 @@ function PromptsManager:showStep3_Settings(state)
                     local features = self.plugin.settings:readSetting("features") or {}
                     if features.enable_library_scanning ~= true then
                         UIManager:show(InfoMessage:new{
-                            text = _("Library use enabled. Note: Enable in Settings → Library Settings first."),
+                            text = _("Library use enabled. Note: Allow Library Scanning must be on (Settings → Privacy & Data)."),
                             timeout = 4,
                         })
                     end
@@ -3724,7 +3724,7 @@ function PromptsManager:showBuiltinSettingsDialog(state)
                     local features = self.plugin.settings:readSetting("features") or {}
                     if not features.enable_book_text_extraction then
                         UIManager:show(InfoMessage:new{
-                            text = _("Text extraction enabled. Note: Enable in Settings → Advanced first."),
+                            text = _("Text extraction enabled. Note: Allow Text Extraction must be on (Settings → Privacy & Data → Text Extraction)."),
                             timeout = 4,
                         })
                     else
@@ -4719,7 +4719,7 @@ function PromptsManager:showCustomQuickSettingsDialog(state)
                     local features = self.plugin.settings:readSetting("features") or {}
                     if not features.enable_book_text_extraction then
                         UIManager:show(InfoMessage:new{
-                            text = _("Text extraction enabled. Note: Enable in Settings → Advanced first."),
+                            text = _("Text extraction enabled. Note: Allow Text Extraction must be on (Settings → Privacy & Data → Text Extraction)."),
                             timeout = 4,
                         })
                     else

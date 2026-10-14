@@ -288,6 +288,18 @@ TestRunner:check("derivedParam nil for unknown model",
 
 resetLayers()
 
+--==========================================================================
+TestRunner:suite("A prefix matches literally: a dot is not a wildcard (B478)")
+
+ModelOverrides._setUserForTests({
+    max_output_tokens = { custom_dotted = { ["gpt-5.6"] = 4096 } },
+})
+TestRunner:check("the dotted prefix caps its own family",
+    ModelConstraints.clampMaxTokens("custom_dotted", "gpt-5.6-terra", 16384) == 4096)
+TestRunner:check("a model that differs at the dot is not capped",
+    ModelConstraints.clampMaxTokens("custom_dotted", "gpt-5x6-terra", 16384) == 16384)
+resetLayers()
+
 -- Summary
 print(string.format("\n%d passed, %d failed", TestRunner.passed, TestRunner.failed))
 return TestRunner.failed == 0

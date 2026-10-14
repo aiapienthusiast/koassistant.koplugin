@@ -5042,8 +5042,8 @@ end
 -- Helper: Check if a key value looks like a placeholder (not a real key)
 local function isPlaceholderKey(key)
   if not key or key == "" then return true end
-  -- Detect common placeholder patterns from apikeys.lua.sample
-  local upper = key:upper()
+  -- Detect common placeholder patterns from apikeys.lua.sample ("your-key-here" too, B432)
+  local upper = (key:upper():gsub("-", "_"))
   if upper:find("YOUR_") or upper:find("_HERE") or upper:find("API_KEY") then
     return true
   end
@@ -6507,7 +6507,11 @@ function AskGPT:executeDictAction(action, word, dict_popup, non_reader_lookup, l
         self.ui,
         word,
         extraction_mode,
-        context_chars
+        context_chars,
+        nil,
+        -- the far side is clamped while spoiler protection is on, as the input dialog does (B436)
+        Dialogs.contextAfterLimit(features,
+          require("koassistant_book_settings").resolveSpoilerFree(self:_openBookDS(), features) or false)
       )
       -- Pre-extract the surrounding-context window while the selection is alive
       -- (the popup close clears it; handlePredefinedPrompt trims per resolved mode)
@@ -6527,6 +6531,10 @@ function AskGPT:executeDictAction(action, word, dict_popup, non_reader_lookup, l
     -- Pass dictionary popup reference so X-Ray browser can close it
     -- when launching book text search (prevents widget stack blocking)
     configuration.features._source_widget = dict_popup
+    -- The surrounding-text window, pre-extracted above while the selection
+    -- was alive: an image made from the popup got the title/author frame
+    -- only (B460)
+    configuration.features._selection_context_window = sc_window
     -- Chat-originated lookups carry the chat's own book — it beats whatever
     -- the reader happens to have open (device 2026-08-13: wrong-book lookups)
     Dialogs.executeDirectAction(self.ui, action, word, configuration, self,
@@ -7520,7 +7528,9 @@ function AskGPT:_showGroupMembersPopup(file, mode, opts)
   -- entry view's provenance line. Computed once, only when a row could open
   -- X-Ray content.
   local held, dirs = {}, {}
-  if mode == "xray" then
+  -- both modes can open a later volume's X-Ray content (the input dialog's
+  -- Group button uses "artifacts"; it skipped the hold-back, B418)
+  if mode == "xray" or mode == "artifacts" then
     held = ActionCache.heldBackLaterFiles(file)
     for _idx, row in ipairs(BookGroups.lookupBooksFor(file, true)) do
       dirs[row.file] = row.direction
@@ -7830,8 +7840,13 @@ function AskGPT:showCacheViewer(cache_info)
       })
     end
 
-    -- Summary and Analyze get regenerate buttons when book is open
-    if cache_key == "_summary_cache" and self.ui and self.ui.document then
+    -- Summary and Analyze get regenerate buttons when the OPEN book is this
+    -- artifact's book: _executeBookLevelActionDirect works on the open book,
+    -- and a hub or browser beside another open book used to rebuild that
+    -- book's copy (B449)
+    local same_book = self.ui and self.ui.document and self.ui.document.file
+      and require("koassistant_doc_settings").samePath(self.ui.document.file, file)
+    if cache_key == "_summary_cache" and same_book then
       local self_ref = self
       on_regenerate = function()
         local action = self_ref.action_service:getAction("book", "summarize_full_document")
@@ -7842,7 +7857,7 @@ function AskGPT:showCacheViewer(cache_info)
         end
       end
     end
-    if cache_key == "_analyze_cache" and self.ui and self.ui.document then
+    if cache_key == "_analyze_cache" and same_book then
       local self_ref = self
       on_regenerate = function()
         local action = self_ref.action_service:getAction("book", "analyze_full_document")
@@ -8101,7 +8116,7 @@ function AskGPT:_checkRequirements(action, target_file, run_provider)
         local lib_folders = features.library_scan_folders
         if not lib_folders or #lib_folders == 0 then
           UIManager:show(InfoMessage:new{
-            text = _("No scan folders configured.\n\nAdd folders in Settings → Library Settings → Permanent Scan Folders.") .. hint,
+            text = _("No scan folders configured.\n\nAdd folders in Settings → Reading & Library → Permanent Scan Folders.") .. hint,
           })
           return true
         end
@@ -9201,7 +9216,7 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
     -- Build source radio buttons dynamically (section scope may add extra summary rows)
     local extract_text = text_extraction_enabled
         and _("Extract text")
-        or (_("Extract text") .. "  (" .. _("enable in Settings → Privacy") .. ")")
+        or (_("Extract text") .. "  (" .. _("enable in Settings → Privacy & Data") .. ")")
     local supports_summary = action.use_summary_cache == true
     local source_radio_buttons = {}
 
@@ -9296,7 +9311,7 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
       local sr_text
       if not smart_eligible then
         if smart_block_reason == "consent" then
-          sr_text = sr_label .. "  (" .. _("enable in Settings → Privacy") .. ")"
+          sr_text = sr_label .. "  (" .. _("enable in Settings → Privacy & Data") .. ")"
         else
           sr_text = sr_label .. "  (" .. _("not supported by this provider") .. ")"
         end
@@ -13961,11 +13976,10 @@ end
 --- Check if we should show a recap reminder for the current book.
 --- Called from onReaderReady when the user opens a book they haven't read in a while.
 function AskGPT:checkRecapReminder()
-  local features = self.settings:readSetting("features") or {}
-  if features.enable_recap_reminder ~= true then return end
-
   if not self.ui or not self.ui.document or not self.ui.doc_settings then return end
 
+  -- The last-opened stamp is kept whether the reminder is on or off, so a
+  -- reminder switched on later counts from the real last read (B433)
   local now = os.time()
   local last_opened = self:_openBookDS():readSetting("koassistant_last_opened")
 
@@ -13983,6 +13997,8 @@ function AskGPT:checkRecapReminder()
   -- Always update timestamp for next session
   self:_openBookDS():saveSetting("koassistant_last_opened", now)
 
+  local features = self.settings:readSetting("features") or {}
+  if features.enable_recap_reminder ~= true then return end
   if not last_opened then return end
 
   local days_since = (now - last_opened) / 86400
@@ -16316,7 +16332,7 @@ function AskGPT:_offerChapterQuiz(chapter_index)
             require("koassistant_book_settings").setQuizField(
               self_ref.ui and self_ref.ui.doc_settings, "enabled", false)
             UIManager:show(InfoMessage:new{
-              text = _("Chapter quizzes turned off for this book.\nRe-enable in Book Settings → Quiz."),
+              text = _("Chapter quizzes turned off for this book.\nRe-enable in Book Settings → Quiz settings."),
               timeout = 3,
             })
           end,
@@ -18641,18 +18657,19 @@ function AskGPT:testProviderConnection()
   local test_message_history = MessageHistory:new()
   test_message_history:addUserMessage("Hello, this is a connection test. Please respond with 'Connection successful'.")
 
-  -- Get current configuration (global configuration is updated with settings in init)
-  -- Disable streaming for test to keep it simple
-  local test_config = {
-    provider = configuration.provider,
-    model = configuration.model,
-    temperature = 0.1,
-    max_tokens = 50,
-    features = {
-      debug = configuration.features and configuration.features.debug or false,
-      enable_streaming = false, -- Disable streaming for test
-    }
-  }
+  -- The configuration every request uses (a custom endpoint from
+  -- configuration.lua, the Ollama server picked in the menu, a Z.AI, Qwen or
+  -- Kimi region ride on it; a two-field config tested the shipped endpoint,
+  -- B477), copied so the test's overrides touch nothing shared
+  local test_config = {}
+  for k, v in pairs(configuration) do test_config[k] = v end
+  test_config.features = {}
+  for k, v in pairs(configuration.features or {}) do test_config.features[k] = v end
+  test_config.temperature = 0.1
+  test_config.max_tokens = 50
+  test_config.enable_web_search = false
+  test_config.features.enable_web_search = false
+  test_config.features.enable_streaming = false -- keep the test simple
 
   -- Perform the test query asynchronously with callback
   UIManager:scheduleIn(0.1, function()
@@ -19496,7 +19513,11 @@ function AskGPT:registerHighlightMenuActions()
               self.ui,
               selected_text,
               context_mode,
-              context_chars
+              context_chars,
+              nil,
+              -- the far side is clamped while spoiler protection is on (B436)
+              Dialogs.contextAfterLimit(cur_features,
+                require("koassistant_book_settings").resolveSpoilerFree(self:_openBookDS(), cur_features) or false)
             )
           end
         end
@@ -19761,7 +19782,11 @@ function AskGPT:syncDictionaryBypass()
           self_ref.ui,
           word,
           extraction_mode,
-          context_chars
+          context_chars,
+          nil,
+          -- the far side is clamped while spoiler protection is on (B436)
+          Dialogs.contextAfterLimit(features,
+            require("koassistant_book_settings").resolveSpoilerFree(self_ref:_openBookDS(), features) or false)
         )
         -- Pre-extract the surrounding-context window while the selection is alive
         -- (highlight:clear() below kills it; handlePredefinedPrompt trims per mode).
@@ -21191,6 +21216,7 @@ end
 function AskGPT:resetBehaviorsDomains()
   local features = self.settings:readSetting("features") or {}
   features.custom_behaviors = nil
+  features.custom_domains = nil  -- the row says domains too (B473)
   self.settings:saveSetting("features", features)
   self.settings:flush()
   self:updateConfigFromSettings()
@@ -23608,7 +23634,7 @@ function AskGPT:showSetupStep3EmojiTest(next_step)
     "📄 Document  📝 Notes  📓 Notebook\n" ..
     "🔍 Search  🌐 Web  🎭 Behavior\n" ..
     "📜 History  🔖 Bookmark  📖 Book" .. "\n\n" ..
-    _("See the README for instructions on how to enable emojis in the KOReader UI.") .. "\n\n" ..
+    _("The wiki's Troubleshooting page explains how to add an emoji font to KOReader.") .. "\n\n" ..
     _("If you see blank boxes or question marks, choose \"No\".")
 
   local wizard_advancing = false

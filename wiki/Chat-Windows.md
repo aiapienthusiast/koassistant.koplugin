@@ -99,7 +99,7 @@ With streaming on (the default), responses appear in real time as the AI generat
 
 **While the AI searches the web**, the window shows "Searching the web..." and then each query, with a "Found:" line naming the sites that turn up (🔍 and 🔗 prefixes with Emoji Menu Icons). Any prose the AI writes before searching stays visible, followed by an inline *[Searched the web]* marker, so you can see where the search happened.
 
-**Hidden output:** a quiz streams behind "Generating quiz" so its answers stay hidden, and an AI merge behind "Merging X-Ray data". Tap **Show** to watch the text arrive.
+**Hidden output:** a quiz streams behind "Generating quiz" so its answers stay hidden, and an AI merge behind "AI merge in progress". Tap **Show** to watch the text arrive.
 
 **With streaming off**, a notice names the provider and model (and says "Reasoning enabled" when it is) until the answer arrives. Tap it to cancel.
 

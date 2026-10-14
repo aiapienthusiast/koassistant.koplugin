@@ -198,7 +198,7 @@ local SettingsSchema = {
                             text = _("Latest Reply on New Page"),
                             path = "features.chat_exchange_page_breaks",
                             default = true,
-                            help_text = _("Present the newest reply from the top of a fresh page. Markdown chats get a real page break before it (older exchanges stay compact — the break moves forward with each reply and never touches saves or exports); Plain Text chats align the view so the reply starts the screen. Chat viewer only."),
+                            help_text = _("Present the newest reply from the top of a fresh page. Markdown chats get a real page break before it (older exchanges stay compact; the break moves forward with each reply and never touches saves or exports); Plain Text chats align the view so the reply starts the screen. Chat viewer only."),
                         },
                         {
                             id = "scroll_to_last_message",
@@ -242,7 +242,7 @@ local SettingsSchema = {
                                 local f = plugin.settings:readSetting("features") or {}
                                 return not f.dictionary_text_mode
                             end,
-                            help_text = _("Use Plain Text mode for dictionary popup when dictionary language is Arabic, Persian, or Urdu. Grayed out when Text Mode for Dictionary is enabled."),
+                            help_text = _("Use Plain Text mode for dictionary popup when dictionary language is Arabic, Classical Arabic, Persian or Urdu. Grayed out when Text Mode for Dictionary is enabled."),
                         },
                         {
                             id = "rtl_translate_text_mode",
@@ -250,7 +250,7 @@ local SettingsSchema = {
                             text = _("Text Mode for RTL Translate"),
                             path = "features.rtl_translate_text_mode",
                             default = true,
-                            help_text = _("Use Plain Text mode for translate popup when translation language is Arabic, Persian, or Urdu."),
+                            help_text = _("Use Plain Text mode for translate popup when translation language is Arabic, Classical Arabic, Persian or Urdu."),
                         },
                         {
                             id = "rtl_chat_text_mode",
@@ -293,7 +293,7 @@ local SettingsSchema = {
                             text = _("Emoji Data Access Indicators"),
                             path = "features.enable_data_access_indicators",
                             default = false,
-                            help_text = _("Show emoji indicators on action names showing what data they access: 📄 document text, 🔖 highlights, 📝 annotations, 📓 notebook, 📚 library, 🌐 web search. Requires emoji font support."),
+                            help_text = _("Show emoji indicators on action names showing what data they access: 📄 document text, 🔖 highlights, 📝 annotations, 📓 notebook, 📚 library, 📊 reading stats, 🌐 web search. Requires emoji font support."),
                         },
                     },
                 },
@@ -575,7 +575,7 @@ local SettingsSchema = {
                             text = _("Turn Reasoning Off"),
                             path = "features.quick_preset_reasoning_off",
                             default = true,
-                            help_text = _("Disable model reasoning/thinking for Quick Answer chats (models that can't disable it drop to their lowest level). A one-shot reasoning pick in the Quick chip's menu overrides this."),
+                            help_text = _("Disable model reasoning/thinking for Quick Answer chats (models that can't disable it drop to their lowest level)."),
                         },
                         {
                             id = "quick_preset_web_off",
@@ -639,7 +639,7 @@ local SettingsSchema = {
                                 end
                                 return T(_("Model override: %1"), label)
                             end,
-                            help_text = _("Optionally switch models while Quick Answer is on (that chat only: your default model is untouched): the active provider's fastest listed model, a tier of the active provider, or a pinned specific model. Custom providers keep the current model unless custom_models.lua gives them tier placements. A one-shot model pick in the Quick chip's menu overrides this."),
+                            help_text = _("Optionally switch models while Quick Answer is on (that chat only: your default model is untouched): the active provider's fastest listed model, a tier of the active provider, or a pinned specific model. Custom providers keep the current model unless custom_models.lua gives them tier placements. A model picked for one run (a long press on Send) overrides it."),
                             callback = "showQuickPresetModelMode",
                             keep_menu_open = true,
                         },
@@ -1027,7 +1027,7 @@ local SettingsSchema = {
                             text = _("X-Ray Entry for Matching Selections"),
                             path = "features.xray_selection_intercept",
                             default = true,
-                            help_text = _("When a tapped word or selected text exactly matches an X-Ray entity's name or alias, open that X-Ray entry directly — skipping ahead of the dictionary and the highlight menu (including any bypass actions you have set there). Anything that doesn't match falls through to your normal dictionary/highlight behavior. Only does anything for books that have an X-Ray. A very long press at the end of a selection always shows the normal highlight menu."),
+                            help_text = _("When a tapped word or selected text exactly matches an X-Ray entity's name or alias, open that X-Ray entry directly, skipping ahead of the dictionary and the highlight menu (including any bypass actions you have set there). Anything that doesn't match falls through to your normal dictionary/highlight behavior. Only does anything for books that have an X-Ray. A very long press at the end of a selection always shows the normal highlight menu."),
                             on_change = function(new_value, plugin)
                                 -- The dictionary wrapper is installed/removed at sync
                                 -- time (the highlight side reads per call)
@@ -1129,7 +1129,7 @@ local SettingsSchema = {
                             text = _("Entity Card First"),
                             path = "features.xray_card_landing",
                             default = true,
-                            help_text = _("Exact entity hits (tapping a marked word, or selecting text that matches an entity) open a compact card first: the name, category and role, and a one-line identification, with the full entry a tap on the card away. The identification may come from the newest built checkpoint, so newly appearing names are known on sight — the full entry stays at your reading position, behind a confirmation, while spoiler protection is on. Off = open the full entry directly."),
+                            help_text = _("Exact entity hits (tapping a marked word, or selecting text that matches an entity) open a compact card first: the name, category and role, and a one-line identification, with the full entry a tap on the card away. The identification may come from the newest built checkpoint, so newly appearing names are known on sight; the full entry stays at your reading position, behind a confirmation, while spoiler protection is on. Off = open the full entry directly."),
                             on_change = function(new_value, plugin)
                                 if plugin.syncXrayMarks then
                                     local UIManager = require("ui/uimanager")
@@ -1595,7 +1595,7 @@ local SettingsSchema = {
                         return T(_("Bypass Action: %1"), action_id)
                     end,
                     callback = "buildDictionaryBypassActionMenu",
-                    help_text = _("Action to trigger when dictionary bypass is enabled. With X-Ray Lookup, a tapped word that has an X-Ray entry opens it directly; any other word falls through to the normal dictionary."),
+                    help_text = _("Action to trigger when dictionary bypass is enabled. With Look up in X-Ray, a tapped word that has an X-Ray entry opens it directly; any other word falls through to the normal dictionary."),
                 },
                 {
                     id = "dictionary_bypass_vocab_add",
@@ -1942,7 +1942,7 @@ local SettingsSchema = {
                     text = _("Manage Domains..."),
                     callback = "showDomainManager",
                     keep_menu_open = true,
-                    info_text = _("Manage knowledge domains. Domains are selected per-chat."),
+                    info_text = _("Manage knowledge domains. The selected domain applies globally or per book."),
                 },
                 {
                     id = "default_domain_research",
@@ -2112,7 +2112,7 @@ local SettingsSchema = {
                     id = "privacy_per_book_tip",
                     type = "action",
                     text = _("Tip: Per-book overrides"),
-                    help_text = _("Every sharing toggle here can be overridden per book (Book Settings → Privacy). Two patterns: keep a global toggle off and allow it for specific books, or keep it on and deny it for sensitive books. A per-book deny always wins — even over trusted providers."),
+                    help_text = _("Every sharing toggle here can be overridden per book (Book Settings → Privacy). Two patterns: keep a global toggle off and allow it for specific books, or keep it on and deny it for sensitive books. A per-book deny always wins, even over trusted providers."),
                     callback = "showPrivacyOverridesTip",
                     keep_menu_open = true,
                 },
@@ -2687,7 +2687,7 @@ local SettingsSchema = {
                             return T(_("Index Scan Folders: %1"), #folders)
                         end
                     end,
-                    help_text = _("Folders to scan during index rebuild: point this at your synced book folders. Only these folders are ever scanned, and only when a rebuild runs. Folders that don't exist on this device are skipped.\n\nNote: a settings reset clears this list."),
+                    help_text = _("Folders to scan during index rebuild: point this at your synced book folders. Only these folders are ever scanned: by a rebuild, and by a backup or restore point gathering per-book settings. Folders that don't exist on this device are skipped.\n\nNote: a settings reset clears this list."),
                     callback = "getIndexScanFoldersMenuItems",
                 },
                 {
@@ -2719,9 +2719,9 @@ local SettingsSchema = {
                             id = "quick_reset_settings",
                             type = "action",
                             text = _("Quick: Settings only"),
-                            help_text = _("Resets ALL settings in this menu to defaults:\n• Provider, model, temperature\n• Streaming, display, export settings\n• Dictionary & translation settings\n• Reasoning & debug settings\n• Language preferences\n\nKeeps: API keys, all actions, custom behaviors/domains, custom providers/models, gesture registrations, chat history."),
+                            help_text = _("Resets ALL settings in this menu to defaults:\n• Provider, model, temperature\n• Streaming, display, export settings\n• Dictionary & translation settings\n• Reasoning & debug settings\n\nKeeps: API keys, your languages and selections (behavior, domain, trusted providers, X-Ray defaults, favorite models, toolbar buttons, export folder), all actions, custom behaviors/domains, custom providers/models, gesture registrations, chat history."),
                             confirm = true,
-                            confirm_text = _("Reset all settings to defaults?\n\nResets ALL settings in Settings menu:\n• Provider, model, temperature\n• Streaming, display, export settings\n• Dictionary & translation settings\n• Reasoning & debug settings\n• Language preferences\n\nKeeps: API keys, all actions, custom behaviors/domains, custom providers/models, gesture registrations, chat history."),
+                            confirm_text = _("Reset all settings to defaults?\n\nResets ALL settings in Settings menu:\n• Provider, model, temperature\n• Streaming, display, export settings\n• Dictionary & translation settings\n• Reasoning & debug settings\n\nKeeps: API keys, your languages and selections (behavior, domain, trusted providers, X-Ray defaults, favorite models, toolbar buttons, export folder), all actions, custom behaviors/domains, custom providers/models, gesture registrations, chat history."),
                             callback = "quickResetSettings",
                         },
                         -- Quick: Actions only
@@ -2729,9 +2729,9 @@ local SettingsSchema = {
                             id = "quick_reset_actions",
                             type = "action",
                             text = _("Quick: Actions only"),
-                            help_text = _("Resets all action-related settings:\n• Custom actions you created\n• Edits to built-in actions\n• Disabled actions (re-enables all)\n• All action menus (highlight, dictionary, quick actions, general, file browser)\n\nKeeps: All settings, API keys, custom behaviors/domains, custom providers/models, gesture registrations, chat history."),
+                            help_text = _("Resets all action-related settings:\n• Custom actions you created\n• Edits to built-in actions\n• Disabled actions (re-enables all)\n• All action menus (highlight, dictionary, quick actions, input dialogs, general, file browser), the QA Panel Utilities and the QS Panel Items\n\nKeeps: All settings, API keys, custom behaviors/domains, custom providers/models, gesture registrations, chat history."),
                             confirm = true,
-                            confirm_text = _("Reset all action settings?\n\nResets:\n• Custom actions you created\n• Edits to built-in actions\n• Disabled actions (re-enables all)\n• All action menus (highlight, dictionary, quick actions, general, file browser)\n\nKeeps: All settings, API keys, custom behaviors/domains, custom providers/models, gesture registrations, chat history."),
+                            confirm_text = _("Reset all action settings?\n\nResets:\n• Custom actions you created\n• Edits to built-in actions\n• Disabled actions (re-enables all)\n• All action menus (highlight, dictionary, quick actions, input dialogs, general, file browser), the QA Panel Utilities and the QS Panel Items\n\nKeeps: All settings, API keys, custom behaviors/domains, custom providers/models, gesture registrations, chat history."),
                             callback = "quickResetActions",
                         },
                         -- Quick: Fresh start
@@ -2739,9 +2739,9 @@ local SettingsSchema = {
                             id = "quick_reset_fresh_start",
                             type = "action",
                             text = _("Quick: Fresh start"),
-                            help_text = _("Resets everything except API keys and chat history:\n• All settings (provider, model, temperature, all toggles)\n• All actions (custom, edits, menus)\n• Custom behaviors & domains\n• Custom providers & models\n\nKeeps: API keys, gesture registrations, chat history only."),
+                            help_text = _("Resets everything except API keys and chat history:\n• All settings (provider, model, temperature, all toggles)\n• All actions (custom, edits, menus, the + Gesture Menu list)\n• Custom behaviors & domains\n• Custom providers & models\n\nKeeps: API keys, your languages, gesture registrations, chat history only."),
                             confirm = true,
-                            confirm_text = _("Fresh start?\n\nResets:\n• All settings (provider, model, temperature, all toggles)\n• All actions (custom, edits, menus)\n• Custom behaviors & domains\n• Custom providers & models\n\nKeeps: API keys, gesture registrations, chat history only."),
+                            confirm_text = _("Fresh start?\n\nResets:\n• All settings (provider, model, temperature, all toggles)\n• All actions (custom, edits, menus, the + Gesture Menu list)\n• Custom behaviors & domains\n• Custom providers & models\n\nKeeps: API keys, your languages, gesture registrations, chat history only."),
                             callback = "quickResetFreshStart",
                             separator = true,
                         },
@@ -2868,7 +2868,7 @@ local SettingsSchema = {
                     text = _("Faster Models for Quick Actions"),
                     path = "features.use_action_tiers",
                     default = true,
-                    help_text = _("Actions that declare a speed tier (Translate and Quick Define by default; configurable per action in the action editor) use a faster model from your current provider for that request. Only the model changes — the prompt and settings stay the same. Providers without tier data keep the current model. Turn off to always use your configured model."),
+                    help_text = _("Actions that declare a speed tier (Translate, Quick Define and Quick Explain by default; configurable per action in the action editor) use a faster model from your current provider for that request. Only the model changes; the prompt and settings stay the same. Providers without tier data keep the current model. Turn off to always use your configured model."),
                 },
                 -- Global tier pins (tier GUI phase 2, docs/tier_gui_plan.md):
                 -- each slot follows the active provider's ladder by default, or
@@ -2896,7 +2896,7 @@ local SettingsSchema = {
                             id = "enable_web_search",
                             type = "toggle",
                             text = _("Enable Web Search"),
-                            help_text = T(_("Allow AI to search the web for current information.\n\nSupported providers: %1.\n\nGemini supports it only on Search-grounding-capable models; OpenAI on GPT-5 models and xAI on Grok-4 models (via their Responses APIs); OpenRouter works for any model via the :online suffix.\n\nPerplexity searches BY DEFAULT (its native behavior) — the Web toggle can now actually turn it off per chat or per book.\n\nOther providers currently ignore this setting.\n\nThis is a global default: per-request toggles (input dialog, chat viewer) adapt to the active provider.\n\nIncreases token usage/cost."),
+                            help_text = T(_("Allow AI to search the web for current information.\n\nSupported providers: %1.\n\nGemini supports it only on Search-grounding-capable models; OpenAI on GPT-5 models and xAI on Grok-4 models (via their Responses APIs); OpenRouter works for any model via the :online suffix.\n\nPerplexity searches BY DEFAULT (its native behavior); the Web toggle can now actually turn it off per chat or per book.\n\nOther providers currently ignore this setting.\n\nThis is a global default: per-request toggles (input dialog, chat viewer) adapt to the active provider.\n\nIncreases token usage/cost."),
                                 ModelConstraints.getWebSearchProvidersLabel())
                                 -- Appended as its own sentence rather than folded into the
                                 -- string above so the existing translations survive. Field
@@ -3236,7 +3236,7 @@ local SettingsSchema = {
                     id = "enable_book_tools",
                     type = "toggle",
                     text = _("AI Book Tools"),
-                    help_text = _("EXPERIMENTAL: Gemini, Claude (Anthropic), OpenAI, OpenRouter (Claude/GPT/Gemini models), DeepSeek, Mistral, Groq, and xAI. Book tools let the AI search the open book's text, read specific pages, and view the table of contents, so it can ground answers in the actual book instead of guessing. Requires \"Allow Text Extraction\".\n\nThis sets whether the Tools chip in book chats starts ON or OFF; you can always flip it per chat, and the AI still decides per question whether to actually search.\n\nPredefined actions are unaffected either way; they never use tools unless they explicitly offer smart retrieval. Override per book in Book Settings. Work in progress; behavior may change."),
+                    help_text = _("EXPERIMENTAL: for providers and models that support tool calls (Test provider shows whether yours does). Book tools let the AI search the open book's text, read specific pages, and view the table of contents, so it can ground answers in the actual book instead of guessing. Requires \"Allow Text Extraction\".\n\nThis sets whether the Tools chip in book chats starts ON or OFF; you can always flip it per chat, and the AI still decides per question whether to actually search.\n\nPredefined actions are unaffected either way; they never use tools unless they explicitly offer smart retrieval. Override per book in Book Settings. Work in progress; behavior may change."),
                     path = "features.enable_book_tools",
                     default = false,
                 },
@@ -3361,7 +3361,7 @@ local SettingsSchema = {
                     depends_on = { id = "show_debug_in_chat", value = true },
                     separator = true,
                     options = {
-                        { value = "minimal", text = _("Minimal (user input only)") },
+                        { value = "minimal", text = _("Minimal (messages only)") },
                         { value = "names", text = _("Names (config summary)") },
                         { value = "full", text = _("Full (system blocks)") },
                     },
@@ -3370,7 +3370,7 @@ local SettingsSchema = {
                     id = "debug_truncate_content",
                     type = "toggle",
                     text = _("Truncate Large Content (debug)"),
-                    help_text = _("Truncate long content (book text, cached responses) in debug output. Shows first and last ~1500 characters with truncation notice."),
+                    help_text = _("Truncate long content (book text, cached responses) in debug output. A field over 5,000 characters shows its first and last 2,000, with a truncation notice."),
                     path = "features.debug_truncate_content",
                     default = true,
                     depends_on = { id = "debug", value = true },

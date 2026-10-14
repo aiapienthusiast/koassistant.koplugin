@@ -458,10 +458,9 @@ BookSettings.KEY_BACKGROUND = "koassistant_book_background"
 BookSettings.BACKGROUND_MAX_CHARS = 2000
 
 --- Read this book's Background, trimmed and capped. Pure.
--- Over-cap text is cut by the Attach engine's truncate (UTF-8-safe, snaps to the
--- previous line break) — its truncation NOTE is deliberately dropped: this is the
--- reader's own standing note, not an attachment, and a "[truncated]" marker in the
--- system prompt would read as instruction text.
+-- Over-cap text is cut at BACKGROUND_MAX_CHARS characters (a character boundary,
+-- B441), with no marker: this is the reader's own standing note, not an attachment,
+-- and a "[truncated]" marker in the system prompt would read as instruction text.
 -- @return string|nil  nil when unset/blank (never an empty string)
 function BookSettings.getBackground(doc_settings)
     doc_settings = BookStore.wrap(doc_settings)
@@ -469,9 +468,10 @@ function BookSettings.getBackground(doc_settings)
     if type(v) ~= "string" then return nil end
     v = v:match("^%s*(.-)%s*$")
     if v == "" then return nil end
-    if #v > BookSettings.BACKGROUND_MAX_CHARS then
-        v = require("koassistant_attachments").truncate(
-            v, BookSettings.BACKGROUND_MAX_CHARS, "head")
+    local SR = require("koassistant_scope_resolver")
+    if SR.utf8Len(v) > BookSettings.BACKGROUND_MAX_CHARS then
+        -- characters, not bytes: a non-Latin note was cut about half as early (B441)
+        v = SR.utf8First(v, BookSettings.BACKGROUND_MAX_CHARS)
     end
     return v
 end
@@ -2974,8 +2974,8 @@ function BookSettings.showXrayMarkingPicker(opts)
 end
 
 --- Per-book "Book Settings" — a dedicated per-book configuration screen. Every row is
--- about THIS book (no For-this-book/Global toggle); each setting offers "Follow global"
--- plus per-book overrides. Compact rows that open small sub-pickers, so the screen scales
+-- about THIS book; the pickers it opens have a For-this-book/Global toggle and open on
+-- the book's tab, and most settings offer "Follow global" plus per-book overrides. Compact rows that open small sub-pickers, so the screen scales
 -- as more per-book settings are added. For the Quick Actions panel, file browser, and the
 -- input-dialog button. (Reader/file-browser only — a book must be in scope.)
 -- @param opts table: { plugin, ui, document_path, on_close }

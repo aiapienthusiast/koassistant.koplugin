@@ -227,7 +227,7 @@ In a series, lookups look past a book only once it is read (marked **Finished**,
 
 In the X-Ray browser, **→ Group** (in the ☰ menu, and in the top row of an entry page) opens the group's member list: its books in order. A book opens its X-Ray at the same entry, or at the same category when it has no such entry. From an entry page the other book's entry opens read-only over the page, with **Open in *Title*'s X-Ray** to switch; that X-Ray's up-arrow at its top level brings you back. A book is marked "(this book)", "(no X-Ray)", "(not in its X-Ray)" or "(later in the series)". Below the books: **AI merge X-Rays…** (a series or a project), **Group hub…** and **Manage groups…**.
 
-The input dialog of a grouped book has a **Group** button that lists the group's books and opens their X-Rays (Settings → Menus & Buttons → Show Group button).
+The input dialog of a grouped book has a **Group** button that lists the group's books and opens their X-Rays (Settings → Menus & Buttons → Show Group button). In a series, a later volume is marked (later in the series) and asks before it opens.
 
 ## Where groups are kept
 

@@ -2446,7 +2446,7 @@ function ModelConstraints.maybeAppendContextLimitHint(err_msg, provider, model, 
     local tip = "Tip: This request was too large for the selected model.\n" ..
         "Actions like X-Ray and Recap send the book's text, which can exceed a model's input limit. Options:\n" ..
         "- Choose \"AI knowledge only\" or a single section when the action offers a source choice.\n" ..
-        "- Lower \"Max Text Characters\" (Settings → Text Extraction).\n" ..
+        "- Lower \"Max Text Characters\" (Settings → Privacy & Data → Text Extraction).\n" ..
         "- Switch to a model/provider with a larger context window."
     if provider == "groq" then
         tip = tip .. "\n\nNote: Groq's free tier limits tokens a minute (about 6K-12K) far below the " ..

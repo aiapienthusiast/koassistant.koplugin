@@ -47,6 +47,11 @@ TestRunner:test("plan: custom (UI) and custom_actions.lua sources route to their
         "membership,placements,edit:config,duplicate", "config")
 end)
 
+TestRunner:test("plan: an action whose details screen hides Duplicate gets no duplicate row (B424)", function()
+    TestRunner:assertEqual(ids(ActionHold.plan({ id = "xray", source = "builtin", no_duplicate = true }, "highlight", true)),
+        "membership,placements,edit:builtin", "no duplicate for X-Ray")
+end)
+
 TestRunner:test("plan: local-handler pseudo actions have no editor or duplicate; no surface = no membership row", function()
     TestRunner:assertEqual(ids(ActionHold.plan({ id = "xray_lookup", source = "builtin", local_handler = true }, "highlight", true)),
         "membership,placements", "pseudo action")

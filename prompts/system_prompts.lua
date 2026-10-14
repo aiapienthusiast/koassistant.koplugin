@@ -12,7 +12,7 @@
 --   [Context data] + [Action prompt] + [Runtime input]
 --
 -- Actions can control behavior via:
---   behavior_variant = "minimal" | "full" | "none"  (pick from list)
+--   behavior_variant = "mini" | "standard" | "full" | "none" | a behavior id
 --   behavior_override = "custom text..."            (replace entirely)
 
 local _ = require("koassistant_gettext")
@@ -86,7 +86,7 @@ end
 -- Handles priority: override > variant > global setting
 -- @param config: {
 --   behavior_override: custom behavior text (highest priority),
---   behavior_variant: "minimal", "full", "custom", "none", or any behavior ID,
+--   behavior_variant: "mini", "standard", "full", "custom", "none", or any behavior ID,
 --   global_variant: global setting fallback (features.selected_behavior),
 --   custom_ai_behavior: user's custom behavior text (used when variant is "custom") - DEPRECATED
 --   custom_behaviors: array of UI-created behaviors from settings (NEW)
@@ -105,11 +105,13 @@ function SystemPrompts.resolveBehavior(config)
 
     -- Priority 2: Named variant (including "none", "custom", or any behavior ID)
     if config.behavior_variant then
-        if config.behavior_variant == "none" then
+        -- "minimal" was the sample's word for the mini behavior until 2026-10 (B422)
+        local variant = config.behavior_variant == "minimal" and "mini" or config.behavior_variant
+        if variant == "none" then
             return nil, "none"  -- Behavior disabled
         end
         -- Legacy "custom" variant support
-        if config.behavior_variant == "custom" then
+        if variant == "custom" then
             return config.custom_ai_behavior or (builtin.mini and builtin.mini.text) or FALLBACK_BEHAVIOR, "variant"
         end
         -- Merged lookup — user behaviors/ folder overrides builtin with the same id
@@ -118,7 +120,7 @@ function SystemPrompts.resolveBehavior(config)
         -- variant-pinned behavior (e.g. behaviors/translator_direct.md for the
         -- translate action — issue #100) a silent no-op on the wire while
         -- getBehaviorById-based previews showed the user's text.
-        local behavior = SystemPrompts.getBehaviorById(config.behavior_variant, config.custom_behaviors)
+        local behavior = SystemPrompts.getBehaviorById(variant, config.custom_behaviors)
         if behavior then
             return behavior.text, "variant"
         end
@@ -175,7 +177,7 @@ end
 --   Context instructions and action prompts go in user message
 --
 -- @param config: {
---   behavior_variant: "minimal", "full", "none", or nil (use global),
+--   behavior_variant: "mini", "standard", "full", "none", a behavior ID, or nil (use global),
 --   behavior_override: custom behavior text (overrides variant),
 --   global_variant: global setting fallback (features.selected_behavior),
 --   domain_context: optional domain context string,
@@ -316,7 +318,7 @@ end
 --     - Ollama: included in messages
 --
 -- @param config: {
---   behavior_variant: "minimal", "full", "custom", "none", or nil,
+--   behavior_variant: "mini", "standard", "full", "custom", "none", a behavior ID, or nil,
 --   behavior_override: custom behavior text (overrides variant),
 --   global_variant: global setting fallback,
 --   custom_ai_behavior: user's custom behavior text,

@@ -556,6 +556,41 @@ TestRunner:test("a failing tar is reported as a failure (LuaJIT os.execute retur
         "_createArchive must return false when tar cannot read the source directory")
 end)
 
+--------------------------------------------------------------------------------
+TestRunner:suite("a Replace restore from a backup without keys keeps the keys you have (B471)")
+
+wipeTmp()
+seed()
+local bm3 = freshManager()
+local sanitized3 = bm3:createBackup({
+    include_settings = true, include_api_keys = false,
+    include_configs = false, include_content = false, include_chats = false,
+})
+-- the live settings hold the keys and the sign-in (seed), plus a key selection
+do
+    local live = LuaSettingsStub:open(TMP .. "/settings/koassistant_settings.lua")
+    local f = live:readSetting("features") or {}
+    f.api_key_selected = { anthropic = "fp-1" }
+    live:saveSetting("features", f)
+    live:flush()
+end
+local restore3 = bm3:restoreBackup(sanitized3.backup_path, {
+    restore_settings = true, restore_configs = false, restore_content = false,
+    restore_api_keys = false, merge_mode = false, skip_restore_point = true,
+})
+
+TestRunner:test("the restore without keys succeeds", function()
+    TestRunner:assertTrue(restore3 and restore3.success, "restore failed: " .. tostring(restore3 and restore3.error))
+end)
+
+TestRunner:test("the keys, the sign-in and the key selection survive the Replace restore", function()
+    local live = LuaSettingsStub:open(TMP .. "/settings/koassistant_settings.lua")
+    local f = live:readSetting("features") or {}
+    TestRunner:assertTrue(f.api_keys ~= nil and f.api_keys.anthropic == "sk-secret", "api key kept")
+    TestRunner:assertTrue(f.openai_codex_oauth ~= nil and f.openai_codex_oauth.access_token == "oauth-access", "sign-in kept")
+    TestRunner:assertTrue(f.api_key_selected ~= nil and f.api_key_selected.anthropic == "fp-1", "selection kept")
+end)
+
 wipeTmp()
 restoreMocks()
 return TestRunner:summary()

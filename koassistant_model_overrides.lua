@@ -67,7 +67,8 @@ end
 
 local function prefixMatch(model, pattern)
     if not model or not pattern then return false end
-    return model == pattern or model:match("^" .. pattern:gsub("%-", "%%-")) ~= nil
+    -- every pattern character escaped: a "." in "gpt-5.6" used to match any character (B478)
+    return model == pattern or model:match("^" .. pattern:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")) ~= nil
 end
 
 local function pluginDir()

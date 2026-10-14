@@ -150,6 +150,13 @@ local s6 = settingsWith({
 TestRunner.assert(Base.getApiKey("gemini", s6) == "AIzaSy-dirty-1234567890",
     "selection fingerprint is computed over the SANITIZED key")
 
+TestRunner.assert(Base.isPlaceholderKey("your-key-here") == true,
+    "the old README's example key is a placeholder (B432)")
+TestRunner.assert(Base.isPlaceholderKey("YOUR-OPENAI-KEY") == true,
+    "a placeholder with hyphens is a placeholder")
+TestRunner.assert(Base.isPlaceholderKey("sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789") == false,
+    "a real key with hyphens is not a placeholder")
+
 -- Cleanup: leave no fake apikeys module for later test files in the same run
 package.loaded["apikeys"] = nil
 

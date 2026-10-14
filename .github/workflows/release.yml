@@ -45,6 +45,9 @@ jobs:
                     --exclude='hooks' \
                     --exclude='screenshots' \
                     --exclude='wiki' \
+                    --exclude='*.pot' \
+                    --exclude='.luacheckrc' \
+                    --exclude='OWNER' \
                     --exclude='.gitignore' \
                     . build/koassistant.koplugin/
 

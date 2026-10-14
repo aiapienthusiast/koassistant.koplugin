@@ -11,6 +11,8 @@ Research mode adapts KOAssistant's prompts, X-Ray schema and web search behavior
 | **Global setting** | Set on the picker's Global target; applies to every book without a setting of its own. |
 | **Per-action override** | An action can force research mode on or off, whatever the other settings say. |
 
+Whatever turns it on, research mode reaches only chats and actions about a book; general and library chats never carry it.
+
 **Resolution order:** action override > per-book setting > DOI auto-detection > global setting. A per-book **Off** keeps research mode off even when a DOI is detected.
 
 No built-in action carries an override; a file-based custom action can, with `research_mode = true` or `research_mode = false` ([Actions and Menus](Actions-and-Menus)).
@@ -25,7 +27,7 @@ A detected DOI turns research mode on for each request about the book as it is m
 | **Academic prompts** | About, Find Similar and X-Ray (Simple) switch to research-oriented prompts: the research context, methodology and cited works instead of characters and themes. About gives a research overview (the question the paper addresses, its contributions, its context in the field, its methods, its impact and reception), Find Similar recommends related academic works, and X-Ray (Simple) becomes a research companion. |
 | **Research note** | A note added to the system prompt tells the AI the text is an academic or research paper: ground the analysis in the provided text and, if web search is available, use it to verify technical claims, place the paper within its field, look up referenced works or foundational concepts, and search for the DOI for citation context and related work. It rides every request about the book: actions, your own questions in a chat, and chats about its artifacts. |
 | **Web search** | Actions that normally run with web search off follow your web search setting instead (the book's own, else the global one): X-Ray, Document Summary, Document Analysis, Key Arguments, Extract Key Insights, Analyze Notes, and on highlights Summarize and Thematic Connection. If web search is on, research texts get web-enriched analysis. Recap, Discussion Questions and Quiz keep web search off. |
-| **Spoiler protection stands down** | Research mode on for a book (set for the book, by its group, or globally) turns spoiler protection off for that book without touching your stored setting: the chat reminder stops, [AI Book Tools](Reasoning-Web-Search-and-Book-Tools) may read the whole document, and X-Ray checkpoints install as soon as they are built. The Book Settings row says "off: research mode"; Book Settings → X-Ray → X-Ray updates → **Follow my reading position** keeps a book's checkpoints at your position. See [Spoiler Protection](Spoiler-Protection). |
+| **Spoiler protection stands down** | Research mode on for a book (set for the book, taken from its group when the book follows it, or globally) turns spoiler protection off for that book without touching your stored setting: the chat reminder stops, [AI Book Tools](Reasoning-Web-Search-and-Book-Tools) may read the whole document, and X-Ray checkpoints install as soon as they are built. The Book Settings row says "off: research mode"; Book Settings → X-Ray → X-Ray updates → **Follow my reading position** keeps a book's checkpoints at your position. See [Spoiler Protection](Spoiler-Protection). |
 
 Recap, Key Arguments, Counterarguments, Discussion Questions, Quiz and Reading Guide carry an academic branch in their own prompts (methodology, evidence, the paper's place in its field), which they use for any paper, with research mode or without. See [Reading Analysis Actions](Reading-Analysis-Actions).
 
@@ -38,7 +40,7 @@ Research mode lives in the **Domain & Research** picker, in a "Research Mode" se
 - **Book Settings**: the **Research mode** row (or the Domain row);
 - **Settings → Actions & Prompts → Default Domain & Research** (the row names your default domain), which opens on the Global target.
 
-When a book is in scope, the picker's top row is a target toggle, **For this book | Global**, shared by the domain and research mode: both use the same target for the session. The picker opens on **For this book** whenever a book is in hand; general and library chats use the global target.
+When a book is in scope, the picker's top row is a target toggle, **For this book | Global**, shared by the domain and research mode. The picker opens on **For this book** whenever a book is in hand; general and library chats use the global target.
 
 - **Book target:** **Follow global (On or Off)** / **On** / **Off**, saved with the book.
 - **Global target:** **Off** / **On**, for every book without a setting of its own.
@@ -57,7 +59,7 @@ KOAssistant looks for the book's DOI when you run an action or a chat about it:
 2. **Document metadata**: the identifier, description and keyword fields (EPUB identifiers, PDF description or keywords).
 3. **A first-page text scan**: the text of page 1 is extracted on the device, searched for a DOI pattern, and discarded. This is the most reliable route for PDFs, since publishers print the DOI on page 1. It needs the book open.
 
-After the first action run, the result is cached with the book, so later actions (including from the file browser) use it instantly. When the first-page scan finds no DOI, that is cached too and the book is not checked again; turn research mode on by hand for such a book. From the file browser, without the book open, only the cached result and the metadata are checked.
+After the first action run, the result is cached with the book, so later actions (including from the file browser) use it instantly. When the first-page scan finds no DOI, that is cached too: later runs re-check only the metadata (a DOI added to the book's identifiers or description is found) and never repeat the page scan. Turn research mode on by hand for such a book. From the file browser, without the book open, only the cached result and the metadata are checked.
 
 DOI detection runs whatever research mode is set to: a detected DOI is always available to prompts through `{doi_clause}`. The research mode setting only controls whether the research behavior (the research note, the prompt swaps, the web search change) turns on.
 

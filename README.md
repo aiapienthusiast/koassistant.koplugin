@@ -7,7 +7,7 @@
 
 **Powerful, customizable AI assistant for KOReader.**
 
-> **Where things are documented.** This README is the overview: what KOAssistant does, how to set it up, where to get help. The **[Wiki](https://github.com/zeeyado/koassistant.koplugin/wiki)** is the full reference, one page per feature, published with every release; the [documentation map](#documentation-map) at the end lists its pages. The README is usually in sync with the main branch, so a feature named here may be newer than the release you run.
+**Documentation:** the [Wiki](https://github.com/zeeyado/koassistant.koplugin/wiki) has a page for every feature; the full list is at the [end of this page](#documentation).
 
 <p align="center">
   <a href="screenshots/ELI5highlightchat.png"><img src="screenshots/ELI5highlightchat.png" width="180" alt="AI explains highlighted text"></a>
@@ -42,9 +42,9 @@
 
 [32 built-in providers](#supported-providers) (Anthropic, OpenAI, Gemini, Ollama and more) plus custom OpenAI-compatible providers. OpenAI can also be used without an API key by signing in with your ChatGPT plan (OpenAI Subscription). Reasoning is configured per model. Personal reading data (highlights, annotations, notebooks) is opt-in and is not sent to the AI unless you enable it.
 
-**Status:** Active development. [Issues](https://github.com/zeeyado/koassistant.koplugin/issues), [discussions](https://github.com/zeeyado/koassistant.koplugin/discussions) and [translations](https://hosted.weblate.org/engage/koassistant/) welcome. If you are somewhat technical and do not want to wait for tested releases, you can run off the main branch to get the latest features; breakage may happen. Also see [Assistant Plugin](https://github.com/omer-faruq/assistant.koplugin); both can run side by side.
+**Status:** Active development. [Issues](https://github.com/zeeyado/koassistant.koplugin/issues), [discussions](https://github.com/zeeyado/koassistant.koplugin/discussions) and [translations](https://hosted.weblate.org/engage/koassistant/) welcome. If you are somewhat technical and do not want to wait for tested releases, you can run off the main branch to get the latest features; breakage may happen, as untested features may be on main. 
 
-This plugin is developed with AI assistance using (mostly) [Claude Code](https://claude.ai).
+This plugin is developed using [Claude Code](https://claude.ai) and other tools.
 
 ---
 
@@ -70,7 +70,7 @@ The folder must be named exactly `koassistant.koplugin` (remove a "-main" suffix
 
 > **This is the only time you install by hand.** From then on KOAssistant updates itself: when a new version is out you see its release notes with an "Update Now" button, and one tap downloads, installs and keeps your settings. See [Updating](#updating).
 
-**Alternative:** the [App Store plugin](https://github.com/omer-faruq/appstore.koplugin) installs KOAssistant from inside KOReader, from releases or from the main branch, with no computer.
+**Alternative:** [Storefront](https://github.com/ultimatejimmy/storefront.koplugin) or the [App Store plugin](https://github.com/omer-faruq/appstore.koplugin) installs KOAssistant from inside KOReader, from releases or from the main branch, with no computer.
 
 ### 2. Restart KOReader
 
@@ -188,8 +188,8 @@ Manual updates, what is safe during an update, update checking, backups, restore
 
 **Quick checks when something does not work:**
 - **An action ignores your highlights, notes or the book's text.** Most reading data is opt-in: **Settings → Privacy & Data** (highlights, annotations, notebook) and **Settings → Privacy & Data → Text Extraction** (book text). X-Ray does not run without text extraction; X-Ray (Simple) works from AI knowledge instead.
-- **"API key missing".** Add the key for the selected provider in **Settings → API Keys & Auth** or in `apikeys.lua`. Pasted keys are cleaned of stray spaces and line breaks on read.
-- **No response or a timeout.** Check the connection, then turn on **Settings → Advanced → Show Debug in Chat** to see the actual error, and try **Settings → Advanced → Test Connection**. A long request is given up to 15 minutes.
+- **"No API key found".** Add the key for the selected provider in **Settings → API Keys & Auth** or in `apikeys.lua`; a sample placeholder such as "your-key-here" counts as no key. Pasted keys are cleaned of stray spaces and line breaks on read.
+- **No response or a timeout.** Check the connection and read the error: it names the provider and model and adds one tip. Try **Settings → Advanced → Test Connection**; **Settings → Advanced → Console Debug** writes the provider's own error text to crash.log. The plugin waits up to 15 minutes for the provider to send something.
 - **Menu icons show as boxes.** KOReader ships no emoji font; the Troubleshooting page explains how to add one, and **Settings → Display Settings → Emoji** turns the icons off.
 - **Highlight menu or bypass actions do not appear.** In a book: KOReader's gear menu → Taps and gestures → Long-press on text; "Dictionary on single word selection" must be on for dictionary bypass, and the highlight action must be "Ask with popup dialog".
 
@@ -197,9 +197,7 @@ The whole list, with fonts for Arabic and other scripts, settings reset and debu
 
 **Where to ask:** [Discussions](https://github.com/zeeyado/koassistant.koplugin/discussions) for questions, prompt ideas, setups and workflows; [Issues](https://github.com/zeeyado/koassistant.koplugin/issues) for bugs with steps to reproduce and for specific feature requests.
 
-<a id="research-mode"></a><a id="hidden-flows-support"></a><a id="x-ray-modes"></a><a id="x-ray-version-history"></a><a id="x-ray-auto-update"></a><a id="x-ray-version-ladder"></a><a id="section-x-rays"></a><a id="section-support"></a><a id="where-images-are-stored"></a><a id="the-generated-images-gallery"></a><a id="api-keys"></a><a id="dictionary-settings-reference"></a><a id="menus--buttons"></a><a id="koreader-integration"></a><a id="privacy--data"></a><a id="text-extraction-and-double-gating"></a><a id="supported-providers--settings"></a><a id="template-variables"></a><a id="troubleshooting"></a><a id="backup--restore"></a><a id="settings-reference"></a><a id="actions"></a><a id="book-groups"></a><a id="book-hub"></a><a id="image-generation"></a><a id="web-search"></a><a id="document-artifacts"></a><a id="free-tier-providers"></a><a id="updating-the-plugin"></a><a id="emoji-font-setup"></a>
-
-## Documentation map
+## Documentation
 
 The [Wiki](https://github.com/zeeyado/koassistant.koplugin/wiki) holds the reference, one page per feature:
 
@@ -208,8 +206,6 @@ The [Wiki](https://github.com/zeeyado/koassistant.koplugin/wiki) holds the refer
 - **Customization:** [Actions and Menus](https://github.com/zeeyado/koassistant.koplugin/wiki/Actions-and-Menus) · [Template Variables](https://github.com/zeeyado/koassistant.koplugin/wiki/Template-Variables) · [Prompts, Behaviors and Domains](https://github.com/zeeyado/koassistant.koplugin/wiki/Prompts-Behaviors-and-Domains) · [Languages](https://github.com/zeeyado/koassistant.koplugin/wiki/Languages)
 - **Providers and models:** [Providers and Models](https://github.com/zeeyado/koassistant.koplugin/wiki/Providers-and-Models) · [Reasoning, Web Search and Book Tools](https://github.com/zeeyado/koassistant.koplugin/wiki/Reasoning-Web-Search-and-Book-Tools)
 - **Reference and support:** [Settings Reference](https://github.com/zeeyado/koassistant.koplugin/wiki/Settings-Reference) · [Backups and Updates](https://github.com/zeeyado/koassistant.koplugin/wiki/Backups-and-Updates) · [Advanced Configuration and Development](https://github.com/zeeyado/koassistant.koplugin/wiki/Advanced-Configuration-and-Development) · [Troubleshooting](https://github.com/zeeyado/koassistant.koplugin/wiki/Troubleshooting) · [Contributing](https://github.com/zeeyado/koassistant.koplugin/wiki/Contributing)
-
-**Where did it go?** Until October 2026 this README held the full reference. Its sections live on these pages now: Privacy & Data and text extraction → [Privacy and Data](https://github.com/zeeyado/koassistant.koplugin/wiki/Privacy-and-Data); the contexts, highlight mode, library mode, general chat, chips and Save to Note → [Contexts and Chat](https://github.com/zeeyado/koassistant.koplugin/wiki/Contexts-and-Chat); X-Ray, its modes, versions, automatic building, section X-Rays and hidden flows → [Using X-Ray](https://github.com/zeeyado/koassistant.koplugin/wiki/Using-X-Ray); Book Groups → [Book Groups and Series](https://github.com/zeeyado/koassistant.koplugin/wiki/Book-Groups-and-Series); Book Settings and Book Hub → [Book Settings and Book Hub](https://github.com/zeeyado/koassistant.koplugin/wiki/Book-Settings-and-Book-Hub); Actions, file-based actions, highlight menu actions and Menus & Buttons → [Actions and Menus](https://github.com/zeeyado/koassistant.koplugin/wiki/Actions-and-Menus); Template Variables → [Template Variables](https://github.com/zeeyado/koassistant.koplugin/wiki/Template-Variables); Behaviors, Domains and how the prompt works → [Prompts, Behaviors and Domains](https://github.com/zeeyado/koassistant.koplugin/wiki/Prompts-Behaviors-and-Domains); Dictionary Integration, Bypass Modes and Translate → [Dictionary and Translation](https://github.com/zeeyado/koassistant.koplugin/wiki/Dictionary-and-Translation) and [Setup, Gestures and Panels](https://github.com/zeeyado/koassistant.koplugin/wiki/Setup-Gestures-and-Panels); Managing Conversations and Notebooks → [Conversations, Notebooks and Export](https://github.com/zeeyado/koassistant.koplugin/wiki/Conversations-Notebooks-and-Export); Settings Reference → [Settings Reference](https://github.com/zeeyado/koassistant.koplugin/wiki/Settings-Reference); Updating, Update Checking, Backup & Restore and reset → [Backups and Updates](https://github.com/zeeyado/koassistant.koplugin/wiki/Backups-and-Updates); Advanced Configuration and Testing Your Setup → [Advanced Configuration and Development](https://github.com/zeeyado/koassistant.koplugin/wiki/Advanced-Configuration-and-Development); Document Artifacts and caching → [Artifacts and Caching](https://github.com/zeeyado/koassistant.koplugin/wiki/Artifacts-and-Caching); Reasoning, Web Search and AI Book Tools → [Reasoning, Web Search and Book Tools](https://github.com/zeeyado/koassistant.koplugin/wiki/Reasoning-Web-Search-and-Book-Tools); Image Generation → [Image Generation](https://github.com/zeeyado/koassistant.koplugin/wiki/Image-Generation); the provider details, free tiers, subscriptions, custom providers and models → [Providers and Models](https://github.com/zeeyado/koassistant.koplugin/wiki/Providers-and-Models); Troubleshooting, the emoji font and RTL fonts → [Troubleshooting](https://github.com/zeeyado/koassistant.koplugin/wiki/Troubleshooting); Tips and KOReader Tips → their feature's page.
 
 ## Requirements
 

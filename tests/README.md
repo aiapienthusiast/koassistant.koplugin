@@ -14,7 +14,8 @@ The test suite must run from within a **KOReader installation** where KOAssistan
 
 | Platform | Path |
 |----------|------|
-| **Kobo/Kindle** | `/mnt/onboard/.adds/koreader/plugins/koassistant.koplugin/` |
+| **Kobo** | `/mnt/onboard/.adds/koreader/plugins/koassistant.koplugin/` |
+| **Kindle** | `/mnt/us/koreader/plugins/koassistant.koplugin/` |
 | **Android** | `/sdcard/koreader/plugins/koassistant.koplugin/` |
 | **macOS** | `~/Library/Application Support/koreader/plugins/koassistant.koplugin/` |
 | **Linux** | `~/.config/koreader/plugins/koassistant.koplugin/` |
@@ -24,7 +25,7 @@ The test suite must run from within a **KOReader installation** where KOAssistan
 
 > **Note:** The `tests/` directory is excluded from release zips to keep downloads small. To run tests, you need to **clone the repository** from GitHub:
 > ```bash
-> git clone https://github.com/zzzsm/koassistant.git
+> git clone https://github.com/zeeyado/koassistant.koplugin.git
 > ```
 > Then copy or symlink the cloned folder to your KOReader plugins directory.
 
@@ -32,8 +33,8 @@ The test suite must run from within a **KOReader installation** where KOAssistan
 2. **Clone KOAssistant** from GitHub (release zips don't include tests)
 3. **Copy to plugins folder** or create a symlink
 4. **Launch KOReader once** to create the settings file
-4. **Add your API keys** via Settings → API Keys (or create `apikeys.lua`)
-5. **Run tests** from the plugin directory
+5. **Add your API keys** via Settings → API Keys & Auth (or create `apikeys.lua`)
+6. **Run tests** from the plugin directory
 
 **Pro tip:** If you already have KOAssistant configured on your e-reader, use [Backups and Updates](https://github.com/zeeyado/koassistant.koplugin/wiki/Backups-and-Updates) to export your settings and import them on your computer.
 

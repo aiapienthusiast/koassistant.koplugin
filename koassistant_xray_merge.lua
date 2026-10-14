@@ -1835,7 +1835,7 @@ function XrayMerge.buildHeadlessConfig(opts, payload)
     -- waiting animation, the Show toggle and the cancel affordance. Round 26:
     -- name the work — the placeholder used to be hardcoded quiz wording.
     config.features.hidden_streaming = true
-    config.features.hidden_streaming_label = _("Merging X-Ray data")
+    config.features.hidden_streaming_label = _("AI merge in progress")  -- a paid merge says "AI merge" everywhere (B401, B440)
     config.features.hidden_streaming_note = _("Tap Show to watch it arrive.")
     local bm = {}
     for k, v in pairs(config.features.book_metadata or {}) do bm[k] = v end

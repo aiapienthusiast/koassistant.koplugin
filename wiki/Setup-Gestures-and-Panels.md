@@ -50,7 +50,7 @@ Assign **KOAssistant: Quick Settings** to a gesture for one-tap access to a two-
 - **Reasoning:** set the reasoning stance (Minimal, Default or Maximum) or override the current model's reasoning. Reasoning is per model: the stance is a global preference each model honors as far as it can. Temperature is no longer a tile; it lives in **Settings → Advanced → Temperature**.
 - **Web Search:** turn AI web search on or off. This sets the global default; per-chat control is the input dialog's Web chip. Marked "N/A" when the active provider can't search. Hold to set it for this book, or the search depth.
 - **Book Tools:** turn AI Book Tools on or off (off by default), so the AI can look things up in the book to answer. A tap changes the global default; hold to set it for this book, the lookup effort, and how much of a short text is read whole. Marked "N/A" when your model can't use them.
-- **Quick Answer:** turn Quick Answer on or off by default, so new chats start with the ⚡ Quick Answer chip on; hold to set it for this book, or for its **Preset settings…**.
+- **Quick Answer:** turn Quick Answer on or off by default, so new chats start with the ⚡ Quick chip on; hold to set it for this book, or for its **Preset settings…**.
 - **Spoiler Protection:** turn it on or off globally; hold for the per-book and global picker.
 - **Minimal Popup:** turn the chrome-less anchored response popup on or off; hold for its mode and action list.
 - **H.Bypass and D.Bypass:** turn Highlight Bypass and Dictionary Bypass on or off; hold to pick the bypass action.
@@ -79,7 +79,7 @@ Assign **KOAssistant: Quick Actions** to a gesture for fast access to reading-re
 *The screenshot shows an earlier version of the panel.*
 
 - **Default actions:** X-Ray, Recap, About, Document Summary, Analyze Notes, Extract Key Insights, Key Arguments, Discussion Questions, Quiz, Suggest from Library.
-- **View Artifacts:** appears when the book has any artifacts. It opens a picker that shows each cached artifact with its progress and age (for example "X-Ray (100%, 3d ago)"). The picker gathers the thirteen per-action artifacts (X-Ray, X-Ray (Simple), Summary, Analysis, Recap, About, Notes Analysis, Key Arguments, Discussion Questions, Quiz, Key Insights, Reading Guide) plus any section-scoped groups, AI Wiki entries, any pinned artifacts, a **Generated Images** entry (the book's image gallery) and a **Previous X-Ray Versions** entry (archived X-Ray snapshots) when those exist. See [Artifacts and Caching](Artifacts-and-Caching).
+- **View Artifacts:** appears when the book has any artifacts. It opens a picker that shows each cached artifact with its progress and age (for example "X-Ray (100%, 3d ago)"). The picker gathers the thirteen per-action artifacts (X-Ray, X-Ray (Simple), Summary, Analysis, Recap, About, Notes Analysis, Key Arguments, Counterarguments, Discussion Questions, Quiz, Key Insights, Reading Guide) plus any section-scoped groups, AI Wiki entries, any pinned artifacts, a **Generated Images** entry (the book's image gallery) and a **Previous X-Ray Versions** entry (archived X-Ray snapshots) when those exist. See [Artifacts and Caching](Artifacts-and-Caching).
 - **Utilities:** Translate Page, Book Chat/Action, Continue Last Chat, General Chat/Action, Chat History, Notebook, View Artifacts, Group Hub (when the book is in a group), Book Hub, Book Settings, Quick Settings.
 
 You can add any book action to Quick Actions from Manage Actions (hold the action, then **+ Quick Actions**), and holding an action on the panel opens its long-press menu. The panel's **gear icon** (top-left) opens **Panel Actions** (reorder or remove actions), **Panel Utilities** (show, hide and reorder the utility buttons) and **Align Buttons** (Quick Actions starts centered). The two managers are also in the hamburger menu of Manage Actions, and at **Settings → Menus & Buttons → Panel Actions** and **Settings → Menus & Buttons → Panel Utilities**. Default actions can be removed too.
@@ -243,7 +243,7 @@ A **shorter long-press interval** makes text selection easier. Go to KOReader's 
 
 After the basic setup, these pages show what else KOAssistant can do. For tips on getting better answers (models, behavior styles, domains), see [Prompts, Behaviors and Domains](Prompts-Behaviors-and-Domains).
 
-- [Contexts and Chat](Contexts-and-Chat): the chips row under the input field (Domain, Web, Tools, Quick, Scope, Attach, Spoiler) changes one chat only, and a long press opens the per-book or global default behind a chip; the ⚡ Quick Answer chip gets a fast, brief reply.
+- [Contexts and Chat](Contexts-and-Chat): the chips row under the input field (Domain, Web, Tools, Quick, Scope, Attach, Spoiler) changes one chat only, and a long press opens the per-book or global default behind a chip; the ⚡ Quick chip gets a fast, brief reply.
 - [Chat Windows](Chat-Windows): short answers (Translate, Quick Define and Quick Explain by default) land in a small Minimal Popup at your selection; tap it to expand.
 - [Using X-Ray](Using-X-Ray): a browsable guide to the book, with section X-Rays, AI Wiki, checkpoints and version history; names are underlined as you read, and a tap opens a short card.
 - [Spoiler Protection](Spoiler-Protection): on by default; replies and X-Ray checkpoint installs stay within your reading position.

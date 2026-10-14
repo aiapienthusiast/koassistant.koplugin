@@ -5,7 +5,7 @@ X-Ray builds a browsable guide to the book you are reading: its people, places, 
 ## Quick start
 
 1. Turn on text extraction: Settings → Privacy & Data → Text Extraction → Allow Text Extraction. It is off by default to avoid unexpected token costs.
-2. Open a book and tap **X-Ray** in the Quick Actions panel (or use a gesture you assigned, or the actions of the book chat dialog).
+2. Open a book and tap **X-Ray** in the Quick Actions panel (or use a gesture you assigned, or **Show More Actions…** in the book's input dialog).
 3. In the X-Ray popup, tap **Create X-Ray…**, check the coverage and build picks, and tap **Create**. The AI needs a moment, longer for long books.
 4. Browse the result, or just read on: names the X-Ray knows get a dotted underline on the page, and a tap on one opens a short card.
 
@@ -18,7 +18,7 @@ The X-Ray is saved with the book. Build it once, then update it as you read furt
 | Action | What it reads | Privacy setting |
 |---|---|---|
 | X-Ray | The book text up to your position (or the whole book, if you pick it) | Allow Text Extraction (required). Allow Highlights only adds your matching highlights to entry pages, matched on your device; nothing extra is sent |
-| X-Ray (Simple) | The AI's training knowledge of the book, and your reading progress | None |
+| X-Ray (Simple) | The AI's training knowledge of the book, and your reading progress | Allow Basic Stats (on by default), for the reading progress only |
 
 **X-Ray does not send your highlights.** With Allow Highlights on, the browser matches your highlights on the device and lists them on each entry page. They leave the device only if you then chat about that entry, and only to a provider your highlight settings allow. See [Privacy and Data](Privacy-and-Data).
 
@@ -48,7 +48,7 @@ Tapping X-Ray always opens its popup, whatever the coverage. Without an X-Ray it
 | **Versions…** | The free switches between checkpoints, and **All versions (N)…** |
 | **Link and merge…** | When the book is in a group or has section X-Rays: the carried list, the AI merges, and **Find duplicate entities…** |
 | **Automatic X-Ray: …** | This book's [Automatic X-Ray](#automatic-x-ray): Follow global, On or Off (EPUB and other flowing books only) |
-| A line about spoiler protection | Says whether checkpoints follow your position; tap it for this book's spoiler setting |
+| A line about spoiler protection | While protection is on: says that checkpoints follow your position (or that the installed X-Ray covers the whole book, or reaches past your position); tap it for this book's spoiler setting |
 | **Marking & lookup…** | This book's [marking and lookup settings](#marking-and-lookup-settings) |
 
 Rows with nothing to offer are left out, and a group holding a single row shows that row directly. While a build or a background update runs, its progress row (tap to cancel) takes the update row's place. The title adds your position and what is waiting ("You're at 34%. The next checkpoint (40%) is already built and installs when you reach it."), and "Last auto-update failed" with the reason after a background update failed. The popup redraws itself while it is open.
@@ -63,7 +63,7 @@ Without an X-Ray, the popup shows **Create X-Ray…**, the Section X-Rays group,
 
 - **The whole book** (the default).
 - **Up to my current position (N%)**.
-- **To the end of a section…**: pick a chapter or part from the table of contents (flowing books with a table of contents).
+- **To the end of a section…**: pick a chapter or part from the table of contents (flowing books with a table of contents). Its one-request build always runs in the background.
 
 **Build:**
 
@@ -78,7 +78,7 @@ Below the picks sit the settings for a new X-Ray: a **Preset** button, then four
 
 Finish with **Create** (it reads **Extend** or **Rebuild** when that is what the pick does). On a small or landscape screen the form scrolls between its title and the **Cancel** / **Create** row, which stay in view.
 
-**Extend or rebuild.** On a book that has an X-Ray, **Extend…** grows it forward from what it covers, and **Rebuild…** opens the same form building from scratch. A rebuild works like a new X-Ray: it starts with the same introduction, and your current X-Ray stays until the new one's first part is saved, so a rebuild cancelled or failed before then changes nothing. The outgoing X-Ray is then archived under **All versions**. When the X-Ray already covers the whole book, or was built in a way that cannot be extended (as a whole document, from AI knowledge, or in an older format), the popup shows a single **Rebuild X-Ray…** row instead.
+**Extend or rebuild.** On a book that has an X-Ray, **Extend…** grows it forward from what it covers, and **Rebuild…** opens the same form building from scratch. A rebuild works like a new X-Ray (built in checkpoints, it starts with the same introduction), and your current X-Ray stays until the new one's first part is saved, so a rebuild cancelled or failed before then changes nothing. The outgoing X-Ray is then archived under **All versions**, and the checkpoints built for it are deleted. When the X-Ray already covers the whole book, or was built in a way that cannot be extended (as a whole document, from AI knowledge, or in an older format), the popup shows a single **Rebuild X-Ray…** row instead.
 
 **Another model, once.** Long-press the X-Ray button to run it once with another model (see [Actions and Menus](Actions-and-Menus)). The pick carries through the popup to a one-request build, an update or a section X-Ray you start there; checkpoint builds and Automatic X-Ray keep your default model.
 
@@ -149,7 +149,7 @@ A preset is only a shortcut, and nothing remembers which one you picked: change 
 - **For a group's books**: Group Settings → X-Ray; see [Book Groups and Series](Book-Groups-and-Series).
 - **For all books**: Settings → Reading & Library → X-Ray, rows **Preset for New X-Rays**, **Categories for New X-Rays**, **Depth of New X-Rays** and **Type of New X-Rays**.
 
-A book follows its group's value, then the global default, until it picks its own; [Book Settings and Book Hub](Book-Settings-and-Book-Hub) explains how.
+A book follows its group's value only once that value is applied to it (the group's **Apply** confirm when the value is set, the same question when the book joins the group, or a **Follow group** row in a picker); otherwise it follows the global default, until it picks its own. [Book Settings and Book Hub](Book-Settings-and-Book-Hub) explains how.
 
 ## Browsing the X-Ray
 
@@ -163,7 +163,7 @@ An X-Ray opens in a browsable category menu, not as a plain document. Each categ
 
 Current State and Current Position appear on incremental X-Rays, Conclusion on complete ones. The menu lists what this X-Ray has: a category it was built without gets no row. Below the categories:
 
-- **Carried from earlier books** (in a series; **Carried from group** in a project): entries from the group's other books that this book has not reached yet. See [Series and book groups](#series-and-book-groups).
+- **Carried from earlier books** (in a series; **Carried from group** outside a series): entries from the group's other books that this book has not reached yet. See [Series and book groups](#series-and-book-groups).
 - **Mentions**: the entries a chapter mentions.
 - **Search X-Ray**.
 - **Full View**: the whole X-Ray as a rendered document in the chat viewer, with export.
@@ -193,7 +193,7 @@ Entries of Story Arc, Argument Development, Arguments, Findings and Figures & Da
 - **Your highlights (N)…**: the passages you highlighted that mention this entry. Only with highlight sharing on; matched on your device, not sent anywhere.
 - Under the **Edit this entry** divider: **Edit search terms**, **Rename…**, **Merge with another entry…**, and **Link with a group member's entry…** in a book group. See [Managing entries](#managing-entries). An entry that carries background from other books also has **Move back to carried list** (see [Book Groups and Series](Book-Groups-and-Series)).
 
-In a book group, an entry page also lists what the group's other X-Rays say about it, under "In other books of the group:" (one line per book, display only; a later volume appears only once the series reveal reaches it).
+In a book group, an entry page also lists what the group's other X-Rays say about it, under "In other books of the group:" (one line per book, display only; a later volume appears only once every book before it is read or has spoiler protection off).
 
 ### Chapter Appearances
 
@@ -201,19 +201,19 @@ In a book group, an entry page also lists what the group's other X-Rays say abou
 
 **Chapter Appearances** on an entry page shows the book's whole table of contents as a tree, with a mention count and a comparison bar at every level. Parent rows expand and collapse, and the current chapter is bold. Settings → Reading & Library → X-Ray → Chapter Appearances Rows sets the density: Compact (20 rows per page, the default) or KOReader's own table of contents settings (its items per page and font size).
 
-- **Counting.** Every match of the entry's name and aliases is collected, overlapping matches are merged, and the unique matches counted, as KOReader's text search does. A match inside another entry's longer name counts only for that longer entry, so a mention of "John Smith" is not also a mention of "Smith" (Mentions and the underlines follow the same rule). Names match as whole words: Chinese, Japanese, Korean and Thai names match inside words, and Arabic names match with or without vowel marks, at the start of a word or after the prefixes a word carries (such as و, ب or the article).
-- **Spoiler gating.** While spoiler protection is on, chapters beyond the greater of your X-Ray's coverage and your reading position are dimmed: tap one to reveal it, or **Reveal all chapters** for all of them. The chapter that crosses your position counts only up to it. A complete X-Ray shows every chapter with no gating.
+- **Counting.** Every match of the entry's name and aliases is collected, overlapping matches are merged, and the unique matches counted, as KOReader's text search does. A match inside another entry's longer name counts only for that longer entry, so where the text has an entry's full name, it does not also count for an entry named by the surname alone (Mentions and the underlines follow the same rule). Names match as whole words: Chinese, Japanese, Korean and Thai names match inside words, and Arabic names match with or without vowel marks, at the start of a word or after the prefixes a word carries (such as و, ب or the article).
+- **Spoiler gating.** While spoiler protection is on, chapters beyond the greater of your X-Ray's coverage and your reading position are dimmed: tap one to reveal it (after a spoiler warning), or **Reveal all chapters** for all of them. The chapter that crosses your position counts only up to it. A complete X-Ray shows every chapter with no gating.
 - **Reading the mentions.** Tap a chapter with mentions for its mention list: one row per occurrence, with the sentence around it. Tap a row to jump there in the book, inside KOReader's own text search (its highlighting and next / previous). A floating **← X-Ray** button brings you back to your reading position and the view you came from. **All appearances** opens the entry's mentions in the whole book.
 - **Chapters** come from the table of contents, with page ranges for books without one.
 - **The name index (EPUB).** Counts come from the book's name index: where each X-Ray name appears, found once in the background (a few seconds for a novel, up to a minute or two for a collected works on an e-reader) and kept next to the book, so the tree and the whole-book Mentions open at once afterwards. New names or aliases are found on their own, and a font or margin change indexes the book again for the new layout. If you open Chapter Appearances before the index is ready, it finds the names right then, with a message you can tap to cancel. A section X-Ray opens on its own pages at once and reads the rest of the book the first time you reveal beyond them. PDFs are searched each time.
 
 ### Mentions
 
-**Mentions** (on the category menu) lists the entries that a part of the book mentions, with comparison bars, counts and category tags. It opens on the chapter you are in (the whole section for a section X-Ray, the whole book for a book marked Finished). The picker at the top changes the scope: any chapter or part (a KOReader-style tree, the current chapter bold), **Entire document (to p. N)** (from page 1 up to the greater of your coverage and your position), or **Entire document**, which reveals the whole book behind one confirmation. While spoiler protection is on, chapters beyond the greater of your coverage and your reading position are dimmed (tap to reveal), and a chapter that crosses your position is clipped at it ("up to p. N"). A complete X-Ray shows every chapter with no gating. Books without a table of contents fall back to page-range chunks. Event categories (timeline, argument development) are left out, since their descriptive names produce misleading matches. Mentions uses the same matching as Chapter Appearances and the underlines, and needs the book open.
+**Mentions** (on the category menu) lists the entries that a part of the book mentions, with comparison bars, counts and category tags. It opens on the chapter you are in (the whole section for a section X-Ray, the whole book for a book marked Finished). The picker at the top changes the scope: any chapter or part (a KOReader-style tree, the current chapter bold), **Entire document (to p. N)** (from page 1 up to the greater of your coverage and your position), or **Entire document**, which reveals the whole book behind one confirmation. While spoiler protection is on, chapters beyond the greater of your coverage and your reading position are dimmed (tap to reveal), and a chapter that crosses your position is clipped at it ("up to p. N"). A complete X-Ray shows every chapter with no gating. Books without a table of contents fall back to page-range chunks. Story Arc, Argument Development, Arguments, Findings and Figures & Data are left out, since their descriptive names produce misleading matches. Mentions uses the same matching as Chapter Appearances and the underlines, and needs the book open.
 
 ### Search X-Ray
 
-**Search X-Ray** finds any entry across all categories by name, alias or description. When the book has more than one X-Ray, a row at the bottom extends the search: **Search this book's section X-Rays (N)** from the main X-Ray, **Search the main X-Ray** or **Search the main X-Ray and other sections (N)** from inside a section. Results are grouped by X-Ray. In a book group, the other books' hits are in the same list, under **From *Title***. **Add as alias of an entry…** sits at the top of the results (see [Look up in X-Ray](#look-up-in-x-ray)).
+**Search X-Ray** finds any entry across all categories by name, alias or description. When the book has more than one X-Ray, a row at the bottom extends the search: **Search this book's section X-Rays (N)** from the main X-Ray, **Search the main X-Ray** or **Search the main X-Ray and other sections (N)** from inside a section. Results are grouped by X-Ray. In a book group, the other books' hits are in the same list, under **From *Title***. **Add "…" as an alias…** sits at the top of the results (see [Look up in X-Ray](#look-up-in-x-ray)).
 
 ### Chat about an entry
 
@@ -236,7 +236,7 @@ The X-Ray browser's ☰ menu holds:
 - **Delete X-Ray** (see [Version history](#version-history) for what happens to archived versions).
 - **All versions (N)…**.
 - **Link and merge…**: the same group as in the X-Ray popup, here whether or not the book is in a group.
-- **→ Group**, in a book group: switch to another book's X-Ray, at the same entry when it has one.
+- **→ Group**, in a book group: the group's books; tap one to switch to its X-Ray, at the same entry when it has one.
 - **Carried entries: …**, when the book has carried entries: whether they also show inside the categories.
 - **Info**: model, progress, date, type, source, whether reasoning or web search was used, merges and the books background came from, how many checkpoints exist and which one is installed.
 - **Open Book**, when the X-Ray was opened from the file browser.
@@ -260,7 +260,7 @@ This is on by default, and it is the part most people miss. All of it runs on yo
 
 Words on the page that match an X-Ray entry's name or alias get a discreet dotted gray underline, drawn shortly after the page settles. Only the page you are on is read, so marking costs the same on any size of book. Tap a marked word to open its entry (real links in the text still win). Names known only from a checkpoint built ahead of you are marked with short dashes instead, so a new name is recognizable before you reach it (see [Upcoming entities](#upcoming-entities)).
 
-**Marking Density** (under Settings → Reading & Library → X-Ray) sets how often a name is marked: once per page, only after 10 unseen pages (the default), only after 25 unseen pages, first appearance only, or all occurrences. The unseen-pages and first-appearance choices read the book's name index; until it is ready, a name is marked once per page. **Mark** sets which entries are marked: all entities, people only, or people and places. In a book group the marks also cover names from this book's carried list and from the group's other X-Rays that the series reveal allows, drawn the same dotted way, since that content is already behind you.
+**Marking Density** (under Settings → Reading & Library → X-Ray) sets how often a name is marked: once per page, only after 10 unseen pages (the default), only after 25 unseen pages, first appearance only, or all occurrences. The unseen-pages and first-appearance choices read the book's name index; until it is ready, a name is marked once per page. **Mark** sets which entries are marked: all entities, people only, or people and places. In a book group the marks also cover names from this book's carried list and from the group's other X-Rays (in a series, the earlier volumes, and a later one only once every book before it is read or has spoiler protection off), drawn the same dotted way, since that content is already behind you.
 
 ### Entity cards
 
@@ -274,16 +274,16 @@ With **Upcoming Entities** on (the default), marking, matching selections and ca
 
 ### Matching selections
 
-Selecting text, or looking up a word in the dictionary, when it exactly matches an entry's name or alias opens that entry instead of the dictionary or the highlight menu, ahead of any bypass action you set there. Anything that does not match falls through to your normal dictionary or highlight menu, and a very long press at the end of a selection always brings the plain highlight menu. Only books with an X-Ray are affected. With **Tap Marked Words to Open** off, the marks are visual only, and a long press still opens matching entries. You can also set the dictionary bypass to **Look up in X-Ray**: a tapped word with an X-Ray entry then opens it directly, and any other word goes to KOReader's dictionary (see [Dictionary and Translation](Dictionary-and-Translation)).
+Selecting text, or looking up a word in the dictionary, when it exactly matches an entry's name or alias opens that entry instead of the dictionary or the highlight menu, ahead of any bypass action you set there. Anything that does not match falls through to your normal dictionary or highlight menu, and a very long press at the end of a selection always brings the plain highlight menu. Only books with an X-Ray are affected. With **Tap Marked Words to Open** off, the marks are visual only, and a long press still opens matching entries. You can also set the dictionary bypass to **Look up in X-Ray**: a tapped word that an X-Ray name or alias contains is then looked up there (an exact match opens its entry, a partial one the results list), and any other word goes to KOReader's dictionary (see [Dictionary and Translation](Dictionary-and-Translation)).
 
 ### Look up in X-Ray
 
-Select text while reading and tap **Look up in X-Ray** (in the highlight menu and the dictionary popup, once the book has any X-Ray, main or section) for an instant lookup in the saved X-Ray: no AI call, no network. It handles multi-word names, which tapping a single word in the text cannot. It searches names and aliases, not descriptions, so a word like "Swift" does not hit unrelated entries.
+Select text while reading and tap **Look up in X-Ray** (in the highlight menu and the dictionary popup, once the book has any X-Ray, main or section) for an instant lookup in the saved X-Ray: no AI call, no network. It handles multi-word names, which tapping a single word in the text cannot. It searches names and aliases, not descriptions, so a common word does not hit every entry whose description uses it.
 
 - An exact name or alias match opens that entry; several entries sharing the name give a short chooser. Partial matches always open a results list (a lone partial match is never opened for you), grouped by X-Ray when they span several.
-- Which X-Ray it reads: the section X-Ray covering the current page first, then the main X-Ray, then the only section X-Ray even when you are outside it; otherwise it asks.
+- With more than one X-Ray (the main X-Ray and section X-Rays), it searches them all at once.
 - In a book group, a name this book has no entry for is answered from its carried list, then from the group's other X-Rays.
-- When a lookup finds nothing (or the wrong entries), it offers **Add as alias of an entry…**: pick the entry the name belongs to, and it is remembered for this book, so marking and lookup recognize it from then on. The no-results message also hints that updating the X-Ray may find the entry.
+- When a lookup finds nothing, its message offers **Add as alias of an entry…**; when it finds the wrong entries, the results list starts with **Add "…" as an alias…**. Pick the entry the name belongs to, and it is remembered for this book, so marking and lookup recognize it from then on. When your X-Ray is well behind your position, the no-results message also hints that updating it may find the entry.
 
 ### Marking and lookup settings
 
@@ -303,7 +303,7 @@ How an update works:
 4. **Update** sends only the new text (30% to 50%) with an index of the existing entries, and the AI returns only new or changed entries. In a book group, the index lists only the carried names the new text mentions, so updates in a long series stay small.
 5. The answer is merged in: entries are matched by name and updated in place, timeline events are appended, the status section is replaced. About 200-500 output tokens, against 2,000-4,000 for a full regeneration.
 
-Your position must be at least 1% past the X-Ray's coverage. The update's confirm says how it relates to built checkpoints, and offers **Update in background (keep reading)** on flowing books. When a built checkpoint is ready, the free **Update to N%, instant** installs it instead: the paid row is left out while a free checkpoint is ready or the next one is less than one checkpoint step away (**Extend…** still reaches a paid update). Going back in the book does not use the saved X-Ray: building to an earlier position is a fresh build, which the form marks "from scratch".
+Your position must be more than 1% past the X-Ray's coverage. The update's confirm says how it relates to built checkpoints, and offers **Update in background (keep reading)** on flowing books. When a built checkpoint is ready, the free **Update to N%, instant** installs it instead: the paid row is left out while a free checkpoint is ready or the next one is less than one checkpoint step away (**Extend…** still reaches a paid update). Going back in the book does not use the saved X-Ray: building to an earlier position is a fresh build from **Rebuild…**, where the form marks it "from scratch".
 
 ### Checkpoints
 
@@ -312,7 +312,7 @@ Checkpoints are versions of the book's X-Ray at points through the book, built i
 - **In checkpoints, now**: builds the whole set now, one incremental step at a time.
 - **In checkpoints, as I read (automatic)**: lets [Automatic X-Ray](#automatic-x-ray) build them as you go.
 
-A confirmation names the plan (how many checkpoints, where) and the number of requests, and waits for **Build**. A build from nothing, and a rebuild, starts with a spoiler-free introduction (the premise, the setting, the first characters), which is one more request; a build bounded at your current position skips it.
+A confirmation names the plan (how many checkpoints, where) and the number of requests, and waits for **Build** (**Start** for the automatic pick). A build from nothing, and a rebuild, starts with a spoiler-free introduction (the premise, the setting, the first characters), which is one more request; a build bounded at your current position skips it.
 
 **Spacing.** About one checkpoint every 10% of a normal-length book, adapting to length: wider on short books so a novella isn't sliced into tiny calls, narrower on very long books so a single version never covers an oversized slice. With Settings → Reading & Library → X-Ray → Checkpoints at Chapter Ends on (the default), each checkpoint moves to the nearest chapter end when the book has a usable table of contents, so versions read as "up to the end of a chapter" and the versions list shows chapter names. The form's **Spacing: every N% ▾** button changes it for this book (2.5% to 50%, the recommended value marked, with live checkpoint counts). The pick sticks for the book; Book Settings → X-Ray → **Checkpoint spacing** changes it later.
 
@@ -343,21 +343,21 @@ Automatic X-Ray keeps a book's X-Ray up to your reading position in the backgrou
 **Spend guards:**
 
 - Incremental track only: it never touches complete, AI-knowledge, older-format or section X-Rays.
-- After a step is declined, fails or is cancelled, it waits out the cooldown before trying again (Settings → Reading & Library → X-Ray → Cooldown (minutes), default 15, 0 = no wait). A build that completes does not wait. Each step is bounded by the book's checkpoint spacing, so a single step is never oversized.
+- After a step is declined, fails or is cancelled, it waits out the cooldown before trying again (Settings → Reading & Library → X-Ray → Cooldown (minutes), default 15, 0 = no wait; the row shows while Automatic X-Ray (all books) is on). A build that completes does not wait. Each step is bounded by the book's checkpoint spacing, so a single step is never oversized.
 - It runs only when WiFi is already on, and never turns WiFi on. After a book's first build is confirmed, it never prompts again.
 - It sends exactly what a manual update sends (the saved X-Ray, the entry index and only the newly read text) to your configured provider, and checks text-extraction consent (or a trusted provider) each time, like a manual update. Revoking consent silently stops it.
 - A section end picked in the creation form also bounds it; Book Settings → X-Ray → **Build up to** shows or changes that limit.
-- EPUB and other flowing formats only: page-based books (PDF) do not show the rows.
+- EPUB and other flowing formats only: for a page-based book (PDF) the X-Ray popup leaves the row out, and Book Settings marks it "(no effect: page-based book)".
 
 Once you have confirmed a book's first build, Automatic X-Ray extracts book text and spends API tokens **without a per-request tap**. The interactive truncation and size warnings don't apply to background runs (an oversized background extraction stops instead of asking). Leave it off if you want every request to be deliberate.
 
-Failures are silent: they show only in the X-Ray popup's title ("Last auto-update failed" with the reason) and the debug console. Turn on Settings → Reading & Library → X-Ray → Notify on Background Activity for a brief notification when background work starts and completes, and when a checkpoint is swapped in.
+Automatic building is quiet: a step that fails for a passing reason is retried without a word, and only a build that stops anyway shows a notice, which stays until you close it (see [When a build stops](#when-a-build-stops)). Turn on Settings → Reading & Library → X-Ray → Notify on Background Activity for a brief notification when background work starts and completes, and when a checkpoint is swapped in.
 
 ### When a build stops
 
 - **Passing problems** are retried: a step that fails for a passing reason (an empty reply, a dropped connection) is tried again, up to twice, before the build stops. When the provider names how long to wait, a background step waits that long before its retry instead of guessing.
 - **Sleep.** On e-readers where KOReader turns Wi-Fi off for sleep, a request in flight stops; the popup says the build is waiting for Wi-Fi, and the checkpoint is built again seconds after Wi-Fi reconnects. Checkpoints already built keep installing meanwhile.
-- **Resume.** The notice of a stopped build stays until you close it, with a **Resume** button. Resume continues the build that stopped (to your position, to a section's end, or as one request) rather than planning to the end of the book. The popup also offers **Resume building checkpoints (from N%)…**, which also names why it stopped. Resume is not offered after a build that found nothing to build from.
+- **Resume.** The notice of a stopped build stays until you close it, with a **Resume** button. Resume continues the build that stopped (to your position, to a section's end, or as one request) rather than planning to the end of the book. The popup also offers **Resume building checkpoints (from N%)…**, which also names why it stopped. Resume is not offered after a build that found nothing to build from, or no book text in its part.
 - **Reasons** the popup and the notices name include "request too large" (a per-minute plan limit, or the model's context or output limit), "account credits or billing" (an account limit at the provider: never retried, and only adding credits or raising the limit fixes it), "answer cut off at its length limit", "nothing to build from so far", "no book text in this part", "rate limited", "model overloaded", "provider error", "request timed out", "connection problem", "unusable response" and "empty reply".
 - **Automatic building pauses after a stop that would repeat.** With Automatic X-Ray on, an answer cut off at its length limit, a request too large for the model, or an account out of credit pauses automatic building for that book until you resume it, instead of planning the same step at every cooldown (a cut-off answer is paid in full each time). The X-Ray popup's **Resume automatic building (paused: …)…** names the reason. Closing the book keeps the pause; restarting KOReader ends it.
 - **A cut-off answer is never saved as if whole.** An answer cut at its length limit, or ended early by the provider, is not saved, and you see it marked as cut off instead of your old X-Ray. "X-Ray not saved" says what helps: a lighter depth or fewer categories, updating in checkpoints, or a model that allows longer answers. Nothing is overwritten. When the AI declines to build an X-Ray, you see its answer instead of the X-Ray already on the device.
@@ -375,7 +375,7 @@ Every update or rebuild archives the version it replaces, so an X-Ray is never s
 
 **How many are kept.** Settings → Reading & Library → X-Ray → X-Ray Versions to Keep (default 5, range 0-20). The versions covering the least of the book are dropped first, the oldest first among equals. 0 stops archiving new versions; versions already archived stay until you delete them or the X-Ray itself. Checkpoints are stored separately and never trimmed by this.
 
-**Deleting the X-Ray.** ☰ → **Delete X-Ray**. When it has archived versions, you choose: **Archive X-Ray (keep N versions)** keeps them reachable under "Archived X-Ray Versions" in View Artifacts, and **Delete X-Ray and N versions** removes them too. Its AI Wiki articles and prepared checkpoints are deleted either way, and the book's Automatic X-Ray is turned off. Settings → Privacy & Data → Text Extraction → Delete Book Artifacts (with the book open) deletes every saved result of the book at once. Deleting is also a way to start over, for example to change [tracks](#two-tracks-incremental-and-complete).
+**Deleting the X-Ray.** ☰ → **Delete X-Ray**. When it has archived versions, you choose: **Archive X-Ray (keep N versions)** keeps them reachable under "Archived X-Ray Versions" in View Artifacts, and **Delete X-Ray and N versions** removes them too. The book's AI Wiki entries (the ones made from highlighted text included) and the prepared checkpoints are deleted either way, and the book's Automatic X-Ray is turned off. Settings → Privacy & Data → Text Extraction → Delete Book Artifacts (with the book open) deletes every saved result of the book at once. Deleting is also a way to start over, for example to change [tracks](#two-tracks-incremental-and-complete).
 
 ## Section X-Rays
 
@@ -385,7 +385,7 @@ Section X-Rays are focused X-Rays of one chapter, part or section, chosen from t
 
 1. In the X-Ray popup, open **Section X-Rays…** → **Generate Section X-Ray…**.
 2. Pick the section in the table of contents tree.
-3. Name it if you like (**Name this section**; the name defaults to the table of contents title, 80 characters at most) and tap **Generate**. A name already in use offers to replace that section X-Ray.
+3. Name it if you like (**Section X-Ray Name**; the name defaults to the table of contents title, 80 characters at most) and tap **Generate**. A name already in use offers to replace that section X-Ray.
 4. Only the text of that page range is sent. The result is a complete X-Ray, built with the book's X-Ray categories, depth, type and status block, as a new X-Ray would be (Book Settings → X-Ray, or the defaults in Settings).
 
 **Section ranges.** **Generate for a section range…** (in the same group) asks for the first and the last section, in either order, and builds one section X-Ray spanning everything between them (chapters 3 to 7 as one, for example). The name defaults to "First – Last". That is one request, instead of building each chapter and merging them.
@@ -399,13 +399,13 @@ Section X-Rays are focused X-Rays of one chapter, part or section, chosen from t
 **How they differ from the main X-Ray:**
 
 - The title reads **X-Ray § *Name***.
-- Scope gating replaces spoiler gating: chapters outside the section's pages are dimmed (whatever you have read), and **Reveal beyond scope** shows them after a scope warning.
+- Scope gating replaces spoiler gating: chapters outside the section's pages are dimmed (whatever you have read). Tap one to reveal it after a scope warning, or **Reveal beyond scope** for all of them.
 - Complete only: no updates and no version history, since the section is analyzed whole in one request. To redo one, generate it again under the same name.
 - The reading position marker shows only while your page is inside the section.
 - The ☰ menu has **Delete Section X-Ray** and **Info** (the section, its pages, the model).
 - Font-size independence: they store document positions next to page numbers, so after a font-size change the page ranges in the list and the browser follow the new layout (EPUB).
 
-**Merging them.** **AI merge section X-Rays (N)…** (in the Section X-Rays group, the section list and **Link and merge…**) has the AI combine the section X-Rays you tick: into the main X-Ray (**Merge into main X-Ray**, **Replace main X-Ray (old version is archived)**, or **Create main X-Ray from sections** when there is none), or into one **combined section X-Ray**. It warns about gaps between the sections and about text past your reading position. After a merge into the main X-Ray you can keep the sections or delete them.
+**Merging them.** **AI merge section X-Rays…** (in the section list, in **Link and merge…**, and in the Section X-Rays group of a book with no main X-Ray) has the AI combine the section X-Rays you tick: into the main X-Ray (**Merge into main X-Ray**, **Replace main X-Ray (old version is archived)**, or **Create main X-Ray from sections** when there is none), or into one **combined section X-Ray**. It warns about gaps between the sections and about text past your reading position. After a merge into the main X-Ray you can keep the sections or delete them.
 
 Search and marking use every X-Ray of the book, main and sections. Section X-Rays need an open book with a table of contents (they cannot be made from the file browser).
 
@@ -415,7 +415,7 @@ Search and marking use every X-Ray of the book, main and sections. Section X-Ray
 
 Books in a group (a series or a project) share X-Ray knowledge:
 
-- **Carried entries**: each book keeps a list of entries from the group's other books (in a series, the earlier ones) that have not appeared in it yet, **Carried from earlier books** (**Carried from group** in a project). It fills itself as you group books and build X-Rays, for free. By default these entries are also listed inside the categories, after the book's own ("85 + 900" on a category row); the **Carried Entries** setting (Settings → Reading & Library → X-Ray, a group, a book, or the browser's ☰ menu) can keep them on their own list only.
+- **Carried entries**: each book keeps a list of entries from the group's other books (in a series, the earlier ones) that have not appeared in it yet, **Carried from earlier books** (**Carried from group** outside a series). It fills itself as you group books and build X-Rays, for free. By default these entries are also listed inside the categories, after the book's own ("85 + 900" on a category row); the **Carried Entries** setting (Settings → Reading & Library → X-Ray, a group, a book, or the browser's ☰ menu) can keep them on their own list only.
 - **Link** (free, nothing sent) joins two names that are one thing, such as a short name here and the full name carried; **Possible matches** on the carried list proposes such pairs.
 - **AI merge** (paid; every row says how many requests) has the model combine another book's X-Ray into this one: **AI merge with another book (1 request)…**, **AI merge the series (1 request per book)…** or **AI merge the group into this book (1 request per book)…**.
 - Lookups, search, cards and marks reach across the group: a name this book does not know yet is answered from the other X-Rays, labeled **From *Title***.
@@ -435,7 +435,7 @@ These rows live in **Link and merge…** (the X-Ray popup and the browser's ☰ 
 
 This works for EPUB and PDF. The hidden content is simply invisible to KOAssistant. Hidden flows are one of the best ways to save tokens and improve results: hide front matter, introductions, appendices, bibliography, indexes and references, and what remains becomes the "whole book" for every action (X-Ray, summaries, analysis). For collected works or anthologies, hide everything but one volume: a complete X-Ray then treats the visible text as the entire document. Hidden flows and [section X-Rays](#section-x-rays) work together: hidden flows trim away what you never want analyzed, section X-Rays focus on chapters within what remains. KOReader's documentation explains how to set up hidden flows.
 
-**Custom tables of contents.** Mentions and Chapter Appearances use KOReader's active table of contents, including a custom one you made, and section X-Rays are picked from it. A book with no chapters, or only one, falls back to page-range chunks of about 20 pages. For better results, make a custom table of contents with KOReader's **Custom table of contents** (in the settings of its navigation menu): you add chapters in the Page browser by long-pressing a thumbnail, or by selecting text on a page to use as the chapter title.
+**Custom tables of contents.** Mentions and Chapter Appearances use KOReader's active table of contents, including a custom one you made, and section X-Rays are picked from it. A book with no table of contents falls back to page-range chunks of 20 pages (a twentieth of the book, when that is longer). For better results, make a custom table of contents with KOReader's **Custom table of contents** (in the settings of its navigation menu): you add chapters in the Page browser by long-pressing a thumbnail, or by selecting text on a page to use as the chapter title.
 
 ## Costs and model choice
 

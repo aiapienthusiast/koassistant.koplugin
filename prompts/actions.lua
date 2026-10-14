@@ -18,7 +18,7 @@ local Constants = require("koassistant_constants")
 --   context          - Where it appears: "highlight", "book", "library", "general", "both" (required)
 --   template         - User prompt template ID from templates.lua (required for builtin)
 --   prompt           - Direct user prompt text (for custom actions without template)
---   behavior_variant - Override global behavior: "minimal", "full", "none" (optional)
+--   behavior_variant - Override global behavior: "mini", "standard", "full", "none" or a behavior id (optional)
 --   behavior_override- Custom behavior text, replaces variant entirely (optional)
 --   extended_thinking- Override global thinking: "off" to disable, "on" to enable (optional)
 --   thinking_budget  - Token budget when extended_thinking="on" (1024-32000, default 4096)
@@ -35,7 +35,7 @@ local Constants = require("koassistant_constants")
 --                      prompt owns spoiler discipline), false = always (explicit opt-in;
 --                      mechanically same as nil today, reserved for future exclusions).
 --                      When protected, prompts carrying {spoiler_free_nudge} resolve it
---                      in place; all others get the nudge appended to the system prompt
+--                      in place; all others get it as a turn-level message at each send (queryWith)
 --   include_book_context - Include book metadata with highlight context (optional)
 --   description      - Human-readable summary of what the action does (optional, shown in details view)
 --   enabled          - Default enabled state (default: true)
@@ -47,7 +47,7 @@ local Constants = require("koassistant_constants")
 --   smart_retrieval  - Offer "Smart retrieval" as a 4th source in the source popup: the AI
 --                      gathers relevant passages via the local book tools and they replace
 --                      full-text extraction (D3, tools_ux_plan.md §4). Only meaningful with
---                      source_selection; only rendered in tools-capable sessions (optional)
+--                      source_selection; always rendered, grayed with the reason when unavailable (optional)
 --   accept_quick_answer - Opt in to the session Quick Answer posture (⚡ chip): when the
 --                      user has Quick Answer on, this action's dialog launch also gets
 --                      the concise nudge + reasoning/web off (controls_parity_plan.md §10).
@@ -237,15 +237,20 @@ function Actions.effectiveSurroundingContextMode(action, features, ambient_mode)
     if flag == true then
         return action.context_mode or ambient or "sentence"
     end
-    -- nil flag: ambient path with structural skips
-    if not ambient then return nil end
-    if action.source_selection then return nil end
+    -- nil flag: a prompt that carries the placeholder asked for the context
+    -- itself, so it resolves like flag true (a UI-made action with another
+    -- data flag never had the flag inferred and the placeholder stayed empty, B429)
     -- NOTE: template-based actions (action.template, no action.prompt) are invisible
     -- to these placeholder scans. Benign today — no highlight template carries a
     -- context channel — but read the resolved template here if one ever does.
     local prompt_text = action.prompt or ""
-    if prompt_text:find("{surrounding_context", 1, true)
-        or prompt_text:find("{context}", 1, true)
+    if prompt_text:find("{surrounding_context", 1, true) then
+        return action.context_mode or ambient or "sentence"
+    end
+    -- ambient path with structural skips
+    if not ambient then return nil end
+    if action.source_selection then return nil end
+    if prompt_text:find("{context}", 1, true)
         or prompt_text:find("{context_section}", 1, true)
         or prompt_text:find("{document_context_section}", 1, true) then
         return nil
@@ -265,7 +270,7 @@ Actions.highlight = {
         context = "highlight",
         template = "explain",
         in_highlight_menu = 3,  -- Default in highlight menu
-        -- Uses global behavior variant (full/minimal)
+        -- Uses global behavior variant (mini/standard/full)
         api_params = {
             temperature = 0.5,  -- More focused for explanations
         },

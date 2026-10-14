@@ -484,7 +484,8 @@ end
 --- which would echo back a confusing 401 (issue #82).
 function BaseHandler.isPlaceholderKey(key)
     if not key or key == "" then return true end
-    local upper = key:upper()
+    -- "your-key-here" (the old README's example) reads like "YOUR_KEY_HERE" (B432)
+    local upper = (key:upper():gsub("-", "_"))
     return upper:find("YOUR_", 1, true) ~= nil
         or upper:find("_HERE", 1, true) ~= nil
         or upper:find("API_KEY", 1, true) ~= nil

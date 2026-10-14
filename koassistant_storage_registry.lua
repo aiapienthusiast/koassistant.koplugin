@@ -129,6 +129,7 @@ Registry.SETTINGS_SUBKEYS = {
         "_dict_bypass_default_migrated",
         "_session_chips_registry_v1", "_model_switch_notice",
         "_quiz_chapter_level_reset", "_language_prompt_shown",
+        "_last_auto_index_rebuild",  -- the once-a-day auto-rebuild gate (B476 note: a reset dropped it)
         "_qs_layout_v2",
         "_minimal_popup_prev_mode",  -- QS tile ON/OFF toggle: which on-state to restore (main.lua)
         "_image_gen_action_v1",  -- old Show-Generate-Image toggle → action dismissal seed (main.lua initSettings)

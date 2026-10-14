@@ -100,7 +100,7 @@ function ActionHold.plan(action, surface, on_surface)
     elseif source == "config" then
         table.insert(rows, { id = "edit", kind = "config" })
     end
-    if not action.local_handler then
+    if not action.local_handler and not action.no_duplicate then
         table.insert(rows, { id = "duplicate" })
     end
     if source == "builtin" and action.has_override then

@@ -626,7 +626,8 @@ local function queryChatGPT(message_history, temp_config, on_complete, settings)
             return "Error: " .. err
         end
     elseif not config.api_key and api_key_required then
-        local err = string.format("No API key found for provider %s. Set it in Settings → API Keys or apikeys.lua", provider)
+        local err = require("ffi/util").template(
+            _("No API key found for provider %1. Set it in Settings → API Keys & Auth or apikeys.lua"), provider)
         if on_complete then
             on_complete(false, nil, err)
             return STREAMING_IN_PROGRESS

@@ -16,6 +16,14 @@ local Gen = {}
 -- Owner page per row or submenu id. A row without an entry inherits its
 -- nearest ancestor's; the fallback is the Settings-Reference page itself.
 Gen.OWNERS = {
+    temperature = "Providers-and-Models",
+    use_action_tiers = "Providers-and-Models",
+    enable_book_tools = "Reasoning-Web-Search-and-Book-Tools",
+    tool_whole_text = "Reasoning-Web-Search-and-Book-Tools",
+    tool_workflow_diagnostics = "Reasoning-Web-Search-and-Book-Tools",
+    book_info_in_chat = "Contexts-and-Chat",
+    spoiler_free_chat = "Spoiler-Protection",
+    spoiler_free_chat_xray = "Spoiler-Protection",
     -- top rows
     quick_settings_panel = "Setup-Gestures-and-Panels",
     quick_actions_panel = "Setup-Gestures-and-Panels",
@@ -75,6 +83,7 @@ Gen.PAGE_NAMES = {
     ["Providers-and-Models"] = "Providers and Models",
     ["Reading-Analysis-Actions"] = "Reading Analysis Actions",
     ["Using-X-Ray"] = "Using X-Ray",
+    ["Spoiler-Protection"] = "Spoiler Protection",
     ["Privacy-and-Data"] = "Privacy and Data",
     ["Languages"] = "Languages",
     ["Dictionary-and-Translation"] = "Dictionary and Translation",
@@ -187,6 +196,16 @@ function Gen.generate(schema)
     w("A row's type: **toggle** (on or off), **choice** (a list of values), **number**, **action** (opens a screen or runs something), **submenu** (holds more rows). Rows that depend on another row are listed under it; \"Settings → …\" paths on the other pages follow the same words as this page.")
     w("")
 
+    -- every row's label by id, for the "grayed out unless" notes
+    local label_by_id = {}
+    local function index(items)
+        for _idx, item in ipairs(items or {}) do
+            if item.id then label_by_id[item.id] = plain(label(item)) end
+            if item.items then index(item.items) end
+        end
+    end
+    index(schema.items)
+
     local sections = {}
     local function walk(items, path, owner, depth, bucket)
         for _idx, item in ipairs(items or {}) do
@@ -247,11 +266,17 @@ function Gen.generate(schema)
                 -- the row's text, indented by its depth below the section
                 local rel = r.path
                 if sec.title ~= "Top rows" then
-                    rel = rel:sub(#sec.title + 4)  -- drop "Section → "
+                    rel = rel:sub(#sec.title + 6)  -- past the title and " → " (the arrow is 3 bytes)  -- drop "Section → "
                 end
                 local does = plain(item.help_text or item.info_text or "")
                 if item.depends_on then
-                    does = does .. (does ~= "" and " " or "") .. "(Shown when " .. tostring(item.depends_on.id) .. " is " .. valueText({}, item.depends_on.value) .. ".)"
+                    -- one { id, value } or a list of them
+                    local deps = item.depends_on.id and { item.depends_on } or item.depends_on
+                    local parts = {}
+                    for _d, dep in ipairs(deps) do
+                        parts[#parts + 1] = (label_by_id[dep.id] or tostring(dep.id)) .. " is " .. valueText({}, dep.value)
+                    end
+                    does = does .. (does ~= "" and " " or "") .. "(Grayed out unless " .. table.concat(parts, " and ") .. ".)"
                 end
                 local default = ""
                 if item.default ~= nil then default = valueText(item, item.default) end

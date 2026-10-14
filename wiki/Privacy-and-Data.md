@@ -109,7 +109,7 @@ A request to a trusted provider bypasses all data sharing controls AND text extr
 - Library scanning still needs at least one folder (permanent or picked on the fly).
 - Trust also satisfies the consent check that background features (such as Automatic X-Ray and X-Ray checkpoint builds) run against: those can then extract text in the background without a per-request tap.
 
-**Which provider counts.** Trust is judged for the provider a request actually goes to: your active provider, an action's own pinned provider, a model picked from the long-press menu of an action or of Send, or the Quick Answer chip's preset model. Pinning an action to a different provider never inherits trust it shouldn't. When the receiving provider may not get something, it is left out of that request:
+**Which provider counts.** Trust is judged for the provider a request actually goes to: your active provider, an action's own pinned provider, a model picked from the long-press menu of an action or of Send, or the Quick chip's preset model. Pinning an action to a different provider never inherits trust it shouldn't. When the receiving provider may not get something, it is left out of that request:
 
 - book passages gathered by smart retrieval, a notebook attached with the Attach chip (in a new chat, a reply, or a chat reopened from Chat History) and the book list of a library chat, each with a short notice;
 - the highlights an X-Ray entry's "Chat about this" carries.

@@ -1875,7 +1875,8 @@ function ChatGPTViewer:init()
       local highlight_text = self.original_highlighted_text or ""
       local threshold = self.configuration.features.long_highlight_threshold or 280
       self.hide_highlighted_text = self.configuration.features.hide_highlighted_text or
-        (self.configuration.features.hide_long_highlights ~= false and string.len(highlight_text) > threshold)
+        (self.configuration.features.hide_long_highlights ~= false
+          and require("koassistant_scope_resolver").utf8Len(highlight_text) > threshold)
     end
     -- Compact view settings (used by dictionary bypass and popup actions)
     if self.configuration.features.compact_view then
@@ -3519,7 +3520,7 @@ function ChatGPTViewer:askAnotherQuestion()
               if reason == "consent" then
                 msg = _("Book tools need \"Allow Text Extraction\" (Settings → Privacy & Data).")
               else
-                msg = T(_("Book tools aren't available for %1.\n\nSupported providers: Gemini, Claude (Anthropic), OpenAI, OpenRouter, DeepSeek, Mistral, Groq, xAI."),
+                msg = T(_("Book tools aren't available for %1.\n\nThey need a provider and model that support tool calls (Test provider shows whether yours does)."),
                   cfg.provider or _("this provider"))
               end
               UIManager:show(InfoMessage:new{ text = msg })
@@ -5267,7 +5268,7 @@ function ChatGPTViewer:saveToNotebook(format_override)
   local content_format = format_override or features.notebook_content_format or "full_qa"
 
   -- Save to notebook
-  local model_name = self.configuration and self.configuration.model
+  local model_name = self.configuration and require("model_constraints").dispatchModel(self.configuration)
   local ok, err = Notebook.saveChat(document_path, history, self.original_highlighted_text, reader_ui, content_format, model_name)
 
   if ok then

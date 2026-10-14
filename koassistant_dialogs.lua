@@ -3168,7 +3168,7 @@ local function showResponseDialog(title, history, highlightedText, addMessage, t
                 local options = {
                     { value = "full", label = _("Full (metadata + chat)") },
                     { value = "qa", label = _("Question + Response") },
-                    { value = "response", label = _("Response only") },
+                    { value = "response", label = _("Last response only") },
                     { value = "everything", label = _("Everything (debug)") },
                 }
 
@@ -3859,11 +3859,11 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
             temp_config.features.translate_hide_quote = true
         elseif hide_mode == "hide_long" then
             local threshold = f.translate_long_highlight_threshold or 280
-            local text_length = highlightedText and #highlightedText or 0
+            local text_length = highlightedText and ScopeResolver.utf8Len(highlightedText) or 0
             temp_config.features.translate_hide_quote = (text_length > threshold)
         elseif hide_mode == "follow_global" then
             -- Replicate global hide logic: hide_highlighted_text OR (hide_long_highlights AND over threshold)
-            local text_length = highlightedText and #highlightedText or 0
+            local text_length = highlightedText and ScopeResolver.utf8Len(highlightedText) or 0
             local global_threshold = f.long_highlight_threshold or 280
             temp_config.features.translate_hide_quote = f.hide_highlighted_text or
                 (f.hide_long_highlights ~= false and text_length > global_threshold)
@@ -4006,6 +4006,10 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
     local per_book_file
     if context == "highlight" and ui and ui.document and ui.document.file then
         per_book_file = ui.document.file
+    elseif context == "general" or context == "library" then
+        -- no book: a general or library action beside an open book took that
+        -- book's domain, background and research mode (B453)
+        per_book_file = nil
     else
         per_book_file = (config.features and config.features.book_metadata and config.features.book_metadata.file)
             or (ui and ui.document and ui.document.file)
@@ -4357,6 +4361,8 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
         research_mode_active = true
     elseif action_research == false then
         research_mode_active = false
+    elseif context == "general" or context == "library" then
+        research_mode_active = false  -- research is about a book (B420)
     else
         local has_doi = config.features and config.features.book_metadata
             and config.features.book_metadata.doi
@@ -4714,6 +4720,12 @@ if prune_book_text then
                 enable_annotations_sharing = config.features and config.features.enable_annotations_sharing,
                 enable_basic_stats = config.features and config.features.enable_basic_stats,
                 enable_notebook_sharing = config.features and config.features.enable_notebook_sharing,
+                -- Library placeholders (the catalog and the engagement lists) were
+                -- always empty from the file browser without these (B463)
+                enable_library_scanning = config.features and config.features.enable_library_scanning,
+                library_scan_folders = config.features and config.features.library_scan_folders,
+                _session_scan_folders = config.features and config.features._session_scan_folders,
+                enable_advanced_stats = config.features and config.features.enable_advanced_stats,
             })
             logger.dbg("KOAssistant: Sidecar extraction for file browser:", fb_document_path)
             local extracted = extractor:extractForAction(prompt or {})
@@ -6799,7 +6811,7 @@ local function showAttachMenu(opts)
                         Attachments.notebookOverrideFor(book_path, ui_instance))
                     if not allowed then
                         UIManager:show(InfoMessage:new{
-                            text = _("Attaching your notebook needs \"Notebook sharing\" (Settings → Privacy & Data, or this book's Privacy overrides)."),
+                            text = _("Attaching your notebook needs \"Allow Notebook\" (Settings → Privacy & Data, or this book's Privacy overrides)."),
                         })
                         return
                     end
@@ -8680,7 +8692,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                             if reason == "consent" then
                                 msg = _("Book tools need \"Allow Text Extraction\" (Settings → Privacy & Data).")
                             else
-                                msg = T(_("Book tools aren't available for %1.\n\nSupported providers: Gemini, Claude (Anthropic), OpenAI, OpenRouter, DeepSeek, Mistral, Groq, xAI."),
+                                msg = T(_("Book tools aren't available for %1.\n\nThey need a provider and model that support tool calls (Test provider shows whether yours does)."),
                                     configuration.provider or _("this provider"))
                             end
                             UIManager:show(InfoMessage:new{ text = msg })
@@ -9026,8 +9038,8 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         -- Custom range (phase 4): two sequential picks, start then end.
                         -- Under spoiler a fully-unread START is rejected; a straddling
                         -- END is allowed — Send-time chipScope clamps it with an honest
-                        -- "trimmed to position" label (chip policy: clamp; the popup's
-                        -- policy is reject).
+                        -- "trimmed to position" label (chip policy: clamp; the popup
+                        -- confirms instead).
                         local function pickRangeEnd(start_entry, consented)
                             plugin:_showSectionPicker({}, {
                                 title = _("Range end: which section?"),
@@ -9949,11 +9961,15 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                     configuration.features._web_search_active = session_web_search == true
 
                     -- Resolve research mode for freeform chat (no action override)
-                    -- Priority: per-book setting > DOI auto-detection > global setting
-                    local freeform_research = require("koassistant_book_settings").resolveResearch(
-                        doc_settings, configuration.features,
-                        { doi = configuration.features and configuration.features.book_metadata
-                            and configuration.features.book_metadata.doi })
+                    -- Priority: per-book setting > DOI auto-detection > global setting.
+                    -- Research is about a book: general and library chats get none (B420).
+                    local freeform_research = false
+                    if not is_general_context and not is_library_context then
+                        freeform_research = require("koassistant_book_settings").resolveResearch(
+                            doc_settings, configuration.features,
+                            { doi = configuration.features and configuration.features.book_metadata
+                                and configuration.features.book_metadata.doi })
+                    end
                     configuration.features = configuration.features or {}
                     configuration.features._research_mode_active = freeform_research or nil
                     -- Persist x-ray flag for the chat session so reply paths can skip book tools
@@ -10560,7 +10576,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                             showLibraryFolderPopup()
                         else
                             UIManager:show(InfoMessage:new{
-                                text = _("To use library scan actions, enable Allow Library Scanning in Settings → Privacy & Data → Library Settings.\n\nIf you don't need these actions, you can hide this section from the gear menu."),
+                                text = _("To use library scan actions, enable Allow Library Scanning in Settings → Privacy & Data.\n\nIf you don't need these actions, you can hide this section from the gear menu."),
                             })
                         end
                     end,
@@ -13520,7 +13536,7 @@ local function launchArtifactChat(user_question, artifact_content, artifact_type
                 configuration.provider or configuration.default_provider,
                 A.notebookOverrideFor(document_path, ui)) then
             UIManager:show(InfoMessage:new{
-                text = _("Chatting about your notebook needs \"Notebook sharing\" (Settings → Privacy & Data, or this book's Privacy overrides)."),
+                text = _("Chatting about your notebook needs \"Allow Notebook\" (Settings → Privacy & Data, or this book's Privacy overrides)."),
             })
             return
         end
@@ -13652,6 +13668,7 @@ return {
     executeActionForResult = executeActionForResult,
     generateSummaryCache = generateSummaryCache,
     extractSurroundingContext = extractSurroundingContext,
+    contextAfterLimit = contextAfterLimit,
     fetchSelectionContextWindow = fetchSelectionContextWindow,
     launchArtifactChat = launchArtifactChat,
     -- Exported for runtime self-require from the quick chip's hold (60-upvalue

@@ -91,8 +91,16 @@ function DOIResolver.resolveDOI(file, doc_props, document, live_doc_settings)
     -- 1. Check doc_settings cache (instant, avoids re-scanning)
     if settings and settings:has("koassistant_doi") then
         local cached = settings:readSetting("koassistant_doi")
-        -- false sentinel = "scanned, no DOI found"
-        return cached or nil
+        if cached then return cached end
+        -- false sentinel = "scanned, no DOI found". The page scan is not
+        -- repeated, but the metadata is re-read: it is cheap, and a DOI added
+        -- to the book's identifiers or description later is found (B421).
+        local doi = DOIResolver.extractDOI(doc_props)
+        if doi then
+            settings:saveSetting("koassistant_doi", doi)
+            if not settings_is_live or settings._koa_facade then settings:flush() end
+        end
+        return doi
     end
 
     -- 2. Try metadata extraction (identifiers → description → keywords)

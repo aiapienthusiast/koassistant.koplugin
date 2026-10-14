@@ -368,8 +368,16 @@ local function makePipeFetchFn(fetch, err_prefix)
         local ok, err = pcall(function()
             local code, body = fetch()
             if code ~= 200 then
+                -- a refusal arrives as JSON with error.message (an OpenAI
+                -- moderation refusal is a 400): show the message, not the body (B459)
+                local msg = body or ""
+                local okj, parsed = pcall(json.decode, msg)
+                if okj and type(parsed) == "table" and type(parsed.error) == "table"
+                        and type(parsed.error.message) == "string" and parsed.error.message ~= "" then
+                    msg = parsed.error.message
+                end
                 BaseHandler.writeAllToFD(child_write_fd,
-                    "ERR:HTTP " .. tostring(code) .. ": " .. (body or ""):sub(1, 200))
+                    "ERR:HTTP " .. tostring(code) .. ": " .. msg:sub(1, 300))
             else
                 BaseHandler.writeAllToFD(child_write_fd, "OK:" .. (body or ""))
             end

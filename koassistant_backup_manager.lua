@@ -1597,6 +1597,15 @@ function BackupManager:restoreBackup(backup_path, options)
 
                 -- Create new settings file with validated data
                 local new_settings = LuaSettings:open(current_settings_file)
+                if not options.restore_api_keys or not manifest.contents.api_keys then
+                    -- The keys entered in Settings, the subscription sign-in and
+                    -- the key selection stay as they are: a Replace restore from
+                    -- a backup without keys (the default backup) wiped them (B471)
+                    local current_features = new_settings:readSetting("features") or {}
+                    backup_features.api_keys = current_features.api_keys
+                    backup_features.openai_codex_oauth = current_features.openai_codex_oauth
+                    backup_features.api_key_selected = current_features.api_key_selected
+                end
                 new_settings:saveSetting("features", backup_features)
 
                 -- Copy other top-level settings with validation
@@ -1624,9 +1633,8 @@ function BackupManager:restoreBackup(backup_path, options)
 
                 new_settings:flush()
 
-                -- If not restoring API keys, restore them from current settings
                 if not options.restore_api_keys or not manifest.contents.api_keys then
-                    table.insert(warnings, "API keys were not included in backup. You may need to re-enter them.")
+                    table.insert(warnings, "API keys were not included in the backup; the keys you had are kept.")
                 end
             end
         end

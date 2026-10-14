@@ -42,6 +42,16 @@ end
 -- @param placeholder string the placeholder to find (e.g., "{book_text_section}")
 -- @param replacement string the value to substitute
 -- @return string the text with placeholder replaced
+-- The raw data placeholders resolved above only when their data is present;
+-- any still in the prompt afterwards is dropped (B464).
+local RAW_DATA_PLACEHOLDERS = {
+    "{surrounding_context}", "{highlights}", "{annotations}", "{book_text}", "{full_document}",
+    "{page_text}", "{notebook}", "{library}", "{xray_cache}", "{analyze_cache}", "{summary_cache}",
+    "{previous_results}", "{chapter_title}", "{chapters_read}", "{page_number}", "{reading_progress}",
+    "{progress_decimal}", "{time_since_last_read}", "{cached_result}", "{cached_progress}",
+    "{incremental_book_text}", "{entity_index}",
+}
+
 local function replace_placeholder(text, placeholder, replacement)
     if not text or not placeholder then return text end
     replacement = replacement or ""
@@ -518,6 +528,13 @@ function MessageBuilder.build(params)
         user_prompt = replace_placeholder(user_prompt, "{summary_cache}", data.summary_cache)
     end
 
+    -- A raw data placeholder whose data was never fetched (a flag off, a cache
+    -- gate that failed, nothing stored) is dropped instead of reaching the
+    -- model as written (B464); the section forms already vanish when empty.
+    for _idx, raw in ipairs(RAW_DATA_PLACEHOLDERS) do
+        user_prompt = replace_placeholder(user_prompt, raw, "")
+    end
+
     -- {highlighted_text} applies to all contexts (resolve before the context switch).
     -- A viewer selection inherits the originating chat's context (e.g. a Summarize
     -- chat is is_book_context), so the placeholder must resolve in the library/book/
@@ -688,13 +705,14 @@ function MessageBuilder.build(params)
         end
 
         -- Support template variables using replace_placeholder (avoids gsub escaping issues)
-        if data.book_title then
-            user_prompt = replace_placeholder(user_prompt, "{title}", data.book_title or "Unknown")
-            user_prompt = replace_placeholder(user_prompt, "{author}", data.book_author or "")
-            user_prompt = replace_placeholder(user_prompt, "{author_clause}",
-                (data.book_author and data.book_author ~= "") and (" by " .. data.book_author) or "")
-            user_prompt = replace_placeholder(user_prompt, "{doi_clause}", data.doi_clause or "")
-        end
+        -- Resolved whether or not a title is known: a prompt carrying {doi_clause}
+        -- without a title placeholder, or a selection made in a chat window, used
+        -- to send these as written (B465)
+        user_prompt = replace_placeholder(user_prompt, "{title}", data.book_title or "")
+        user_prompt = replace_placeholder(user_prompt, "{author}", data.book_author or "")
+        user_prompt = replace_placeholder(user_prompt, "{author_clause}",
+            (data.book_author and data.book_author ~= "") and (" by " .. data.book_author) or "")
+        user_prompt = replace_placeholder(user_prompt, "{doi_clause}", data.doi_clause or "")
         if data.highlighted_text then
             user_prompt = replace_placeholder(user_prompt, "{highlighted_text}", data.highlighted_text)
         end

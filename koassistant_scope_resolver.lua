@@ -38,6 +38,7 @@ local function utf8Len(s)
     for _ in s:gmatch(UTF8_CHAR_PATTERN) do count = count + 1 end
     return count
 end
+ScopeResolver.utf8Len = utf8Len -- THE character count for any threshold stated in characters (B431)
 
 --- First n UTF-8 chars of str. @return trimmed, was_truncated
 function ScopeResolver.utf8First(str, n)

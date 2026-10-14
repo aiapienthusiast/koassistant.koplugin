@@ -2311,7 +2311,7 @@ local function isWordCharAt(text, pos, scan_back)
     if not lb or lb < 0xC0 then return true end  -- Can't decode, assume word
     local cp
     if lb < 0xE0 then
-        -- 2-byte: U+0080-U+07FF (Latin Extended, Cyrillic, Arabic, Hebrew, etc.)
+        -- 2-byte: U+0080-U+07FF (Latin Extended, Cyrillic, Arabic, etc.)
         local b2 = text:byte(lead_pos + 1)
         if not b2 then return true end
         cp = (lb - 0xC0) * 64 + (b2 - 0x80)
@@ -2338,7 +2338,7 @@ end
 --- Check if needle should skip word-boundary checking.
 --- Returns true for scripts where byte-level boundary detection is unreliable:
 --- - CJK/Thai (3+ byte UTF-8, leading byte >= 0xE0): no word-boundary spaces
---- - Arabic/Hebrew/Syriac (2-byte UTF-8, leading bytes 0xD6-0xDB): have spaces but
+--- - Arabic/Syriac (2-byte UTF-8, leading bytes 0xD6-0xDB): have spaces but
 ---   multi-byte punctuation (،؛؟) makes byte-level boundary check unreliable
 --- Latin/Cyrillic/Greek (leading bytes 0xC0-0xD5) still use boundary checking.
 --- @param str string Text to check
@@ -2347,7 +2347,7 @@ local function skipBoundaryCheck(str)
     for i = 1, #str do
         local b = str:byte(i)
         if b >= 0xE0 then return true end           -- CJK, Thai, etc.
-        if b >= 0xD6 and b <= 0xDB then return true end  -- Arabic, Hebrew, Syriac
+        if b >= 0xD6 and b <= 0xDB then return true end  -- Arabic, Syriac
     end
     return false
 end
@@ -2412,7 +2412,7 @@ end
 --- Collect match spans of a substring in text (plain search).
 --- For Latin/Cyrillic/Greek: uses word-boundary matching to prevent false positives.
 --- For Arabic: the start of a word, allowed prefixes and short endings (arabicWordMatch).
---- For CJK/Thai/Hebrew: skips boundary matching (see skipBoundaryCheck).
+--- For CJK/Thai: skips boundary matching (see skipBoundaryCheck).
 --- @param text string Haystack (already lowered)
 --- @param needle string Needle (already lowered)
 --- @return table spans Array of {start, end_pos} pairs
@@ -2459,7 +2459,7 @@ end
 -- index (koassistant_xray_index.lua) all match X-Ray names against book text
 -- through matchNormalize + matchTermSet + _collectMatchSpans, so an
 -- underline, a count and a mention list agree. Latin, Cyrillic and Greek
--- names match whole words; Hebrew, CJK and Thai match substrings (particles,
+-- names match whole words; CJK and Thai match substrings (particles,
 -- no spaces between words). Arabic names match where a word starts, after
 -- the prefixes a word carries (و ف ب ك ل س, the article), with at most three
 -- letters after them (B339): every combining mark of the text is optional,
@@ -2576,7 +2576,6 @@ local LETTER_SCRIPTS = {
     { 0x00C0, 0x024F, "latin" }, { 0x1E00, 0x1EFF, "latin" },
     { 0x0370, 0x03FF, "greek" }, { 0x1F00, 0x1FFF, "greek" },
     { 0x0400, 0x052F, "cyrillic" }, { 0x0531, 0x058A, "armenian" },
-    { 0x05D0, 0x05F2, "hebrew" },
     { 0x0620, 0x065F, "arabic" }, { 0x066E, 0x06D5, "arabic" }, { 0x06FA, 0x06FF, "arabic" },
     { 0x0750, 0x077F, "arabic" }, { 0x08A0, 0x08FF, "arabic" },
     { 0xFB50, 0xFDFF, "arabic" }, { 0xFE70, 0xFEFF, "arabic" },

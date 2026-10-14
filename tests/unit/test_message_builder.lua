@@ -220,6 +220,18 @@ TestRunner:test("dictionary context mode none strips context lines entirely", fu
 end)
 
 print("")
+TestRunner:test("raw data placeholders with nothing behind them are dropped, not sent as written (B464, B465)", function()
+    local out = MessageBuilder.build({
+        prompt = { prompt = "A {book_text} B {summary_cache} C {library} D {doi_clause} E {title} F {cached_result} G" },
+        context = "highlight",
+        data = { highlighted_text = "X" },
+    })
+    for _idx, raw in ipairs({ "{book_text}", "{summary_cache}", "{library}", "{doi_clause}", "{title}", "{cached_result}" }) do
+        TestRunner:hasnt(out, raw, "left in the prompt")
+    end
+    TestRunner:has(out, "A  B  C  D  E  F  G", "the prompt around them survives")
+end)
+
 print(string.rep("-", 50))
 print(string.format("  Results: %d passed, %d failed", TestRunner.passed, TestRunner.failed))
 print(string.rep("-", 50))

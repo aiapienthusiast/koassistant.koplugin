@@ -280,7 +280,7 @@ The reply window has a shorter chips row of its own (Web, Tools when it applies,
 
 ### Quick Answer and its preset
 
-Tapping the **⚡ Quick** chip (the Quick Answer chip) applies a configurable bundle to the chat: a brevity nudge, reasoning off, web search off and book tools off; each part can be turned off in the preset. Quick shapes your typed messages and the actions made for it (Explain, Quick Explain, ELI5, Elaborate, Explain in Context); other actions run as usual. If you tap the Web or Tools chip while Quick is on, that choice is pinned and the preset no longer overrides it for this chat.
+Tapping the **⚡ Quick** chip applies a configurable bundle to the chat: a brevity nudge, reasoning off, web search off and book tools off; each part can be turned off in the preset. Quick shapes your typed messages and the actions made for it (Explain, Quick Explain, ELI5, Elaborate, Explain in Context); other actions run as usual. If you tap the Web or Tools chip while Quick is on, that choice is pinned and the preset no longer overrides it for this chat.
 
 Set up the bundle in Settings → Chat & Export Settings → Quick Answer Preset (also from the chip's long-press → **Preset settings…**):
 

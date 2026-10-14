@@ -1887,7 +1887,7 @@ function ChatHistoryDialog:continueChat(ui, document_path, chat, chat_history_ma
                 history:addAssistantMessage(answer, history:getModel() or (config and config.model), reasoning, ConfigHelper:buildDebugInfo(config), web_search_used)
 
                 -- Auto-save continued chats
-                if config.features.auto_save_all_chats or (config.features.auto_save_chats ~= false) then
+                if config.features.auto_save_all_chats ~= false or config.features.auto_save_chats ~= false then
                     -- Reload fresh metadata from disk to pick up any
                     -- changes made via the tag/rename/star UI during this session
                     local fresh = chat_history_manager:getChatById(document_path, chat.id)
@@ -2271,7 +2271,7 @@ function ChatHistoryDialog:continueChat(ui, document_path, chat, chat_history_ma
                     local options = {
                         { value = "full", label = _("Full (metadata + chat)") },
                         { value = "qa", label = _("Question + Response") },
-                        { value = "response", label = _("Response only") },
+                        { value = "response", label = _("Last response only") },
                         { value = "everything", label = _("Everything (debug)") },
                     }
 
@@ -2456,7 +2456,7 @@ function ChatHistoryDialog:showExportOptions(document_path, chat_id, chat_histor
     local chat = chat_history_manager:getChatById(document_path, chat_id)
     local book_title = chat and chat.book_title or nil
     local chat_title = chat and chat.title or nil  -- User-editable title
-    local chat_timestamp = chat and chat.timestamp or nil  -- Chat creation time
+    local chat_timestamp = chat and chat.timestamp or nil  -- the last save time (rewritten on every save)
 
     -- Determine chat type for subfolder routing
     local chat_type = "book"
@@ -2590,7 +2590,7 @@ function ChatHistoryDialog:showExportOptions(document_path, chat_id, chat_histor
         local options = {
             { value = "full", label = _("Full (metadata + chat)") },
             { value = "qa", label = _("Question + Response") },
-            { value = "response", label = _("Response only") },
+            { value = "response", label = _("Last response only") },
             { value = "everything", label = _("Everything (debug)") },
         }
 

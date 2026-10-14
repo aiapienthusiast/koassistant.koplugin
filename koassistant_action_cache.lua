@@ -35,7 +35,7 @@ end
 local CACHE_VERSION = 2
 
 -- Artifact keys tracked in the browsing index
-local ARTIFACT_KEYS = { "_xray_cache", "_summary_cache", "_analyze_cache", "recap", "xray_simple", "book_info", "analyze_highlights", "key_arguments", "discussion_questions", "quiz", "extract_insights", "reading_guide" }
+local ARTIFACT_KEYS = { "_xray_cache", "_summary_cache", "_analyze_cache", "recap", "xray_simple", "book_info", "analyze_highlights", "key_arguments", "counterarguments", "discussion_questions", "quiz", "extract_insights", "reading_guide" }
 
 --- Update the artifact index in g_reader_settings after any cache mutation.
 --- Scans the in-memory cache table for known artifact keys and updates the index entry.
@@ -623,6 +623,7 @@ local ARTIFACT_NAMES = {
     ["book_info"] = _("About"),
     ["analyze_highlights"] = _("Notes Analysis"),
     ["key_arguments"] = _("Key Arguments"),
+    ["counterarguments"] = _("Counterarguments"),
     ["discussion_questions"] = _("Discussion Questions"),
     ["quiz"] = _("Quiz"),
     ["extract_insights"] = _("Key Insights"),
@@ -633,8 +634,10 @@ ActionCache.ARTIFACT_NAMES = ARTIFACT_NAMES
 -- Artifact keys that are per-action caches (vs document-level caches)
 local PER_ACTION_ARTIFACTS = {
     recap = true, xray_simple = true, book_info = true, analyze_highlights = true,
-    key_arguments = true, discussion_questions = true, quiz = true, extract_insights = true, reading_guide = true,
+    key_arguments = true, counterarguments = true, discussion_questions = true, quiz = true, extract_insights = true,
+    reading_guide = true,
 }
+ActionCache.PER_ACTION_ARTIFACTS = PER_ACTION_ARTIFACTS
 
 --- Get available artifacts for a document file.
 --- Central source of truth for discovering cached artifacts.
@@ -715,9 +718,7 @@ function ActionCache.getAvailableArtifacts(document_path, exclude_key, doc)
         end
     end
     -- Add non-X-Ray section groups
-    local other_section_types = { "summary", "analyze", "key_arguments",
-        "discussion_questions", "quiz", "extract_insights", "reading_guide" }
-    for _idx, sec_type in ipairs(other_section_types) do
+    for _idx, sec_type in ipairs(ActionCache.SECTION_GROUP_ORDER) do
         local prefix = ActionCache.SECTION_PREFIXES[sec_type]
         if prefix then
             local type_sections = ActionCache.getSections(document_path, prefix)
@@ -933,6 +934,11 @@ ActionCache.SECTION_PREFIXES = {
     reading_guide = "reading_guide_section:",
 }
 
+-- The non-X-Ray section groups View Artifacts lists, in this order (every
+-- SECTION_PREFIXES key but xray; tests/unit/test_artifact_keys.lua keeps them equal)
+ActionCache.SECTION_GROUP_ORDER = { "summary", "analyze", "key_arguments", "counterarguments",
+    "discussion_questions", "quiz", "extract_insights", "reading_guide" }
+
 -- Human-readable names for section group display (plural for group titles)
 ActionCache.SECTION_GROUP_NAMES = {
     xray = _("View Section X-Rays"),
@@ -954,7 +960,7 @@ ActionCache.SECTION_TYPE_LABELS = {
     key_arguments = _("Key Arguments"),
     counterarguments = _("Counterarguments"),
     discussion_questions = _("Discussion Questions"),
-    generate_quiz = _("Quiz"),
+    quiz = _("Quiz"),
     extract_insights = _("Key Insights"),
     reading_guide = _("Reading Guide"),
 }

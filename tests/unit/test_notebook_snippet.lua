@@ -292,12 +292,35 @@ local function teardown()
     package.loaded["koassistant_notebook"] = nil
 end
 
+-- B445: a chat about a closed book beside an open one must not record the
+-- open book's page in the other book's notebook
+local function runPageInfoGuardTests()
+    print("\n--- getPageInfo: a reader open on another book (B445) ---")
+    local function reader(file)
+        return { document = { file = file, info = { number_of_pages = 10, has_pages = true } },
+                 view = { state = { page = 7 } } }
+    end
+    local other = reader("/tmp/books/other.epub")
+    local info = Notebook.getPageInfo(other, "/tmp/books/this.epub")
+    check("another book's reader lends no page", info.page == nil and info.total_pages == nil, tostring(info.page))
+    local orig = package.loaded["apps/reader/readerui"]
+    package.loaded["apps/reader/readerui"] = { instance = other }
+    local info2 = Notebook.getPageInfo(nil, "/tmp/books/this.epub")
+    check("the fallback instance is checked too", info2.page == nil, tostring(info2.page))
+    package.loaded["apps/reader/readerui"] = orig
+    local info3 = Notebook.getPageInfo(reader("/tmp/books/this.epub"), "/tmp/books/this.epub")
+    check("the book's own reader gives the page", info3.page == 7 and info3.progress == 70, tostring(info3.page))
+    local info4 = Notebook.getPageInfo(other, nil)
+    check("without an expected file the reader is used", info4.page == 7, tostring(info4.page))
+end
+
 local function runAll()
     print("=== test_notebook_snippet ===")
     runFormatSnippetTests()
     runFormatEntryTests()
     runSaveChatScopeTests()
     runGuardTests()
+    runPageInfoGuardTests()
     runRoundTripTests()
     teardown()
     print(string.format("\n=== Results: %d passed, %d failed ===\n", TestRunner.passed, TestRunner.failed))

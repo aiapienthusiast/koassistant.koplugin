@@ -108,7 +108,7 @@ function DomainManager:showDomainMenu()
 
     -- Add help text at the top
     table.insert(menu_items, {
-        text = _("Hold for details • Domains are selected when starting a chat"),
+        text = _("Hold for details • Select a domain in the Domain & Research picker"),
         dim = true,
         enabled = false,
     })
@@ -176,7 +176,7 @@ function DomainManager:showDomainMenu()
                 callback = function()
                     -- Show hint about how domains work
                     UIManager:show(InfoMessage:new{
-                        text = _("Domains are selected when starting a chat.\n\nHold to view details or edit."),
+                        text = _("Select a domain in the Domain & Research picker, globally or per book.\n\nHold to view details or edit."),
                         timeout = 2,
                     })
                 end,
@@ -236,7 +236,7 @@ function DomainManager:_showMenuOptions()
             {{ text = _("About Domains"), align = "left", callback = function()
                 UIManager:close(self_ref._anchored_menu)
                 UIManager:show(InfoMessage:new{
-                    text = _("Domains provide specialized knowledge context to the AI.\n\nUnlike behaviors (which set communication style), domains give the AI expertise in specific subject areas.\n\nDomains are selected per-chat, not globally, making them like 'projects' you can switch between."),
+                    text = _("Domains provide specialized knowledge context to the AI.\n\nUnlike behaviors (which set communication style), domains give the AI expertise in specific subject areas.\n\nA domain is selected globally or per book, like a project you switch between."),
                 })
             end }},
             {{ text = _("Delete all custom"), align = "left", callback = function()

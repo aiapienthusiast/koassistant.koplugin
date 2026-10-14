@@ -442,7 +442,7 @@ function MessageHistory:createResultText(highlightedText, config)
         local start_pct = self.book_text_coverage_start or 0
         local end_pct = self.book_text_coverage_end or 0
         table.insert(result, string.format(
-            "*Book text truncated (~%d%%–%d%% coverage). Increase limit in Advanced Settings → Book Text Extraction. You can also use Hidden Flows to exclude irrelevant content, or focus on a specific section.*\n\n---\n\n",
+            "*Book text truncated (~%d%%–%d%% coverage). Increase it in Settings → Privacy & Data → Text Extraction → Max Text Characters. You can also use Hidden Flows to exclude irrelevant content, or focus on a specific section.*\n\n---\n\n",
             start_pct, end_pct))
     end
 
@@ -467,7 +467,7 @@ function MessageHistory:createResultText(highlightedText, config)
     local should_hide = config and config.features and (
         config.features.hide_highlighted_text or
         (config.features.hide_long_highlights ~= false and highlightedText and
-         string.len(highlightedText) > (config.features.long_highlight_threshold or 280))
+         require("koassistant_scope_resolver").utf8Len(highlightedText) > (config.features.long_highlight_threshold or 280))
     )
 
     if not should_hide and highlightedText and highlightedText ~= "" then

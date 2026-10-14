@@ -158,7 +158,6 @@ Languages.KOREADER_LOCALE_FALLBACK = {
     eo = "Esperanto",
     eu = "Basque",
     gl = "Galician",
-    he = "Hebrew",
     kk = "Kazakh",
 }
 

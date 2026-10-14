@@ -1111,15 +1111,17 @@ TestRunner:test("getBackground: trims surrounding whitespace", function()
         "reading this critically", "trimmed")
 end)
 
-TestRunner:test("getBackground: caps over-long text (UTF-8 safe)", function()
-    local long = string.rep("a", BookSettings.BACKGROUND_MAX_CHARS + 500)
-    local out = BookSettings.getBackground(bgDs(long))
-    TestRunner:assertEqual(#out <= BookSettings.BACKGROUND_MAX_CHARS, true, "capped to the max")
-    -- Multi-byte tail must not be cut mid-sequence
-    local multi = string.rep("é", BookSettings.BACKGROUND_MAX_CHARS)  -- 2 bytes each
-    local out2 = BookSettings.getBackground(bgDs(multi))
-    TestRunner:assertEqual(#out2 <= BookSettings.BACKGROUND_MAX_CHARS, true, "multibyte capped")
-    TestRunner:assertEqual(#out2 % 2, 0, "no half codepoint at the tail")
+TestRunner:test("getBackground: caps over-long text in characters, not bytes (B441)", function()
+    local MAX = BookSettings.BACKGROUND_MAX_CHARS
+    local SR = require("koassistant_scope_resolver")
+    local out = BookSettings.getBackground(bgDs(string.rep("a", MAX + 500)))
+    TestRunner:assertEqual(#out, MAX, "capped to the max")
+    -- a non-Latin note keeps MAX characters (it used to be cut by bytes, about half as early)
+    local out2 = BookSettings.getBackground(bgDs(string.rep("é", MAX + 100)))  -- 2 bytes each
+    TestRunner:assertEqual(SR.utf8Len(out2), MAX, "characters, not bytes")
+    TestRunner:assertEqual(#out2, MAX * 2, "no half codepoint at the tail")
+    TestRunner:assertEqual(BookSettings.getBackground(bgDs(string.rep("é", MAX))), string.rep("é", MAX),
+        "at the limit, untouched")
 end)
 
 TestRunner:test("backgroundRowLabel: 'not set' when empty, preview when set", function()

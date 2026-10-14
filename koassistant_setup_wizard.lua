@@ -330,7 +330,7 @@ local function installEmojiFont(plugin, ctx, next_step)
         if not lfs.attributes(src, "mode") then
             UIManager:show(InfoMessage:new{
                 icon = "notice-warning",
-                text = _("The bundled emoji font is missing from this build. See the README's Emoji Font Setup for the manual route."),
+                text = _("The bundled emoji font is missing from this build. The wiki's Troubleshooting page has the manual route."),
                 dismiss_callback = next_step,
             })
             return

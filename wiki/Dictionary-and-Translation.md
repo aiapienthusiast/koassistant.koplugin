@@ -89,7 +89,7 @@ The **Ctx** button in the dictionary window turns context on or off for one look
 
 ### The text after the word
 
-Dictionary, Quick Define, Deep Analysis and Translate do not carry the [spoiler protection](Spoiler-Protection) reminder; what they send from the book is the context itself. Two rows under **Settings → Highlight Settings** limit the side after the word: **Context Direction** (**Before the selection only** sends nothing after it) and, while spoiler protection is on, **Context Under Spoiler Protection** (up to the end of the word's sentence or paragraph, or nothing after it). They apply when a dictionary action runs from the input dialog. Lookups from the dictionary popup, the highlight menu and the bypass send the context exactly as Context Mode cuts it.
+Dictionary, Quick Define, Deep Analysis and Translate do not carry the [spoiler protection](Spoiler-Protection) reminder; what they send from the book is the context itself. Two rows under **Settings → Highlight Settings** limit the side after the word: **Context Direction** (**Before the selection only** sends nothing after it) and, while spoiler protection is on, **Context Under Spoiler Protection** (up to the end of the word's sentence or paragraph, or nothing after it). They apply to every dictionary lookup: from the dictionary popup, the highlight menu, the bypass and the input dialog.
 
 ## Dictionary bypass
 

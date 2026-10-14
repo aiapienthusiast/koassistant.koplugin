@@ -176,7 +176,7 @@ When you open a book you haven't read in a while, KOAssistant can ask "You haven
 - **Settings → Reading & Library → Remind to Recap on Book Open:** show the reminder (default: Off).
 - **Settings → Reading & Library → Days Before Reminder:** how many days since you last opened the book before the reminder appears (default 7, range 1-90; grayed out while the reminder is off).
 
-It skips books you haven't started and books past 95%. For a book with no record yet (not opened while the reminder was on), it goes by when the book's sidecar folder last changed.
+It skips books you haven't started and books past 95%. For a book with no record yet, it goes by when the book's sidecar folder last changed.
 
 ## End of book
 

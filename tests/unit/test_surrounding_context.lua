@@ -294,6 +294,15 @@ end)
 --==========================================================================
 TestRunner:suite("Actions.effectiveSurroundingContextMode — tri-state matrix")
 
+TestRunner:test("nil flag with the placeholder in the prompt resolves like flag true (B429)", function()
+    local action = { id = "custom", use_reading_progress = true, prompt = "Around: {surrounding_context}" }
+    TestRunner:assertEqual(Actions.effectiveSurroundingContextMode(action, {}, "paragraph"), "paragraph", "ambient mode adopted")
+    TestRunner:assertEqual(Actions.effectiveSurroundingContextMode(action, {}, "none"), "sentence", "ambient off still extracts")
+    TestRunner:assertEqual(Actions.effectiveSurroundingContextMode(action, {}, nil), "sentence", "ambient unset still extracts")
+    local section = { id = "custom2", prompt = "{surrounding_context_section}", context_mode = "paragraph" }
+    TestRunner:assertEqual(Actions.effectiveSurroundingContextMode(section, {}, nil), "paragraph", "own context_mode wins")
+end)
+
 TestRunner:test("nil action (freeform) follows the ambient mode", function()
     TestRunner:assertEqual(Actions.effectiveSurroundingContextMode(nil, {}, "sentence"), "sentence")
     TestRunner:assertNil(Actions.effectiveSurroundingContextMode(nil, {}, "none"), "ambient off")

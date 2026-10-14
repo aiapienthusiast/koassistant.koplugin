@@ -13,6 +13,11 @@
 --     output (a schema change is followed by regenerating it)
 --   - the release-notes draft's <!-- wiki: --> tags name existing pages
 --   - the release zip leaves wiki/ out
+--   - every "Settings → …" path inside a _("...") string of the plugin's code
+--     is a path of the menu too (in-app notices went stale through two reorgs, B152)
+--   - the Providers page's generated tables equal tests/tools/gen_provider_tables.lua's
+--     output, every built-in provider has a display name there, and the provider
+--     tables of the wiki and the README list every provider with its status
 --
 -- Run: lua tests/unit/test_wiki_pages.lua  (or lua tests/run_tests.lua --unit)
 
@@ -362,6 +367,59 @@ TestRunner:test("every 'Settings → …' path in the README is a path of the KO
     TestRunner:assertEqual(table.concat(problems, "\n      "), "", "README menu paths")
 end)
 
+-- The _("...") and _('...') literals of a Lua source, unescaped enough for a path check.
+local function gettextStrings(src)
+    local out = {}
+    local pos = 1
+    while true do
+        local _s, e, q = src:find("_%(%s*([\"'])", pos)
+        if not _s then break end
+        local i = e + 1
+        local buf = {}
+        while i <= #src do
+            local c = src:sub(i, i)
+            if c == "\\" then
+                local n = src:sub(i + 1, i + 1)
+                buf[#buf + 1] = (n == "n" and "\n") or (n == "t" and "\t") or n
+                i = i + 2
+            elseif c == q then
+                break
+            else
+                buf[#buf + 1] = c
+                i = i + 1
+            end
+        end
+        out[#out + 1] = table.concat(buf)
+        pos = i + 1
+    end
+    return out
+end
+
+TestRunner:test("every 'Settings → …' path in the plugin's user-facing strings is a path of the KOAssistant menu", function()
+    local problems = {}
+    for _idx, dir in ipairs({ "", "koassistant_api/", "koassistant_ui/", "prompts/" }) do
+        local h = io.popen('ls "' .. plugin_dir .. '/' .. dir .. '"*.lua 2>/dev/null')
+        if h then
+            for path in h:lines() do
+                local rel = path:sub(#plugin_dir + 2)
+                local f = io.open(path, "r")
+                if f then
+                    local src = f:read("*a")
+                    f:close()
+                    local strings = gettextStrings(src)
+                    if #strings > 0 then
+                        for _j, problem in ipairs(checkPaths(rel, table.concat(strings, "\n"))) do
+                            problems[#problems + 1] = problem
+                        end
+                    end
+                end
+            end
+            h:close()
+        end
+    end
+    TestRunner:assertEqual(table.concat(problems, "\n      "), "", "menu paths in the code's strings")
+end)
+
 print("\n  [the README and the generated page]")
 
 TestRunner:test("README.md stays the front door (under " .. README_MAX_LINES .. " lines)", function()
@@ -421,6 +479,68 @@ TestRunner:test("the release zip leaves wiki/ out", function()
     local function has(rel) return (read(rel) or ""):find("--exclude='wiki'", 1, true) ~= nil end
     TestRunner:assertTrue(has(".github/workflows/release.yml"), "release.yml")
     TestRunner:assertTrue(has("scripts/build_release_zip.sh"), "build_release_zip.sh")
+end)
+
+print("\n  [the provider tables]")
+
+local ModelLists = require("koassistant_model_lists")
+local GenP = dofile(tests_dir .. "/tools/gen_provider_tables.lua")
+
+TestRunner:test("the Providers page's generated tables are the generator's output", function()
+    local text = read(GenP.PAGE) or ""
+    local blocks = GenP.generate(ModelLists)
+    local stale = {}
+    for _idx, name in ipairs(GenP.BLOCKS) do
+        local have = GenP.extract(text, name)
+        if have == nil then
+            stale[#stale + 1] = name .. " (markers missing)"
+        elseif have ~= blocks[name] then
+            stale[#stale + 1] = name
+        end
+    end
+    TestRunner:assertEqual(table.concat(stale, ", "), "", "run: lua tests/tools/gen_provider_tables.lua")
+end)
+
+TestRunner:test("every built-in provider has a display name and a place in the provider generator", function()
+    local ordered = {}
+    for _idx, id in ipairs(GenP.ORDER) do ordered[id] = true end
+    local missing = {}
+    for _idx, id in ipairs(ModelLists.getAllProviders()) do
+        if not GenP.NAMES[id] then missing[#missing + 1] = id .. " (no name)" end
+        if not ordered[id] then missing[#missing + 1] = id .. " (not in ORDER)" end
+    end
+    table.sort(missing)
+    TestRunner:assertEqual(table.concat(missing, ", "), "", "Gen.NAMES / Gen.ORDER in gen_provider_tables.lua")
+end)
+
+TestRunner:test("the provider tables of the wiki and the README list every built-in provider with its status", function()
+    local problems = {}
+    local function check(rel, rowOf)
+        local text = read(rel) or ""
+        for _idx, id in ipairs(ModelLists.getAllProviders()) do
+            local row = rowOf(text, id)
+            local want = ModelLists.isCommunity(id) and "| Docs-based* |" or "| Tested |"
+            if not row then
+                problems[#problems + 1] = rel .. ": no row for " .. id
+            elseif not row:find(want, 1, true) then
+                problems[#problems + 1] = rel .. ": " .. id .. " should read " .. want
+            end
+        end
+    end
+    -- the wiki's table tags each row with the id; the README's names the provider
+    check("wiki/Providers-and-Models.md", function(text, id)
+        for line in text:gmatch("[^\n]+") do
+            if line:sub(1, 1) == "|" and line:find("(`" .. id .. "`)", 1, true) then return line end
+        end
+    end)
+    check("README.md", function(text, id)
+        local head = "| **" .. (GenP.NAMES[id] or id) .. "** |"
+        for line in text:gmatch("[^\n]+") do
+            if line:sub(1, #head) == head then return line end
+        end
+    end)
+    table.sort(problems)
+    TestRunner:assertEqual(table.concat(problems, "\n      "), "", "provider tables")
 end)
 
 TestRunner:summary()

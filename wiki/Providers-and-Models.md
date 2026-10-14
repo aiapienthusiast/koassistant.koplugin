@@ -274,39 +274,49 @@ You can override the system default model of any provider with your preferred ch
 
 ### Current default models
 
-The first model in each provider's list is its default. Current defaults (subject to change as providers update; the live source of truth is `koassistant_model_lists.lua`):
+The first model in each provider's list is its default. These tables are generated from the plugin's model lists (`koassistant_model_lists.lua`) when the page is published, so they match the code. "Also listed" is the rest of the built-in list in the menu's order; the routers list a few ids, and **Fetch models from provider...** lists the whole catalog.
 
-| Provider | Default | Notable alternatives |
-|----------|---------|----------------------|
-| **Anthropic** | `claude-sonnet-5-5` | `claude-opus-5-5` (deep reasoning), `claude-fable-5-1` (most capable, premium price), `claude-haiku-5-5` (fast), `claude-sonnet-5` / `claude-opus-5` / `claude-fable-5` (previous versions) |
-| **OpenAI** | `gpt-5.6-terra` | `gpt-6.1-sol` (most capable, can't turn reasoning off), `gpt-6-astra` (frontier, premium price), `gpt-6-luna` (cheapest; the fast pick), `gpt-6-sol` / `gpt-5.6-luna` (previous versions) |
-| **OpenAI Subscription** | `gpt-5.6-terra` | `gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-5.6-luna` (Sol and Astra need a paid ChatGPT plan) |
-| **DeepSeek** | `deepseek-flash` | `deepseek-v4-pro` (most capable; both 1M context, thinking on by default). `deepseek-flash` is DeepSeek's new name for the V4 flash model |
-| **Gemini** | `gemini-3.8-flash` | `gemini-3.7-flash`, `gemini-3.1-pro-preview` (paid only), `gemini-3.5-flash-lite` (fast, ultrafast), `gemini-2.5-flash/pro` (older accounts only) |
-| **Groq** | `openai/gpt-oss-120b` | `openai/gpt-oss-20b` (fast), `qwen/qwen3.8-27b` |
-| **Mistral** | `mistral-large-latest` | `mistral-medium-latest`, `mistral-small-latest`, `magistral-medium-latest` (reasoning) |
-| **xAI** | `grok-4.7` | `grok-4.6`, `grok-4.5`, `grok-4.3`, `grok-4.20-0309-reasoning`/`-non-reasoning` |
-| **OpenRouter** | `anthropic/claude-sonnet-5.5` | Claude, GPT (gpt-oss included), Gemini, DeepSeek, GLM, Grok, Llama, Mistral, Qwen, Sonar, Kimi and MiniMax models; **Fetch models** lists the whole catalog |
-| **Requesty** | `openai/gpt-4o-mini` | Claude, GPT, Gemini, DeepSeek and Grok models |
+<!-- generated: defaults -->
+| Provider | Default | Also listed |
+|----------|---------|-------------|
+| **Anthropic** | `claude-sonnet-5-5` | `claude-opus-5-5`, `claude-fable-5-1`, `claude-haiku-5-5`, `claude-sonnet-5`, `claude-opus-5`, `claude-fable-5` |
+| **OpenAI** | `gpt-5.6-terra` | `gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-5.6-luna` |
+| **OpenAI Subscription** | `gpt-5.6-terra` | `gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-5.6-luna` |
+| **DeepSeek** | `deepseek-flash` | `deepseek-v4-pro` |
+| **Gemini** | `gemini-3.8-flash` | `gemini-3.7-flash`, `gemini-3.6-flash`, `gemini-3.5-flash`, `gemini-3.1-pro-preview`, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, `gemini-2.5-flash`, `gemini-2.5-pro` and 1 more |
+| **Groq** | `openai/gpt-oss-120b` | `openai/gpt-oss-20b`, `qwen/qwen3.8-27b` |
+| **Mistral** | `mistral-large-latest` | `mistral-medium-latest`, `mistral-small-latest`, `magistral-medium-latest`, `magistral-small-latest`, `ministral-14b-latest`, `ministral-8b-latest`, `ministral-3b-latest`, `codestral-latest` |
+| **xAI** | `grok-4.7` | `grok-4.6`, `grok-4.5`, `grok-4.3`, `grok-4.20-0309-non-reasoning`, `grok-4.20-0309-reasoning`, `grok-build-0.1` |
+| **OpenRouter** | `anthropic/claude-sonnet-5.5` | `anthropic/claude-opus-5.5`, `anthropic/claude-fable-5.1`, `anthropic/claude-sonnet-5`, `anthropic/claude-opus-5`, `anthropic/claude-fable-5`, `anthropic/claude-sonnet-4.6`, `anthropic/claude-opus-4.8`, `anthropic/claude-haiku-5.5` and 35 more |
 | **Perplexity** | `perplexity/sonar` | `openai/gpt-6-luna`, `openai/gpt-6-sol`, `openai/gpt-6.1-sol`, `anthropic/claude-sonnet-5-5`, `google/gemini-3.8-flash`, `xai/grok-4.7` |
-| **Z.AI** | `glm-5.2` | `glm-5.3` (most capable, always thinks), `glm-5.3-flash`, `glm-5.1`, `glm-4.7` (reasoning), `glm-4.7-flash` (free) |
-| **Cohere** | `command-a-plus-05-2026` | `command-a-reasoning-08-2025`, `command-r7b-12-2024` (fast) |
-| **Kimi** | `kimi-k2.6` | `kimi-k3` (most capable), `kimi-k2.6-thinking` (reasoning), `kimi-k2-turbo-preview` (fast); these two are China-platform only, the international platform serves `kimi-k2.6` and `kimi-k3` |
-| **Qwen** | `qwen3-max` | `qwen3.8-max`, `qwen3.8-flash`, `qwen3.5-plus`, `qwen3.5-flash`, `qwen-turbo` |
-| **Doubao** | `doubao-seed-2.0-pro-32k` | `doubao-seed-2.0-pro-256k`, `doubao-seed-2.0-lite` |
-| **Ollama** | `llama4` (when installed; otherwise your server's first installed model) | The models installed on your server: the menu lists those, not a built-in list. KOAssistant's own list (`llama4`, `qwen3.5`, `deepseek-v4`, `gemma4`, `mistral`, `phi4`, `tinyllama` and others) only supplies the default and the tier picks |
-| **Together** | `deepseek-ai/DeepSeek-V4-Pro-0813` | `deepseek-ai/DeepSeek-V4-Flash-0731`, `meta-llama/Llama-3.3-70B-Instruct-Turbo`, `moonshotai/Kimi-K2.6`, `zai-org/GLM-5.2` |
-| **Fireworks** | `accounts/fireworks/models/gpt-oss-120b` | `glm-5p3`, `glm-5p3-flash`, `kimi-k3`, `deepseek-v4p1-flash`, `minimax-m3`, `qwen3p8-max` (each under `accounts/fireworks/models/`) |
-| **SambaNova** | `gpt-oss-120b` | `DeepSeek-V3.1`, `DeepSeek-V3.2`, `Meta-Llama-3.3-70B-Instruct`, `MiniMax-M2.7`, `gemma-4-31B-it` |
+| **Z.AI** | `glm-5.2` | `glm-5.3`, `glm-5.3-flash`, `glm-5.3-flashx`, `glm-5.1`, `glm-5`, `glm-5-turbo`, `glm-4.7`, `glm-4.7-flash` |
+| **Cohere** | `command-a-plus-05-2026` | `command-a-reasoning-08-2025`, `command-r7b-12-2024` |
+| **Kimi** | `kimi-k2.6` | `kimi-k3`, `kimi-k2.6-thinking`, `kimi-k2-turbo-preview` |
+| **Qwen** | `qwen3-max` | `qwen3.8-max`, `qwen3.8-flash`, `qwen3.5-plus`, `qwen3.5-flash`, `qwen-turbo`, `qwen3-coder-plus` |
+| **Ollama** | `llama4` | `llama3.3`, `llama3.3:70b`, `llama3.2`, `llama3.2:3b`, `qwen3.5`, `qwen3`, `qwen3:8b`, `qwen3:32b` and 12 more |
+| **Fireworks** | `accounts/fireworks/models/gpt-oss-120b` | `accounts/fireworks/models/glm-5p3`, `accounts/fireworks/models/glm-5p3-flash`, `accounts/fireworks/models/kimi-k3`, `accounts/fireworks/models/deepseek-v4p1-flash`, `accounts/fireworks/models/minimax-m3`, `accounts/fireworks/models/qwen3p8-max` |
 | **NVIDIA** | `nvidia/nemotron-3-super-120b-a12b` | `nvidia/nemotron-3-ultra-550b-a55b`, `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`, `openai/gpt-oss-20b` |
-| **OpenCode Zen** | `deepseek-v4-flash` | `deepseek-v4.1-flash`, `deepseek-v4-pro`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3`, `qwen3.8-max`, `minimax-m3`, and older GLM, MiniMax and Qwen versions |
-| **OpenCode Go** | `kimi-k3` | `hy4-preview`, `longcat-2.0`, `minimax-m3`, `glm-5.3`, `glm-5.3-flash`, `mimo-v2.5-pro`, `qwen3.8-max` and more; `deepseek-v4-flash`, `deepseek-v4-pro` and the `muse-spark` models need an opt-in at the OpenCode console |
-| **A2Agent** | `deepseek-v4-flash` | `deepseek-v4-pro`, `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3`, `qwen3.8-max`, `qwen3.8-flash`, `MiniMax-M3`; **Fetch models** lists the rest |
+| **OpenCode Zen** | `deepseek-v4-flash` | `deepseek-v4.1-flash`, `deepseek-v4-pro`, `glm-5.3-flash`, `glm-5.3`, `kimi-k3`, `qwen3.8-max`, `minimax-m3`, `minimax-m2.7` and 5 more |
+| **OpenCode Go** | `kimi-k3` | `hy4-preview`, `longcat-2.0`, `minimax-m3`, `glm-5.3-flash`, `glm-5.3`, `glm-5.2`, `deepseek-v4-flash-vision-exp`, `mimo-v2.5-pro` and 9 more |
+| **A2Agent** | `deepseek-v4-flash` | `deepseek-v4-pro`, `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3`, `qwen3.8-max`, `qwen3.8-flash`, `MiniMax-M3` |
+<!-- /generated: defaults -->
 
-The community hosts ship seed lists of one or two ids (the first is the default). Some of these ids were never confirmed with a request, since the maintainer has no key for these providers; if the first request fails, fetch the live list.
+A few of these ids come with conditions:
 
-| Provider | Seed list |
-|----------|-----------|
+- **OpenAI Subscription:** the Sol and Astra models need a paid ChatGPT plan; a free account is refused with a note saying so.
+- **Gemini:** `gemini-3.1-pro-preview` is paid only; the 2.5 models answer on older accounts only.
+- **Ollama:** the menu lists the models installed on your server, not this list. `llama4` is the default when it is installed, otherwise your server's first installed model.
+- **OpenCode Go:** `deepseek-v4-flash`, `deepseek-v4-pro` and the `muse-spark` models need an opt-in at the OpenCode console.
+
+The community hosts ship short built-in lists (the first id is the default). Some of these ids were never confirmed with a request, since the maintainer has no key for these providers; if the first request fails, fetch the live list.
+
+<!-- generated: community -->
+| Provider | Built-in list |
+|----------|---------------|
+| **Together** | `deepseek-ai/DeepSeek-V4-Pro-0813`, `deepseek-ai/DeepSeek-V4-Flash-0731`, `meta-llama/Llama-3.3-70B-Instruct-Turbo`, `moonshotai/Kimi-K2.6`, `zai-org/GLM-5.2` |
+| **SambaNova** | `gpt-oss-120b`, `DeepSeek-V3.1`, `DeepSeek-V3.2`, `Meta-Llama-3.3-70B-Instruct`, `MiniMax-M2.7`, `gemma-4-31B-it` |
+| **Requesty** | `openai/gpt-4o-mini`, `openai/gpt-5.5`, `openai/gpt-5.4`, `anthropic/claude-sonnet-5-5`, `anthropic/claude-opus-5-5`, `anthropic/claude-fable-5.1`, `anthropic/claude-sonnet-5`, `anthropic/claude-opus-5` and 6 more |
+| **Doubao** | `doubao-seed-2.0-pro-32k`, `doubao-seed-2.0-pro-256k`, `doubao-seed-2.0-lite`, `doubao-seed-2.0-code` |
 | **Cerebras** | `gpt-oss-120b`, `gemma-4-31b` |
 | **MiniMax** | `MiniMax-M3`, `MiniMax-M2.7` |
 | **DeepInfra** | `meta-llama/Llama-3.3-70B-Instruct-Turbo`, `deepseek-ai/DeepSeek-V4-Pro` |
@@ -316,6 +326,7 @@ The community hosts ship seed lists of one or two ids (the first is the default)
 | **Chutes** | `deepseek-ai/DeepSeek-V4-Flash-0731-TEE` |
 | **Featherless** | `Qwen/Qwen3-32B` |
 | **Vercel AI Gateway** | `openai/gpt-5.5`, `anthropic/claude-sonnet-5` |
+<!-- /generated: community -->
 
 > **Note:** OpenRouter, Requesty, Together, Fireworks and SambaNova use provider-prefixed or vendor-specific model IDs (`anthropic/claude-sonnet-5` on OpenRouter, `deepseek-ai/DeepSeek-V4-Pro-0813` on Together); see the provider's own catalog for exact strings, or use **Fetch models from provider...**. The routers spell the same model differently: `anthropic/claude-sonnet-5.5` and `x-ai/grok-4.3` on OpenRouter, `anthropic/claude-sonnet-5-5` and `xai/grok-4.3` on Requesty. Fireworks ids live under `accounts/fireworks/models/` and write a version's dots as "p" (`glm-5p3` is GLM-5.3).
 
@@ -353,28 +364,30 @@ Meta-routers (OpenRouter, Requesty, OpenCode Zen, OpenCode Go, A2Agent, Perplexi
 
 ### Current tier picks
 
-Frontier exists only on Anthropic (`claude-fable-5-1`), OpenAI and the OpenAI Subscription (`gpt-6-astra`) and Gemini (`gemini-3.1-pro-preview`). The other built-in picks:
+The built-in picks, generated from the plugin's tier table when the page is published. An empty Frontier cell means the provider has no frontier-class model; a provider without a row has no curated placements (the routers and the community hosts, as above).
 
-| Provider | Flagship | Standard | Fast | Ultrafast |
-|----------|----------|----------|------|-----------|
-| **Anthropic** | `claude-opus-5-5` | `claude-sonnet-5-5` | `claude-haiku-5-5` | `claude-haiku-5-5` |
-| **OpenAI** | `gpt-6.1-sol` | `gpt-5.6-terra` | `gpt-6-luna` | `gpt-6-luna` |
-| **OpenAI Subscription** | `gpt-6.1-sol` (paid plans) | `gpt-5.6-terra` | `gpt-6-luna` | `gpt-6-luna` |
-| **DeepSeek** | `deepseek-v4-pro` | `deepseek-flash` | `deepseek-flash` | `deepseek-flash` |
-| **Gemini** | `gemini-3.8-flash` | `gemini-3.8-flash` | `gemini-3.5-flash-lite` | `gemini-3.5-flash-lite` |
-| **Groq** | `openai/gpt-oss-120b` | `openai/gpt-oss-120b` | `openai/gpt-oss-20b` | `openai/gpt-oss-20b` |
-| **Mistral** | `mistral-large-latest` | `mistral-medium-latest` | `ministral-14b-latest` | `ministral-3b-latest` |
-| **xAI** | `grok-4.7` | `grok-4.20-0309-non-reasoning` | `grok-4.20-0309-non-reasoning` | `grok-4.20-0309-non-reasoning` |
-| **Cohere** | `command-a-plus-05-2026` | `command-a-plus-05-2026` | `command-r7b-12-2024` | `command-r7b-12-2024` |
-| **Qwen** | `qwen3-max` | `qwen3.5-plus` | `qwen3.5-flash` | `qwen-turbo` |
-| **Kimi** | `kimi-k2.6` | `kimi-k2.6` | `kimi-k2.6` | `kimi-k2.6` |
-| **Z.AI** | `glm-5.3` | `glm-5` | `glm-5-turbo` | `glm-4.7-flash` |
-| **Doubao** | `doubao-seed-2.0-pro-32k` | `doubao-seed-2.0-pro-32k` | `doubao-seed-2.0-lite` | `doubao-seed-2.0-lite` |
-| **Together** | `deepseek-ai/DeepSeek-V4-Pro-0813` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` |
-| **Fireworks** (under `accounts/fireworks/models/`) | `glm-5p3` | `gpt-oss-120b` | `gpt-oss-120b` | `deepseek-v4p1-flash` |
-| **SambaNova** | `gpt-oss-120b` | `Meta-Llama-3.3-70B-Instruct` | `Meta-Llama-3.3-70B-Instruct` | `Meta-Llama-3.3-70B-Instruct` |
-| **NVIDIA** | `nvidia/nemotron-3-ultra-550b-a55b` | `nvidia/nemotron-3-super-120b-a12b` | `openai/gpt-oss-20b` | `openai/gpt-oss-20b` |
-| **Ollama** | `llama4` | `llama3.3` | `llama3.2:3b` | `tinyllama` |
+<!-- generated: tiers -->
+| Provider | Frontier | Flagship | Standard | Fast | Ultrafast |
+|----------|----------|----------|----------|------|-----------|
+| **Anthropic** | `claude-fable-5-1` | `claude-opus-5-5` | `claude-sonnet-5-5` | `claude-haiku-5-5` | `claude-haiku-5-5` |
+| **OpenAI** | `gpt-6-astra` | `gpt-6.1-sol` | `gpt-5.6-terra` | `gpt-6-luna` | `gpt-6-luna` |
+| **OpenAI Subscription** | `gpt-6-astra` | `gpt-6.1-sol` | `gpt-5.6-terra` | `gpt-6-luna` | `gpt-6-luna` |
+| **DeepSeek** |  | `deepseek-v4-pro` | `deepseek-flash` | `deepseek-flash` | `deepseek-flash` |
+| **Gemini** | `gemini-3.1-pro-preview` | `gemini-3.8-flash` | `gemini-3.8-flash` | `gemini-3.5-flash-lite` | `gemini-3.5-flash-lite` |
+| **Groq** |  | `openai/gpt-oss-120b` | `openai/gpt-oss-120b` | `openai/gpt-oss-20b` | `openai/gpt-oss-20b` |
+| **Mistral** |  | `mistral-large-latest` | `mistral-medium-latest` | `ministral-14b-latest` | `ministral-3b-latest` |
+| **xAI** |  | `grok-4.7` | `grok-4.20-0309-non-reasoning` | `grok-4.20-0309-non-reasoning` | `grok-4.20-0309-non-reasoning` |
+| **Z.AI** |  | `glm-5.3` | `glm-5` | `glm-5-turbo` | `glm-4.7-flash` |
+| **Cohere** |  | `command-a-plus-05-2026` | `command-a-plus-05-2026` | `command-r7b-12-2024` | `command-r7b-12-2024` |
+| **Kimi** |  | `kimi-k2.6` | `kimi-k2.6` | `kimi-k2.6` | `kimi-k2.6` |
+| **Qwen** |  | `qwen3-max` | `qwen3.5-plus` | `qwen3.5-flash` | `qwen-turbo` |
+| **Ollama** |  | `llama4` | `llama3.3` | `llama3.2:3b` | `tinyllama` |
+| **Fireworks** |  | `accounts/fireworks/models/glm-5p3` | `accounts/fireworks/models/gpt-oss-120b` | `accounts/fireworks/models/gpt-oss-120b` | `accounts/fireworks/models/deepseek-v4p1-flash` |
+| **NVIDIA** |  | `nvidia/nemotron-3-ultra-550b-a55b` | `nvidia/nemotron-3-super-120b-a12b` | `openai/gpt-oss-20b` | `openai/gpt-oss-20b` |
+| **Together** |  | `deepseek-ai/DeepSeek-V4-Pro-0813` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` |
+| **SambaNova** |  | `gpt-oss-120b` | `Meta-Llama-3.3-70B-Instruct` | `Meta-Llama-3.3-70B-Instruct` | `Meta-Llama-3.3-70B-Instruct` |
+| **Doubao** |  | `doubao-seed-2.0-pro-32k` | `doubao-seed-2.0-pro-32k` | `doubao-seed-2.0-lite` | `doubao-seed-2.0-lite` |
+<!-- /generated: tiers -->
 
 - **Claude Haiku 5.5** (since v0.24.0, replacing Haiku 4.5) is Anthropic's fast and fastest model, so Translate, Quick Define and Quick Explain run on it when they use the faster model, still with reasoning off. It reads up to 1M tokens (Haiku 4.5: 200K) and costs $0.10 / $0.50 per million tokens, five times that for a request whose prompt passes 100K tokens. It also replaced Haiku 4.5 in the OpenRouter and Requesty lists.
 - **`gpt-6-luna`**, the cheapest OpenAI model, is the fast and fastest pick of OpenAI (it replaced GPT-5.6 Luna and GPT-5.4 nano) and of the OpenAI Subscription.
@@ -415,7 +428,7 @@ What KOAssistant does differently per provider, mostly on its own. When the curr
 - **Doubao:** Volcano Engine may require a date-suffixed snapshot or endpoint id; check the exact string in its console.
 - **OpenCode Zen and OpenCode Go:** both send the conversation header OpenCode requires (`x-opencode-session`, carrying the chat's id). One account key works for both, entered under `opencode` and `opencode_go`. GPT, Claude and Gemini ids use other OpenCode endpoints and are not supported yet.
 - **Perplexity:** runs on Perplexity's Agent API since v0.23.0 (the Sonar chat API it used before retired on 2026-09-27). Perplexity serves its own Sonar model and other companies' models (GPT, Claude, Gemini, Grok and more) on one key; the model list holds a few of them, with `perplexity/sonar` as the default, and **Fetch models** lists the rest. Web search is on by default here. With web search on, the model answers inside Perplexity's `fast` search preset, so it searches and cites its sources, as picking a model in Perplexity's own app does; with web search off it answers without a search. The answer's sources list only what it cites; **Show Sources** lists everything found. A setting that still names an old Sonar model (`sonar`, `sonar-pro`, `sonar-reasoning-pro`, `sonar-deep-research`) moves to `perplexity/sonar`, with a one-time note. Perplexity's research presets (`low`, `medium`, `high`, which pick their own model) are not in the list but still work if typed in as a custom model; a preset always searches, so with web search off the request goes to `perplexity/sonar` without a search instead. Web search is reported as used only when results came back. Two Grok models (`xai/grok-4.20-reasoning` and `xai/grok-4.20-multi-agent`) refuse the preset's settings, so they answer on their own and search only when they decide to. **Test provider...** is not offered; **Settings → Advanced → Test Connection** checks it.
-- **Models that cannot turn reasoning off:** Minimal and the Quick Answer chip give them their lowest level instead. Among them: GPT-6 Astra and GPT-6.1 Sol, Claude Opus 5.5 and Fable 5, GLM-5.3 and Grok 4.5 to 4.7; through Fireworks, GLM-5.3 and gpt-oss; through OpenRouter, Claude Fable 5, Grok 4.6 and gpt-oss; through Requesty, Claude Fable 5, Sonnet 5.5 and Opus 5.5. Reasoning from models that end their thinking with a bare `</think>` (Qwen3 Thinking, DeepSeek R1 on some hosts) goes to the reasoning view, not the answer. Per-model details: [Reasoning, Web Search and Book Tools](Reasoning-Web-Search-and-Book-Tools).
+- **Models that cannot turn reasoning off:** Minimal and the Quick chip give them their lowest level instead. Among them: GPT-6 Astra and GPT-6.1 Sol, Claude Opus 5.5 and Fable 5, GLM-5.3 and Grok 4.5 to 4.7; through Fireworks, GLM-5.3 and gpt-oss; through OpenRouter, Claude Fable 5, Grok 4.6 and gpt-oss; through Requesty, Claude Fable 5, Sonnet 5.5 and Opus 5.5. Reasoning from models that end their thinking with a bare `</think>` (Qwen3 Thinking, DeepSeek R1 on some hosts) goes to the reasoning view, not the answer. Per-model details: [Reasoning, Web Search and Book Tools](Reasoning-Web-Search-and-Book-Tools).
 
 ## Meta-providers
 

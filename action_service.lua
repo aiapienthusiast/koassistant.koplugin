@@ -309,6 +309,8 @@ function ActionService:loadActions()
                 local id = "config_" .. i
                 self:addCustomAction(id, action, "config", disabled_actions)
             end
+        elseif not ok then
+            logger.warn("ActionService: custom_actions.lua was not loaded: " .. tostring(custom_actions))
         end
     end
 
@@ -348,16 +350,23 @@ end
 function ActionService:addCustomAction(id, action, source, disabled_actions)
     local contexts = self:expandContexts(action.context)
 
-    for _, context in ipairs(contexts) do
-        local key = context .. ":" .. id
-        local action_data = self:copyAction(action)
-        action_data.id = id
-        action_data.enabled = not disabled_actions[key]
-        action_data.source = source
-        action_data.builtin = false
-        -- Preserve original context for compound contexts (both)
-        action_data.original_context = action.context
-        table.insert(self.actions_cache[context], action_data)
+    for _idx, context in ipairs(contexts) do
+        if not self.actions_cache[context] then
+            -- An unknown context (the old sample documented "all") used to stop
+            -- every action from loading (B422); the action is skipped instead.
+            logger.warn("ActionService: custom action " .. tostring(action.text or id)
+                .. " skipped: unknown context " .. tostring(context))
+        else
+            local key = context .. ":" .. id
+            local action_data = self:copyAction(action)
+            action_data.id = id
+            action_data.enabled = not disabled_actions[key]
+            action_data.source = source
+            action_data.builtin = false
+            -- Preserve original context for compound contexts (both)
+            action_data.original_context = action.context
+            table.insert(self.actions_cache[context], action_data)
+        end
     end
 end
 

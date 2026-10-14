@@ -293,8 +293,9 @@ end
 --- Get current page info from ReaderUI
 --- Extracts page number, progress percentage, and chapter title
 --- @param ui table|nil ReaderUI instance (optional, will use ReaderUI.instance if not provided)
+--- @param expected_file string|nil the book the entry is for: a reader open on another file lends no page
 --- @return table page_info Table with page, progress, chapter, timestamp fields
-function Notebook.getPageInfo(ui)
+function Notebook.getPageInfo(ui, expected_file)
     local info = {
         page = nil,
         total_pages = nil,
@@ -308,6 +309,11 @@ function Notebook.getPageInfo(ui)
     if not reader_ui then
         local ReaderUI = require("apps/reader/readerui")
         reader_ui = ReaderUI.instance
+    end
+    -- A chat about a closed book beside an open one used to record the open
+    -- book's page, progress and chapter in the other book's notebook (B445)
+    if expected_file and reader_ui and reader_ui.document and reader_ui.document.file ~= expected_file then
+        reader_ui = nil
     end
 
     if reader_ui and reader_ui.document then
@@ -570,7 +576,7 @@ function Notebook.saveChat(document_path, history, highlighted_text, ui, content
         if not notebook_path then return false, "Failed to resolve notebook path" end
     end
 
-    local page_info = Notebook.getPageInfo(ui)
+    local page_info = Notebook.getPageInfo(ui, document_path)
     content_format = content_format or "full_qa"
 
     -- Extract messages from history
