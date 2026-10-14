@@ -3776,6 +3776,9 @@ function BookSettings.showPrivacyConfig(opts)
     if not doc_settings then return end
 
     local features = plugin and plugin.settings and plugin.settings:readSetting("features") or {}
+    -- The global switches as the follow-global rows name them: the gates module's
+    -- states with no provider and no book (so trust plays no part in the label)
+    local g = require("koassistant.request.privacy_gates").summary({ features = features })
 
     local dialog
     local function closeDialog()
@@ -3819,29 +3822,29 @@ function BookSettings.showPrivacyConfig(opts)
 
     local buttons = {
         {{ text = T(_("Highlights sharing: %1"), boolLabel(doc_settings:readSetting(BookSettings.KEY_HIGHLIGHTS_SHARING),
-                features.enable_highlights_sharing == true or features.enable_annotations_sharing == true)),
+                g.highlights.state == "allow")),
             callback = function()
                 showBoolSubPicker(BookSettings.KEY_HIGHLIGHTS_SHARING,
                     _("Highlights sharing (this book)"),
-                    features.enable_highlights_sharing == true or features.enable_annotations_sharing == true)
+                    g.highlights.state == "allow")
             end }},
         {{ text = T(_("Annotations sharing: %1"), boolLabel(doc_settings:readSetting(BookSettings.KEY_ANNOTATIONS_SHARING),
-                features.enable_annotations_sharing == true)),
+                g.annotations.state == "allow")),
             callback = function()
                 showBoolSubPicker(BookSettings.KEY_ANNOTATIONS_SHARING,
-                    _("Annotations sharing (this book)"), features.enable_annotations_sharing == true)
+                    _("Annotations sharing (this book)"), g.annotations.state == "allow")
             end }},
         {{ text = T(_("Notebook sharing: %1"), boolLabel(doc_settings:readSetting(BookSettings.KEY_NOTEBOOK_SHARING),
-                features.enable_notebook_sharing == true)),
+                g.notebook.state == "allow")),
             callback = function()
                 showBoolSubPicker(BookSettings.KEY_NOTEBOOK_SHARING,
-                    _("Notebook sharing (this book)"), features.enable_notebook_sharing == true)
+                    _("Notebook sharing (this book)"), g.notebook.state == "allow")
             end }},
         {{ text = T(_("Text extraction: %1"), boolLabel(doc_settings:readSetting(BookSettings.KEY_TEXT_EXTRACTION),
-                features.enable_book_text_extraction == true)),
+                g.book_text.state == "allow")),
             callback = function()
                 showBoolSubPicker(BookSettings.KEY_TEXT_EXTRACTION,
-                    _("Text extraction (this book)"), features.enable_book_text_extraction == true)
+                    _("Text extraction (this book)"), g.book_text.state == "allow")
             end }},
         -- The override rules, spelled out (device note 2026-08-13)
         {{ text = _("How overrides work…"), callback = function()

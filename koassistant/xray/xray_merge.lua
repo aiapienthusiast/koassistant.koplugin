@@ -1787,28 +1787,18 @@ end
 --- directions — deny beats trusted.
 --- @return boolean allowed
 function XrayMerge.consentOk(entries, features, provider, book_file, ui)
+    local Gates = require("koassistant.request.privacy_gates")
     local needs_text = false
     for _idx, e in ipairs(entries) do
-        if e.used_book_text ~= false then
+        if Gates.stampedKinds(e).book_text then
             needs_text = true
             break
         end
     end
     if not needs_text then return true end
-    if book_file then
-        local ok, ds = pcall(function()
-            return require("koassistant.storage.doc_settings").resolve(book_file, ui)
-        end)
-        if ok and ds then
-            local ov = require("koassistant.books.book_settings").effectivePrivacyOverrides(ds).book_text
-            if ov ~= nil then return ov end
-        end
-    end
-    if features and features.enable_book_text_extraction == true then return true end
-    for _idx, trusted_id in ipairs((features and features.trusted_providers) or {}) do
-        if trusted_id == provider then return true end
-    end
-    return false
+    local book
+    if book_file then book = Gates.bookOverrides(book_file, ui) end
+    return Gates.allows("book_text", { features = features, provider = provider, book = book })
 end
 
 -- ============================ execution ============================

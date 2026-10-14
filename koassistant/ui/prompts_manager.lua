@@ -1975,7 +1975,7 @@ function PromptsManager:showStep3_Settings(state)
                 state.use_highlights = not state.use_highlights
                 if state.use_highlights then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_highlights_sharing ~= true and features.enable_annotations_sharing ~= true then
+                    if features.enable_highlights_sharing ~= true and features.enable_annotations_sharing ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
                         UIManager:show(InfoMessage:new{
                             text = _("Highlight use enabled. Note: Enable in Settings → Privacy & Data first."),
                             timeout = 4,
@@ -1993,7 +1993,7 @@ function PromptsManager:showStep3_Settings(state)
                 if state.use_annotations then
                     state.use_highlights = true
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_annotations_sharing ~= true then
+                    if features.enable_annotations_sharing ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
                         UIManager:show(InfoMessage:new{
                             text = _("Annotation use enabled. Note: Enable in Settings → Privacy & Data first."),
                             timeout = 4,
@@ -2010,7 +2010,7 @@ function PromptsManager:showStep3_Settings(state)
                 state.use_notebook = not state.use_notebook
                 if state.use_notebook then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_notebook_sharing ~= true then
+                    if features.enable_notebook_sharing ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
                         UIManager:show(InfoMessage:new{
                             text = _("Notebook use enabled. Note: Enable in Settings → Privacy & Data first."),
                             timeout = 4,
@@ -2027,7 +2027,7 @@ function PromptsManager:showStep3_Settings(state)
                 state.use_library = not state.use_library
                 if state.use_library then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_library_scanning ~= true then
+                    if features.enable_library_scanning ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
                         UIManager:show(InfoMessage:new{
                             text = _("Library use enabled. Note: Allow Library Scanning must be on (Settings → Privacy & Data)."),
                             timeout = 4,
@@ -2048,7 +2048,7 @@ function PromptsManager:showStep3_Settings(state)
                 state.use_advanced_stats = not state.use_advanced_stats
                 if state.use_advanced_stats then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_advanced_stats ~= true then
+                    if features.enable_advanced_stats ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
                         UIManager:show(InfoMessage:new{
                             text = _("Advanced stats enabled. Note: Enable in Settings → Privacy & Data first."),
                             timeout = 4,
@@ -3757,7 +3757,7 @@ function PromptsManager:showBuiltinSettingsDialog(state)
                 state.use_highlights = not state.use_highlights
                 if state.use_highlights then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_highlights_sharing ~= true and features.enable_annotations_sharing ~= true then
+                    if features.enable_highlights_sharing ~= true and features.enable_annotations_sharing ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
                         UIManager:show(InfoMessage:new{
                             text = _("Highlight use enabled. Note: Enable in Settings → Privacy & Data first."),
                             timeout = 4,
@@ -3775,7 +3775,7 @@ function PromptsManager:showBuiltinSettingsDialog(state)
                 if state.use_annotations then
                     state.use_highlights = true
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_annotations_sharing ~= true then
+                    if features.enable_annotations_sharing ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
                         UIManager:show(InfoMessage:new{
                             text = _("Annotation use enabled. Note: Enable in Settings → Privacy & Data first."),
                             timeout = 4,
@@ -3793,7 +3793,7 @@ function PromptsManager:showBuiltinSettingsDialog(state)
                 state.use_notebook = not state.use_notebook
                 if state.use_notebook then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_notebook_sharing ~= true then
+                    if features.enable_notebook_sharing ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
                         UIManager:show(InfoMessage:new{
                             text = _("Notebook use enabled. Note: Enable in Settings → Privacy & Data first."),
                             timeout = 4,
@@ -3819,7 +3819,7 @@ function PromptsManager:showBuiltinSettingsDialog(state)
                 state.use_advanced_stats = not state.use_advanced_stats
                 if state.use_advanced_stats then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_advanced_stats ~= true then
+                    if features.enable_advanced_stats ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
                         UIManager:show(InfoMessage:new{
                             text = _("Advanced stats enabled. Note: Enable in Settings → Privacy & Data first."),
                             timeout = 4,
@@ -4752,7 +4752,7 @@ function PromptsManager:showCustomQuickSettingsDialog(state)
                 state.use_highlights = not state.use_highlights
                 if state.use_highlights then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_highlights_sharing ~= true and features.enable_annotations_sharing ~= true then
+                    if features.enable_highlights_sharing ~= true and features.enable_annotations_sharing ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
                         UIManager:show(InfoMessage:new{
                             text = _("Highlight use enabled. Note: Enable in Settings → Privacy & Data first."),
                             timeout = 4,
@@ -4770,7 +4770,7 @@ function PromptsManager:showCustomQuickSettingsDialog(state)
                 if state.use_annotations then
                     state.use_highlights = true
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_annotations_sharing ~= true then
+                    if features.enable_annotations_sharing ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
                         UIManager:show(InfoMessage:new{
                             text = _("Annotation use enabled. Note: Enable in Settings → Privacy & Data first."),
                             timeout = 4,
@@ -4788,7 +4788,7 @@ function PromptsManager:showCustomQuickSettingsDialog(state)
                 state.use_notebook = not state.use_notebook
                 if state.use_notebook then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_notebook_sharing ~= true then
+                    if features.enable_notebook_sharing ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
                         UIManager:show(InfoMessage:new{
                             text = _("Notebook use enabled. Note: Enable in Settings → Privacy & Data first."),
                             timeout = 4,
@@ -4814,7 +4814,7 @@ function PromptsManager:showCustomQuickSettingsDialog(state)
                 state.use_advanced_stats = not state.use_advanced_stats
                 if state.use_advanced_stats then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_advanced_stats ~= true then
+                    if features.enable_advanced_stats ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
                         UIManager:show(InfoMessage:new{
                             text = _("Advanced stats enabled. Note: Enable in Settings → Privacy & Data first."),
                             timeout = 4,

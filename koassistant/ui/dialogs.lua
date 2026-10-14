@@ -389,41 +389,10 @@ end
 -- when the action accepts quick) > base provider. Reads only; consumption stays in
 -- the bake.
 local function effectiveDispatchProvider(features, action, base_provider)
-    features = features or {}
-    -- A run option's picked model beats even the action's own pin (B345); its
-    -- Quick part stands in for the chip, below the pin like the bake
-    local rv = features._run_variant
-    if type(rv) ~= "table" then rv = nil end
-    if rv and rv.provider then return rv.provider end
-    if action and action.provider then return base_provider end
-    -- The *_active consumables are set just-in-time at dispatch; before that point
-    -- (freeform Send's scope-consent check) the same pending state lives in the
-    -- _session_* chip keys. Direct entries drop inherited chip state, then may
-    -- seed the quick consumable from the Quick Answer DEFAULT (accept-gated,
-    -- handlePredefinedPrompt's direct-entry guard) — covered here by the
-    -- _quick_answer_active read.
-    local override = features._model_override_active or features._session_model
-    if override and override.provider then return override.provider end
-    local quick = features._quick_answer_active or features._session_quick_answer
-    if rv and rv.quick ~= nil
-            and not require("koassistant.request.run_options").isModelOnly(action) then
-        quick = rv.quick
-    end
-    if quick and action and action.accept_quick_answer ~= true then quick = nil end
-    if quick then
-        local preset = resolveQuickPresetModel(features, base_provider)
-        if preset and preset.provider then return preset.provider end
-    end
-    -- Per-action tier hint (weakest rung): a usable GLOBAL tier pin re-points
-    -- the dispatch provider (tier GUI phase 2) — mirror the bake's resolution
-    -- with the same guards. Ladder hits return the base provider unchanged.
-    if features.use_action_tiers ~= false and action and action.model_tier
-            and not action.provider and not action.model then
-        local p2 = require("koassistant.request.model_lists")
-            .resolveTierTarget(base_provider, action.model_tier)
-        if p2 then return p2 end
-    end
-    return base_provider
+    -- One copy, in the gates module; the Quick preset's model resolver is this
+    -- file's (the bake's own), handed over so the two never disagree.
+    return require("koassistant.request.privacy_gates").dispatchProvider(
+        features, action, base_provider, resolveQuickPresetModel)
 end
 
 -- Reasoning headroom (#98): thinking tokens bill against max_tokens on every
@@ -4733,13 +4702,8 @@ if prune_book_text then
         -- No open document but action needs library data — extract library only
         -- Global toggle is absolute gate; session folders bypass folder config only
         local lib_features = plugin and plugin.settings and plugin.settings:readSetting("features") or {}
-        local lib_toggle = lib_features.enable_library_scanning == true
-        -- Check trusted provider (against the effective dispatch provider — see C4 note above)
-        if not lib_toggle and lib_features.trusted_providers and effective_provider then
-            for _idx, tp in ipairs(lib_features.trusted_providers) do
-                if tp == effective_provider then lib_toggle = true; break end
-            end
-        end
+        local lib_toggle = require("koassistant.request.privacy_gates").allows("book_list",
+            { features = lib_features, provider = effective_provider })
         local scan_folders_to_use
         if lib_toggle then
             scan_folders_to_use = plugin and plugin._session_scan_folders
@@ -4757,15 +4721,9 @@ if prune_book_text then
                 if scan_result and scan_result.books and #scan_result.books > 0 then
                     -- Stats enrichment: engagement labels + group placeholders
                     -- Gated: enable_advanced_stats (opt-in) + use_advanced_stats per-action (double-gated)
-                    local provider_trusted = lib_features.trusted_providers and effective_provider
-                    if provider_trusted then
-                        provider_trusted = false
-                        for _idx, tp in ipairs(lib_features.trusted_providers) do
-                            if tp == effective_provider then provider_trusted = true; break end
-                        end
-                    end
                     local stats_gated = prompt.use_advanced_stats
-                        and (provider_trusted or lib_features.enable_advanced_stats == true)
+                        and require("koassistant.request.privacy_gates").allows("habits",
+                            { features = lib_features, provider = effective_provider })
                     if stats_gated then
                         local stats_ok, StatsReader = pcall(require, "koassistant.books.stats_reader")
                         if stats_ok and StatsReader then
@@ -4802,23 +4760,9 @@ if prune_book_text then
             and (prompt.use_highlights or prompt.use_annotations or prompt.use_notebook) then
         local extraction_ok, ContextExtractor = pcall(require, "koassistant.request.context_extractor")
         if extraction_ok and ContextExtractor then
-            -- Privacy checks (same gates as single-book sidecar extraction)
-            -- Trust evaluated against the effective dispatch provider (see C4 note above)
-            local provider_trusted = false
-            local trusted_list = config.features and config.features.trusted_providers
-            if trusted_list and effective_provider then
-                for _idx, tp in ipairs(trusted_list) do
-                    if tp == effective_provider then provider_trusted = true; break end
-                end
-            end
+            -- Privacy: the same gates as single-book sidecar extraction, judged
+            -- for the effective dispatch provider and each book's own values
             local features = config.features or {}
-            local highlights_allowed = provider_trusted
-                or features.enable_highlights_sharing == true
-                or features.enable_annotations_sharing == true
-            local annotations_allowed = provider_trusted
-                or features.enable_annotations_sharing == true
-            local notebook_allowed = provider_trusted
-                or features.enable_notebook_sharing == true
 
             local total_sidecar_chars = 0
             for _idx, book in ipairs(message_data.books_info) do
@@ -4826,21 +4770,11 @@ if prune_book_text then
                     -- Per-book privacy overrides (Book Settings ▸ Privacy): each
                     -- scanned book can allow/deny its own channels; deny beats
                     -- trusted — same semantics as the single-book extractor.
-                    local b_ov = {}
-                    do
-                        local sds_ok, b_ds = pcall(function()
-                            return require("koassistant.storage.doc_settings").resolve(book.file, ui)
-                        end)
-                        if sds_ok and b_ds then
-                            b_ov = require("koassistant.books.book_settings").effectivePrivacyOverrides(b_ds)
-                        end
-                    end
-                    local b_highlights = highlights_allowed
-                    if b_ov.highlights ~= nil then b_highlights = b_ov.highlights end
-                    local b_annotations = annotations_allowed
-                    if b_ov.annotations ~= nil then b_annotations = b_ov.annotations end
-                    local b_notebook = notebook_allowed
-                    if b_ov.notebook ~= nil then b_notebook = b_ov.notebook end
+                    local b_gate = { features = features, provider = effective_provider,
+                        book = require("koassistant.request.privacy_gates").bookOverrides(book.file, ui) }
+                    local b_highlights = require("koassistant.request.privacy_gates").allows("highlights", b_gate)
+                    local b_annotations = require("koassistant.request.privacy_gates").allows("annotations", b_gate)
+                    local b_notebook = require("koassistant.request.privacy_gates").allows("notebook", b_gate)
 
                     -- Highlights
                     if prompt.use_highlights and b_highlights then
@@ -4885,7 +4819,7 @@ if prune_book_text then
                     end
 
                     -- Progress (for display in per-book headers)
-                    local progress_allowed = provider_trusted or features.enable_basic_stats ~= false
+                    local progress_allowed = require("koassistant.request.privacy_gates").allows("position", b_gate)
                     if progress_allowed then
                         local progress = ContextExtractor.readSidecarProgress(book.file)
                         if progress.formatted ~= "" then
@@ -5047,42 +4981,17 @@ if prune_book_text then
             -- `requires` field, so nothing else protects it). Trust is evaluated against the
             -- effective dispatch provider (consistent with C4). If a needed permission is now off,
             -- skip the cache and fall through to a fresh full generation.
-            local cache_trusted = false
-            if effective_provider and config.features and config.features.trusted_providers then
-                for _idx, tid in ipairs(config.features.trusted_providers) do
-                    if tid == effective_provider then
-                        cache_trusted = true
-                        break
-                    end
-                end
-            end
-            local cf = config.features or {}
-            -- Per-book privacy overrides for the cache's book (deny beats trusted;
-            -- allow satisfies the global gate) — the update path re-sends cached
-            -- text/highlight-derived content, so it must honor them like fresh reads.
-            local cache_book_priv = {}
-            do
-                local cb_ok, cb_ds = pcall(function()
-                    return require("koassistant.storage.doc_settings").resolve(cache_file, ui)
-                end)
-                if cb_ok and cb_ds then
-                    cache_book_priv = require("koassistant.books.book_settings").effectivePrivacyOverrides(cb_ds)
-                end
-            end
-            local cache_requires_text = cached_entry.used_book_text ~= false
-            local cache_text_ok = not cache_requires_text
-                or cache_trusted or cf.enable_book_text_extraction == true
-            if cache_requires_text and cache_book_priv.book_text ~= nil then
-                cache_text_ok = cache_book_priv.book_text
-            end
-            local cache_requires_highlights = cached_entry.used_highlights == true
-                or (cached_entry.used_highlights == nil and cached_entry.used_annotations == true)
-            local cache_highlights_ok = not cache_requires_highlights
-                or cache_trusted or cf.enable_highlights_sharing == true
-                or cf.enable_annotations_sharing == true
-            if cache_requires_highlights and cache_book_priv.highlights ~= nil then
-                cache_highlights_ok = cache_book_priv.highlights
-            end
+            -- The cache's stamps say what it was built from; the gates judge each
+            -- kind for the effective dispatch provider and the cache's book (its
+            -- own values win both ways): the update path re-sends the cached
+            -- result verbatim, so it honours them like a fresh read.
+            local cache_gate = { features = config.features or {}, provider = effective_provider,
+                book = require("koassistant.request.privacy_gates").bookOverrides(cache_file, ui) }
+            local cache_kinds = require("koassistant.request.privacy_gates").stampedKinds(cached_entry)
+            local cache_text_ok = not cache_kinds.book_text
+                or require("koassistant.request.privacy_gates").allows("book_text", cache_gate)
+            local cache_highlights_ok = not cache_kinds.highlights
+                or require("koassistant.request.privacy_gates").allows("highlights", cache_gate)
             local cache_read_allowed = cache_text_ok and cache_highlights_ok
             if not cache_read_allowed then
                 logger.dbg("KOAssistant: Cached", prompt.id,
@@ -8514,13 +8423,8 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
     -- Library scan state: computed here (outer scope) so both buildInputDialogButtons and hint text can use it
     -- Settings come from plugin.settings (KOReader settings system), not configuration.features
     local settings_features = plugin and plugin.settings and plugin.settings:readSetting("features") or {}
-    local is_trusted = false
-    if settings_features.trusted_providers and configuration and configuration.provider then
-        for _idx, tp in ipairs(settings_features.trusted_providers) do
-            if tp == configuration.provider then is_trusted = true; break end
-        end
-    end
-    local library_toggle_on = settings_features.enable_library_scanning == true or is_trusted
+    local library_toggle_on = require("koassistant.request.privacy_gates").allows("book_list",
+        { features = settings_features, provider = configuration and configuration.provider })
     local has_session_scan = plugin and plugin._session_scan_folders and #plugin._session_scan_folders > 0
     local has_permanent_folders = settings_features.library_scan_folders and #settings_features.library_scan_folders > 0
     local library_scan_available = library_toggle_on and (has_session_scan or has_permanent_folders)
@@ -8920,24 +8824,11 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                             and ui_instance.view.state.page) or 1
                         local toc_available = ui_instance.toc and ui_instance.toc.toc
                             and #ui_instance.toc.toc > 0
-                        local consent = feats.enable_book_text_extraction == true
-                        if not consent and feats.trusted_providers then
-                            for _i, tp in ipairs(feats.trusted_providers) do
-                                if tp == configuration.provider then consent = true break end
-                            end
-                        end
-                        -- Per-book privacy override — must agree with the Send-time
-                        -- gate (deny beats trusted). Runtime requires only (60-cap).
-                        do
-                            local pv_ok, pv_ds = pcall(function()
-                                return require("koassistant.storage.doc_settings").resolve(nil, ui_instance)
-                            end)
-                            if pv_ok and pv_ds then
-                                local ov = require("koassistant.books.book_settings")
-                                    .effectivePrivacyOverrides(pv_ds).book_text
-                                if ov ~= nil then consent = ov end
-                            end
-                        end
+                        -- The book's own value, trust, the switch: the gates module,
+                        -- as at Send. Runtime requires only (60-cap).
+                        local consent = require("koassistant.request.privacy_gates").allows("book_text",
+                            { features = feats, provider = configuration.provider,
+                              book = require("koassistant.request.privacy_gates").bookOverrides(nil, ui_instance) })
                         local progress_fmt
                         do
                             local okr, CE = pcall(require, "koassistant.request.context_extractor")
@@ -9448,30 +9339,15 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         end
                         scope_block = { label = "Text of the reader's current page:", text = text }
                     else
-                        local consent = configuration.features.enable_book_text_extraction == true
-                        if not consent and configuration.features.trusted_providers then
-                            -- Trust is judged against the provider this Send will actually
-                            -- dispatch to — a pending ⚡ model override re-points it at bake
-                            -- time (injection_gating_audit; C4 pattern). Runtime self-require:
-                            -- a file-local reference here would add an upvalue (60-cap).
-                            local send_provider = send_rv and send_rv.provider
-                                or require("koassistant.ui.dialogs").effectiveDispatchProvider(
-                                    configuration.features, nil, configuration.provider)
-                            for _i, tp in ipairs(configuration.features.trusted_providers) do
-                                if tp == send_provider then consent = true; break end
-                            end
-                        end
-                        -- Per-book privacy override (Book Settings ▸ Privacy): wins in
-                        -- both directions — deny beats trusted. Runtime requires only,
-                        -- no new upvalues (60-cap).
-                        local sc_ok, sc_ds = pcall(function()
-                            return require("koassistant.storage.doc_settings").resolve(nil, ui_instance)
-                        end)
-                        if sc_ok and sc_ds then
-                            local ov = require("koassistant.books.book_settings")
-                                .effectivePrivacyOverrides(sc_ds).book_text
-                            if ov ~= nil then consent = ov end
-                        end
+                        -- Judged for the provider this Send really goes to (a pending
+                        -- pick re-points it at bake time) and for the book's own value,
+                        -- by the gates module. Runtime requires only (60-cap).
+                        local consent = require("koassistant.request.privacy_gates").allows("book_text",
+                            { features = configuration.features,
+                              provider = send_rv and send_rv.provider
+                                  or require("koassistant.ui.dialogs").effectiveDispatchProvider(
+                                      configuration.features, nil, configuration.provider),
+                              book = require("koassistant.request.privacy_gates").bookOverrides(nil, ui_instance) })
                         if not consent then
                             UIManager:show(InfoMessage:new{
                                 text = _("The chosen scope needs \"Allow Text Extraction\" (Settings → Privacy & Data). Clear the Scope chip or enable extraction."),
@@ -9608,7 +9484,15 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                     -- For book-info level "full": gather reading position to append to the book
                     -- line. Respects Basic Stats; silently adds nothing when unavailable.
                     local function appendSendPosition()
-                        if (configuration.features or {}).enable_basic_stats == false then return end
+                        -- The position is reading-position data: the gates module's
+                        -- answer for the provider this Send goes to (runtime requires
+                        -- only, 60-cap)
+                        if not require("koassistant.request.privacy_gates").allows("position",
+                                { features = configuration.features or {},
+                                  provider = require("koassistant.ui.dialogs").effectiveDispatchProvider(
+                                      configuration.features or {}, nil, configuration.provider) }) then
+                            return
+                        end
                         local prog = book_metadata and book_metadata.reading_progress
                         local chapter, page
                         -- The live position belongs to the OPEN book: a chat about a
@@ -9650,11 +9534,11 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         -- ⚡ pick can re-point it after the dialog opened (B396 c).
                         local lib_features = plugin and plugin.settings and plugin.settings:readSetting("features") or {}
                         local scan_folders_to_use
-                        if lib_features.enable_library_scanning == true
-                                or require("koassistant.request.attachments").isTrustedProvider(lib_features,
-                                    send_rv and send_rv.provider
-                                        or require("koassistant.ui.dialogs").effectiveDispatchProvider(
-                                            configuration.features, nil, configuration.provider)) then
+                        if require("koassistant.request.privacy_gates").allows("book_list",
+                                { features = lib_features,
+                                  provider = send_rv and send_rv.provider
+                                      or require("koassistant.ui.dialogs").effectiveDispatchProvider(
+                                          configuration.features, nil, configuration.provider) }) then
                             scan_folders_to_use = plugin and plugin._session_scan_folders
                             if not scan_folders_to_use then
                                 if lib_features.library_scan_folders and #lib_features.library_scan_folders > 0 then

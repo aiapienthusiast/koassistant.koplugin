@@ -13,6 +13,7 @@ This module extracts reading context data from KOReader documents:
 local Constants = require("koassistant.core.constants")
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("koassistant.core.logger")
+local Gates = require("koassistant.request.privacy_gates")
 local ScopeResolver = require("koassistant.request.scope_resolver")
 
 local ContextExtractor = {}
@@ -269,19 +270,14 @@ end
 --- Check if current provider is trusted (bypasses privacy settings).
 -- @return boolean
 function ContextExtractor:isProviderTrusted()
-    local provider = self.settings.provider
-    local trusted_providers = self.settings.trusted_providers or {}
+    return Gates.isTrusted(self.settings, self.settings.provider)
+end
 
-    if not provider then
-        return false
-    end
-
-    for _idx, trusted_id in ipairs(trusted_providers) do
-        if trusted_id == provider then
-            return true
-        end
-    end
-    return false
+--- What the gates need to judge this request: the settings it runs under, the
+--- provider it goes to, the book's own values (koassistant/request/privacy_gates.lua).
+function ContextExtractor:gateContext()
+    return { features = self.settings, provider = self.settings.provider,
+        book = self:getBookPrivacyOverrides() }
 end
 
 --- Get reading progress as percentage.
@@ -397,12 +393,7 @@ end
 -- (injection_gating_audit).
 -- @return boolean
 function ContextExtractor:isBookTextExtractionEnabled()
-    -- Per-book override wins in both directions (deny beats trusted).
-    local override = self:getBookPrivacyOverrides().book_text
-    if override ~= nil then return override end
-    -- Default to false if not explicitly enabled
-    return self.settings.enable_book_text_extraction == true
-        or self:isProviderTrusted()
+    return Gates.allows("book_text", self:gateContext())
 end
 
 --- Get book text up to current reading position.
@@ -1463,16 +1454,14 @@ function ContextExtractor:extractForAction(action)
     action = action or {}
     local data = {}
 
-    -- Check if current provider is trusted (bypasses all privacy settings)
-    local provider_trusted = self:isProviderTrusted()
-
-    -- Per-book privacy overrides (Book Settings ▸ Privacy): tri-state per data
-    -- channel. Deny beats trusted; allow satisfies the global gate only — the
-    -- per-action flags below still apply (double-gating preserved).
-    local book_priv = self:getBookPrivacyOverrides()
+    -- Every "may this kind go out" below is the gates module's answer for this
+    -- request (its settings, its provider, the book's own values: a book's deny
+    -- beats trust, its allow satisfies the global gate only); the per-action
+    -- flags still apply on top (the double gate).
+    local gate = self:gateContext()
 
     -- Reading progress - check basic stats privacy setting (default: enabled)
-    if provider_trusted or self.settings.enable_basic_stats ~= false then
+    if Gates.allows("position", gate) then
         local progress = self:getReadingProgress()
         data.reading_progress = progress.formatted
         data.progress_decimal = tostring(progress.decimal)
@@ -1485,14 +1474,7 @@ function ContextExtractor:extractForAction(action)
     -- Highlights - check both global setting AND per-action flag (default: disabled)
     -- Double-gate: user must enable sharing globally AND action must request it
     -- Annotations implies highlights: enable_annotations_sharing grants highlight access too
-    local highlights_allowed
-    if book_priv.highlights ~= nil then
-        highlights_allowed = book_priv.highlights
-    else
-        highlights_allowed = provider_trusted
-            or self.settings.enable_highlights_sharing == true
-            or self.settings.enable_annotations_sharing == true
-    end
+    local highlights_allowed = Gates.allows("highlights", gate)
     if highlights_allowed and action.use_highlights then
         data.highlights = self:getHighlights().formatted
     else
@@ -1504,13 +1486,7 @@ function ContextExtractor:extractForAction(action)
     --   1. Per-action gate: use_annotations OFF but use_highlights ON → degrade to highlights
     --   2. Global gate: enable_annotations_sharing OFF but enable_highlights_sharing ON → degrade
     -- Tracks degradation state for adaptive labels in {annotations_section}.
-    local annotations_allowed
-    if book_priv.annotations ~= nil then
-        annotations_allowed = book_priv.annotations
-    else
-        annotations_allowed = provider_trusted
-            or self.settings.enable_annotations_sharing == true
-    end
+    local annotations_allowed = Gates.allows("annotations", gate)
     if action.use_annotations and annotations_allowed then
         -- Both gates pass: full annotations (highlighted text + user notes)
         data.annotations = self:getAnnotations().formatted or ""
@@ -1524,7 +1500,7 @@ function ContextExtractor:extractForAction(action)
     end
 
     -- Reading stats (chapter info) - check basic stats privacy setting (default: enabled)
-    if provider_trusted or self.settings.enable_basic_stats ~= false then
+    if Gates.allows("position", gate) then
         local stats = self:getReadingStats()
         data.chapter_title = stats.chapter_title
         data.chapters_read = stats.chapters_read
@@ -1633,26 +1609,25 @@ function ContextExtractor:extractForAction(action)
     -- If cache was built with text extraction (used_book_text=true or nil/legacy), require text extraction permission
     -- Trusted providers bypass the text extraction setting (consistent with book text extraction)
     -- (isBookTextExtractionEnabled already folds in trusted providers AND the
-    -- per-book override — no extra provider_trusted OR here, it would let trust
+    -- per-book override — no extra trust check here, it would let trust
     -- bypass a per-book deny)
     local text_extraction_allowed = self:isBookTextExtractionEnabled()
 
     -- {xray_cache} / {xray_cache_section} → cached X-Ray
     if action.use_xray_cache then
         local xray = self:getXrayCache()
+        local xray_kinds = Gates.stampedKinds(xray)
         -- Dynamic text extraction gate: only require if cache used text (nil/legacy = requires)
-        local requires_text = xray.used_book_text ~= false
+        local requires_text = xray_kinds.book_text
         local text_ok = not requires_text or text_extraction_allowed
         -- Dynamic highlight gate: only require if cache used highlights
         -- Legacy compat: old caches have used_annotations but no used_highlights field
-        local requires_highlights = xray.used_highlights == true
-            or (xray.used_highlights == nil and xray.used_annotations == true)
+        local requires_highlights = xray_kinds.highlights
         local highlights_ok = not requires_highlights
             or (highlights_allowed and action.use_highlights)
         -- Dynamic annotation gate: only for NEW caches that explicitly tracked annotations
         -- (old caches used used_annotations to mean highlights, handled above)
-        local requires_annotations = xray.used_annotations == true
-            and xray.used_highlights ~= nil
+        local requires_annotations = xray_kinds.annotations
         local annotations_ok = not requires_annotations
             or (annotations_allowed and action.use_annotations)
         if text_ok and highlights_ok and annotations_ok then
@@ -1665,7 +1640,7 @@ function ContextExtractor:extractForAction(action)
     -- {analyze_cache} / {analyze_cache_section} → cached document analysis
     if action.use_analyze_cache then
         local analyze = self:getAnalyzeCache()
-        local requires_text = analyze.used_book_text ~= false
+        local requires_text = Gates.stampedKinds(analyze).book_text
         if not requires_text or text_extraction_allowed then
             data.analyze_cache = analyze.text
         end
@@ -1690,7 +1665,7 @@ function ContextExtractor:extractForAction(action)
         if not summary then
             summary = self:getSummaryCache()
         end
-        local requires_text = summary.used_book_text ~= false
+        local requires_text = Gates.stampedKinds(summary).book_text
         if not requires_text or text_extraction_allowed then
             data.summary_cache = summary.text
         end
@@ -1699,12 +1674,7 @@ function ContextExtractor:extractForAction(action)
     -- Notebook content extraction: double-gated like other sensitive data
     -- Requires both use_notebook flag AND enable_notebook_sharing global setting
     -- Trusted providers bypass the global setting; per-book override wins over both
-    local notebook_allowed
-    if book_priv.notebook ~= nil then
-        notebook_allowed = book_priv.notebook
-    else
-        notebook_allowed = provider_trusted or self.settings.enable_notebook_sharing == true
-    end
+    local notebook_allowed = Gates.allows("notebook", gate)
     if action.use_notebook and notebook_allowed then
         local notebook = self:getNotebookContent()
         data.notebook_content = notebook.content
@@ -1720,7 +1690,7 @@ function ContextExtractor:extractForAction(action)
     -- Session scan folders (_session_scan_folders) bypass gates 2+3 — user actively chose them
     local session_scan = self.settings._session_scan_folders
     local has_session_scan = session_scan and #session_scan > 0
-    local library_setting_allowed = provider_trusted or self.settings.enable_library_scanning == true
+    local library_setting_allowed = Gates.allows("book_list", gate)
     local library_folders = self.settings.library_scan_folders
     local library_folders_configured = library_folders and #library_folders > 0
     -- Global toggle is absolute gate; session folders only bypass folder configuration requirement
@@ -1737,8 +1707,7 @@ function ContextExtractor:extractForAction(action)
         end
         -- Stats enrichment: engagement labels + group placeholders
         -- Gated: enable_advanced_stats (opt-in) + use_advanced_stats per-action (double-gated)
-        local stats_gated = action.use_advanced_stats
-            and (provider_trusted or self.settings.enable_advanced_stats == true)
+        local stats_gated = action.use_advanced_stats and Gates.allows("habits", gate)
         local format_options = {}
         if stats_gated and scan_result and scan_result.books and #scan_result.books > 0 then
             local stats_ok, StatsReader = pcall(require, "koassistant.books.stats_reader")

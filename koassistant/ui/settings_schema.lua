@@ -2160,7 +2160,7 @@ local SettingsSchema = {
                     enabled_func = function(plugin)
                         -- Grayed out when annotations is enabled (annotations implies highlights)
                         local f = plugin.settings:readSetting("features") or {}
-                        return f.enable_annotations_sharing ~= true
+                        return f.enable_annotations_sharing ~= true  -- raw-gate: the row's gray state, not a gate
                     end,
                 },
                 {

@@ -8043,35 +8043,21 @@ function AskGPT:_checkRequirements(action, target_file, run_provider)
   local features = configuration and configuration.features or {}
   local hint = action.blocked_hint and ("\n\n" .. action.blocked_hint) or ""
 
-  -- Check if the provider this action dispatches to is trusted (bypasses global privacy gates).
-  -- Must match the extraction gate: a run option's picked model, else the action's pinned
-  -- provider when set, else the global — otherwise pre-flight and extraction disagree on
-  -- trust (audit v0.20.0 finding C4).
-  local function isProviderTrusted()
-    local provider = run_provider or action.provider or features.provider
-    if not provider then return false end
-    for _idx, trusted_id in ipairs(features.trusted_providers or {}) do
-      if trusted_id == provider then return true end
-    end
-    return false
-  end
-
-  -- Per-book privacy overrides (Book Settings ▸ Privacy): deny beats trusted,
-  -- allow satisfies the global gate only. `target_file` names the action's book
-  -- when it is not (or may not be) the open one (file browser, cross-book
-  -- artifact regenerate); default = the open book.
-  local book_priv = {}
+  -- The gates judge this action for the provider it really goes to (a run
+  -- option's model, the action's pin, a pending pick, the Quick preset, a tier
+  -- pin, else the global: the same answer the extraction gate gets) and for
+  -- its book: `target_file` names the action's book when it is not (or may
+  -- not be) the open one (file browser, cross-book artifact regenerate),
+  -- default = the open book. A book's deny beats trust.
+  local Gates = require("koassistant.request.privacy_gates")
+  local book_priv
   do
     local pf = target_file or (self.ui and self.ui.document and self.ui.document.file)
-    if pf then
-      local ok_r, ds = pcall(function()
-        return require("koassistant.storage.doc_settings").resolve(pf, self.ui)
-      end)
-      if ok_r and ds then
-        book_priv = require("koassistant.books.book_settings").effectivePrivacyOverrides(ds)
-      end
-    end
+    if pf then book_priv = Gates.bookOverrides(pf, self.ui) end
   end
+  book_priv = book_priv or {}
+  local gate = { features = features, book = book_priv,
+    provider = Gates.dispatchProvider(features, action, run_provider or action.provider or features.provider) }
 
   for _idx, req in ipairs(action.requires) do
     if req == "book_text" then
@@ -8084,8 +8070,7 @@ function AskGPT:_checkRequirements(action, target_file, run_provider)
       end
       -- Global gate: text extraction enabled? (trusted providers bypass;
       -- per-book override wins in both directions)
-      local bt_allowed = features.enable_book_text_extraction == true or isProviderTrusted()
-      if book_priv.book_text ~= nil then bt_allowed = book_priv.book_text end
+      local bt_allowed = Gates.allows("book_text", gate)
       if not bt_allowed then
         UIManager:show(InfoMessage:new{
           text = (book_priv.book_text == false
@@ -8104,7 +8089,7 @@ function AskGPT:_checkRequirements(action, target_file, run_provider)
       end
       -- Global gate: library scanning enabled? (trusted providers bypass)
       -- This is an absolute gate — session folders do NOT bypass it
-      if features.enable_library_scanning ~= true and not isProviderTrusted() then
+      if not Gates.allows("book_list", gate) then
         UIManager:show(InfoMessage:new{
           text = _("Library scanning is required for this action.\n\nEnable it in Settings → Privacy & Data → Allow Library Scanning.") .. hint,
         })
@@ -8131,9 +8116,7 @@ function AskGPT:_checkRequirements(action, target_file, run_provider)
       end
       -- Global gate: is any highlight-type sharing enabled? (trusted providers
       -- bypass; per-book override wins in both directions)
-      local hl_allowed = features.enable_highlights_sharing == true
-        or features.enable_annotations_sharing == true or isProviderTrusted()
-      if book_priv.highlights ~= nil then hl_allowed = book_priv.highlights end
+      local hl_allowed = Gates.allows("highlights", gate)
       if not hl_allowed then
         UIManager:show(InfoMessage:new{
           text = (book_priv.highlights == false
@@ -8643,27 +8626,17 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
   -- Must be boolean (not nil) — nil won't override CheckButton's default enabled=true
   local scope_sections_enabled = section_prefix ~= nil or opts.for_highlight == true
 
-  -- Check text extraction availability
-  -- Trust against the effective dispatch provider (pinned action provider, else global) so this
-  -- popup agrees with the extraction gate (audit v0.20.0 finding C4).
+  -- Text extraction availability: the source picker must agree with the
+  -- extraction gate, so the gates module judges the book's own value, then
+  -- trust for the provider the action really goes to, then the switch ("Full
+  -- text" usable when this book allows it).
   local features = configuration and configuration.features or {}
-  local text_extraction_enabled = features.enable_book_text_extraction == true
-  if not text_extraction_enabled and features.trusted_providers then
-    local provider = action.provider or features.provider or ""
-    for _idx, tp in ipairs(features.trusted_providers) do
-      if tp == provider then
-        text_extraction_enabled = true
-        break
-      end
-    end
-  end
-  -- Per-book privacy override (Book Settings ▸ Privacy) — the source picker must
-  -- agree with the extraction gate: deny beats trusted, allow satisfies the
-  -- global gate ("Full text" usable when this book allows it).
-  if self.ui and self.ui.doc_settings then
-    local bt_ov = require("koassistant.books.book_settings")
-      .effectivePrivacyOverrides(self.ui.doc_settings).book_text
-    if bt_ov ~= nil then text_extraction_enabled = bt_ov end
+  local text_extraction_enabled
+  do
+    local Gates = require("koassistant.request.privacy_gates")
+    text_extraction_enabled = Gates.allows("book_text", { features = features,
+      provider = Gates.dispatchProvider(features, action, action.provider or features.provider),
+      book = Gates.overridesOf(self.ui and self.ui.doc_settings) })
   end
 
   -- Check if action requires book_text (constrains source to text extraction only)
@@ -14055,7 +14028,10 @@ function AskGPT:onEndOfBook()
   -- Otherwise, suggest a next read (requires library scanning).
   -- Setting defaults to true (opt-out), requires library scanning to be useful
   if features.enable_end_of_book_suggestion == false then return end
-  if features.enable_library_scanning ~= true then return end
+  -- The suggestion sends the book list: the gates module's answer for the
+  -- provider it goes to (trust counts here as everywhere since slice 1)
+  if not require("koassistant.request.privacy_gates").allows("book_list",
+      { features = features, provider = features.provider }) then return end
   if not features.library_scan_folders or #features.library_scan_folders == 0 then return end
   if not self.ui or not self.ui.document then return end
 
@@ -14480,18 +14456,12 @@ end
 --- @param run_provider string|nil a one-shot run option's provider (B345)
 function AskGPT:_xrayBackgroundConsentOk(action, features, run_provider)
   if action.use_book_text == false then return false end
-  -- Per-book privacy override wins in both directions (deny beats trusted)
-  if self.ui and self.ui.doc_settings then
-    local ov = require("koassistant.books.book_settings")
-      .effectivePrivacyOverrides(self.ui.doc_settings).book_text
-    if ov ~= nil then return ov end
-  end
-  if features.enable_book_text_extraction == true then return true end
-  local provider = run_provider or action.provider or features.provider
-  for _idx, trusted_id in ipairs(features.trusted_providers or {}) do
-    if trusted_id == provider then return true end
-  end
-  return false
+  -- The book's own value, then trust for the provider the build really goes
+  -- to, then the switch: the gates module (a book's deny beats trust)
+  local Gates = require("koassistant.request.privacy_gates")
+  return Gates.allows("book_text", { features = features,
+    provider = Gates.dispatchProvider(features, action, run_provider or action.provider or features.provider),
+    book = Gates.overridesOf(self.ui and self.ui.doc_settings) })
 end
 
 --- Round 21 — the UNIFIED CHECKPOINT ENGINE's auto fire (plan item 23): build
@@ -17733,7 +17703,7 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
   -- The picker stays usable (it sets the defaults); we just annotate when N/A.
   local ModelConstraints = require("koassistant.request.model_constraints")
   local web_search_supported = ModelConstraints.supportsWebSearch(provider, model)
-  local text_extraction = features.enable_book_text_extraction == true  -- Default false
+  local text_extraction = features.enable_book_text_extraction == true  -- raw-gate: the tile shows the global switch it flips (default false)
 
   -- Get behavior display name (with source indicator)
   local custom_behaviors = features.custom_behaviors or {}

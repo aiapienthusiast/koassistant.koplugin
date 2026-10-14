@@ -2913,29 +2913,15 @@ function XrayBrowser:showItemDetail(item, category_key, title, source, nav_conte
     -- Append matching highlights for searchable categories
     if not DISTRIBUTION_EXCLUDED[category_key] and self.ui then
         local config_features = (self.metadata.configuration or {}).features or {}
-        -- Check trusted provider (bypasses privacy settings)
-        local provider = config_features.provider
-        local provider_trusted = false
-        if provider then
-            for _idx, trusted_id in ipairs(config_features.trusted_providers or {}) do
-                if trusted_id == provider then
-                    provider_trusted = true
-                    break
-                end
-            end
-        end
-        local highlights_allowed = provider_trusted
-            or config_features.enable_highlights_sharing == true
-            or config_features.enable_annotations_sharing == true
-        -- Per-book privacy override (Book Settings ▸ Privacy): the highlights come
-        -- from the OPEN book's live annotations, and this detail text is sent to
-        -- the provider by "Chat about this" — deny beats trusted.
-        local hl_override
-        if self.ui.doc_settings then
-            hl_override = require("koassistant.books.book_settings")
-                .effectivePrivacyOverrides(self.ui.doc_settings).highlights
-            if hl_override ~= nil then highlights_allowed = hl_override end
-        end
+        -- The highlights come from the OPEN book's live annotations, and this
+        -- detail text is sent to the provider by "Chat about this": the book's
+        -- own value, then trust, then sharing, judged by the gates module. The
+        -- override is recorded with the block so every send re-judges it (B396 d).
+        local Gates = require("koassistant.request.privacy_gates")
+        local book_values = Gates.overridesOf(self.ui.doc_settings)
+        local hl_override = book_values and book_values.highlights
+        local highlights_allowed = Gates.allows("highlights", { features = config_features,
+            provider = config_features.provider, book = book_values })
         item_highlights = highlights_allowed and findItemHighlights(item, self.ui) or {}
         if #item_highlights > 0 then
             -- The chat context keeps them inline (that is the whole point of

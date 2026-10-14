@@ -201,7 +201,7 @@ print("\n  [(c) the library Send]")
 
 TestRunner:test("the book list is judged for the provider the Send goes to", function()
     local cond = dialogs_src:match(
-        "local scan_folders_to_use\n%s*if (lib_features%.enable_library_scanning.-) then\n%s*scan_folders_to_use = ")
+        "Auto%-attach library scan data.-local scan_folders_to_use\n%s*if (.-) then\n%s*scan_folders_to_use = ")
     TestRunner:assertTrue(cond, "the catalog condition")
     local allowed = assert(load("local lib_features, send_rv, configuration = ...; return " .. cond,
         "library catalog"))

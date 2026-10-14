@@ -396,16 +396,8 @@ local function liveSpoilerLine(cfg, ui)
     -- basic-stats data — with stats sharing off (and the provider untrusted)
     -- this line must NOT disclose it, exactly as extractForAction already
     -- withholds {reading_progress}. The no-progress nudge variant covers it.
-    local stats_ok = features.enable_basic_stats ~= false
-    if not stats_ok and cfg and cfg.provider
-        and type(features.trusted_providers) == "table" then
-        for _idx, p in ipairs(features.trusted_providers) do
-            if p == cfg.provider then
-                stats_ok = true
-                break
-            end
-        end
-    end
+    local stats_ok = require("koassistant.request.privacy_gates").allows("position",
+        { features = features, provider = cfg and cfg.provider })
     local progress
     if not stats_ok then
         progress = nil
@@ -850,16 +842,6 @@ local function appendTurnTokenUsage(answer, usage)
     return answer .. "\n\n---\n**Total token usage this turn:** " .. formatTurnUsage(usage)
 end
 
--- Tools read book text, so a trusted provider bypasses the extraction-consent gate
--- (mirrors ContextExtractor:isProviderTrusted — features.trusted_providers vs the active provider).
-local function isProviderTrusted(provider, features)
-    if not provider then return false end
-    for _idx, trusted_id in ipairs(features.trusted_providers or {}) do
-        if trusted_id == provider then return true end
-    end
-    return false
-end
-
 -- Session-level eligibility: everything shouldUse checks EXCEPT the activation decision
 -- (global flag / session checkbox) and the context flags. Used by the input dialog to
 -- decide whether the per-chat "Book tools" checkbox is worth showing at all (it gates
@@ -888,12 +870,9 @@ function BookToolRunner.sessionEligible(config, ui)
     -- Tools are a form of book-text extraction → respect the consent gate
     -- (trusted bypass); the per-book privacy override wins in both directions
     -- (deny beats trusted).
-    local consent = features.enable_book_text_extraction == true
-        or isProviderTrusted(provider, features)
-    if ui and ui.doc_settings then
-        local ov = BookSettings.effectivePrivacyOverrides(ui.doc_settings).book_text
-        if ov ~= nil then consent = ov end
-    end
+    local Gates = require("koassistant.request.privacy_gates")
+    local consent = Gates.allows("book_text", { features = features, provider = provider,
+        book = Gates.overridesOf(ui and ui.doc_settings) })
     if not consent then
         return false, "consent"
     end

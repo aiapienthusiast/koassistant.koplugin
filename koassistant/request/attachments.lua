@@ -97,23 +97,19 @@ function Attachments.clear()
     if #staged > 0 then staged = {} end
 end
 
---- Same trusted-provider bypass as the Scope chip / extractor gates.
+--- The trusted-provider check, the gates module's (one copy).
 function Attachments.isTrustedProvider(features, provider)
-    if not features or not provider then return false end
-    if type(features.trusted_providers) ~= "table" then return false end
-    for _idx, tp in ipairs(features.trusted_providers) do
-        if tp == provider then return true end
-    end
-    return false
+    return require("koassistant.request.privacy_gates").isTrusted(features, provider)
 end
 
 --- The notebook's consent for the provider a request goes to (the use_notebook
 --- gate, attach_plan.md §4): the book's privacy override wins in both
 --- directions (deny beats trusted), else notebook sharing or a trusted provider.
 function Attachments.notebookAllowed(features, provider, book_override)
-    if book_override ~= nil then return book_override == true end
-    return (features and features.enable_notebook_sharing == true)
-        or Attachments.isTrustedProvider(features, provider)
+    local book
+    if book_override ~= nil then book = { notebook = book_override } end
+    return require("koassistant.request.privacy_gates").allows("notebook",
+        { features = features, provider = provider, book = book })
 end
 
 --- The highlights' consent for the provider a request goes to (the
@@ -121,10 +117,10 @@ end
 --- beats trusted), else highlights or annotations sharing, or a trusted
 --- provider. Same rule as the extractor's.
 function Attachments.highlightsAllowed(features, provider, book_override)
-    if book_override ~= nil then return book_override == true end
-    return (features and (features.enable_highlights_sharing == true
-            or features.enable_annotations_sharing == true))
-        or Attachments.isTrustedProvider(features, provider)
+    local book
+    if book_override ~= nil then book = { highlights = book_override } end
+    return require("koassistant.request.privacy_gates").allows("highlights",
+        { features = features, provider = provider, book = book })
 end
 
 --- The X-Ray chat's text for the provider it goes to (B396 d). Its "Your
