@@ -69,7 +69,7 @@ local function imageDetailApplies(plugin)
     if not ModelLists.getImageModels(provider) then return true end
     local f = plugin.settings:readSetting("features") or {}
     local model = ModelLists.resolveImageModel(provider, f["image_gen_model_" .. provider])
-    return require("koassistant.images.image_generator").pictureFacts(provider, model).detail
+    return require("koassistant.images.image_generator").pictureFacts(provider, model, f).detail
 end
 
 -- Shape and Detail: one pair for every image provider (image round S2)
@@ -3074,10 +3074,11 @@ local SettingsSchema = {
                                     openai = "OpenAI",
                                     xai = "xAI (Grok)",
                                     gemini = "Gemini",
+                                    openrouter = "OpenRouter",
                                 }
                                 return T(_("Provider: %1"), labels[v] or v)
                             end,
-                            help_text = _("Which provider generates images.\n\n'Follow main provider' uses your current chat provider when it supports images (OpenAI, xAI, Gemini). Picking one explicitly lets image generation work no matter which chat provider is active: it uses that provider's own API key.\n\nThe highlight-menu button only appears when the resolved provider has an API key."),
+                            help_text = _("Which provider generates images.\n\n'Follow main provider' uses your current chat provider when it supports images (OpenAI, xAI, Gemini, OpenRouter). Picking one explicitly lets image generation work no matter which chat provider is active: it uses that provider's own API key.\n\nThe highlight-menu button only appears when the resolved provider has an API key."),
                             path = "features.image_gen_provider",
                             default = "auto",
                             options = {
@@ -3085,6 +3086,7 @@ local SettingsSchema = {
                                 { value = "openai", text = "OpenAI" },
                                 { value = "xai", text = "xAI (Grok)" },
                                 { value = "gemini", text = "Gemini" },
+                                { value = "openrouter", text = "OpenRouter" },
                             },
                             separator = true,
                         },
@@ -3126,6 +3128,20 @@ local SettingsSchema = {
                             default = "default",
                             options = imageModelOptions("gemini"),
                             enabled_func = function(plugin) return imageRowsProvider(plugin) == "gemini" end,
+                        },
+                        {
+                            -- A submenu built when opened: the listed models,
+                            -- a model picked from the live catalog, and More
+                            -- models… (main.lua openRouterImageModelItems)
+                            id = "image_gen_model_openrouter",
+                            type = "submenu",
+                            callback = "openRouterImageModelItems",
+                            text_func = function(plugin)
+                                local f = plugin.settings:readSetting("features") or {}
+                                return T(_("OpenRouter model: %1"), imageModelLabel("openrouter", f.image_gen_model_openrouter))
+                            end,
+                            help_text = _("OpenRouter draws with many makers' models through one key. GPT Image 2.5 Flare is fast and the cheapest (about half a cent at Draft); Nano Banana 2.1 is Google's everyday model; FLUX 3 (Black Forest Labs, about 5 cents) and Seedream 5.0 Flash (ByteDance, about 2 cents) are other makers'; Recraft v4.1 Flash (under a cent) leans to illustration.\n\nMore models… lists OpenRouter's whole image catalog. Shape and Detail adapt to what the picked model takes."),
+                            enabled_func = function(plugin) return imageRowsProvider(plugin) == "openrouter" end,
                             separator = true,
                         },
                         {

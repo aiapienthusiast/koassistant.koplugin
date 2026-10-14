@@ -132,6 +132,7 @@ Gen.DYNAMIC_LABELS = {
     image_gen_model_openai = "OpenAI model: …",
     image_gen_model_xai = "xAI model: …",
     image_gen_model_gemini = "Gemini model: …",
+    image_gen_model_openrouter = "OpenRouter model: … (the listed models, More models…)",
     image_gen_shape = "Shape: Fit my screen / Portrait / Landscape / Square / Let the model choose",
     image_gen_detail = "Detail: Draft / Standard / Best",
     zai_region = "Z.AI Region: International / China",

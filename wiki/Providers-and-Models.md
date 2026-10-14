@@ -57,7 +57,7 @@ You can help promote a docs-based provider to tested:
 
 - **Web search:** Anthropic, Gemini, OpenAI, OpenAI Subscription, xAI, Perplexity, OpenRouter, Z.AI and Qwen. Other providers ignore the setting and answer without searching. How each one searches, and the effort dial: [Reasoning, Web Search and Book Tools](Reasoning-Web-Search-and-Book-Tools).
 - **AI Book Tools** (experimental: the AI searches and reads the open book for grounded, page-referenced answers): Gemini, Anthropic, OpenAI (API or Subscription), OpenRouter, DeepSeek, Mistral, Groq, xAI, Fireworks, Qwen, Kimi, OpenCode Zen, OpenCode Go, A2Agent and Ollama (models whose server reports tool support). The community hosts Cerebras, MiniMax, DeepInfra, Novita AI, Hyperbolic, Nebius AI Studio, Chutes, Featherless and Vercel AI Gateway, and custom providers, can use them for a model once **Test provider...** has recorded that it calls tools, or `custom_models.lua` grants it. A per-chat **Tools** chip turns them on; the setting behind it (off by default) decides whether the chip starts on, globally or per book. See [Reasoning, Web Search and Book Tools](Reasoning-Web-Search-and-Book-Tools).
-- **Image generation:** OpenAI, xAI and Gemini. See [Image Generation](Image-Generation).
+- **Image generation:** OpenAI, xAI, Gemini and OpenRouter. See [Image Generation](Image-Generation).
 - **Reasoning** depends on the model rather than the provider. The stance and the per-model settings are on [Reasoning, Web Search and Book Tools](Reasoning-Web-Search-and-Book-Tools); the models that cannot turn it off are listed under [Provider quirks](#provider-quirks).
 
 ## Free tiers

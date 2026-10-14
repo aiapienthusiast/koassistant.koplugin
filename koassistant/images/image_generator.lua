@@ -9,6 +9,7 @@ Currently supported providers and their image-generation endpoints:
   • openai     → https://api.openai.com/v1/images/generations   (gpt-image family)
   • xai        → https://api.x.ai/v1/images/generations         (grok-imagine-image)
   • gemini     → generateContent with IMAGE modality             (gemini-*-image)
+  • openrouter → https://openrouter.ai/api/v1/images             (its Image API: many makers)
 
 Model inventory lives in koassistant/request/model_lists.lua (`_image_models`);
 this file holds only wire/endpoint facts. Generated images are kept in
@@ -77,6 +78,15 @@ local IMAGE_ENDPOINTS = {
         url        = "https://generativelanguage.googleapis.com/v1beta/models",
         key_header = "x-goog-api-key",
         is_gemini  = true,
+    },
+    openrouter = {
+        -- OpenRouter's Image API (image round S3): the answer is
+        -- data[].b64_json with its media_type; a generation that fails is a
+        -- 502 and is not billed. The catalog lists every model with the
+        -- parameters it takes (no key needed).
+        url        = "https://openrouter.ai/api/v1/images",
+        key_header = "Authorization",
+        catalog    = "https://openrouter.ai/api/v1/images/models",
     },
 }
 
@@ -431,7 +441,8 @@ end
 
 --- POST the image-generation request; pipe carries "OK:<json>" or "ERR:<msg>".
 --- @param endpoint table: IMAGE_ENDPOINTS entry (used for key_header)
-local function makeBackgroundFn(url, api_key, request_body_str, endpoint)
+--- @param extra_headers table|nil: the request's own headers (buildRequest)
+local function makeBackgroundFn(url, api_key, request_body_str, endpoint, extra_headers)
     -- Pre-resolve DNS in parent (needed on macOS after fork)
     local resolved_ip = BaseHandler.resolveForSubprocess(url)
 
@@ -444,6 +455,7 @@ local function makeBackgroundFn(url, api_key, request_body_str, endpoint)
         [auth_header_name] = auth_header_value,
         ["Content-Length"] = tostring(#request_body_str),
     }
+    for name, value in pairs(extra_headers or {}) do headers[name] = value end
 
     return makePipeFetchFn(function()
         return BaseHandler.fetchInSubprocess(url, {
@@ -639,6 +651,46 @@ local GEMINI_RATIOS = { "1:1", "5:4", "4:5", "4:3", "3:4", "3:2", "2:3", "16:9",
 -- The three sizes every gpt-image model takes, with their ratios
 local OPENAI_SIZES = { { "1024x1024", 1 }, { "1536x1024", 3 / 2 }, { "1024x1536", 2 / 3 } }
 
+-- What OpenRouter's listed models take, as its catalog lists them
+-- (GET /api/v1/images/models, 2026-10-14): aspect ratios, resolutions,
+-- qualities, output formats. A model picked from the live catalog (More
+-- models… in the settings) brings its own lists, stored beside the pick
+-- (image_gen_openrouter_caps).
+local OPENROUTER_FACTS = {
+    ["openai/gpt-image-2.5-flare"] = {
+        ratios = { "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9", "auto" },
+        qualities = { "auto", "low", "medium", "high", "xhigh", "max" },
+        -- not in the catalog, but passed on to OpenAI: a probe answered JPEG
+        -- (255 KB for the PNG's 3 MB, 2026-10-14); FLUX 3 refuses the key
+        formats = { "png", "jpeg", "webp" },
+    },
+    ["google/gemini-nano-banana-2.1"] = {
+        ratios = { "1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1", "4:3", "4:5", "5:4", "8:1", "9:16",
+            "16:9", "21:9" },
+        resolutions = { "1K", "2K", "4K" },
+    },
+    ["black-forest-labs/flux-3-image"] = {
+        ratios = { "21:9", "2:1", "16:9", "3:2", "7:5", "4:3", "5:4", "1:1", "4:5", "3:4", "5:7", "2:3",
+            "9:16", "1:2", "9:21", "auto" },
+        resolutions = { "768", "1K", "1.5K", "2K", "4K" },
+    },
+    ["bytedance-seed/seedream-5-0-flash"] = {
+        ratios = { "1:1", "1:2", "2:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "9:19.5",
+            "19.5:9", "9:20", "20:9", "9:21", "21:9", "auto" },
+        resolutions = { "1K", "2K" },
+    },
+    ["recraft/recraft-v4.1-flash"] = {
+        ratios = { "1:1", "4:3", "3:4", "16:9", "9:16", "auto" },
+    },
+}
+
+-- Detail as an OpenRouter quality: the first of these the model lists
+local OPENROUTER_QUALITY = {
+    draft = { "low", "medium", "high" },
+    standard = { "medium", "high", "low" },
+    best = { "xhigh", "high", "medium" },
+}
+
 local SHAPES = { fit = true, portrait = true, landscape = true, square = true, auto = true }
 local DETAILS = { draft = true, standard = true, best = true }
 
@@ -658,13 +710,121 @@ local function nearest(list, ratio, value_of)
     return best
 end
 
+-- The ratios of a list that are ratios ("auto" and the like left out)
+local function ratioList(list)
+    local out = {}
+    for _idx, spec in ipairs(type(list) == "table" and list or {}) do
+        if type(spec) == "string" and spec:match("^[%d%.]+:[%d%.]+$") and ratioValue(spec) > 0 then
+            out[#out + 1] = spec
+        end
+    end
+    return #out > 0 and out or nil
+end
+
+-- A resolution as a number of K: "768" = 0.75, "1.5K" = 1.5
+local function resolutionK(spec)
+    if type(spec) ~= "string" then return nil end
+    local k = spec:upper():match("^([%d%.]+)K$")
+    if k then return tonumber(k) end
+    local px = tonumber(spec)
+    return px and px / 1024 or nil
+end
+
+-- The first of `wanted` that `list` holds
+local function firstListed(list, wanted)
+    for _idx, w in ipairs(wanted) do
+        for _j, v in ipairs(list) do
+            if v == w then return w end
+        end
+    end
+    return nil
+end
+
+--- What an OpenRouter catalog entry's supported_parameters say a model
+--- takes: { ratios, resolutions, qualities, formats } (each a list of the
+--- catalog's strings, or nil). Pure; the catalog list and the stored pick use it.
+function ImageGenerator.openRouterFacts(params)
+    params = type(params) == "table" and params or {}
+    local function enum(key)
+        local p = type(params[key]) == "table" and params[key] or nil
+        if not (p and type(p.values) == "table") then return nil end
+        local list = {}
+        for _idx, v in ipairs(p.values) do
+            if type(v) == "string" then list[#list + 1] = v end
+        end
+        return #list > 0 and list or nil
+    end
+    return { ratios = enum("aspect_ratio"), resolutions = enum("resolution"),
+             qualities = enum("quality"), formats = enum("output_format") }
+end
+
+--- OpenRouter's image catalog answer as the More models… list: { { id, name,
+--- facts }, ... } sorted by id, or nil when the answer is not a catalog. A
+--- model that answers only in SVG (a vector maker) is left out: the image
+--- viewer shows raster pictures. Pure.
+function ImageGenerator.parseOpenRouterCatalog(body)
+    local ok, resp = pcall(json.decode, body or "")
+    if not ok or type(resp) ~= "table" or type(resp.data) ~= "table" then return nil end
+    local out = {}
+    for _idx, m in ipairs(resp.data) do
+        if type(m) == "table" and str(m.id) and m.id ~= "" then
+            local facts = ImageGenerator.openRouterFacts(m.supported_parameters)
+            local raster = not facts.formats
+                or firstListed(facts.formats, { "png", "jpeg", "webp" }) ~= nil
+            if raster then
+                out[#out + 1] = { id = m.id, name = str(m.name) or m.id, facts = facts }
+            end
+        end
+    end
+    table.sort(out, function(a, b) return a.id < b.id end)
+    return out
+end
+
+--- Fetch OpenRouter's image catalog in the background (no key needed):
+--- on_done(models) with parseOpenRouterCatalog's list, or on_done(nil, message).
+function ImageGenerator.fetchOpenRouterCatalog(on_done)
+    BaseHandler.fetchAsync(IMAGE_ENDPOINTS.openrouter.catalog, { timeout = 20 }, function(code, body)
+        if code ~= 200 then
+            on_done(nil, code and ("HTTP " .. tostring(code)) or tostring(body))
+            return
+        end
+        local models = ImageGenerator.parseOpenRouterCatalog(body)
+        if not models or #models == 0 then
+            on_done(nil, _("No models found in the response"))
+            return
+        end
+        on_done(models)
+    end)
+end
+
 --- What an image model takes for Shape and Detail: `ratios` (its aspect
 --- ratios; OpenAI takes sizes instead), `custom_size` (any width and height in
 --- steps of 16: OpenAI's 2.5 models), `best_quality` (the quality Best sends to
 --- OpenAI), `detail` (false where the model has one quality and size: xAI's
---- grok-imagine-image, Gemini's Flash Lite). Pure; the Detail row asks it too.
-function ImageGenerator.pictureFacts(provider, model)
+--- grok-imagine-image, Gemini's Flash Lite). OpenRouter's models add
+--- `resolutions`, `qualities` and `formats` from its catalog: the listed
+--- models' own, or a More models… pick's, stored in
+--- features.image_gen_openrouter_caps. Pure; the Detail row asks it too.
+function ImageGenerator.pictureFacts(provider, model, features)
     model = type(model) == "string" and model or ""
+    if provider == "openrouter" then
+        local caps = features and features.image_gen_openrouter_caps
+        local listed = OPENROUTER_FACTS[model]
+            or (type(caps) == "table" and caps.model == model and caps) or {}
+        local resolutions = {}
+        for _idx, r in ipairs(type(listed.resolutions) == "table" and listed.resolutions or {}) do
+            if resolutionK(r) then resolutions[#resolutions + 1] = r end
+        end
+        local qualities = type(listed.qualities) == "table" and listed.qualities or {}
+        local graded = firstListed(qualities, { "low", "medium", "high", "xhigh" }) ~= nil
+        return {
+            ratios = ratioList(listed.ratios),
+            resolutions = #resolutions > 0 and resolutions or nil,
+            qualities = graded and qualities or nil,
+            formats = type(listed.formats) == "table" and listed.formats or nil,
+            detail = graded or #resolutions > 1,
+        }
+    end
     if provider == "openai" then
         local v25 = model:find("^gpt%-image%-2%.5") ~= nil
         return { custom_size = v25, best_quality = v25 and "xhigh" or "high", detail = true }
@@ -713,7 +873,8 @@ end
 --- (image_gen_shape, default Fit my screen; image_gen_detail, default Draft);
 --- `screen` = { w, h } is the screen Fit my screen fits. Pure;
 --- tests/inspect.lua --image and the audit's image probe build with it too.
---- @return table|nil { url, key_header, body } (nil for a provider with no image endpoint)
+--- @return table|nil { url, key_header, body, headers (extra, or nil) } (nil
+---   for a provider with no image endpoint)
 function ImageGenerator.buildRequest(provider, model, prompt, features, screen)
     features = features or {}
     local endpoint = IMAGE_ENDPOINTS[provider]
@@ -721,7 +882,28 @@ function ImageGenerator.buildRequest(provider, model, prompt, features, screen)
     local shape = SHAPES[features.image_gen_shape] and features.image_gen_shape or "fit"
     local detail = DETAILS[features.image_gen_detail] and features.image_gen_detail or "draft"
     local ratio = ImageGenerator.shapeRatio(shape, screen)
-    local facts = ImageGenerator.pictureFacts(provider, model)
+    local facts = ImageGenerator.pictureFacts(provider, model, features)
+    if provider == "openrouter" then
+        -- Each model takes what its catalog entry lists: the nearest ratio,
+        -- Detail as a quality and a resolution (1K, Best 2K, else the nearest
+        -- listed), JPEG where a model offers it; Let the model choose and a
+        -- model that lists nothing send no parameter
+        local body = { model = model, prompt = prompt }
+        if ratio and facts.ratios then body.aspect_ratio = nearest(facts.ratios, ratio, ratioValue) end
+        if facts.qualities then body.quality = firstListed(facts.qualities, OPENROUTER_QUALITY[detail]) end
+        if facts.resolutions then
+            body.resolution = nearest(facts.resolutions, (detail == "best") and 2 or 1, resolutionK)
+        end
+        if facts.formats and firstListed(facts.formats, { "jpeg" }) then body.output_format = "jpeg" end
+        local github = require("koassistant.core.constants").GITHUB
+        return {
+            url = endpoint.url,
+            key_header = endpoint.key_header,
+            body = body,
+            -- the app's attribution, as OpenRouter's chat requests send it
+            headers = { ["HTTP-Referer"] = github and github.URL or nil, ["X-Title"] = "KOAssistant" },
+        }
+    end
     if endpoint.is_gemini then
         -- generateContent with image output; model in the path. The Gemini
         -- Content Filter setting applies here as it does to chat (a book
@@ -980,7 +1162,7 @@ function ImageGenerator._generateImpl(word, config_table, settings, book_info, o
 
     -- Launch subprocess
     logger.dbg("KOAssistant: image gen request:", provider, resolved_model)
-    local bg_fn = makeBackgroundFn(request.url, api_key, request_body_str, endpoint)
+    local bg_fn = makeBackgroundFn(request.url, api_key, request_body_str, endpoint, request.headers)
     local pid, parent_read_fd = ffiutil.runInSubProcess(bg_fn, true)
 
     if not pid then

@@ -1101,6 +1101,16 @@ ModelLists._image_models = {
         "gemini-3.1-flash-lite-image",  -- fastest and cheapest, 1K only
         "gemini-3-pro-image",           -- Nano Banana Pro: finest detail, slower
     },
+    -- OpenRouter's Image API (image round S3, 2026-10-14): one key for
+    -- several makers; "More models…" in the settings reaches the rest of its
+    -- catalog. Prices per picture from each model's endpoints that day.
+    openrouter = {
+        "openai/gpt-image-2.5-flare",         -- default: about $0.005 at Draft (priced per token)
+        "google/gemini-nano-banana-2.1",      -- priced per token, about $0.04
+        "black-forest-labs/flux-3-image",     -- $0.048 at 1K
+        "bytedance-seed/seedream-5-0-flash",  -- $0.018
+        "recraft/recraft-v4.1-flash",         -- $0.007, leans to illustration
+    },
 }
 
 -- Image models the provider answers with another model: a stored pick goes out

@@ -6865,6 +6865,156 @@ function AskGPT:showImageGenPromptTemplate()
   })
 end
 
+-- The OpenRouter image model row's submenu (image round S3): Default, the
+-- listed models, a model picked from OpenRouter's catalog, then More models…,
+-- which fetches the catalog when asked. A catalog pick stores the parameters
+-- its model takes beside it (image_gen_openrouter_caps), so Shape and Detail
+-- fit any model (ImageGenerator.pictureFacts).
+function AskGPT:openRouterImageModelItems()
+  local self_ref = self
+  local ModelLists = require("koassistant.request.model_lists")
+  local function current()
+    local f = self_ref.settings:readSetting("features") or {}
+    local v = f.image_gen_model_openrouter
+    return (type(v) == "string" and v ~= "") and v or "default"
+  end
+  local function pick(value, caps)
+    local f = self_ref.settings:readSetting("features") or {}
+    f.image_gen_model_openrouter = value
+    if caps then f.image_gen_openrouter_caps = caps end
+    self_ref.settings:saveSetting("features", f)
+    self_ref.settings:flush()
+    self_ref:updateConfigFromSettings()
+  end
+  local function radio(text, value)
+    return {
+      text = text,
+      radio = true,
+      checked_func = function() return current() == value end,
+      callback = function() pick(value) end,
+      keep_menu_open = true,
+    }
+  end
+  local items = { radio(T(_("Default (%1)"), ModelLists.getDefaultImageModel("openrouter") or "?"), "default") }
+  local listed = {}
+  for _idx, m in ipairs(ModelLists.getImageModels("openrouter") or {}) do
+    listed[m] = true
+    items[#items + 1] = radio(m, m)
+  end
+  local cur = current()
+  if cur ~= "default" and not listed[cur] then
+    items[#items + 1] = radio(cur, cur)
+  end
+  items[#items].separator = true
+  items[#items + 1] = {
+    text = _("More models…"),
+    keep_menu_open = true,
+    callback = function(touchmenu_instance)
+      self_ref:showOpenRouterImageCatalog(function(model, caps)
+        pick(model, caps)
+        self_ref:refreshTouchMenu(touchmenu_instance, function()
+          return self_ref:openRouterImageModelItems()
+        end)
+      end)
+    end,
+  }
+  return items
+end
+
+-- OpenRouter's image catalog (no key needed), fetched in the background,
+-- then a filterable list like the chat models' Fetch models. on_pick(model,
+-- caps) with the parameters the model takes.
+function AskGPT:showOpenRouterImageCatalog(on_pick)
+  local self_ref = self
+  NetworkMgr:runWhenConnected(function()
+    local note = InfoMessage:new{ text = _("Fetching OpenRouter's image models…") }
+    UIManager:show(note)
+    require("koassistant.images.image_generator").fetchOpenRouterCatalog(function(models, err)
+      UIManager:close(note)
+      if not models then
+        UIManager:show(InfoMessage:new{
+          text = T(_("Could not fetch models: %1"), err or _("unknown error")),
+        })
+        return
+      end
+      self_ref:showOpenRouterImagePicker(models, nil, on_pick)
+    end)
+  end)
+end
+
+function AskGPT:showOpenRouterImagePicker(models, filter, on_pick)
+  local self_ref = self
+  local ButtonDialog = require("ui/widget/buttondialog")
+  local f = self.settings:readSetting("features") or {}
+  local current = f.image_gen_model_openrouter
+  local needle = filter and filter:lower() or nil
+  local shown = {}
+  for _idx, m in ipairs(models) do
+    if not needle or m.id:lower():find(needle, 1, true) or m.name:lower():find(needle, 1, true) then
+      shown[#shown + 1] = m
+    end
+  end
+  local dialog
+  local buttons = {{{
+    text = filter and T(_("Filter: %1 (tap to change)"), filter) or _("Filter models..."),
+    callback = function()
+      UIManager:close(dialog)
+      local InputDialog = require("ui/widget/inputdialog")
+      local input
+      input = InputDialog:new{
+        title = _("Filter models"),
+        input = filter or "",
+        buttons = {{
+          {
+            text = _("Cancel"),
+            id = "close",
+            callback = function()
+              UIManager:close(input)
+              self_ref:showOpenRouterImagePicker(models, filter, on_pick)
+            end,
+          },
+          {
+            text = _("Apply"),
+            is_enter_default = true,
+            callback = function()
+              local new_filter = input:getInputText()
+              UIManager:close(input)
+              if new_filter == "" then new_filter = nil end
+              self_ref:showOpenRouterImagePicker(models, new_filter, on_pick)
+            end,
+          },
+        }},
+      }
+      UIManager:show(input)
+      input:onShowKeyboard()
+    end,
+  }}}
+  for i, m in ipairs(shown) do
+    if i > 30 then break end
+    local entry = m
+    buttons[#buttons + 1] = {{
+      text = (entry.id == current and "✓ " or "") .. entry.id,
+      callback = function()
+        UIManager:close(dialog)
+        local facts = entry.facts or {}
+        on_pick(entry.id, { model = entry.id, ratios = facts.ratios, resolutions = facts.resolutions,
+          qualities = facts.qualities, formats = facts.formats })
+      end,
+    }}
+  end
+  buttons[#buttons + 1] = {{
+    text = _("Close"),
+    id = "close",
+    callback = function() UIManager:close(dialog) end,
+  }}
+  local title = T(_("OpenRouter: %1 image models"), #shown)
+  if #shown > 30 then
+    title = title .. "\n" .. _("Showing the first 30 - use the filter to narrow")
+  end
+  dialog = ButtonDialog:new{ title = title, buttons = buttons }
+  UIManager:show(dialog)
+end
+
 -- Ghost-widget net (device family #9, 2026-08-17): ReaderUI:showReader
 -- broadcasts ShowingReader before every book open but closes only the
 -- FileManager, so any cross-book plugin Menu/dialog left below survives into

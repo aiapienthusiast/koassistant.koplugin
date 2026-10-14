@@ -329,7 +329,7 @@ MODES:
     --inspect, -i <provider>     Inspect request for a single provider
     --compare, -c <p1> <p2> ...  Compare requests across providers
     --export, -e <provider>      Export request as JSON
-    --image <provider>           The image request (openai, xai, gemini): framed prompt + body
+    --image <provider>           The image request (openai, xai, gemini, openrouter): framed prompt + body
     --list, -l                   List supported providers
     --web, -w                    Start web UI server (http://localhost:8080)
     --help, -h                   Show this help
@@ -555,7 +555,7 @@ local function inspectImage(provider, options)
     local ImageGenerator = require("koassistant.images.image_generator")
     local ModelLists = require("koassistant.request.model_lists")
     if not ModelLists.getImageModels(provider) then
-        io.stderr:write("Error: '" .. tostring(provider) .. "' makes no images here (openai, xai, gemini).\n")
+        io.stderr:write("Error: '" .. tostring(provider) .. "' makes no images here (openai, xai, gemini, openrouter).\n")
         return false
     end
     local features = {}
@@ -570,6 +570,7 @@ local function inspectImage(provider, options)
     local request = ImageGenerator.buildRequest(provider, model, prompt, features, { w = 1264, h = 1680 })
     print("POST " .. request.url)
     print("Auth header: " .. request.key_header)
+    for name, value in pairs(request.headers or {}) do print(name .. ": " .. tostring(value)) end
     print(require("json").encode(request.body))
     return true
 end

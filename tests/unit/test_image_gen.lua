@@ -397,6 +397,102 @@ local function runAll()
         TestRunner:assertEquals(ImageGenerator.buildRequest("anthropic", "x", "p", {}), nil)
     end)
 
+    print("  [OpenRouter (S3)]")
+    TestRunner:test("OpenRouter's list and the default; it draws under Follow main provider", function()
+        TestRunner:assertEquals(ModelLists.getDefaultImageModel("openrouter"), "openai/gpt-image-2.5-flare")
+        TestRunner:assertEquals(#ModelLists.getImageModels("openrouter"), 5)
+        withApikeys({ openrouter = "sk-or-real-key" }, function()
+            local settings = mockSettings({})
+            TestRunner:assertEquals(ImageGenerator.effectiveProvider({}, "openrouter", settings), "openrouter")
+            TestRunner:assertEquals(ImageGenerator.effectiveProvider({ image_gen_provider = "openrouter" },
+                "anthropic", settings), "openrouter")
+        end)
+    end)
+    TestRunner:test("OpenRouter: the request at the defaults, the app's headers, no key in the body", function()
+        local r = ImageGenerator.buildRequest("openrouter", "openai/gpt-image-2.5-flare", "p", {}, SCREEN)
+        TestRunner:assertEquals(r.url, "https://openrouter.ai/api/v1/images")
+        TestRunner:assertEquals(r.key_header, "Authorization")
+        TestRunner:assertEquals(r.body.model, "openai/gpt-image-2.5-flare")
+        TestRunner:assertEquals(r.body.aspect_ratio, "3:4", "Fit my screen: the nearest listed ratio")
+        TestRunner:assertEquals(r.body.quality, "low", "Draft")
+        TestRunner:assertEquals(r.body.output_format, "jpeg", "flare answers JPEG (probed)")
+        TestRunner:assertEquals(r.body.resolution, nil, "flare lists no resolution")
+        TestRunner:assertEquals(r.body.n, nil)
+        TestRunner:assertEquals(r.headers["X-Title"], "KOAssistant")
+    end)
+    TestRunner:test("OpenRouter: Detail as each model's quality and resolution", function()
+        local function body(model, detail, shape)
+            return ImageGenerator.buildRequest("openrouter", model, "p",
+                { image_gen_detail = detail, image_gen_shape = shape }, SCREEN).body
+        end
+        TestRunner:assertEquals(body("openai/gpt-image-2.5-flare", "standard").quality, "medium")
+        TestRunner:assertEquals(body("openai/gpt-image-2.5-flare", "best").quality, "xhigh")
+        local flux = body("black-forest-labs/flux-3-image", "draft")
+        TestRunner:assertEquals(flux.resolution, "1K")
+        TestRunner:assertEquals(flux.quality, nil)
+        TestRunner:assertEquals(flux.output_format, nil, "FLUX 3 refuses output_format (probed)")
+        TestRunner:assertEquals(body("black-forest-labs/flux-3-image", "best").resolution, "2K")
+        TestRunner:assertEquals(body("bytedance-seed/seedream-5-0-flash", "best").resolution, "2K")
+        local recraft = body("recraft/recraft-v4.1-flash", "best", "landscape")
+        TestRunner:assertEquals(recraft.resolution, nil)
+        TestRunner:assertEquals(recraft.quality, nil)
+        TestRunner:assertEquals(recraft.aspect_ratio, "4:3", "the nearest of the five it lists")
+        TestRunner:assertEquals(body("google/gemini-nano-banana-2.1", "draft", "auto").aspect_ratio, nil,
+            "Let the model choose: none")
+    end)
+    TestRunner:test("OpenRouter: a More models… pick takes its stored lists; the Detail row follows them", function()
+        local features = { image_gen_openrouter_caps = { model = "x-ai/grok-imagine-image-2.0",
+            ratios = { "1:1", "3:4", "auto" }, resolutions = { "1K", "2K" }, qualities = { "low", "medium" } } }
+        features.image_gen_detail = "best"
+        local b = ImageGenerator.buildRequest("openrouter", "x-ai/grok-imagine-image-2.0", "p", features, SCREEN).body
+        TestRunner:assertEquals(b.aspect_ratio, "3:4")
+        TestRunner:assertEquals(b.quality, "medium", "no xhigh or high: the best it lists")
+        TestRunner:assertEquals(b.resolution, "2K")
+        TestRunner:assertEquals(ImageGenerator.pictureFacts("openrouter", "x-ai/grok-imagine-image-2.0", features).detail,
+            true)
+        -- the stored lists belong to their model only
+        local other = ImageGenerator.buildRequest("openrouter", "meta/muse-image", "p", features, SCREEN).body
+        TestRunner:assertEquals(other.aspect_ratio, nil)
+        TestRunner:assertEquals(other.quality, nil)
+        TestRunner:assertEquals(ImageGenerator.pictureFacts("openrouter", "meta/muse-image", features).detail, false)
+        TestRunner:assertEquals(ImageGenerator.pictureFacts("openrouter", "recraft/recraft-v4.1-flash").detail, false,
+            "Recraft takes no Detail")
+        TestRunner:assertEquals(ImageGenerator.pictureFacts("openrouter", "krea/krea-2-medium", { image_gen_openrouter_caps =
+            { model = "krea/krea-2-medium", resolutions = { "1K" } } }).detail, false, "one resolution: no Detail")
+    end)
+    TestRunner:test("OpenRouter's catalog: models with their parameters; vector-only makers left out", function()
+        local body = '{"data":['
+            .. '{"id":"b/two","name":"B: Two","supported_parameters":{"aspect_ratio":{"type":"enum","values":["1:1","auto"]},'
+            .. '"resolution":{"type":"enum","values":["768","1.5K"]},"n":{"type":"range","min":1,"max":1}}},'
+            .. '{"id":"a/one","name":"A: One","supported_parameters":{"quality":{"type":"enum","values":["low","high"]}}},'
+            .. '{"id":"r/vector","name":"R: Vector","supported_parameters":{"output_format":{"type":"enum","values":["svg"]}}},'
+            .. '{"name":"no id"}]}'
+        local models = ImageGenerator.parseOpenRouterCatalog(body)
+        TestRunner:assertEquals(#models, 2)
+        TestRunner:assertEquals(models[1].id, "a/one", "sorted by id")
+        TestRunner:assertEquals(models[1].facts.qualities[2], "high")
+        TestRunner:assertEquals(models[2].name, "B: Two")
+        TestRunner:assertEquals(models[2].facts.resolutions[2], "1.5K")
+        TestRunner:assertEquals(ImageGenerator.parseOpenRouterCatalog("not json"), nil)
+        -- a resolution between the listed ones goes to the nearest: 1.5K for Best (2K), 768 is nearer 1K than 1.5K is
+        local caps = models[2].facts
+        caps.model = "b/two"
+        local b = ImageGenerator.buildRequest("openrouter", "b/two", "p",
+            { image_gen_openrouter_caps = caps, image_gen_detail = "best" }, SCREEN).body
+        TestRunner:assertEquals(b.resolution, "1.5K")
+        b = ImageGenerator.buildRequest("openrouter", "b/two", "p", { image_gen_openrouter_caps = caps }, SCREEN).body
+        TestRunner:assertEquals(b.resolution, "768")
+        TestRunner:assertEquals(b.aspect_ratio, "1:1", "the only ratio it lists")
+    end)
+    TestRunner:test("OpenRouter's answer: data[].b64_json with its media_type", function()
+        local r = ImageGenerator.parseResponse("openrouter",
+            '{"created":1,"data":[{"b64_json":"JPEGBYTES","media_type":"image/jpeg"}],"usage":{"cost":0.0059}}')
+        TestRunner:assertEquals(r.bytes, "JPEGBYTES")
+        TestRunner:assertEquals(ImageGenerator.errorMessage(400,
+            '{"error":{"message":"Black Forest Labs FLUX 3 Image does not support: output_format.","code":400}}'),
+            "HTTP 400: Black Forest Labs FLUX 3 Image does not support: output_format.")
+    end)
+
     print("  [The answer read (B064, B459)]")
     -- mime.unb64 is a passthrough stub in this file: the "base64" is the bytes
     TestRunner:test("OpenAI-style: b64_json, a link, nothing", function()

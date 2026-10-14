@@ -3714,6 +3714,10 @@ ModelAudit.IMAGE_SKIPS = {
         ["nano-banana-pro-preview"] = "alias of gemini-3-pro-image-preview",
     },
     xai = {},
+    -- OpenRouter lists every maker's image models (57 on 2026-10-14); its list
+    -- here is five of them and More models… reaches the rest, so the diff
+    -- reports only listed ids gone and the listed models' parameter drift
+    openrouter = {},
 }
 
 --- The image model ids in a provider's list answer (pure). OpenAI: /v1/models
@@ -3747,8 +3751,42 @@ function ModelAudit.imageIdsFrom(provider, data)
             local id = name:match("^models/(.+)$") or name
             if id:find("image", 1, true) or id:find("banana", 1, true) then served[id] = true end
         end
+    elseif provider == "openrouter" then
+        for _i, m in ipairs(type(data.data) == "table" and data.data or {}) do
+            if type(m) == "table" and type(m.id) == "string" then served[m.id] = true end
+        end
     end
     return served, aliases
+end
+
+--- Where an OpenRouter catalog entry's parameters differ from what the
+--- plugin sends its listed model (pure): a list of "aspect_ratio: …" lines,
+--- empty when they agree.
+function ModelAudit.openRouterDrift(model, entry)
+    local ImageGenerator = require("koassistant.images.image_generator")
+    local listed = ImageGenerator.pictureFacts("openrouter", model)
+    -- the catalog's side, read as a More models… pick of the same model
+    local caps = ImageGenerator.openRouterFacts(type(entry) == "table" and entry.supported_parameters)
+    caps.model = "(catalog)"
+    local served = ImageGenerator.pictureFacts("openrouter", "(catalog)", { image_gen_openrouter_caps = caps })
+    local out = {}
+    local function same(a, b)
+        a, b = a or {}, b or {}
+        if #a ~= #b then return false end
+        local set = {}
+        for _i, v in ipairs(a) do set[v] = true end
+        for _i, v in ipairs(b) do if not set[v] then return false end end
+        return true
+    end
+    for _i, k in ipairs({ "ratios", "resolutions", "qualities", "formats" }) do
+        -- a catalog entry without output formats says nothing about them
+        -- (flare's JPEG is a probed fact, image_generator.lua OPENROUTER_FACTS)
+        if not same(listed[k], served[k]) and not (k == "formats" and not served[k]) then
+            out[#out + 1] = string.format("%s: plugin %s, catalog %s", k,
+                table.concat(listed[k] or {}, " "), table.concat(served[k] or {}, " "))
+        end
+    end
+    return out
 end
 
 --- One image list against what its provider serves (pure).
@@ -3786,6 +3824,8 @@ local IMAGE_LISTS = {
             headers = function(key) return bearerHeaders(key) end },
     gemini = { url = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000",
                headers = function(key) return { ["x-goog-api-key"] = key } end },
+    openrouter = { url = "https://openrouter.ai/api/v1/images/models",
+                   headers = function() return {} end },
 }
 
 local function runImageDiscovery(providers, apikeys, verbose)
@@ -3796,7 +3836,8 @@ local function runImageDiscovery(providers, apikeys, verbose)
         local key = keyFor(apikeys, provider)
         if not src then
             printf("  %sno image list for %s%s", C.dim, provider, C.off)
-        elseif not TestConfig.isValidApiKey(key) then
+        elseif provider ~= "openrouter" and not TestConfig.isValidApiKey(key) then
+            -- OpenRouter's catalog needs no key
             printf("  %sskipped: no API key in apikeys.lua%s", C.dim, C.off)
         else
             local text, err = httpGet(src.url, src.headers(key))
@@ -3817,6 +3858,22 @@ local function runImageDiscovery(providers, apikeys, verbose)
                 for _j, id in ipairs(d.missing) do
                     printf("  %sNOT SERVED  %s%s (listed here)", C.red, id, C.off)
                     problems = problems + 1
+                end
+                if provider == "openrouter" then
+                    -- a router: the rest of its catalog is More models…, so only
+                    -- the listed models' parameters are checked
+                    local by_id = {}
+                    for _j, m in ipairs(type(data.data) == "table" and data.data or {}) do
+                        if type(m) == "table" and type(m.id) == "string" then by_id[m.id] = m end
+                    end
+                    for _j, id in ipairs(ModelLists.getImageModels(provider) or {}) do
+                        for _k, line in ipairs(by_id[id] and ModelAudit.openRouterDrift(id, by_id[id]) or {}) do
+                            printf("  %sDRIFT       %s%s %s", C.yellow, id, C.off, line)
+                            problems = problems + 1
+                        end
+                    end
+                    printf("  %sothers in the catalog: %d (More models… reaches them)%s", C.dim, #d.new, C.off)
+                    d.new = {}
                 end
                 for _j, id in ipairs(d.new) do
                     printf("  %sNEW         %s%s (not listed; --image-probe it)", C.yellow, id, C.off)
@@ -3906,6 +3963,7 @@ local function runImageProbe(provider, model, api_key, shape, detail)
         #sent > 0 and table.concat(sent, ", ") or "no shape or detail parameters")
     local headers = { [request.key_header] = request.key_header == "Authorization"
         and ("Bearer " .. api_key) or api_key }
+    for name, value in pairs(request.headers or {}) do headers[name] = value end
     RUN.provider, RUN.model = provider, model
     local t0 = require("socket").gettime()
     local code, decoded, raw = httpPostJson(request.url, headers, request.body)
@@ -3935,6 +3993,8 @@ local function runImageProbe(provider, model, api_key, shape, detail)
     if type(decoded) == "table" then
         if type(decoded.usage) == "table" and tonumber(decoded.usage.cost_in_usd_ticks) then
             printf("  cost: $%.4f (xAI's own figure)", tonumber(decoded.usage.cost_in_usd_ticks) / 1e10)
+        elseif type(decoded.usage) == "table" and tonumber(decoded.usage.cost) then
+            printf("  cost: $%.4f (OpenRouter's own figure)", tonumber(decoded.usage.cost))
         elseif type(decoded.usage) == "table" then
             printf("  usage: input %s, output %s tokens", tostring(decoded.usage.input_tokens),
                 tostring(decoded.usage.output_tokens))

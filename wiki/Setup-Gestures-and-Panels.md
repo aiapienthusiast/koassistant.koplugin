@@ -27,7 +27,7 @@ After the wizard, complete these steps for the best experience:
 - [ ] **Add actions to gestures:** any book or general action can become a gesture (Manage Actions → hold the action → **+ Gesture Menu**; needs a restart). See [Custom Action Gestures](#custom-action-gestures).
 - [ ] **Pin actions to the file browser:** add book actions you use often to the file browser's long-press menu (Manage Actions → hold the action → **+ File Browser**).
 - [ ] **Hold any action button:** in the highlight menu, the dictionary popup, Quick Actions, the input dialog and the file browser menu, a long press on an action opens the same menu: its description; buttons that run it once another way (Quick answer, up to three models: your favorites, then recent picks, then your provider's fast model; No reasoning; with or without web search; **More models…**); then Add to or Remove from that menu, **Edit…**, and its other placements under **More…**. See [Actions and Menus](Actions-and-Menus).
-- [ ] **Try Generate Image:** turn a highlighted passage into an AI-generated illustration (highlight menu → Generate Image; needs an OpenAI, xAI or Gemini image model). See [Image Generation](Image-Generation).
+- [ ] **Try Generate Image:** turn a highlighted passage into an AI-generated illustration (highlight menu → Generate Image; needs an OpenAI, xAI, Gemini or OpenRouter key). See [Image Generation](Image-Generation).
 
 > **Tip:** edit a built-in action to always use the provider and model of your choice, whatever your main settings say. Dictionary actions, for example, benefit from a lighter model for speed. See [Actions and Menus](Actions-and-Menus).
 
