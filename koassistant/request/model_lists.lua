@@ -201,29 +201,28 @@ local ModelLists = {
         -- OpenRouter model naming differs from direct provider APIs
         -- Format: provider/model-name (no "-latest" suffixes, periods not dashes)
 
+        -- Anthropic and OpenAI follow their direct lists' order (maintainer 2026-10-11,
+        -- applied here 2026-10-14): the current models first, then one previous version
+        -- per line. Left the picker 2026-10-14, still served (a saved pick is kept):
+        -- claude-sonnet-4.6, claude-opus-4.8, gpt-5.6-sol, gpt-5.5, gpt-5.4, gpt-5.4-mini.
+
         -- Anthropic
         "anthropic/claude-sonnet-5.5",  -- default (2026-09-28; battery 2026-09-29); reasoning cannot be turned off here, Minimal = low
         "anthropic/claude-opus-5.5",    -- deep reasoning flagship (2026-09-22; battery 2026-09-28)
         "anthropic/claude-fable-5.1",   -- most capable / frontier (2026-09-01; battery 2026-09-28)
+        "anthropic/claude-haiku-5.5",   -- fast (2026-10-07; battery 2026-10-08: reasons by default, turns off here)
         "anthropic/claude-sonnet-5",    -- previous default
         "anthropic/claude-opus-5",      -- previous flagship (a -fast variant exists at 2x price; not listed)
         "anthropic/claude-fable-5",     -- previous frontier
-        "anthropic/claude-sonnet-4.6",
-        "anthropic/claude-opus-4.8",
-        "anthropic/claude-haiku-5.5",   -- fast (2026-10-07; battery 2026-10-08: reasons by default, turns off here)
 
-        -- OpenAI (gpt-6: astra > sol > luna, reason by default; battery 2026-09-28)
-        "openai/gpt-6.1-sol",           -- cannot turn reasoning off (battery 2026-09-30)
-        "openai/gpt-6-sol",
-        "openai/gpt-6-luna",
-        "openai/gpt-6-astra",
-        -- OpenAI (gpt-5.6: sol > terra > luna)
-        "openai/gpt-5.6-sol",
+        -- OpenAI (gpt-6: astra > sol > luna, reason by default; battery 2026-09-28;
+        -- gpt-5.6: sol > terra > luna)
         "openai/gpt-5.6-terra",
-        "openai/gpt-5.6-luna",
-        "openai/gpt-5.5",
-        "openai/gpt-5.4",
-        "openai/gpt-5.4-mini",
+        "openai/gpt-6.1-sol",           -- cannot turn reasoning off (battery 2026-09-30)
+        "openai/gpt-6-astra",
+        "openai/gpt-6-luna",
+        "openai/gpt-6-sol",             -- previous sol
+        "openai/gpt-5.6-luna",          -- previous luna
         -- OpenAI open-weight (Apache 2.0; ids live-verified on the catalog
         -- 2026-08-04, a 20b ":free" variant also exists)
         "openai/gpt-oss-120b",

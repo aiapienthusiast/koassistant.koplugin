@@ -287,7 +287,7 @@ The first model in each provider's list is its default. These tables are generat
 | **Groq** | `openai/gpt-oss-120b` | `openai/gpt-oss-20b`, `qwen/qwen3.8-27b` |
 | **Mistral** | `mistral-large-latest` | `mistral-medium-latest`, `mistral-small-latest`, `magistral-medium-latest`, `magistral-small-latest`, `ministral-14b-latest`, `ministral-8b-latest`, `ministral-3b-latest`, `codestral-latest` |
 | **xAI** | `grok-4.7` | `grok-4.6`, `grok-4.5`, `grok-4.3`, `grok-4.20-0309-non-reasoning`, `grok-4.20-0309-reasoning`, `grok-build-0.1` |
-| **OpenRouter** | `anthropic/claude-sonnet-5.5` | `anthropic/claude-opus-5.5`, `anthropic/claude-fable-5.1`, `anthropic/claude-sonnet-5`, `anthropic/claude-opus-5`, `anthropic/claude-fable-5`, `anthropic/claude-sonnet-4.6`, `anthropic/claude-opus-4.8`, `anthropic/claude-haiku-5.5` and 33 more |
+| **OpenRouter** | `anthropic/claude-sonnet-5.5` | `anthropic/claude-opus-5.5`, `anthropic/claude-fable-5.1`, `anthropic/claude-haiku-5.5`, `anthropic/claude-sonnet-5`, `anthropic/claude-opus-5`, `anthropic/claude-fable-5`, `openai/gpt-5.6-terra`, `openai/gpt-6.1-sol` and 27 more |
 | **Perplexity** | `perplexity/sonar` | `openai/gpt-6-luna`, `openai/gpt-6-sol`, `openai/gpt-6.1-sol`, `anthropic/claude-sonnet-5-5`, `google/gemini-3.8-flash`, `xai/grok-4.7` |
 | **Z.AI** | `glm-5.2` | `glm-5.3`, `glm-5.3-flash`, `glm-5.3-flashx`, `glm-5.1`, `glm-5`, `glm-5-turbo`, `glm-4.7`, `glm-4.7-flash` |
 | **Cohere** | `command-a-plus-05-2026` | `command-a-reasoning-08-2025`, `command-r7b-12-2024` |
