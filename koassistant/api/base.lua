@@ -23,8 +23,9 @@ local RateLimits = require("koassistant.request.rate_limits")
 --- Every request names the plugin (B285 / #107: OpenCode requires a
 --- self-identifying client, "no broad user agents"; harmless elsewhere).
 --- Applied at BOTH transports (backgroundRequest + fetchInSubprocess), so no
---- handler builds it; a handler that sets its own (openai_codex) is kept.
-BaseHandler.USER_AGENT = "KOAssistant/" .. tostring(require("_meta").version or "unknown")
+--- handler builds it; a handler that sets its own (openai_codex) is kept. The
+--- version is this plugin's own _meta.lua, read by path (B384).
+BaseHandler.USER_AGENT = "KOAssistant/" .. tostring(require("koassistant.core.paths").meta().version or "unknown")
 
 function BaseHandler.withUserAgent(headers)
     local out = {}

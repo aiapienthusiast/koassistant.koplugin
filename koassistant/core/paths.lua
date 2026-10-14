@@ -16,4 +16,13 @@ if root == "" then root = "./" end
 Paths.ROOT = root                                    -- ends with "/"
 Paths.CODE = Paths.ROOT .. "koassistant/"            -- the modules and the built-in prompts
 
+-- The plugin's own _meta.lua, read by path and once (B384): require("_meta")
+-- returns whichever plugin's _meta.lua KOReader loaded first, since every
+-- plugin shares one package.loaded, and assistant.koplugin loads before this one.
+local meta
+function Paths.meta()
+    if not meta then meta = dofile(Paths.ROOT .. "_meta.lua") end
+    return meta
+end
+
 return Paths

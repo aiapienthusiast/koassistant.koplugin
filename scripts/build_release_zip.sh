@@ -33,7 +33,7 @@ mkdir "$work/src"
 git -C "$root" archive --format=tar "$ref" | tar -x -C "$work/src"
 
 mkdir -p "$work/build/koassistant.koplugin"
-# release.yml's exclude list (keep equal; the unit test compares them)
+# the exclude list (tests/unit/test_release_zip.lua checks it)
 rsync -a --exclude='.git' \
          --exclude='.github' \
          --exclude='.claude' \
@@ -48,6 +48,7 @@ rsync -a --exclude='.git' \
          --exclude='.luacheckrc' \
          --exclude='OWNER' \
          --exclude='.gitignore' \
+         --exclude='.git-blame-ignore-revs' \
          "$work/src/" "$work/build/koassistant.koplugin/"
 
 # transitional shims (see the header): "<old path> <module id>" per line, comments with #

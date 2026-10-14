@@ -6,27 +6,11 @@ local ffi = require("ffi")
 local ffiutil = require("ffi/util")
 local lfs = require("libs/libkoreader-lfs")
 
--- Load _meta.lua from the plugin's own directory to avoid conflicts with other plugins
--- (assistant.koplugin also has _meta.lua, and require() might load the wrong one)
-local meta
-local plugin_dir = require("koassistant.core.paths").ROOT
-if plugin_dir then
-    local meta_path = plugin_dir .. "_meta.lua"
-    local ok, result = pcall(dofile, meta_path)
-    if ok then
-        meta = result
-        logger.dbg("UpdateChecker: loaded _meta from:", meta_path, "plugin:", meta.name, "version:", meta.version)
-    else
-        logger.warn("UpdateChecker: failed to load _meta from plugin dir:", result)
-        -- Fallback to require (may load wrong plugin's _meta)
-        meta = require("_meta")
-        logger.dbg("UpdateChecker: fell back to require('_meta'), got plugin:", meta.name)
-    end
-else
-    logger.warn("UpdateChecker: could not determine plugin dir, using require('_meta')")
-    meta = require("_meta")
-    logger.dbg("UpdateChecker: loaded via require, got plugin:", meta.name)
-end
+-- This plugin's own folder and _meta.lua, by path (B384): require("_meta") can
+-- hand back another plugin's, since every plugin shares one package.loaded.
+local Paths = require("koassistant.core.paths")
+local plugin_dir = Paths.ROOT
+local meta = Paths.meta()
 
 -- Core modules always loaded (needed for subprocess fetch/poll)
 local UIManager = require("ui/uimanager")

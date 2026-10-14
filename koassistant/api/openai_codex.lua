@@ -6,7 +6,7 @@ local ModelConstraints = require("koassistant.request.model_constraints")
 local OAuth = require("koassistant.api.openai_codex_oauth")
 local ffi = require("ffi")
 local json = require("json")
-local meta = require("_meta")
+local meta = require("koassistant.core.paths").meta()  -- this plugin's own, by path (B384)
 
 local CodexHandler = OpenAIHandler:new()
 

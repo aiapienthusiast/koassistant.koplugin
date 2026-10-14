@@ -39,7 +39,7 @@ TestRunner:test("the release workflow builds its zip with the build script (one 
         "release.yml runs scripts/build_release_zip.sh")
     TestRunner:assertTrue(workflow:find("--exclude=", 1, true) == nil, "release.yml keeps no exclude list of its own")
     local script = read("scripts/build_release_zip.sh")
-    for _idx, name in ipairs({ "docs", "tests", "scripts", "hooks", "wiki", "screenshots", "*.pot", ".luacheckrc", "OWNER", ".gitignore" }) do
+    for _idx, name in ipairs({ "docs", "tests", "scripts", "hooks", "wiki", "screenshots", "*.pot", ".luacheckrc", "OWNER", ".gitignore", ".git-blame-ignore-revs" }) do
         TestRunner:assertTrue(script:find("--exclude='" .. name .. "'", 1, true) ~= nil, "the script leaves out " .. name)
     end
 end)
