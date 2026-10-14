@@ -66,17 +66,30 @@ A provider's model row can be changed while that provider makes the images: the 
 
 ## Where images are stored
 
-Generated images are kept, not temporary, in `koassistant_images` under KOReader's data folder (for example `~/.config/koreader/koassistant_images` on a Linux desktop). Each file is named with its creation date and time plus the start of the selected text, so the folder is self-describing, and carries the type of its contents: `.jpg` for most new images (KOAssistant asks OpenAI for JPEG, a fraction of a PNG's size and quicker to open, and Gemini and xAI send JPEG), `.webp` or `.png` for some of OpenRouter's models, `.png` for images made by earlier versions. They are your data: preserved across plugin updates, and no reset or uninstall removes them. They are not part of KOAssistant backups; copy the folder yourself when moving to another device ([Backups and Updates](Backups-and-Updates)).
+Generated images are kept, not temporary, in `koassistant_images` under KOReader's data folder (for example `~/.config/koreader/koassistant_images` on a Linux desktop). Each file is named with its creation date and time plus the start of the selected text, so the folder is self-describing, and carries the type of its contents: `.jpg` for most new images (KOAssistant asks OpenAI for JPEG, a fraction of a PNG's size and quicker to open, and Gemini and xAI send JPEG), `.webp` or `.png` for some of OpenRouter's models, `.png` for images made by earlier versions. A `thumbnails` folder beside them holds a small preview of each (made once, so the gallery never has to open the full pictures). They are your data: preserved across plugin updates, and no reset or uninstall removes them. They are not part of KOAssistant backups; copy the folder yourself when moving to another device ([Backups and Updates](Backups-and-Updates)).
 
 ## The gallery
 
-Open it from **Settings → Advanced → Image Generation → Generated images…**, or from any View Artifacts surface (below). Images are listed newest first with their file size. Tap an image to view it full screen; hold it to read who wrote the prompt and from what, then the full prompt that was sent, with **Delete image…** under it (an image with no recorded prompt goes straight to the delete confirmation). The menu button in the title bar deletes every image after a confirmation, or just the book's in a per-book view.
+Open it from **Settings → Advanced → Image Generation → Generated images…**, or from any View Artifacts surface (below), which opens the book's own images. When your images come from more than one book, the gallery first lists **All images**, then each book (the one with the newest image first), then **Without a book** (images made outside a book, or whose book was deleted), each with its count; tap one to see its images.
+
+The images show as thumbnails, newest first, nine to a page (eight with the reader held sideways), with the start of the selected text (or the X-Ray entry's name) under each. Turn pages with a swipe, the arrows at the bottom or the page keys; swipe down to close. Images made before this version get their thumbnail the first time a page shows them, after a short "Making previews…" note.
+
+- **Tap** an image to view it full screen; the triangle in its title bar shows the prompt.
+- **Hold** an image to read who drew it (the provider and model), who wrote the prompt and from what, then the full prompt that was sent, with three buttons:
+  - **Regenerate** draws the same prompt again with the image provider, model, Shape and Detail now in effect (no prompt writer this time: the prompt is used as it stands). The new image is saved beside the old one, which stays until you delete it, and shows first in the gallery.
+  - **Edit prompt…** opens the prompt in an editor; **Regenerate** there draws your edited text the same way.
+  - **Delete image…** deletes it after a confirmation.
+
+  An image with no recorded prompt (made by a version before the prompt was kept) goes straight to the delete confirmation.
+- The **menu button** in the title bar deletes every image shown after a confirmation: all of them, or just one book's.
+
+A prompt drawn again goes to the image provider in effect with what it carries: a prompt made from the text around the passage or from X-Ray descriptions asks the same privacy question a new image does when that data is on Ask, and is refused when it is set to Never. It has no **Continue without**, since what a written prompt took from them cannot be taken out ([Privacy and Data](Privacy-and-Data)). On a device without a touchscreen the gallery is a list of names with the same tap and hold.
 
 ## Per-book association
 
 An image generated while reading is recorded as that book's, in a small index inside the images folder. That gives you a per-book gallery filtered to the book's images, and a **Generated Images (N)** entry on every View Artifacts surface: the file browser's long-press menu, the open book's artifact viewer, the input dialog's View Artifacts, the Book Hub, the chat window's Artifacts switcher, the X-Ray browser's Other Artifacts, and the cross-book artifact browser, where a book that only has images still shows up ([Artifacts and Caching](Artifacts-and-Caching)).
 
-Images follow their book: moving the book in the file manager moves its associations; deleting the book keeps the images, which then appear only in the full gallery. Deleting an image from a per-book view keeps the index in step.
+Images follow their book: moving the book in the file manager moves its associations; deleting the book keeps the images and their prompts, which then appear under **Without a book**. Deleting an image from the gallery removes its thumbnail and keeps the index in step.
 
 ## Showing or hiding the button
 

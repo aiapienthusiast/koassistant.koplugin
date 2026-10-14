@@ -273,17 +273,18 @@ local function runAll()
     end)
 
     print("  [Images index: book associations]")
-    TestRunner:test("recordImage → readIndex roundtrip; no-op without book info", function()
+    TestRunner:test("recordImage → readIndex roundtrip; a picture without a book is recorded too", function()
         withImageIndex(function()
             ImageGenerator.recordImage("a.png",
                 { file = "/books/b1.epub", title = "Book One" }, "a castle")
-            ImageGenerator.recordImage("b.png", nil, "ignored")
+            ImageGenerator.recordImage("b.png", nil, "a tower")
             local index = ImageGenerator.readIndex()
             TestRunner:assertEquals(index["a.png"].book_file, "/books/b1.epub")
             TestRunner:assertEquals(index["a.png"].book_title, "Book One")
             TestRunner:assertEquals(index["a.png"].prompt, "a castle")
             TestRunner:assert(type(index["a.png"].created) == "number", "created timestamp set")
-            TestRunner:assertEquals(index["b.png"], nil)
+            TestRunner:assertEquals(index["b.png"].prompt, "a tower", "its prompt kept for Regenerate (S7)")
+            TestRunner:assertEquals(index["b.png"].book_file, nil)
         end)
     end)
     TestRunner:test("booksWithImages counts per book and prunes stale entries", function()
@@ -299,6 +300,15 @@ local function runAll()
             TestRunner:assert(books["/books/b1.epub"].modified > 0, "modified from created timestamps")
             TestRunner:assertEquals(books["/books/b2.epub"], nil, "stale entry not counted")
             TestRunner:assertEquals(ImageGenerator.readIndex()["gone.png"], nil, "stale entry pruned")
+        end)
+    end)
+    TestRunner:test("booksWithImages keeps a picture without a book, uncounted", function()
+        withImageIndex(function()
+            touchFile("a.png")
+            ImageGenerator.recordImage("a.png", nil, "p1")
+            local books = ImageGenerator.booksWithImages()
+            TestRunner:assertEquals(next(books), nil, "no book counted")
+            TestRunner:assertEquals(ImageGenerator.readIndex()["a.png"].prompt, "p1", "not pruned")
         end)
     end)
     TestRunner:test("removeIndexEntries removes only the listed names", function()
@@ -321,10 +331,12 @@ local function runAll()
             -- move: association follows the book
             ImageGenerator.updateIndexForMove("/books/b1.epub", "/moved/b1.epub", false)
             TestRunner:assertEquals(ImageGenerator.readIndex()["a.png"].book_file, "/moved/b1.epub")
-            -- delete: association dropped (image becomes global-only)
+            -- delete: association dropped (image kept, with its prompt, as a
+            -- picture without a book)
             ImageGenerator.updateIndexForMove("/books/b2.epub", nil, false)
-            TestRunner:assertEquals(ImageGenerator.readIndex()["b.png"], nil)
-            TestRunner:assert(ImageGenerator.readIndex()["a.png"] ~= nil, "other book untouched")
+            TestRunner:assertEquals(ImageGenerator.readIndex()["b.png"].book_file, nil)
+            TestRunner:assertEquals(ImageGenerator.readIndex()["b.png"].prompt, "p2", "the prompt stays")
+            TestRunner:assertEquals(ImageGenerator.readIndex()["a.png"].book_file, "/moved/b1.epub", "other book untouched")
         end)
     end)
 
@@ -941,6 +953,284 @@ local function runAll()
         end)
         package.loaded["koassistant.artifacts.action_cache"], Gates.bookOverrides = real_ac, real_overrides
         if not ok then error(err, 0) end
+    end)
+
+    print("  [The gallery: thumbnails, the index, Regenerate (S7)]")
+    local function list(t) return table.concat(t or {}, ",") end
+    TestRunner:test("thumbnailSize: a third of the screen each way, the ratio kept, never enlarged", function()
+        local w, h = ImageGenerator.thumbnailSize(1152, 1536, 1264, 1680)
+        TestRunner:assertEquals(w .. "x" .. h, "420x560")
+        w, h = ImageGenerator.thumbnailSize(1536, 1024, 1264, 1680)
+        TestRunner:assertEquals(w .. "x" .. h, "421x281")
+        w, h = ImageGenerator.thumbnailSize(1536, 1024, 1680, 1264)
+        TestRunner:assertEquals(w .. "x" .. h, "421x281", "the same box held sideways")
+        w, h = ImageGenerator.thumbnailSize(300, 200, 1264, 1680)
+        TestRunner:assertEquals(w .. "x" .. h, "300x200", "a small picture is not enlarged")
+    end)
+    TestRunner:test("thumbnailPath and subjectFromName", function()
+        TestRunner:assertEquals(ImageGenerator.thumbnailPath("x.png"), IMAGES_DIR .. "/thumbnails/x.png.jpg")
+        TestRunner:assertEquals(ImageGenerator.subjectFromName("2026-10-15 00.10.50 lighthouse keeper.jpg"), "lighthouse keeper")
+        TestRunner:assertEquals(ImageGenerator.subjectFromName("2026-10-15 00.10.50 lighthouse keeper (2).png"), "lighthouse keeper")
+        TestRunner:assertEquals(ImageGenerator.subjectFromName("my own.webp"), "my own")
+    end)
+    TestRunner:test("deleteImages: the picture, its thumbnail, its entry; sweepThumbnails drops the orphans", function()
+        withImageIndex(function()
+            local lfs = require("libs/libkoreader-lfs")
+            touchFile("a.png")
+            touchFile("b.png")
+            os.execute('mkdir -p "' .. IMAGES_DIR .. '/thumbnails"')
+            for _idx, n in ipairs({ "a.png", "b.png", "gone.png" }) do
+                local f = assert(io.open(ImageGenerator.thumbnailPath(n), "w"))
+                f:write("jpg")
+                f:close()
+            end
+            ImageGenerator.recordImage("a.png", nil, "p1")
+            ImageGenerator.recordImage("b.png", nil, "p2")
+            ImageGenerator.deleteImages({ "a.png" })
+            TestRunner:assertEquals(lfs.attributes(IMAGES_DIR .. "/a.png", "mode"), nil)
+            TestRunner:assertEquals(lfs.attributes(ImageGenerator.thumbnailPath("a.png"), "mode"), nil)
+            TestRunner:assertEquals(ImageGenerator.readIndex()["a.png"], nil)
+            TestRunner:assert(ImageGenerator.readIndex()["b.png"], "the other kept")
+            ImageGenerator.sweepThumbnails()
+            TestRunner:assertEquals(lfs.attributes(ImageGenerator.thumbnailPath("gone.png"), "mode"), nil, "orphan swept")
+            TestRunner:assertEquals(lfs.attributes(ImageGenerator.thumbnailPath("b.png"), "mode"), "file", "b's kept")
+        end)
+    end)
+    TestRunner:test("recordImage keeps who drew it, the kinds and the subject (capped)", function()
+        withImageIndex(function()
+            ImageGenerator.recordImage("a.png", nil, "p", nil, { provider = "openai", model = "gpt-image-2.5-flare",
+                kinds = { "nearby_text" }, description = string.rep("x", 400) })
+            local e = ImageGenerator.readIndex()["a.png"]
+            TestRunner:assertEquals(e.provider, "openai")
+            TestRunner:assertEquals(e.model, "gpt-image-2.5-flare")
+            TestRunner:assertEquals(list(e.kinds), "nearby_text")
+            TestRunner:assertEquals(#e.description, 300)
+        end)
+    end)
+    TestRunner:test("saveImage: the file by its bytes, the entry with the subject; no decoder, no thumbnail", function()
+        withImageIndex(function()
+            local path, bb = ImageGenerator.saveImage("\255\216\255jpegbytes", "Mara ran.", { file = "/books/b.epub", title = "B" },
+                "A girl running.", "Prompt written by W.", { provider = "xai", model = "grok-imagine-image", kinds = {} })
+            TestRunner:assert(path and path:match("%d Mara ran%.jpg$"), tostring(path))
+            TestRunner:assertEquals(bb, nil, "the test environment has no image decoder")
+            local e = ImageGenerator.readIndex()[path:match("([^/]+)$")]
+            TestRunner:assertEquals(e.description, "Mara ran.")
+            TestRunner:assertEquals(e.prompt, "A girl running.")
+            TestRunner:assertEquals(e.provider, "xai")
+            TestRunner:assertEquals(e.book_file, "/books/b.epub")
+        end)
+    end)
+    TestRunner:test("kindsSent: what a prompt carries, recorded with the picture", function()
+        local xray = { used_book_text = true }
+        TestRunner:assertEquals(list(ImageGenerator.kindsSent({ around = true })), "nearby_text")
+        TestRunner:assertEquals(list(ImageGenerator.kindsSent({ stored = xray, written = true, entries = 2 })), "book_text")
+        TestRunner:assertEquals(list(ImageGenerator.kindsSent({ stored = xray, written = false, entries = 2 })), "",
+            "a framed prompt carries no X-Ray descriptions")
+        TestRunner:assertEquals(list(ImageGenerator.kindsSent({ stored = xray, entry = true })), "book_text", "the entry to draw")
+        TestRunner:assertEquals(list(ImageGenerator.kindsSent({ around = true, entry = true,
+            stored = { used_book_text = true, used_highlights = true } })), "nearby_text,book_text,highlights")
+        TestRunner:assertEquals(list(ImageGenerator.kindsSent({})), "")
+    end)
+    TestRunner:test("promptKinds: the recorded kinds; before S7, the frame's text around", function()
+        TestRunner:assertEquals(list(ImageGenerator.promptKinds({ kinds = { "nearby_text", "book_text" } })), "nearby_text,book_text")
+        local framed = ImageGenerator.buildPrompt("Mara ran.", { window = { prev = "Before.", next = " After." } }, {})
+        TestRunner:assertEquals(list(ImageGenerator.promptKinds({ prompt = framed })), "nearby_text", "the frame's label")
+        TestRunner:assertEquals(list(ImageGenerator.promptKinds({ prompt = "Mara ran." })), "")
+        TestRunner:assertEquals(list(ImageGenerator.promptKinds({ prompt = framed, kinds = {} })), "", "a recorded list wins")
+        TestRunner:assertEquals(list(ImageGenerator.promptKinds(nil)), "")
+        -- builds between S5 and S7: a written prompt (it has a provenance
+        -- line) as both, an X-Ray entry's frame as book text
+        TestRunner:assertEquals(list(ImageGenerator.promptKinds({ prompt = "A girl on the rocks.",
+            provenance = "Prompt written by W." })), "nearby_text,book_text")
+        local entry_frame = ImageGenerator.buildEntryPrompt({ name = "Mara", type = "person", description = "A red scarf." }, {}, {})
+        TestRunner:assertEquals(list(ImageGenerator.promptKinds({ prompt = entry_frame })), "book_text")
+    end)
+    TestRunner:test("makeThumbnail: made only when the file is there (the JPEG writer hides its failures)", function()
+        withImageIndex(function()
+            local lfs = require("libs/libkoreader-lfs")
+            local saved = package.loaded["ui/renderimage"]
+            local writes, sizes = true, {}
+            local function fakeBB(w, h)
+                return {
+                    getWidth = function() return w end, getHeight = function() return h end, free = function() end,
+                    writeToFile = function(_self, path)
+                        sizes[#sizes + 1] = w .. "x" .. h
+                        if writes then
+                            local f = io.open(path, "wb")
+                            f:write("jpeg")
+                            f:close()
+                        end
+                        return true
+                    end,
+                }
+            end
+            package.loaded["ui/renderimage"] = {
+                renderImageFile = function() return fakeBB(1152, 1536) end,
+                scaleBlitBuffer = function(_self, _bb, w, h) return fakeBB(w, h) end,
+            }
+            local ok, err = pcall(function()
+                TestRunner:assertEquals(ImageGenerator.makeThumbnail("a.png"), true)
+                local tw, th = ImageGenerator.thumbnailSize(1152, 1536, 800, 600)
+                TestRunner:assertEquals(sizes[1], tw .. "x" .. th, "fitted to a third of the mock's 800x600 screen")
+                writes = false
+                TestRunner:assertEquals(ImageGenerator.makeThumbnail("b.png"), false, "nothing on disk: not made")
+                TestRunner:assertEquals(lfs.attributes(ImageGenerator.thumbnailPath("b.png"), "mode"), nil)
+            end)
+            package.loaded["ui/renderimage"] = saved
+            if not ok then error(err, 0) end
+        end)
+    end)
+    local function buttonTexts(dialog)
+        local out = {}
+        for _idx, row in ipairs(dialog.buttons or {}) do
+            for _j, b in ipairs(row) do out[#out + 1] = b.text end
+        end
+        return out
+    end
+    TestRunner:test("Regenerate: the recorded prompt drawn as it stands, no prompt writer", function()
+        withApikeys({ openai = "sk-real-key" }, function()
+            withRun("unused", function(cap)
+                ImageGenerator._regenerateImpl({ name = "2026-10-15 00.10.50 lamp.jpg",
+                    entry = { prompt = "A lamp.", provenance = "Prompt written by W.", kinds = {} }, prompt = "A lamp." },
+                    config({ image_gen_provider = "openai" }), mockSettings({}))
+                TestRunner:assertEquals(cap.writer, nil, "no writer request")
+                TestRunner:assertEquals(cap.image.provider, "openai")
+                TestRunner:assertEquals(cap.image.prompt, "A lamp.")
+            end)
+        end)
+    end)
+    TestRunner:test("Regenerate: the new picture's provenance, book and subject; an edit is said", function()
+        local real_run = ImageGenerator._run
+        local got
+        ImageGenerator._run = function(st) got = st end
+        local ok, err = pcall(withApikeys, { openai = "sk-real-key" }, function()
+            ImageGenerator._regenerateImpl({ name = "2026-10-15 00.10.50 lighthouse keeper (2).jpg",
+                entry = { prompt = "A lamp.", provenance = "Prompt written by W.", kinds = {},
+                    book_file = "/books/b.epub", book_title = "B" },
+                prompt = "A lamp at night.", edited = true }, config({ image_gen_provider = "openai" }), mockSettings({}))
+        end)
+        ImageGenerator._run = real_run
+        if not ok then error(err, 0) end
+        TestRunner:assertEquals(got.fixed_prompt, "A lamp at night.")
+        TestRunner:assertEquals(got.fixed_provenance, "Drawn from your edit of an earlier picture's prompt. Prompt written by W.")
+        TestRunner:assertEquals(got.book_info.file, "/books/b.epub")
+        TestRunner:assertEquals(got.description, "lighthouse keeper", "recorded before S7: the subject from its name")
+        TestRunner:assertEquals(got.writer_on, false)
+        TestRunner:assertEquals(list(got.kinds), "")
+    end)
+    TestRunner:test("Regenerate: the text around on Ask asks (required: no Continue without); Allow once draws", function()
+        withApikeys({ openai = "sk-real-key" }, function()
+            withRun("unused", function(cap)
+                ImageGenerator._regenerateImpl({ name = "x.jpg", entry = { prompt = "A lamp.", kinds = { "nearby_text" } },
+                    prompt = "A lamp." }, config({ image_gen_provider = "openai", nearby_text_sharing = "ask" }), mockSettings({}))
+                TestRunner:assertEquals(cap.image, nil, "nothing sent before the answer")
+                local q = cap.shown[1]
+                TestRunner:assert(q and q.title:find("Regenerate will send to OpenAI:", 1, true), q and q.title)
+                local texts = list(buttonTexts(q))
+                TestRunner:assert(not texts:find("Continue without", 1, true) and not texts:find("Not for this book", 1, true), texts)
+                TestRunner:assert(not texts:find("Allow for this book", 1, true), "a picture without a book: " .. texts)
+                q.buttons[1][1].callback()
+                TestRunner:assertEquals(cap.image.prompt, "A lamp.")
+            end)
+            withRun("unused", function(cap)
+                -- with its book: the book's answer is offered
+                local Gates = require("koassistant.request.privacy_gates")
+                local real = Gates.bookOverrides
+                Gates.bookOverrides = function() return {} end
+                local ok, err = pcall(ImageGenerator._regenerateImpl, { name = "x.jpg", prompt = "A lamp.",
+                    entry = { prompt = "A lamp.", kinds = { "nearby_text" }, book_file = "/books/b.epub" } },
+                    config({ image_gen_provider = "openai", nearby_text_sharing = "ask" }), mockSettings({}))
+                Gates.bookOverrides = real
+                if not ok then error(err, 0) end
+                TestRunner:assert(list(buttonTexts(cap.shown[1])):find("Allow for this book", 1, true),
+                    list(buttonTexts(cap.shown[1])))
+            end)
+        end)
+    end)
+    TestRunner:test("Regenerate: a picture from before S7 is judged by its frame; the book's Never refuses", function()
+        local Gates = require("koassistant.request.privacy_gates")
+        local real_overrides = Gates.bookOverrides
+        local framed = ImageGenerator.buildPrompt("Mara ran.", { window = { prev = "Before.", next = " After." } }, {})
+        local ok, err = pcall(withApikeys, { openai = "sk-real-key" }, function()
+            withRun("unused", function(cap)
+                ImageGenerator._regenerateImpl({ name = "x.jpg", entry = { prompt = framed }, prompt = framed },
+                    config({ image_gen_provider = "openai", nearby_text_sharing = "ask" }), mockSettings({}))
+                TestRunner:assert(cap.shown[1] and cap.shown[1].title:find("will send to OpenAI", 1, true),
+                    "the frame's text around asked for")
+            end)
+            Gates.bookOverrides = function() return { nearby_text = false } end
+            withRun("unused", function(cap)
+                ImageGenerator._regenerateImpl({ name = "x.jpg", prompt = "A lamp.",
+                    entry = { prompt = "A lamp.", kinds = { "nearby_text" }, book_file = "/books/b.epub" } },
+                    config({ image_gen_provider = "openai" }), mockSettings({}))
+                TestRunner:assertEquals(cap.image, nil, "nothing sent")
+                TestRunner:assert(cap.shown[1] and cap.shown[1].title:find("Regenerate needs text around what you tap", 1, true),
+                    cap.shown[1] and cap.shown[1].title)
+            end)
+        end)
+        Gates.bookOverrides = real_overrides
+        if not ok then error(err, 0) end
+    end)
+    TestRunner:test("Regenerate with a chat provider that cannot draw asks which provider first", function()
+        withApikeys({ openai = "sk-real-key" }, function()
+            withRun("unused", function(cap)
+                ImageGenerator._regenerateImpl({ name = "x.jpg", entry = { prompt = "A lamp." }, prompt = "A lamp." },
+                    config({}), mockSettings({}))
+                TestRunner:assert(cap.shown[1] and cap.shown[1].title:find("can't make images", 1, true),
+                    cap.shown[1] and cap.shown[1].title)
+                TestRunner:assertEquals(cap.image, nil)
+            end)
+        end)
+    end)
+    TestRunner:test("Regenerate: an empty prompt draws nothing", function()
+        withRun("unused", function(cap)
+            ImageGenerator._regenerateImpl({ name = "x.jpg", entry = {}, prompt = "  " }, config({}), mockSettings({}))
+            TestRunner:assertEquals(cap.image, nil)
+        end)
+    end)
+
+    print("  [The gallery's list and hold view (S7)]")
+    -- The gallery requires Menu and ConfirmBox, which the shared mocks lack:
+    -- stubs for the load only, restored after
+    local function loadBrowser()
+        local saved = { menu = package.loaded["ui/widget/menu"], confirm = package.loaded["ui/widget/confirmbox"] }
+        package.loaded["ui/widget/menu"] = saved.menu or {}
+        package.loaded["ui/widget/confirmbox"] = saved.confirm or {}
+        package.loaded["koassistant.images.image_browser"] = nil
+        local ok, mod = pcall(require, "koassistant.images.image_browser")
+        package.loaded["ui/widget/menu"], package.loaded["ui/widget/confirmbox"] = saved.menu, saved.confirm
+        package.loaded["koassistant.images.image_browser"] = nil
+        if not ok then error(mod, 0) end
+        return mod
+    end
+    TestRunner:test("groups: All images, each book with the newest picture first, then Without a book", function()
+        local B = loadBrowser()
+        local files = { { name = "d.png" }, { name = "c.png" }, { name = "b.png" }, { name = "a.png" } }
+        local g = B.groups(files, {
+            ["d.png"] = { book_file = "/books/two.epub", book_title = "Two" },
+            ["c.png"] = { book_file = "/books/one.epub" },
+            ["b.png"] = {},
+            ["a.png"] = { book_file = "/books/one.epub", book_title = "One" },
+        })
+        TestRunner:assertEquals(#g, 4)
+        TestRunner:assertEquals(g[1].key, "all")
+        TestRunner:assertEquals(#g[1].files, 4)
+        TestRunner:assertEquals(g[2].key, "/books/two.epub", "the newest picture's book first")
+        TestRunner:assertEquals(g[3].title, "One", "a later entry's title fills a missing one")
+        TestRunner:assertEquals(#g[3].files, 2)
+        TestRunner:assertEquals(g[4].key, "none")
+        TestRunner:assertEquals(g[4].files[1].name, "b.png")
+        g = B.groups({ { name = "x.png" } }, {})
+        TestRunner:assertEquals(#g, 2, "a picture missing from the index is without a book")
+        TestRunner:assertEquals(g[2].key, "none")
+        g = B.groups({ { name = "y.png" } }, { ["y.png"] = { book_file = "/books/three.epub" } })
+        TestRunner:assertEquals(g[2].title, "three.epub", "no title recorded: the file name")
+    end)
+    TestRunner:test("holdText: who drew it, the provenance, then the prompt", function()
+        local B = loadBrowser()
+        TestRunner:assertEquals(B.holdText({ prompt = "P", provenance = "Written by W.", provider = "openai", model = "m1" }),
+            "Drawn by OpenAI / m1.\nWritten by W.\n\nP")
+        TestRunner:assertEquals(B.holdText({ prompt = "P" }), "P", "before S7: the prompt alone")
     end)
 
     print("  [The main provider (B462)]")

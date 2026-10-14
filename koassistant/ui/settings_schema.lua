@@ -3228,7 +3228,7 @@ local SettingsSchema = {
                             text = _("Generated images…"),
                             callback = "showImageBrowser",
                             keep_menu_open = true,
-                            help_text = _("Browse, view, and delete the images generated so far."),
+                            help_text = _("The images generated so far, as thumbnails, by book: tap one to view it; hold it to read its prompt, draw that prompt again (as it stands or edited), or delete it."),
                         },
                     },
                 },

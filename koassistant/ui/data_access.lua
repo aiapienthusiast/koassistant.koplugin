@@ -118,7 +118,9 @@ end
 --- with no moment to ask offers Allow for this book alone), spec.decline_once
 --- (Continue without in place of Not for this book: the run goes on without
 --- the optional kinds and nothing is stored; the image run, whose kinds reach
---- it indirectly, where a book-wide Never would stop the book's X-Ray updates).
+--- it indirectly, where a book-wide Never would stop the book's X-Ray updates),
+--- spec.no_book (no book to hold a value: no Allow for this book, no Not for
+--- this book).
 function DataAccess.ask(plugin, spec, on_answer)
     local dialog
     local answered = false
@@ -136,14 +138,15 @@ function DataAccess.ask(plugin, spec, on_answer)
     if not spec.set then
         if plan.global_only then
             first[#first + 1] = { text = _("Always allow"), callback = function() answer("always") end }
-        else
+        elseif not spec.no_book then
             first[#first + 1] = { text = _("Allow for this book"), callback = function() answer("book") end }
         end
     end
-    local rows = { first }
+    local rows = {}
+    if #first > 0 then rows[1] = first end
     if not spec.set and plan.optional_only and spec.decline_once then
         rows[#rows + 1] = { { text = _("Continue without"), callback = function() answer("without") end } }
-    elseif not spec.set and plan.optional_only and plan.per_book then
+    elseif not spec.set and plan.optional_only and plan.per_book and not spec.no_book then
         rows[#rows + 1] = { { text = _("Not for this book"), callback = function() answer("not_book") end } }
     end
     local last = {}
@@ -374,9 +377,15 @@ function DataAccess.withAccess(plugin, action, opts, run_fn)
         provider_name = opts.provider_name or providerName(plugin, opts.provider),
         asked = plan.asked, plan = plan, amounts = opts.amounts, note = note,
         set = opts.books ~= nil, standing_only = opts.standing_only, decline_once = opts.decline_once,
+        -- no book to hold a value (a picture made outside a book): the
+        -- per-book answers could store nothing
+        no_book = opts.books == nil and opts.path == nil,
     }, function(choice)
         if choice == "once" then
-            Gates.grantOnce(features, opts.books and nil or opts.path, asked_kinds)
+            -- a set of books: an allowance for the run, not for one book
+            local once_path = opts.path
+            if opts.books then once_path = nil end
+            Gates.grantOnce(features, once_path, asked_kinds)
             run_fn({ once = asked_kinds })
         elseif choice == "book" then
             local stored, once = {}, {}

@@ -35,9 +35,15 @@ Public API:
       pictureFacts / shapeRatio), the answer read, the refusal worded, the
       file type from the bytes (unit-tested; tests/inspect.lua --image and
       the audit's image probe build and read with them).
+  ImageGenerator.regenerate(spec, configuration, settings) — a recorded
+      prompt (or the reader's edit of it) drawn again (S7), the kinds it
+      carries judged for the provider it goes to (promptKinds).
   ImageGenerator.getImagesDir()
-  Index API (book associations): readIndex, recordImage, removeIndexEntries,
-  booksWithImages, updateIndexForMove, getIndexFilename.
+  Index API: readIndex, recordImage, removeIndexEntries, booksWithImages,
+  updateIndexForMove, getIndexFilename, promptKinds, subjectFromName.
+  Files: saveImage (file, index entry, thumbnail from one decode),
+  deleteImages, thumbnailPath / thumbnailSize / makeThumbnail,
+  sweepThumbnails.
 ]]
 
 local json   = require("json")
@@ -309,15 +315,17 @@ function ImageGenerator.errorMessage(code, body)
 end
 
 -- ---------------------------------------------------------------------------
--- Book-association index
--- Maps image filename → { book_file, book_title, prompt, created } so the
--- gallery and artifact browser can offer per-book views. Lives INSIDE the
--- images dir (already registry-tracked, so reset/backup flows cover it with
--- no new registry work). Images absent from the index stay valid — they just
--- appear in the global gallery only.
+-- The images index
+-- Maps image filename → { book_file, book_title, prompt, provenance,
+-- description, provider, model, kinds, created } so the gallery can offer
+-- per-book views and draw a prompt again. Lives INSIDE the images dir
+-- (already registry-tracked, so reset/backup flows cover it with no new
+-- registry work), like the thumbnails folder. Images absent from the index
+-- stay valid; a picture made outside a book has no book_file.
 -- ---------------------------------------------------------------------------
 
 local INDEX_FILENAME = "koassistant_index.lua"
+local THUMB_DIRNAME = "thumbnails"
 
 --- The index file's basename (the gallery excludes it from image listings).
 function ImageGenerator.getIndexFilename()
@@ -329,7 +337,7 @@ local function openIndex()
     return LuaSettings:open(ImageGenerator.getImagesDir() .. "/" .. INDEX_FILENAME)
 end
 
---- Read the whole index: { [filename] = { book_file, book_title, prompt, created } }
+--- Read the whole index: { [filename] = { book_file, book_title, prompt, created, ... } }
 function ImageGenerator.readIndex()
     local idx = openIndex():readSetting("images")
     return type(idx) == "table" and idx or {}
@@ -341,20 +349,170 @@ local function writeIndex(index)
     store:flush()
 end
 
---- Record a saved image's book association (called at save time; no-op
---- without book info — the image just stays unassigned). provenance = the
---- prompt writer's line (who wrote the prompt, from what), nil without it.
-function ImageGenerator.recordImage(filename, book_info, prompt, provenance)
-    if not (book_info and book_info.file) then return end
+--- Record a saved image (called at save time): its book when it has one, the
+--- prompt sent, the provenance line (who wrote the prompt, from what, nil
+--- without it), and meta = { description (the picture's subject), provider,
+--- model (who drew it), kinds (the kinds of the reader's data its prompt
+--- carries, S7) }.
+function ImageGenerator.recordImage(filename, book_info, prompt, provenance, meta)
+    meta = meta or {}
     local index = ImageGenerator.readIndex()
+    local description = type(meta.description) == "string"
+        and require("koassistant.request.scope_resolver").utf8Head(meta.description, 300) or nil
     index[filename] = {
-        book_file = book_info.file,
-        book_title = book_info.title,
+        book_file = book_info and book_info.file or nil,
+        book_title = book_info and book_info.file and book_info.title or nil,
         prompt = prompt,
         provenance = provenance,
+        description = description,
+        provider = meta.provider,
+        model = meta.model,
+        kinds = meta.kinds,
         created = os.time(),
     }
     writeIndex(index)
+end
+
+-- The frame's label for the text around the passage (buildPrompt), and the
+-- words that open an X-Ray entry's frame (buildEntryPrompt): a prompt
+-- recorded before S7 carries those kinds when it carries these
+local FRAME_AROUND = "Surrounding text, for context only: "
+local FRAME_ENTRY = " from a book, as described below."
+
+--- The kinds of the reader's data a recorded prompt carries (S7): what its
+--- run recorded. Before S7: the frame's text around when the prompt has its
+--- label (all a released version's prompt could carry), an X-Ray entry's
+--- frame as book text, and a prompt the writer wrote (it has a provenance
+--- line; builds between S5 and S7, never released) as both, whatever it
+--- used: the record cannot tell. Pure.
+function ImageGenerator.promptKinds(entry)
+    if type(entry) ~= "table" then return {} end
+    if type(entry.kinds) == "table" then
+        local out = {}
+        for _idx, kind in ipairs(entry.kinds) do
+            if type(kind) == "string" then out[#out + 1] = kind end
+        end
+        return out
+    end
+    local prompt = type(entry.prompt) == "string" and entry.prompt or ""
+    local written = type(entry.provenance) == "string" and entry.provenance ~= ""
+    local out = {}
+    if written or prompt:find(FRAME_AROUND, 1, true) then out[#out + 1] = "nearby_text" end
+    if written or prompt:find(FRAME_ENTRY, 1, true) then out[#out + 1] = "book_text" end
+    return out
+end
+
+--- The kinds of the reader's data a run's prompt carries, recorded with the
+--- picture so drawing it again can judge them (S7): the text around when it
+--- went (spec.around); the X-Ray's stamped kinds when a description went
+--- (spec.stored = the X-Ray's cache entry, when allowed: the entry to draw
+--- (spec.entry), or the passage's entries (spec.entries, a count) in a
+--- written prompt (spec.written)). Pure.
+function ImageGenerator.kindsSent(spec)
+    local out = {}
+    if spec.around then out[#out + 1] = "nearby_text" end
+    if spec.stored and (spec.entry or (spec.written and (spec.entries or 0) > 0)) then
+        local stamped = require("koassistant.request.privacy_gates").stampedKinds(spec.stored)
+        for _idx, kind in ipairs({ "book_text", "highlights", "annotations" }) do
+            if stamped[kind] then out[#out + 1] = kind end
+        end
+    end
+    return out
+end
+
+--- A picture's subject from its file name (the text after the date, without
+--- the extension and a " (2)" counter): the label under a thumbnail, and the
+--- subject of a picture recorded before S7. Pure.
+function ImageGenerator.subjectFromName(name)
+    local s = (type(name) == "string" and name or ""):gsub("%.%w+$", "")
+    s = s:gsub("^%d%d%d%d%-%d%d%-%d%d %d%d%.%d%d%.%d%d ?", ""):gsub(" %(%d+%)$", "")
+    return s
+end
+
+-- ---------------------------------------------------------------------------
+-- Thumbnails (S7, B062): one small JPEG per image in thumbnails/, cut once,
+-- so the gallery's grid never decodes the full pictures
+-- ---------------------------------------------------------------------------
+
+--- An image's thumbnail file: the whole image name plus .jpg (two images that
+--- differ only by extension never share one).
+function ImageGenerator.thumbnailPath(name)
+    return ImageGenerator.getImagesDir() .. "/" .. THUMB_DIRNAME .. "/" .. name .. ".jpg"
+end
+
+--- A thumbnail's size: the image fitted into a box a third of the screen's
+--- shorter side wide and a third of its longer side high, never enlarged. Pure.
+function ImageGenerator.thumbnailSize(img_w, img_h, screen_w, screen_h)
+    local box_w = math.floor(math.min(screen_w, screen_h) / 3)
+    local box_h = math.floor(math.max(screen_w, screen_h) / 3)
+    local scale = math.min(box_w / img_w, box_h / img_h, 1)
+    return math.max(1, math.floor(img_w * scale + 0.5)), math.max(1, math.floor(img_h * scale + 0.5))
+end
+
+--- Write an image's thumbnail: cut from bb when the caller has the picture
+--- decoded (bb is kept), else decoded from the file. true when written.
+function ImageGenerator.makeThumbnail(name, bb)
+    local ok, written = pcall(function()
+        local lfs = require("libs/libkoreader-lfs")
+        local RenderImage = require("ui/renderimage")
+        local Screen = require("device").screen
+        local src = bb or RenderImage:renderImageFile(ImageGenerator.getImagesDir() .. "/" .. name, false)
+        if not src then return false end
+        local w, h = ImageGenerator.thumbnailSize(src:getWidth(), src:getHeight(), Screen:getWidth(), Screen:getHeight())
+        -- scaleBlitBuffer scales to exactly w x h (the fit is ours) and hands
+        -- back the source itself when it is that size already
+        local thumb = RenderImage:scaleBlitBuffer(src, w, h, false)
+        local dir = ImageGenerator.getImagesDir() .. "/" .. THUMB_DIRNAME
+        if not lfs.attributes(dir, "mode") then lfs.mkdir(dir) end
+        local path = ImageGenerator.thumbnailPath(name)
+        local done
+        if thumb.writeToFile then
+            done = thumb:writeToFile(path, "jpg", 85)
+        else
+            -- an older frontend without writeToFile: a PNG under the same
+            -- name (the decoders read the bytes, not the extension)
+            done = pcall(thumb.writePNG, thumb, path)
+        end
+        if thumb ~= src then thumb:free() end
+        if not bb then src:free() end
+        -- the JPEG writer drops the encoder's own failure (a full disk, no
+        -- folder): the file is the proof, and an empty one goes
+        if done and (lfs.attributes(path, "size") or 0) > 0 then return true end
+        os.remove(path)
+        return false
+    end)
+    if not ok then
+        logger.warn("KOAssistant: thumbnail failed:", written)
+        return false
+    end
+    return written
+end
+
+--- Delete pictures with their thumbnails and index entries (one index write).
+--- @param names table array of image file names
+function ImageGenerator.deleteImages(names)
+    local dir = ImageGenerator.getImagesDir()
+    for _idx, name in ipairs(names) do
+        os.remove(dir .. "/" .. name)
+        os.remove(ImageGenerator.thumbnailPath(name))
+    end
+    ImageGenerator.removeIndexEntries(names)
+end
+
+--- Remove the thumbnails whose picture is gone (deleted outside the gallery).
+function ImageGenerator.sweepThumbnails()
+    local lfs = require("libs/libkoreader-lfs")
+    local dir = ImageGenerator.getImagesDir()
+    local tdir = dir .. "/" .. THUMB_DIRNAME
+    if lfs.attributes(tdir, "mode") ~= "directory" then return end
+    local gone = {}
+    for entry in lfs.dir(tdir) do
+        local image = entry:match("^(.+)%.jpg$")
+        if image and lfs.attributes(dir .. "/" .. image, "mode") ~= "file" then
+            gone[#gone + 1] = tdir .. "/" .. entry
+        end
+    end
+    for _idx, path in ipairs(gone) do os.remove(path) end
 end
 
 --- What an image's caption and the gallery's hold view show: the provenance
@@ -382,7 +540,8 @@ end
 
 --- Map of book_file → { count, modified, book_title } for books with images.
 --- Joins the index against the directory; stale entries (image file removed
---- outside the gallery) are pruned in passing.
+--- outside the gallery) are pruned in passing. Pictures made outside a book
+--- are kept and not counted.
 function ImageGenerator.booksWithImages()
     local lfs = require("libs/libkoreader-lfs")
     local dir = ImageGenerator.getImagesDir()
@@ -396,9 +555,9 @@ function ImageGenerator.booksWithImages()
     local books = {}
     local stale = false
     for filename, entry in pairs(index) do
-        local valid = type(entry) == "table" and type(entry.book_file) == "string"
+        local valid = type(entry) == "table"
             and lfs.attributes(dir .. "/" .. filename, "mode") == "file"
-        if valid then
+        if valid and type(entry.book_file) == "string" then
             local b = books[entry.book_file]
             if not b then
                 b = { count = 0, modified = 0 }
@@ -409,7 +568,7 @@ function ImageGenerator.booksWithImages()
             if type(entry.book_title) == "string" and entry.book_title ~= "" then
                 b.book_title = entry.book_title
             end
-        else
+        elseif not valid then
             index[filename] = nil
             stale = true
         end
@@ -420,8 +579,9 @@ end
 
 --- Keep book associations valid across file-manager operations (called from
 --- the DocSettings.updateLocation patch in main.lua). Move rewrites
---- book_file; delete drops the association (images are kept and become
---- global-only); copy leaves images with the original book.
+--- book_file; delete drops the association (images are kept, with their
+--- prompts, as pictures without a book); copy leaves images with the
+--- original book.
 function ImageGenerator.updateIndexForMove(old_path, new_path, copy)
     if copy then return end
     -- Cheap stat guard: this runs on EVERY file-manager move/delete
@@ -436,7 +596,8 @@ function ImageGenerator.updateIndexForMove(old_path, new_path, copy)
             if new_path then
                 entry.book_file = new_path
             else
-                index[filename] = nil
+                entry.book_file = nil
+                entry.book_title = nil
             end
             changed = true
         end
@@ -454,19 +615,15 @@ local function sanitizeForFilename(s)
     return s
 end
 
---- Show the generated image in KOReader's ImageViewer.
---- `image_data` is the raw PNG/JPEG binary string. Images are KEPT
---- (maintainer decision 2026-07-16): the filename carries the metadata
---- (date + prompt snippet) and the Generated Images browser handles deletion.
---- `book_info` = optional { file, title } → recorded in the images index.
---- full_prompt (optional): the exact prompt sent to the API (context-framed);
---- recorded in the index so the gallery's "Show full prompt" shows the truth.
---- `description` stays the raw selection — it drives filename + viewer title.
---- provenance = the prompt writer's line, recorded and shown before the prompt.
-local function showImage(image_data, description, on_close, book_info, full_prompt, provenance)
-    local UIManager  = require("ui/uimanager")
+--- Save a picture beside the others: the file named by date and subject with
+--- the extension its bytes call for, its index entry (recordImage: the book,
+--- the prompt sent, the provenance, meta), and its thumbnail cut from one
+--- decode. Images are KEPT (maintainer decision 2026-07-16); the gallery
+--- handles deletion. Returns the path and the decoded picture (for the
+--- viewer; nil when it did not decode), or nil when the file could not be
+--- written.
+function ImageGenerator.saveImage(image_data, description, book_info, full_prompt, provenance, meta)
     local lfs = require("libs/libkoreader-lfs")
-
     local dir = ImageGenerator.getImagesDir()
     if not lfs.attributes(dir, "mode") then
         lfs.mkdir(dir)
@@ -482,18 +639,43 @@ local function showImage(image_data, description, on_close, book_info, full_prom
         path = string.format("%s (%d).%s", base, n, ext)
     end
     local f = io.open(path, "wb")
-    if not f then
+    if not f then return nil end
+    f:write(image_data)
+    f:close()
+    local name = path:match("([^/]+)$")
+    meta = meta or {}
+    meta.description = meta.description or description
+    ImageGenerator.recordImage(name, book_info, full_prompt or description, provenance, meta)
+    local okd, bb = pcall(function()
+        return require("ui/renderimage"):renderImageData(image_data, #image_data, false)
+    end)
+    if not (okd and bb) then return path end
+    ImageGenerator.makeThumbnail(name, bb)
+    return path, bb
+end
+
+--- Save the generated image (saveImage) and show it in KOReader's
+--- ImageViewer. `image_data` is the raw PNG/JPEG/WebP binary string.
+--- `book_info` = optional { file, title } → recorded in the images index.
+--- full_prompt (optional): the exact prompt sent to the API (context-framed);
+--- recorded in the index so the gallery's "Show full prompt" shows the truth.
+--- `description` stays the raw selection — it drives filename + viewer title.
+--- provenance = the prompt writer's line, recorded and shown before the prompt.
+--- meta = { provider, model, kinds } for the index (S7).
+local function showImage(image_data, description, on_close, book_info, full_prompt, provenance, meta)
+    local UIManager  = require("ui/uimanager")
+
+    local path, bb = ImageGenerator.saveImage(image_data, description, book_info, full_prompt, provenance, meta)
+    if not path then
         showNotice(_("Failed to save generated image to disk."))
         return
     end
-    f:write(image_data)
-    f:close()
-    ImageGenerator.recordImage(path:match("([^/]+)$"), book_info, full_prompt or description, provenance)
 
     -- Try to load KOReader's ImageViewer
     local ok, ImageViewer = pcall(require, "ui/widget/imageviewer")
     if not ok then
         -- Older KOReader builds may not have ImageViewer — offer a save notice
+        if bb then bb:free() end
         showNotice(T(_("Image saved to:\n%1"), path))
         if on_close then on_close() end
         return
@@ -519,8 +701,12 @@ local function showImage(image_data, description, on_close, book_info, full_prom
             caption = require("util").fixUtf8(caption:sub(1, 400), "") .. "…"
         end
     end
+    -- the picture decoded once for its thumbnail is the one shown (the
+    -- viewer frees it on close); the file when it did not decode here
     local viewer = ImageViewer:new{
-        file = path,
+        file = (not bb) and path or nil,
+        image = bb,
+        image_disposable = true,
         with_title_bar = true,
         title_text = title_text,
         caption = caption,
@@ -723,8 +909,7 @@ function ImageGenerator.buildPrompt(description, opts, features)
         -- Image prompts reward brevity: ~400 chars a side, UTF-8-safe cuts
         if #prev > 400 then prev = "…" .. fixUtf8(prev:sub(-400), "") end
         if #next_ > 400 then next_ = fixUtf8(next_:sub(1, 400), "") .. "…" end
-        table.insert(frame, "Surrounding text, for context only: "
-            .. prev .. " […] " .. next_)
+        table.insert(frame, FRAME_AROUND .. prev .. " […] " .. next_)
     end
     -- The style (S6) when it is not the frame's own "illustration", and the
     -- reader's note (S5), as lines after the frame
@@ -765,7 +950,7 @@ function ImageGenerator.buildEntryPrompt(entry, opts, features)
     entry = entry or {}
     local kind = type(entry.type) == "string" and entry.type ~= "" and entry.type or "thing"
     local parts = { "Create an illustration of " .. (kind:match("^[aeiou]") and "an " or "a ") .. kind
-        .. " from a book, as described below. Do not render any text, titles, or captions in the image." }
+        .. FRAME_ENTRY .. " Do not render any text, titles, or captions in the image." }
     local desc = type(entry.description) == "string" and entry.description ~= "" and (": " .. entry.description) or ""
     parts[#parts + 1] = "To illustrate: " .. (entry.name or "") .. desc
     local meta = (features.image_gen_frame_identity ~= false) and opts and opts.book_metadata or nil
@@ -1258,12 +1443,12 @@ end
 --- the "nearby_text" kind for the image provider); book_privacy is the book's
 --- own privacy values (PrivacyGates.overridesOf); plugin names the chat
 --- provider in the questions and refreshes the settings after an answer.
-function ImageGenerator._generateImpl(word, config_table, settings, book_info, opts)
-    local UIManager = require("ui/uimanager")
-
-    -- Effective provider (maintainer decision 2026-07-16): explicit
-    -- image_gen_provider > image-capable main provider; never fall back to a
-    -- merely-keyed provider. Model: per-provider setting > list default.
+--- The provider that draws, then run_fn(provider). Effective provider
+--- (maintainer decision 2026-07-16): explicit image_gen_provider >
+--- image-capable main provider; never fall back to a merely-keyed provider.
+--- When the chat provider cannot draw, the S4 question first (its answer
+--- saved as Provider, then retry()); without one, a notice.
+local function withImageProvider(config_table, settings, opts, retry, run_fn)
     local features = (config_table and config_table.features) or {}
     local main_provider = config_table and config_table.provider
     local provider, unavailable = ImageGenerator.effectiveProvider(features, main_provider, settings)
@@ -1283,7 +1468,7 @@ function ImageGenerator._generateImpl(word, config_table, settings, book_info, o
                 features.image_gen_provider = picked
                 if plugin and plugin.updateConfigFromSettings then plugin:updateConfigFromSettings() end
                 logger.info("KOAssistant: image provider set by the first-tap question:", picked)
-                ImageGenerator.generate(word, config_table, settings, book_info, opts)
+                retry()
             end)
             return
         end
@@ -1296,20 +1481,101 @@ function ImageGenerator._generateImpl(word, config_table, settings, book_info, o
         end
         return
     end
-    -- The subject: the selection, or (Illustrate from X-Ray, S8) an entry of
-    -- the book's X-Ray
-    opts = opts or {}
-    local description
-    if opts.entry then
-        description = type(opts.entry.name) == "string" and opts.entry.name or ""
-    else
-        description = (word or ""):match("^%s*(.-)%s*$") or ""
+    run_fn(provider)
+end
+
+function ImageGenerator._generateImpl(word, config_table, settings, book_info, opts)
+    withImageProvider(config_table, settings, opts, function()
+        ImageGenerator.generate(word, config_table, settings, book_info, opts)
+    end, function(provider)
+        -- The subject: the selection, or (Illustrate from X-Ray, S8) an entry
+        -- of the book's X-Ray
+        opts = opts or {}
+        local description
+        if opts.entry then
+            description = type(opts.entry.name) == "string" and opts.entry.name or ""
+        else
+            description = (word or ""):match("^%s*(.-)%s*$") or ""
+        end
+        if description == "" then
+            showNotice(_("No description selected."))
+            return
+        end
+        ImageGenerator._askAndRun(provider, description, config_table, settings, book_info, opts)
+    end)
+end
+
+--- Draw a recorded prompt again (S7), or the reader's edit of it: the image
+--- provider and model now in effect, Shape and Detail now in effect, no
+--- prompt writer (the prompt is final). The new picture is saved beside the
+--- source, never in its place. The prompt is stored material: the kinds it
+--- carries (promptKinds) are judged for the provider it goes to, required
+--- (a written prompt cannot go without what is in it), so Ask asks and Never
+--- refuses. spec = { name (the source's file name), entry (its index entry),
+--- prompt (the text to draw), edited, plugin, ui, on_viewer_close }.
+function ImageGenerator.regenerate(spec, config_table, settings)
+    local ok, err = pcall(ImageGenerator._regenerateImpl, spec, config_table, settings)
+    if not ok then
+        logger.err("KOAssistant: image regeneration error:", err)
+        showNotice(T(_("Image generation error:\n\n%1"), tostring(err)))
     end
-    if description == "" then
-        showNotice(_("No description selected."))
+end
+
+function ImageGenerator._regenerateImpl(spec, config_table, settings)
+    local prompt = type(spec.prompt) == "string" and spec.prompt:match("^%s*(.-)%s*$") or ""
+    if prompt == "" then
+        showNotice(_("The prompt is empty."))
         return
     end
-    ImageGenerator._askAndRun(provider, description, config_table, settings, book_info, opts)
+    local opts = { plugin = spec.plugin, ui = spec.ui, on_viewer_close = spec.on_viewer_close }
+    withImageProvider(config_table, settings, opts, function()
+        ImageGenerator.regenerate(spec, config_table, settings)
+    end, function(provider)
+        local features = (config_table and config_table.features) or {}
+        local entry = type(spec.entry) == "table" and spec.entry or {}
+        local path = type(entry.book_file) == "string" and entry.book_file or nil
+        -- the reader's UI reads the open book's values; a picture without a
+        -- book must not borrow them
+        if not path then opts.ui = nil end
+        local kinds = ImageGenerator.promptKinds(entry)
+        local description = type(entry.description) == "string" and entry.description:match("%S") and entry.description
+            or ImageGenerator.subjectFromName(spec.name)
+        local head = spec.edited and _("Drawn from your edit of an earlier picture's prompt.")
+            or _("Drawn again from an earlier picture's prompt.")
+        local source_line = type(entry.provenance) == "string" and entry.provenance:match("%S") and entry.provenance or nil
+        local run_features = {}
+        for k, v in pairs(features) do run_features[k] = v end
+        run_features._data_once = nil
+        local st = {
+            provider = provider, description = description, config_table = config_table, settings = settings,
+            book_info = path and { file = path, title = entry.book_title } or nil, opts = opts,
+            features = run_features, writer_on = false, recipients = { provider }, entries = {}, path = path,
+            fixed_prompt = prompt, fixed_provenance = source_line and (head .. " " .. source_line) or head,
+            kinds = kinds,
+        }
+        if #kinds == 0 then
+            ImageGenerator._run(st)
+            return
+        end
+        require("koassistant.ui.data_access").withAccess(opts.plugin, nil, {
+            features = run_features, kinds = kinds, providers = { provider }, required = true,
+            path = path, ui = opts.ui,
+            action_name = _("Regenerate"),
+            provider_name = ImageGenerator.providerName(provider, opts.plugin),
+            amounts = {
+                nearby_text = _("the text around the passage, in this picture's prompt"),
+                book_text = _("what X-Ray descriptions made from the book's text gave this picture's prompt"),
+                highlights = _("what X-Ray descriptions made with your highlights gave this picture's prompt"),
+                annotations = _("what X-Ray descriptions made with your notes gave this picture's prompt"),
+            },
+        }, function()
+            local ok, err = pcall(ImageGenerator._run, st)
+            if not ok then
+                logger.err("KOAssistant: image regeneration error:", err)
+                showNotice(T(_("Image generation error:\n\n%1"), tostring(err)))
+            end
+        end)
+    end)
 end
 
 --- What a run sends and to whom, the question for it, then the run (S5, D12):
@@ -1442,10 +1708,21 @@ function ImageGenerator._run(st)
     -- What may go: every kind allowed for every provider it reaches (the
     -- question's answer is on the run's features, or the book's own values,
     -- read again here)
+    local book_values = st.path and Gates.bookOverrides(st.path, opts.ui) or opts.book_privacy
+    if st.fixed_prompt then
+        -- a recorded prompt drawn again (S7): the kinds it carries, each
+        -- allowed for the image provider, or nothing goes
+        for _idx, kind in ipairs(st.kinds or {}) do
+            if not Gates.allows(kind, { features = features, provider = provider, book = book_values,
+                    once = Gates.onceFor(features, st.path) }) then
+                showNotice(_("This picture's prompt can't be sent: it carries data your privacy settings keep from this provider."))
+                return
+            end
+        end
+    end
     local allowed = ImageGenerator.allowedMaterial({
         features = features, recipients = st.recipients, path = st.path,
-        book = st.path and Gates.bookOverrides(st.path, opts.ui) or opts.book_privacy,
-        window = st.window ~= nil, stored = st.stored,
+        book = book_values, window = st.window ~= nil, stored = st.stored,
     })
     local left_out = {}
     local around_ok = allowed.around
@@ -1462,6 +1739,16 @@ function ImageGenerator._run(st)
         end
     end
     local entries = stored_ok and st.entries or {}
+
+    -- The kinds the prompt carries, recorded with the picture (S7); a prompt
+    -- drawn again keeps its source's
+    local function kindsSent(written)
+        if st.fixed_prompt then return st.kinds end
+        return ImageGenerator.kindsSent({
+            around = around_ok and st.window ~= nil, stored = stored_ok and st.stored or nil,
+            entry = opts.entry ~= nil, written = written, entries = #entries,
+        })
+    end
 
     -- The framed prompt: the writer's fallback, and the prompt itself with the
     -- writer off (S1's frame; the style and the note as lines)
@@ -1551,8 +1838,9 @@ function ImageGenerator._run(st)
     -- The picture: the request as the provider takes it (OpenAI-style images
     -- API, or Gemini's generateContent with image output); Fit my screen fits
     -- the screen as it is held now. note = a line above the phase (the
-    -- writer's failure)
-    local function draw(final_prompt, provenance, note)
+    -- writer's failure); kinds = what the prompt carries, for the index
+    local function draw(final_prompt, provenance, note, kinds)
+        local meta = { provider = provider, model = resolved_model, kinds = kinds }
         local request = ImageGenerator.buildRequest(provider, resolved_model, final_prompt, features, screen)
         local request_body_str = BaseHandler.encodeBody(request.body)
         setPhase((note and (note .. "\n\n") or "")
@@ -1592,7 +1880,7 @@ function ImageGenerator._run(st)
             if result.bytes then
                 stopTicker()
                 status.close()
-                showImage(result.bytes, description, nil, book_info, final_prompt, provenance)
+                showImage(result.bytes, description, opts.on_viewer_close, book_info, final_prompt, provenance, meta)
                 return
             end
             -- Download phase: same window, same elapsed clock
@@ -1616,13 +1904,17 @@ function ImageGenerator._run(st)
                 -- "OK:" prefix + binary
                 stopTicker()
                 status.close()
-                showImage(dl_raw:sub(4), description, nil, book_info, final_prompt, provenance)
+                showImage(dl_raw:sub(4), description, opts.on_viewer_close, book_info, final_prompt, provenance, meta)
             end))
         end))
     end
 
+    if st.fixed_prompt then
+        draw(st.fixed_prompt, st.fixed_provenance, nil, kindsSent())
+        return
+    end
     if not st.writer_on then
-        draw(framedPrompt(), nil)
+        draw(framedPrompt(), nil, nil, kindsSent(false))
         return
     end
 
@@ -1678,14 +1970,15 @@ function ImageGenerator._run(st)
             draw(prompt, PromptWriter.provenance({
                 model = writer_model, entry = opts.entry, around = around ~= nil, entries = entries,
                 book = book_said, background = background ~= nil, note = note ~= nil, left_out = left_out,
-            }))
+            }), nil, kindsSent(true))
             return
         end
         local why = PromptWriter.failureText(failure)
         logger.warn("KOAssistant: image prompt writer failed:", tostring(failure))
         draw(framedPrompt(), PromptWriter.provenance({ failed = why, entry = opts.entry, left_out = left_out }),
             opts.entry and T(_("The prompt writer failed (%1); drawing from the entry's description."), why)
-                or T(_("The prompt writer failed (%1); drawing from the passage as framed."), why))
+                or T(_("The prompt writer failed (%1); drawing from the passage as framed."), why),
+            kindsSent(false))
     end
     local ok_query, query_err = pcall(require("koassistant.request.gpt_query").query, history:getMessages(), cfg,
         guarded(function(success, answer, err)
