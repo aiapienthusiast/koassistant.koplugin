@@ -173,7 +173,8 @@ ModelConstraints.capabilities = {
         -- Gemini 3 models use thinkingLevel (minimal/low/medium/high).
         -- "gemini-3" = FAMILY FALLBACK (item 19a): new 3.x minors inherit without a
         -- plugin update; the specific entries stay for documentation value.
-        thinking = { "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-3.1-flash-lite", "gemini-3" },
+        -- "gemini-4" = the same family fallback for the Gemini 4 line (Argon, 2026-10-13).
+        thinking = { "gemini-4-argon", "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-3.1-flash-lite", "gemini-3", "gemini-4" },
         -- Gemini 2.5 models use thinkingBudget (0=off, -1=dynamic, 128-24576).
         -- gemini-3.1-pro-preview ALSO accepts thinkingBudget (probed 2026-08-15,
         -- budget 0 rejected "only works in thinking mode") but its curated axis is
@@ -181,20 +182,21 @@ ModelConstraints.capabilities = {
         thinking_budget = { "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite" },
         -- Sampling params deprecated for every Gemini 3 model (changelog 2026-07-21:
         -- "remove these parameters from all requests"); gemini.lua strips them. Every
-        -- curated 3.x id still accepted a temperature on 2026-10-08.
-        no_sampling_params = { "gemini-3" },
-        -- Google Search grounding ("gemini-3" = family fallback)
+        -- curated 3.x id still accepted a temperature on 2026-10-08. Gemini 4 Argon's
+        -- guide: "If provided, sampling parameters are ignored" (0.7 accepted 2026-10-14).
+        no_sampling_params = { "gemini-3", "gemini-4" },
+        -- Google Search grounding ("gemini-3" / "gemini-4" = family fallbacks)
         google_search = {
-            "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-3.1-flash-lite",
+            "gemini-4-argon", "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-3.1-flash-lite",
             "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite",
-            "gemini-3",
+            "gemini-3", "gemini-4",
         },
         -- Function calling for the book-tool workflows (same models as google_search).
         -- The runner's shouldUse gates on this + a tool_wire.lua adapter being registered.
         tools = {
-            "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-3.1-flash-lite",
+            "gemini-4-argon", "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-3.1-flash-lite",
             "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite",
-            "gemini-3",
+            "gemini-3", "gemini-4",
         },
     },
     -- Note: Z.AI web search only works via a separate endpoint (/api/paas/v4/tools),
@@ -237,7 +239,7 @@ ModelConstraints.capabilities = {
                                -- 3.8 ids direct); "qwen/qwen3" grants their tools
         },
         tools = {
-            "anthropic/claude", "openai/gpt-6", "openai/gpt-5", "google/gemini-3", "google/gemini-2.5",
+            "anthropic/claude", "openai/gpt-6", "openai/gpt-5", "google/gemini-4", "google/gemini-3", "google/gemini-2.5",
             "z-ai/glm-5.3", "moonshotai/kimi-k3", "minimax/minimax-m3",   -- batteries 2026-09-28
             "deepseek/deepseek-v4", "x-ai/grok-4", "meta-llama/llama-3.3-70b-instruct",
             "mistralai/mistral-large", "mistralai/mistral-medium", "qwen/qwen3",
@@ -447,13 +449,13 @@ ModelConstraints.capabilities = {
         thinking = { "DeepSeek-V3.1", "DeepSeek-V3.2" },
     },
     qwen = {
-        -- Probed live 2026-08-15 (DashScope international, model_audit battery):
-        -- qwen3-max = no default reasoning, temp free in [0, 2), out 65536,
-        -- tools + forced tool_choice + two-round replay all green (wave 2 —
-        -- ToolWire alias added same day). Other qwen ids unprobed for tools;
-        -- grant as batteries run. enable_search web search is wired in
+        -- Book tools had one model here, qwen3-max (battery 2026-08-15: tools + forced
+        -- tool_choice + two-round replay green; ToolWire alias in place), retired by
+        -- Alibaba 2026-10-10. The 3.8 and 3.5 models refuse a forced tool call while they
+        -- think and qwen.lua cannot turn thinking off yet, so no grant until B368 sends
+        -- enable_thinking=false on tool sessions. enable_search web search is wired in
         -- qwen.lua (server-side injection; no sources on this wire).
-        tools = { "qwen3-max" },
+        tools = {},
     },
     kimi = {
         -- kimi-k2.6 probed live 2026-08-15 (international platform): thinks by
@@ -619,6 +621,9 @@ ModelConstraints._max_output_tokens = {
     },
     gemini = {
         ["gemini-3"] = 65536,            -- 3.x family (docs; OpenRouter catalog agrees)
+        ["gemini-4"] = 32768,            -- Argon: models-endpoint outputTokenLimit and the guide's
+                                         -- per-request cap without streaming (65536 streaming; a larger
+                                         -- ask is accepted, 2026-10-14)
         ["gemini-2.5"] = 65536,          -- 2.5 family (docs)
     },
     xai = {
@@ -658,6 +663,9 @@ ModelConstraints._max_output_tokens = {
         ["openai/gpt-5"] = 128000,       -- prefix: 5.6-sol/terra/luna, 5.5, 5.4, 5.4-mini
         ["openai/gpt-oss"] = 131072,
         ["google/gemini-3"] = 65536,
+        ["google/gemini-4"] = 65536,     -- Google's streaming per-request cap (the endpoints state 943718,
+                                         -- long decode, which this plugin does not use)
+        ["qwen/qwen3.8-max"] = 131072,   -- largest endpoint cap (battery 2026-10-14)
         ["deepseek/deepseek-v4-pro"] = 384000,
         ["deepseek/deepseek-v4-flash"] = 131072,
         ["meta-llama/llama-3.3-70b-instruct"] = 16384,
@@ -811,6 +819,7 @@ ModelConstraints._context_windows = {
     },
     gemini = {
         ["gemini-3"]   = 1048576,   -- [probe] models-endpoint inputTokenLimit, all curated 3.x ids
+        ["gemini-4"]   = 1048576,   -- [probe] Argon's inputTokenLimit; [docs] shared by input, thinking and output
         ["gemini-2.5"] = 1048576,   -- [probe] 2.5-flash / -pro / -flash-lite
     },
     mistral = {
@@ -867,6 +876,8 @@ ModelConstraints._context_windows = {
         ["openai/gpt-5.4-mini"]         = 272000,
         ["openai/gpt-oss"]              = 131072,
         ["google/gemini-3"]             = 1048576,
+        ["google/gemini-4"]             = 1048576, -- [OR] catalog 2026-10-14
+        ["qwen/qwen3.8-max"]            = 1000000, -- [OR] catalog 2026-10-14
         ["deepseek/deepseek-v4"]        = 1000000,
         ["x-ai/grok-4.3"]               = 1000000,
         ["x-ai/grok-4.20"]              = 1000000, -- [probe] xAI's own API; [OR]'s 2M rejected
@@ -1187,6 +1198,14 @@ ModelConstraints.reasoning_profiles = {
           stance_map = { minimal = { state = "off" }, maximum = { state = "on" } } },
     },
     gemini = {
+        -- gemini-4-argon (battery 2026-10-14, paid key): the 3.8-flash shape. Thinks by
+        -- default (medium per the guide), low/medium/high OK, MINIMAL rejected. A
+        -- thinkingBudget is accepted but only maps to the nearest level ("returns a
+        -- warning"): budget 0 thought 174 tokens on the harder prompt, so no disable.
+        { match = "gemini-4-argon", axis = "effort", default_state = "on",
+          can_disable = false, can_enable = true,
+          options = { "low", "medium", "high" }, default_option = "high",
+          stance_map = { minimal = { option = "low" }, maximum = { option = "high" } } },
         -- Gemini 3 (thinkingLevel). Pro has no "minimal" floor; flash variants do.
         { match = "gemini-3.1-pro-preview", axis = "effort", default_state = "on",
           can_disable = false, can_enable = true,
@@ -1252,8 +1271,12 @@ ModelConstraints.reasoning_profiles = {
           stance_map = { minimal = { state = "off" }, maximum = { state = "on", option = "max" } } },
         -- FAMILY FALLBACK (item 19a): a new gemini-3.x id inherits the effort
         -- profile with the option subset both pro and flash accept (no "minimal" —
-        -- pro rejects it).
+        -- pro rejects it). "gemini-4" the same for the Gemini 4 line.
         { match = "gemini-3", axis = "effort", default_state = "on",
+          can_disable = false, can_enable = true,
+          options = { "low", "medium", "high" }, default_option = "high",
+          stance_map = { minimal = { option = "low" }, maximum = { option = "high" } } },
+        { match = "gemini-4", axis = "effort", default_state = "on",
           can_disable = false, can_enable = true,
           options = { "low", "medium", "high" }, default_option = "high",
           stance_map = { minimal = { option = "low" }, maximum = { option = "high" } } },
@@ -1311,7 +1334,7 @@ ModelConstraints.reasoning_profiles = {
         -- qwen3.7-plus reason by DEFAULT. enable_thinking=false turns it off on the wire
         -- (probed; forced tool calls then work too), but qwen.lua sends no reasoning
         -- param yet, so they read as always-on with no control (the magistral shape).
-        -- qwen3-max does not reason by default (no profile: passthrough).
+        -- (qwen3-max, retired 2026-10-10, did not reason by default: no profile.)
         -- (Trailing "-": prefixMatch leaves "." unescaped, so a bare "qwen3.8" would
         -- also catch qwen3-8b.)
         { match = "qwen3.8-", axis = "none", default_state = "on", can_disable = false, can_enable = false },
@@ -1326,6 +1349,10 @@ ModelConstraints.reasoning_profiles = {
         -- still works — low=284 vs high=816 reasoning tokens). These carry can_disable=false
         -- so the minimal stance resolves to lowest EFFORT, never an (illegal) hard off.
         { match = "google/gemini-3", axis = "effort", default_state = "on", can_disable = false, can_enable = true,
+          options = { "low", "medium", "high" }, default_option = "high",
+          stance_map = { minimal = { option = "low" }, maximum = { option = "high" } } },
+        -- google/gemini-4-argon (battery 2026-10-14): mandatory as well; the gemini-3 shape.
+        { match = "google/gemini-4", axis = "effort", default_state = "on", can_disable = false, can_enable = true,
           options = { "low", "medium", "high" }, default_option = "high",
           stance_map = { minimal = { option = "low" }, maximum = { option = "high" } } },
         { match = "openai/gpt-5.5", axis = "effort", default_state = "on", can_disable = false, can_enable = true,
@@ -1405,6 +1432,11 @@ ModelConstraints.reasoning_profiles = {
         { match = "minimax/minimax-m3", axis = "effort", default_state = "on", can_disable = true, can_enable = true,
           options = { "low", "medium", "high" }, default_option = "high",
           stance_map = { minimal = { state = "off" }, maximum = { state = "on", option = "high" } } },
+        -- qwen/qwen3.8-max-0902 (battery 2026-10-14): "Reasoning is mandatory" for effort
+        -- none and enabled=false, unlike 3.8-flash below.
+        { match = "qwen/qwen3.8-max", axis = "effort", default_state = "on", can_disable = false, can_enable = true,
+          options = { "low", "medium", "high" }, default_option = "high",
+          stance_map = { minimal = { option = "low" }, maximum = { option = "high" } } },
         { match = "qwen/qwen3.8-", axis = "effort", default_state = "on", can_disable = true, can_enable = true,
           options = { "low", "medium", "high" }, default_option = "high",
           stance_map = { minimal = { state = "off" }, maximum = { state = "on", option = "high" } } },

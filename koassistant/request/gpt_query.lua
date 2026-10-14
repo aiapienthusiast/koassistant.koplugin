@@ -595,6 +595,17 @@ local function queryChatGPT(message_history, temp_config, on_complete, settings)
     -- the exact list the resolver needs (a custom provider the settings do not
     -- list never gets this far). Built-ins need no list at all: getProviderDefaults
     -- answers them from ProviderDefaults.
+    -- An id the provider no longer serves (ModelLists._retired) can still be stored
+    -- outside the selected model, which the startup refresh moves: a favorite, an
+    -- action's or a tier's pin, a provider's preferred default. It goes out as its
+    -- replacement (a Qwen pin on qwen3-max answered 404 after 2026-10-10).
+    if not is_custom_provider and type(config.model) == "string" then
+        local replacement = require("koassistant.request.model_lists").retiredReplacement(provider, config.model)
+        if replacement then
+            logger.dbg("KOAssistant: retired model", config.model, "sent as", replacement)
+            config.model = replacement
+        end
+    end
     local dispatch_model = ModelConstraints.dispatchModel({
         provider = provider, model = config.model,
         features = { custom_providers = custom_provider_config and { custom_provider_config } or nil },

@@ -126,6 +126,17 @@ TestRunner:check("deliberate skip bucketed with its reason",
     and type(skip_diff.deliberate[1].reason) == "string")
 TestRunner:check("deliberate skip stays out of new", #skip_diff.new == 0)
 
+-- An id the plugin retired but the provider still lists (Google routes 3.7-flash to
+-- 3.8-flash and keeps listing it) is `retired`, never new; the real table drives it.
+local retired_diff = ModelAudit.diffLists("gemini", { "gemini-3.8-flash" },
+    { ["gemini-3.8-flash"] = {}, ["gemini-3.7-flash"] = { created = NOW - 86400 } }, NOW,
+    { retired = require("koassistant.request.model_lists")._retired.gemini })
+TestRunner:check("retired id bucketed with its replacement",
+    #retired_diff.retired == 1 and retired_diff.retired[1].id == "gemini-3.7-flash"
+    and retired_diff.retired[1].to == "gemini-3.8-flash")
+TestRunner:check("retired id stays out of new", #retired_diff.new == 0)
+TestRunner:check("no retired table: the bucket stays empty", #diff.retired == 0)
+
 --==========================================================================
 TestRunner:suite("modelTimestamp")
 

@@ -188,6 +188,7 @@ ModelAudit.DELIBERATE_SKIPS = {
         ["gpt-5.4"] = "left the picker 2026-10-11: the 5.4 line ended, 6-luna is cheaper",
         ["gpt-5.4-mini"] = "left the picker 2026-10-11: the 5.4 line ended, 6-luna is cheaper",
         ["gpt-5.4-nano"] = "left the picker 2026-10-11: the 5.4 line ended, 6-luna is cheaper",
+        ["gpt-5.5-2026-04-23"] = "dated snapshot of gpt-5.5, which left the picker 2026-10-11",
     },
     mistral = {
         ["mistral-medium"] = "curated via mistral-medium-latest",
@@ -455,12 +456,15 @@ ModelAudit.RECENT_SECONDS = 180 * 86400  -- uncurated ids older than this go to 
 -- curated: array of ids; fetched: map id -> meta; now: os.time() (nil = no
 -- staleness split, everything uncurated lands in `new`). opts.unlisted(id) =
 -- true for curated ids the list never carries (Perplexity presets): they are
--- never reported removed.
+-- never reported removed. opts.retired = ModelLists._retired[provider]: an id
+-- we moved saved picks off that the list still carries (Google's routed
+-- flashes, OpenCode Go's "use ..." ids) is `retired`, never new.
 -- Returns { new={}, stale={}, removed={}, snapshots={}, ignored={}, deliberate={},
--- reviewed={}, known=n }.
+-- reviewed={}, retired={}, known=n }.
 function ModelAudit.diffLists(provider, curated, fetched, now, opts)
     local result = { new = {}, stale = {}, removed = {}, snapshots = {}, ignored = {},
-                     deliberate = {}, reviewed = {}, known = 0 }
+                     deliberate = {}, reviewed = {}, retired = {}, known = 0 }
+    local retired = opts and opts.retired or {}
     local curated_set = {}
     for _i, id in ipairs(curated) do curated_set[id] = true end
     local skips = ModelAudit.DELIBERATE_SKIPS[provider] or {}
@@ -476,6 +480,8 @@ function ModelAudit.diffLists(provider, curated, fetched, now, opts)
     for _i, id in ipairs(fetched_ids) do
         if curated_set[id] then
             result.known = result.known + 1
+        elseif retired[id] then
+            table.insert(result.retired, { id = id, to = retired[id] })
         elseif ModelAudit.isSnapshotOf(id, curated_set) then
             table.insert(result.snapshots, id)
         elseif ModelAudit.isNoise(provider, id) then
@@ -1219,9 +1225,9 @@ local function runDiscovery(provider, api_key, verbose)
 
     local undated = ModelAudit.undatedList(fetched)
     local diff = ModelAudit.diffLists(provider, curated, fetched, (not undated) and os.time() or nil,
-        { unlisted = DISCOVERY[provider].unlisted })
+        { unlisted = DISCOVERY[provider].unlisted, retired = ModelLists._retired[provider] })
     printf("  fetched %d chat-relevant ids - curated %d - older uncurated %d - snapshots %d - ignored %d",
-        diff.known + #diff.new + #diff.stale + #diff.snapshots + #diff.reviewed, #curated,
+        diff.known + #diff.new + #diff.stale + #diff.snapshots + #diff.reviewed + #diff.retired, #curated,
         #diff.stale, #diff.snapshots, #diff.ignored)
     if undated then
         printf("  %sthe list carries no release dates (one shared `created` value): every " ..
@@ -1249,6 +1255,12 @@ local function runDiscovery(provider, api_key, verbose)
             C.dim, C.off)
         for _i, entry in ipairs(diff.deliberate) do
             printf("    %s. %-38s %s%s", C.dim, entry.id, entry.reason, C.off)
+        end
+    end
+    if #diff.retired > 0 then
+        printf("  %sstill listed, retired here (ModelLists._retired moves saved picks):%s", C.dim, C.off)
+        for _i, entry in ipairs(diff.retired) do
+            printf("    %s> %-38s -> %s%s", C.dim, entry.id, entry.to, C.off)
         end
     end
     if #diff.removed > 0 then
@@ -2170,11 +2182,29 @@ local function probeGemini(model, api_key, verbose)
     end
     facts.adaptive_ok = any_level  -- effort-style control accepted
 
-    -- 4. thinkingBudget (2.5 budget axis; 0 = disable)
-    local zcode, zdec, zraw = req({ thinkingConfig = { thinkingBudget = 0 } }, nil, 32)
-    facts.disable_ok = verdict(zcode)
-    recordProbe(facts, "thinkingBudget=0 (disable)", facts.disable_ok,
-        not facts.disable_ok and ModelAudit.errText(zdec, zraw) or nil)
+    -- 4. thinkingBudget (2.5 budget axis; 0 = disable). On the harder prompt, so a
+    -- budget that only maps to a thinking level shows its thoughts: Google maps a
+    -- budget to the nearest level on 3.x and 4 (Gemini 4 Argon accepted budget 0 and
+    -- thought 174 tokens, 2026-10-14; the old 32-token leg drafted can_disable = true).
+    -- Where levels are accepted the plugin sends thinkingLevel, which has no off: such
+    -- a model turns off only by sending nothing, so only when it does not think by default.
+    local zcode, zdec, zraw = req({ thinkingConfig = { thinkingBudget = 0 } }, nil, 2048,
+        HARD_REASONING_PROBE_PROMPT)
+    local zum = zcode == 200 and type(zdec) == "table" and type(zdec.usageMetadata) == "table"
+        and zdec.usageMetadata
+    local zthoughts = zum and type(zum.thoughtsTokenCount) == "number" and zum.thoughtsTokenCount or 0
+    if facts.adaptive_ok then
+        facts.disable_ok = not facts.default_reasoning
+    else
+        facts.disable_ok = verdict(zcode) and zthoughts == 0
+    end
+    local znote
+    if verdict(zcode) == false then
+        znote = ModelAudit.errText(zdec, zraw)
+    elseif zthoughts > 0 then
+        znote = "accepted, still thought " .. zthoughts .. " tokens: a budget is no off here"
+    end
+    recordProbe(facts, "thinkingBudget=0 (disable)", verdict(zcode), znote)
     local bcode, bdec, braw = req({ thinkingConfig = { thinkingBudget = 1024 } }, nil, 32)
     facts.budget_ok = verdict(bcode)
     recordProbe(facts, "thinkingBudget=1024", facts.budget_ok,

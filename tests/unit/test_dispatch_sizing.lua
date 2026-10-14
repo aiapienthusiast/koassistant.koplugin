@@ -168,7 +168,7 @@ for _idx, k in ipairs(SAVED_KEYS) do saved[k] = package.loaded[k] end
 local calls = {}
 package.loaded["koassistant.api.ollama"] = {
     query = function(_self, _message_history, cfg)
-        calls[#calls + 1] = { max_tokens = cfg.api_params and cfg.api_params.max_tokens }
+        calls[#calls + 1] = { max_tokens = cfg.api_params and cfg.api_params.max_tokens, model = cfg.model }
         return "ok"
     end,
 }
@@ -228,6 +228,26 @@ TestRunner:test("a nil-model config is capped by the plan recorded for its defau
     TestRunner:assertEqual(calls[1].max_tokens, cap, "the wire budget is the plan cap")
     TestRunner:assertEqual(#shown, 0, "an unpinned default being sized down is silent")
     RL._reset()
+end)
+
+TestRunner:test("a retired id stored outside the selected model goes out as its replacement", function()
+    -- A favorite, a pin or a preferred default can still name a retired id (the
+    -- startup refresh moves only the selected model); the router maps it once,
+    -- before the id that keys the request is resolved.
+    RL._reset()
+    local ModelLists = require("koassistant.request.model_lists")
+    local had = ModelLists._retired.ollama
+    ModelLists._retired.ollama = { ["gone-model"] = "llama4" }
+    local ok, err = pcall(function()
+        runQuery({ provider = "ollama", model = "gone-model", features = {} })
+        TestRunner:assertEqual(#calls, 1, "one request went out")
+        TestRunner:assertEqual(calls[1].model, "llama4", "the replacement is on the wire")
+        runQuery({ provider = "ollama", model = "llama3.3", features = {} })
+        TestRunner:assertEqual(calls[1].model, "llama3.3", "a served id is untouched")
+    end)
+    ModelLists._retired.ollama = had
+    RL._reset()
+    if not ok then error(err, 0) end
 end)
 
 TestRunner:test("the plan filed under the WRONG key never binds (a2, the measured F3 failure)", function()

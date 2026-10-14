@@ -93,14 +93,19 @@ local ModelLists = {
                                         -- low/medium/high, MINIMAL rejected, tools + replay +
                                         -- streaming green, grounding on the paid key, answers
                                         -- on a free key)
-        "gemini-3.7-flash",             -- previous default (kept available)
-        "gemini-3.6-flash",
-        "gemini-3.5-flash",             -- previous flash (kept available)
-        "gemini-3.1-pro-preview",       -- frontier tier, reasoning (paid only; no 3.5/3.6 pro yet;
-                                        -- full battery green on a paid key 2026-08-15: effort
-                                        -- low/medium/high, no disable, tools + grounding work)
+        "gemini-4-argon",               -- frontier (GA 2026-10-13, paid only: $2/$10 to 2026-11-30, then
+                                        -- $4/$20). Battery 2026-10-14: thinks by default, low/medium/high,
+                                        -- MINIMAL rejected, a budget of 0 does not turn it off; tools,
+                                        -- replay, streaming and grounding green
         "gemini-3.5-flash-lite",        -- fast/ultrafast (newest lite)
-        "gemini-3.1-flash-lite",        -- ultrafast (previous)
+        -- Since 2026-10-08 Google answers gemini-3.7-flash with 3.8-flash and gemini-3.5-flash
+        -- with 3.6-flash (the response's modelVersion says so): both left the picker and
+        -- saved picks move via _retired.
+        "gemini-3.6-flash",             -- previous flash
+        "gemini-3.1-pro-preview",       -- previous frontier, reasoning (paid only; full battery green
+                                        -- on a paid key 2026-08-15: effort low/medium/high, no
+                                        -- disable, tools + grounding work)
+        "gemini-3.1-flash-lite",        -- previous lite
         -- Gemini 2.5 (kept for popularity)
         "gemini-2.5-flash",             -- still popular, free tier
         "gemini-2.5-pro",               -- GA deep-reasoning (paid)
@@ -227,6 +232,7 @@ local ModelLists = {
 
         -- Google
         "google/gemini-3.8-flash",      -- battery 2026-09-28 (reasoning mandatory here)
+        "google/gemini-4-argon",        -- battery 2026-10-14 (reasoning mandatory here; $2/$10 to 2026-11-30)
         "google/gemini-3.7-flash",      -- catalog-verified 2026-08-15 ($0.38/$1.88, half of 3.6 there)
         "google/gemini-3.6-flash",
         "google/gemini-3.5-flash",
@@ -252,10 +258,10 @@ local ModelLists = {
         "mistralai/mistral-large-2512",
         "mistralai/mistral-medium-3.1",
 
-        -- Qwen
+        -- Qwen (qwen3-max and qwen3-235b-a22b answer 404 "deprecated on Oct 9, 2026";
+        -- saved picks move via _retired)
+        "qwen/qwen3.8-max-0902",                        -- battery 2026-10-14 (reasoning mandatory here, forced tools OK)
         "qwen/qwen3.8-flash",                           -- battery 2026-09-28 (forced tool calls refused: auto)
-        "qwen/qwen3-max",
-        "qwen/qwen3-235b-a22b",
 
         -- Perplexity (built-in web search)
         "perplexity/sonar-pro",
@@ -302,17 +308,16 @@ local ModelLists = {
     },
 
     qwen = {
-        -- Qwen3 / Qwen3.5 (current)
-        "qwen3-max",                    -- flagship (default; no default reasoning, book tools)
         -- Qwen3.8 (2026-08/09, 1M context). Probed 2026-09-28: reason by default
-        -- (enable_thinking=false turns it off on the wire; not sent yet), temp
+        -- (enable_thinking=false turns it off on the wire; not sent yet, B368), temp
         -- [0, 2), 128K out; forced tool calls refused while thinking, so no tools.
-        "qwen3.8-max",
+        "qwen3.8-max",                  -- default + flagship (since 2026-10-14)
         "qwen3.8-flash",
         "qwen3.5-plus",                 -- standard
-        "qwen3.5-flash",                -- fast
-        "qwen-turbo",                   -- ultrafast
-        "qwen3-coder-plus",             -- coding
+        "qwen3.5-flash",                -- fast + ultrafast
+        -- Gone 2026-10-14 (saved picks move via _retired): qwen3-max and qwen3-coder-plus
+        -- answer 404 "Model not exist" (Alibaba's retirement of 2026-10-10); qwen-turbo
+        -- left the list and answers only 429 "exceeded your current request limit".
     },
 
     kimi = {
@@ -379,7 +384,8 @@ local ModelLists = {
         -- Llama 3.x
         "Meta-Llama-3.3-70B-Instruct",                       -- standard/fast
         -- Other
-        "MiniMax-M2.7",
+        "MiniMax-M3",                                        -- replaced MiniMax-M2.7 in the catalog by 2026-10-14
+                                                             -- (1M ctx; catalog only: the key is refused)
         "gemma-4-31B-it",
         -- (Llama-4-Maverick-17B-128E-Instruct — the former default/flagship —
         -- deprecated by SambaNova 2026-06-09 and absent from their live model
@@ -678,7 +684,7 @@ local ModelLists = {
         xai        = { "grok-4.7", "grok-4.6", "grok-4.5", "grok-4.3", "grok-4.20-beta-0309-non-reasoning", "grok-4-1-fast-non-reasoning" },
         openrouter = { "anthropic/claude-sonnet-5.5", "anthropic/claude-sonnet-5", "anthropic/claude-sonnet-4.6", "anthropic/claude-sonnet-4.5" },
         requesty   = { "openai/gpt-4o-mini" },
-        qwen       = { "qwen3-max" },
+        qwen       = { "qwen3.8-max", "qwen3-max" },
         kimi       = { "kimi-k2.6", "kimi-k2.5", "kimi-k2-0905-preview" },
         together   = { "deepseek-ai/DeepSeek-V4-Pro-0813", "deepseek-ai/DeepSeek-V4-Pro", "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8" },
         fireworks  = { "accounts/fireworks/models/gpt-oss-120b", "accounts/fireworks/models/deepseek-v4-pro", "accounts/fireworks/models/llama4-maverick-instruct-basic" },
@@ -691,8 +697,9 @@ local ModelLists = {
 
     -- Ids a provider no longer serves, mapped to their replacement. The startup
     -- refresh moves a stored pick even when it was deliberate (the old id would
-    -- fail), with a one-time notice; the provider's handler maps any other stored
-    -- copy (an action's or a tier's pinned model) at the wire. Perplexity: the
+    -- fail), with a one-time notice; the request router (gpt_query) maps any other
+    -- stored copy (a favorite, an action's or a tier's pin, a provider's preferred
+    -- default) at the wire. Perplexity: the
     -- Sonar chat wire retired 2026-09-27; sonar lives on as perplexity/sonar on
     -- the Agent API, the other Sonar models are gone and land on it too (the
     -- default).
@@ -754,6 +761,30 @@ local ModelLists = {
         together = {
             ["deepseek-ai/DeepSeek-V4-Pro"] = "deepseek-ai/DeepSeek-V4-Pro-0813",
         },
+        -- Google answers these with another model since 2026-10-08 (changelog; the
+        -- response's modelVersion names the replacement, checked 2026-10-14). Moving the
+        -- pick keeps the name honest; the old id would still answer.
+        gemini = {
+            ["gemini-3.7-flash"] = "gemini-3.8-flash",
+            ["gemini-3.5-flash"] = "gemini-3.6-flash",
+        },
+        -- Model Studio 2026-10-14: qwen3-max and qwen3-coder-plus answer 404 "Model not
+        -- exist"; qwen-turbo left the list and answers only a 429 request limit.
+        qwen = {
+            ["qwen3-max"] = "qwen3.8-max",
+            ["qwen3-coder-plus"] = "qwen3.8-max",
+            ["qwen-turbo"] = "qwen3.5-flash",
+        },
+        -- OpenRouter 2026-10-14: both 404 "deprecated on Oct 9, 2026" (its own advice:
+        -- Qwen3.8 Max (0902) and Qwen3.7 Plus; the curated flash stands in for the latter).
+        openrouter = {
+            ["qwen/qwen3-max"] = "qwen/qwen3.8-max-0902",
+            ["qwen/qwen3-235b-a22b"] = "qwen/qwen3.8-flash",
+        },
+        -- Gone from SambaNova's catalog by 2026-10-14 (catalog evidence; the key is refused).
+        sambanova = {
+            ["MiniMax-M2.7"] = "MiniMax-M3",
+        },
     },
 
     _tiers = {
@@ -774,7 +805,7 @@ local ModelLists = {
             anthropic = "claude-fable-5-1",
             openai = "gpt-6-astra",                  -- $10/$50; cannot turn reasoning off
             openai_codex = "gpt-6-astra",            -- opt-in like every frontier pick; needs a paid plan (refused on free accounts with the plan tip, 2026-10-11)
-            gemini = "gemini-3.1-pro-preview",       -- paid-only deep reasoning
+            gemini = "gemini-4-argon",               -- paid only (no free tier); GA, replaces 3.1-pro-preview here 2026-10-14
         },
 
         -- Provider's most capable general-purpose model
@@ -792,7 +823,7 @@ local ModelLists = {
             together = "deepseek-ai/DeepSeek-V4-Pro-0813",
             fireworks = "accounts/fireworks/models/glm-5p3",       -- deepseek-v4-pro stopped serving 2026-09
             sambanova = "gpt-oss-120b",              -- Maverick deprecated 2026-06-09
-            qwen = "qwen3-max",
+            qwen = "qwen3.8-max",                    -- qwen3-max retired 2026-10-10
             kimi = "kimi-k2.6",                      -- kimi-k3 probed on the international platform only; China-region keys exist (the pre-v0.21 migration), tier hints must never 400
             doubao = "doubao-seed-2.0-pro-32k",
             zai = "glm-5.3",                         -- always thinks (the 5.2 default can turn it off)
@@ -858,7 +889,7 @@ local ModelLists = {
             together = "meta-llama/Llama-3.3-70B-Instruct-Turbo",
             fireworks = "accounts/fireworks/models/deepseek-v4p1-flash", -- gpt-oss-20b stopped serving 2026-09; reasoning can turn off
             sambanova = "Meta-Llama-3.3-70B-Instruct",
-            qwen = "qwen-turbo",
+            qwen = "qwen3.5-flash",                  -- qwen-turbo gone 2026-10-14; the fast pick fills both
             kimi = "kimi-k2.6", -- turbo-preview 404s on the international platform (2026-08-15); k2.6 serves everywhere
             doubao = "doubao-seed-2.0-lite",
             zai = "glm-4.7-flash",

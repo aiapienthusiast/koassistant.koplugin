@@ -25,7 +25,7 @@ local function getDefaultModel(provider)
         opencode = "deepseek-v4-flash",
         opencode_go = "kimi-k3",
         a2agent = "deepseek-v4-flash",
-        qwen = "qwen3-max",
+        qwen = "qwen3.8-max",
         kimi = "kimi-k2.6",
         together = "deepseek-ai/DeepSeek-V4-Pro-0813",
         fireworks = "accounts/fireworks/models/gpt-oss-120b",
