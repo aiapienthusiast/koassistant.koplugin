@@ -36,7 +36,7 @@ The Reasoning tile in Quick Settings shows the effective state for the current m
 | OpenAI GPT-5.5 | reasons by default | effort low / medium / high; cannot be fully disabled |
 | DeepSeek V4 and Flash, Z.AI GLM-4.7 to 5.2, SambaNova DeepSeek-V3.x | thinks by default | On / Off |
 | Z.AI GLM-5.3 family | always thinks | no control |
-| Qwen 3.8 / 3.7 / 3.5 (the Qwen provider) | reasons by default | no control yet |
+| Qwen 3.8 / 3.7 / 3.5 (the Qwen provider) | reasons by default | Off / On |
 | xAI Grok 4.7, 4.6, 4.5 | reasons by default | effort minimal to xhigh; cannot be fully disabled |
 | xAI Grok 4.3 | reasons by default | Off / effort low / medium / high |
 | xAI Grok 4.20 reasoning | always reasons | no control |
@@ -94,7 +94,7 @@ When you chat about an open book, the AI can call local tools to look things up 
 
 **Lookup effort** (**Settings → Advanced → Book Tools Lookup Effort**): **Quick** (2 rounds, 4 lookups), **Standard** (4 rounds, 8 lookups) or **Thorough** (6 rounds, 16 lookups, a larger passage budget) caps how much the AI may look up per question and tells the model its remaining budget, so it plans its searches from broad to narrow instead of being cut off mid-search.
 
-**Providers:** Gemini, Claude (Anthropic), OpenAI (API or Subscription) and OpenRouter, plus DeepSeek, Mistral, Groq, xAI, Fireworks, Kimi, OpenCode Zen, OpenCode Go and A2Agent on tool-capable models, and Ollama locally (a local model's capabilities are derived from the model menu, on pick or with "Refresh model capabilities", before the Tools chip lights up). A few models reached through OpenCode Go and A2Agent (its Qwen models) answer tools but refuse the forced-tool step, so they are left out; the Qwen provider's own models do the same while they reason, so Qwen has no tool-capable model for now. Most community hosts, and custom providers, can use them for a model once **Test provider...** has recorded that it calls tools ([Providers and Models](Providers-and-Models#fetching-and-testing-models)). Providers and models without tool support fall back to normal chat.
+**Providers:** Gemini, Claude (Anthropic), OpenAI (API or Subscription) and OpenRouter, plus DeepSeek, Mistral, Groq, xAI, Fireworks, Qwen, Kimi, OpenCode Zen, OpenCode Go and A2Agent on tool-capable models, and Ollama locally (a local model's capabilities are derived from the model menu, on pick or with "Refresh model capabilities", before the Tools chip lights up). A few models reached through OpenCode Go and A2Agent (its Qwen models) answer tools but refuse the forced-tool step, so they are left out. On DeepSeek, Kimi and the Qwen provider, reasoning is turned off during the lookups (some of their models refuse the forced step while they reason); in the default gather mode the answer written after the lookups reasons as usual. Most community hosts, and custom providers, can use them for a model once **Test provider...** has recorded that it calls tools ([Providers and Models](Providers-and-Models#fetching-and-testing-models)). Providers and models without tool support fall back to normal chat.
 
 **Requires** Allow Text Extraction: the tools read the book's text ([Privacy and Data](Privacy-and-Data)); a trusted provider satisfies that too, and a book's own **Text extraction** row (Book Settings → Privacy) wins either way.
 

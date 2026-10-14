@@ -179,6 +179,9 @@ ModelAudit.DELIBERATE_SKIPS = {
         ["gemini-2.0-flash-001"] = "old generation",
         ["gemini-2.0-flash-lite"] = "old generation",
         ["gemini-2.0-flash-lite-001"] = "old generation",
+        ["gemini-2.5-flash"] = "left the picker 2026-10-14: served only to accounts that used 2.5 before",
+        ["gemini-2.5-pro"] = "left the picker 2026-10-14: served only to accounts that used 2.5 before",
+        ["gemini-2.5-flash-lite"] = "left the picker 2026-10-14: served only to accounts that used 2.5 before",
     },
     openai = {
         ["chat-latest"] = "ChatGPT-tuned rolling alias",
@@ -1808,10 +1811,14 @@ local OPENAI_FAMILY = {
     opencode_go = { effort_key = "reasoning_effort",
                    extra_headers = { ["x-opencode-session"] = "koassistant-model-audit" } },
     a2agent    = { effort_key = "reasoning_effort" },   -- #108: gateway to five families; the probe decides what each backend honors
-    deepseek   = { binary_key = "thinking" },   -- {type="enabled"/"disabled"}
+    -- tool_off = what the handler adds to every tool-session request (deepseek.lua and
+    -- qwen.lua turn thinking off there); the replay leg sends it too.
+    deepseek   = { binary_key = "thinking",     -- {type="enabled"/"disabled"}
+                   tool_off = { thinking = { type = "disabled" } } },
     zai        = { binary_key = "thinking" },
     mistral    = {},                            -- no reasoning params (magistral always-on)
-    qwen       = {},                            -- DashScope compatible-mode; enable_thinking probing TODO (2026-08-15)
+    qwen       = { binary_key = "enable_thinking", binary_flat = true,   -- DashScope: true/false (B368)
+                   tool_off = { enable_thinking = false } },
     kimi       = {},                            -- Moonshot international; k2.6 has no reasoning params
                                                 -- CAUTION: lowest tier = org-wide 3 RPM — expect 429 retries
     openrouter = { reasoning_obj = true,        -- reasoning={effort=..}/{enabled=false}
@@ -1902,6 +1909,7 @@ local function probeOpenAIFamily(provider, model, api_key, verbose)
     end
 
     -- 3. reasoning controls
+    local binary_off_value   -- the off the forced-call retry in step 6 sends
     if fam.effort_key then
         facts.ladder = OPENAI_LADDER
         for _i, effort in ipairs(OPENAI_LADDER) do
@@ -1913,15 +1921,25 @@ local function probeOpenAIFamily(provider, model, api_key, verbose)
         facts.disable_ok = facts.efforts.none
     elseif fam.binary_key then
         facts.binary = true
-        local oncode, ondec, onraw = req({ [fam.binary_key] = { type = "enabled" } })
+        -- {type="enabled"/"disabled"} (deepseek, zai) or a flat boolean (qwen's enable_thinking)
+        local on_v, off_v = { type = "enabled" }, { type = "disabled" }
+        if fam.binary_flat then on_v, off_v = true, false end
+        local on_label = fam.binary_key .. (fam.binary_flat and "=true" or '={type="enabled"}')
+        local off_label = fam.binary_key .. (fam.binary_flat and "=false" or '={type="disabled"}')
+        local oncode, ondec, onraw = req({ [fam.binary_key] = on_v })
         facts.binary_on_ok = verdict(oncode)
-        recordProbe(facts, fam.binary_key .. '={type="enabled"}', facts.binary_on_ok,
+        recordProbe(facts, on_label, facts.binary_on_ok,
             not facts.binary_on_ok and ModelAudit.errText(ondec, onraw) or nil)
-        local offcode, offdec, offraw = req({ [fam.binary_key] = { type = "disabled" } })
-        facts.binary_off_ok = verdict(offcode)
+        -- Accepted is not off: the off runs on the reasoning prompt with room to think,
+        -- and counts only when the reply shows no reasoning (the Argon budget-0 lesson).
+        local offcode, offdec, offraw = req({ [fam.binary_key] = off_v }, 1024, REASONING_PROBE_PROMPT)
+        local still = offcode == 200 and ModelAudit.reasoningEvidence(offdec) or nil
+        facts.binary_off_ok = verdict(offcode) and not still
         facts.disable_ok = facts.binary_off_ok
-        recordProbe(facts, fam.binary_key .. '={type="disabled"}', facts.binary_off_ok,
-            not facts.binary_off_ok and ModelAudit.errText(offdec, offraw) or nil)
+        recordProbe(facts, off_label, verdict(offcode),
+            verdict(offcode) == false and ModelAudit.errText(offdec, offraw)
+            or (still and ("accepted, still reasoned (" .. still .. "): no off")) or nil)
+        binary_off_value = off_v
     elseif fam.reasoning_obj then
         facts.ladder = OPENAI_LADDER
         for _i, effort in ipairs(OPENAI_LADDER) do
@@ -1981,8 +1999,11 @@ local function probeOpenAIFamily(provider, model, api_key, verbose)
         if facts.tool_choice_any_ok == false and fam.binary_key then
             -- deepseek V4 precedent: thinking mode rejects tool_choice=required;
             -- the handler accommodation is forcing thinking off on tool turns
+            -- (an explicit nil check: Qwen's off is the boolean false, which `or` would replace)
+            local off_value = binary_off_value
+            if off_value == nil then off_value = { type = "disabled" } end
             local rcode = req({ tools = probe_tools, tool_choice = "required",
-                                [fam.binary_key] = { type = "disabled" } })
+                                [fam.binary_key] = off_value })
             if rcode == 200 then
                 facts.tool_choice_any_thinking_off = true
                 adetail = (adetail or "") .. " | OK with " .. fam.binary_key .. " disabled"
@@ -2082,7 +2103,7 @@ local function probeOpenAIFamily(provider, model, api_key, verbose)
     if facts.tools_ok and real_specs then
         local auto = replayWithAuto(facts)
         local tool_extra = { tools = probe_tools, tool_choice = auto and "auto" or "required" }
-        if provider == "deepseek" then tool_extra.thinking = { type = "disabled" } end
+        for k, v in pairs(fam.tool_off or {}) do tool_extra[k] = v end
         local t1code, t1dec, t1raw = req(tool_extra, 1024, TOOL_REPLAY_PROMPT)
         local parsed = t1code == 200 and parseToolCalls(t1dec, provider) or nil
         if not parsed then
@@ -2096,7 +2117,7 @@ local function probeOpenAIFamily(provider, model, api_key, verbose)
                 if provider ~= "openrouter" then m.reasoning_details = nil end
             end
             local replay_extra = { messages = messages, tools = probe_tools, tool_choice = "none" }
-            if provider == "deepseek" then replay_extra.thinking = { type = "disabled" } end
+            for k, v in pairs(fam.tool_off or {}) do replay_extra[k] = v end
             local t2code, t2dec, t2raw = req(replay_extra, 1024)
             facts.tool_replay_ok = verdict(t2code)
             recordProbe(facts, "tool replay round 2 (adapter echo)", facts.tool_replay_ok,

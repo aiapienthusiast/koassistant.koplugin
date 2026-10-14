@@ -1459,6 +1459,31 @@ TestRunner:test("refresh 2026-09-28: new prefixes do not catch neighbouring ids"
         "qwen3-max keeps the forced call")
 end)
 
+-- B368 (batteries 2026-10-14): Qwen's thinking switch and the tools it unlocks
+TestRunner:test("qwen: off sends enable_thinking=false; tool sessions always turn it off", function()
+    for _idx, model in ipairs({ "qwen3.8-max", "qwen3.8-flash", "qwen3.5-plus", "qwen3.5-flash" }) do
+        local ap = offWire("qwen", model)
+        TestRunner:assertEqual(ap.qwen_thinking and ap.qwen_thinking.enabled, false, model .. ": Minimal is off")
+        ap = offWire("qwen", model, { global_stance = "default" })
+        TestRunner:assertEqual(ap.qwen_thinking, nil, model .. ": Default sends nothing")
+        ap = offWire("qwen", model, { global_stance = "maximum" })
+        TestRunner:assertEqual(ap.qwen_thinking, nil, model .. ": on is the API default, nothing sent")
+        TestRunner:assertTrue(ModelConstraints.supportsCapability("qwen", model, "tools"), model .. ": tools")
+    end
+    TestRunner:assertFalse(ModelConstraints.supportsCapability("qwen", "qwen3.8-27b", "tools"),
+        "an unprobed Fetch-models id gets no tools grant")
+    TestRunner:assertFalse(ModelConstraints.reasoningDisplayEnabled({ qwen_thinking = { enabled = false } }),
+        "the off reads as reasoning off")
+
+    local Qwen = require("koassistant.api.qwen")
+    local body = Qwen:customizeRequestBody({}, { api_params = { qwen_thinking = { enabled = false } } })
+    TestRunner:assertEqual(body.enable_thinking, false, "the off reaches the wire")
+    body = Qwen:customizeRequestBody({}, { api_params = {}, tools = { specs = {} } })
+    TestRunner:assertEqual(body.enable_thinking, false, "a tool session turns thinking off")
+    body = Qwen:customizeRequestBody({}, { api_params = {} })
+    TestRunner:assertEqual(body.enable_thinking, nil, "otherwise the model's default stands")
+end)
+
 -- Sonnet 5.5 (probed 2026-09-29): its own rows, not Sonnet 5's by prefix
 TestRunner:test("Sonnet 5.5: off is its named lowest setting, never disabled", function()
     local ap, d = offWire("anthropic", "claude-sonnet-5-5")

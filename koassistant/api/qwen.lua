@@ -46,7 +46,22 @@ end
 -- search_options.enable_source, so there is no provenance to harvest — the
 -- answer is grounded but "Show Sources" stays empty by wire limitation).
 -- Override-first read, same layering as zai.lua/openrouter.lua.
+--
+-- Thinking (B368, batteries 2026-10-14): the 3.8 / 3.7 / 3.5 models reason by
+-- default; the resolver's neutral api_params.qwen_thinking = { enabled = false }
+-- becomes enable_thinking=false. Every tool session turns thinking off too
+-- (kimi.lua and deepseek.lua do the same): qwen3.8-flash refuses a forced
+-- tool_choice "in thinking mode", and phase 2 of gather mode carries no
+-- config.tools, so the streamed answer keeps the model's default thinking.
 function QwenHandler:customizeRequestBody(request_body, config)
+    local thinking = config.api_params and config.api_params.qwen_thinking
+    if type(thinking) == "table" and thinking.enabled == false then
+        request_body.enable_thinking = false
+    end
+    if config.tools and config.tools.specs then
+        request_body.enable_thinking = false
+    end
+
     local enable_web_search = false
     if config.enable_web_search ~= nil then
         enable_web_search = config.enable_web_search

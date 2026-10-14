@@ -106,10 +106,9 @@ local ModelLists = {
                                         -- on a paid key 2026-08-15: effort low/medium/high, no
                                         -- disable, tools + grounding work)
         "gemini-3.1-flash-lite",        -- previous lite
-        -- Gemini 2.5 (kept for popularity)
-        "gemini-2.5-flash",             -- still popular, free tier
-        "gemini-2.5-pro",               -- GA deep-reasoning (paid)
-        "gemini-2.5-flash-lite",        -- cheapest/fastest 2.5 (free tier)
+        -- The 2.5 models left the picker 2026-10-14 (maintainer: one previous version per
+        -- line). Google serves them only to accounts that used them before (2026-09-18);
+        -- an explicit pick is kept (resolveModelRefresh) and Fetch models adds them back.
     },
 
     ollama = {
@@ -233,10 +232,11 @@ local ModelLists = {
         -- Google
         "google/gemini-3.8-flash",      -- battery 2026-09-28 (reasoning mandatory here)
         "google/gemini-4-argon",        -- battery 2026-10-14 (reasoning mandatory here; $2/$10 to 2026-11-30)
-        "google/gemini-3.7-flash",      -- catalog-verified 2026-08-15 ($0.38/$1.88, half of 3.6 there)
         "google/gemini-3.6-flash",
-        "google/gemini-3.5-flash",
         "google/gemini-3.5-flash-lite",
+        -- google/gemini-3.7-flash and 3.5-flash left the picker 2026-10-14: Google's own API
+        -- answers them with 3.8 and 3.6. They still answer here (AI Studio and Vertex
+        -- endpoints), so a saved pick is kept rather than moved.
 
         -- DeepSeek
         "deepseek/deepseek-v4-pro",

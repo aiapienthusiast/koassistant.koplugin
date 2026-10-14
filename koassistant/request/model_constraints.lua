@@ -449,13 +449,17 @@ ModelConstraints.capabilities = {
         thinking = { "DeepSeek-V3.1", "DeepSeek-V3.2" },
     },
     qwen = {
-        -- Book tools had one model here, qwen3-max (battery 2026-08-15: tools + forced
-        -- tool_choice + two-round replay green; ToolWire alias in place), retired by
-        -- Alibaba 2026-10-10. The 3.8 and 3.5 models refuse a forced tool call while they
-        -- think and qwen.lua cannot turn thinking off yet, so no grant until B368 sends
-        -- enable_thinking=false on tool sessions. enable_search web search is wired in
-        -- qwen.lua (server-side injection; no sources on this wire).
-        tools = {},
+        -- B368 (batteries 2026-10-14, DashScope international): the 3.8, 3.7 and 3.5
+        -- models reason by default and turn off with enable_thinking=false, which
+        -- qwen.lua sends for an off decision and on EVERY tool session (the Kimi and
+        -- DeepSeek shape): 3.8-flash refuses a forced tool call while thinking ("not
+        -- supported ... in thinking mode"), the other three accept it either way, and
+        -- with thinking off all four pass forced tool_choice, "none" and the two-round
+        -- replay. (qwen3-max, the tools model before, was retired 2026-10-10.)
+        -- enable_search web search is wired in qwen.lua (server-side injection; no
+        -- sources on this wire).
+        thinking = { "qwen3.8-", "qwen3.7-", "qwen3.5-" },
+        tools = { "qwen3.8-max", "qwen3.8-flash", "qwen3.5-plus", "qwen3.5-flash" },
     },
     kimi = {
         -- kimi-k2.6 probed live 2026-08-15 (international platform): thinks by
@@ -1330,16 +1334,20 @@ ModelConstraints.reasoning_profiles = {
           stance_map = { minimal = { state = "off" }, maximum = { state = "on" } } },
     },
     qwen = {
-        -- Probed 2026-09-28 (DashScope international): the 3.8 and 3.5 families and
-        -- qwen3.7-plus reason by DEFAULT. enable_thinking=false turns it off on the wire
-        -- (probed; forced tool calls then work too), but qwen.lua sends no reasoning
-        -- param yet, so they read as always-on with no control (the magistral shape).
-        -- (qwen3-max, retired 2026-10-10, did not reason by default: no profile.)
+        -- Probed 2026-09-28 and 2026-10-14 (DashScope international): the 3.8 and 3.5
+        -- families and qwen3.7-plus reason by DEFAULT; enable_thinking=false turns it
+        -- off (the battery's off leg: no reasoning on the math prompt). The resolver
+        -- emits api_params.qwen_thinking only for off (on = the API default); qwen.lua
+        -- translates it (B368). (qwen3-max, retired 2026-10-10, did not reason by
+        -- default: no profile.)
         -- (Trailing "-": prefixMatch leaves "." unescaped, so a bare "qwen3.8" would
         -- also catch qwen3-8b.)
-        { match = "qwen3.8-", axis = "none", default_state = "on", can_disable = false, can_enable = false },
-        { match = "qwen3.7-", axis = "none", default_state = "on", can_disable = false, can_enable = false },
-        { match = "qwen3.5-", axis = "none", default_state = "on", can_disable = false, can_enable = false },
+        { match = "qwen3.8-", axis = "binary", default_state = "on", can_disable = true, can_enable = true,
+          stance_map = { minimal = { state = "off" }, maximum = { state = "on" } } },
+        { match = "qwen3.7-", axis = "binary", default_state = "on", can_disable = true, can_enable = true,
+          stance_map = { minimal = { state = "off" }, maximum = { state = "on" } } },
+        { match = "qwen3.5-", axis = "binary", default_state = "on", can_disable = true, can_enable = true,
+          stance_map = { minimal = { state = "off" }, maximum = { state = "on" } } },
     },
     openrouter = {
         -- OpenRouter is a meta-provider: reasoning-disable support varies by backend, so
@@ -2252,8 +2260,8 @@ function ModelConstraints.maybeAppendGemini3GroundingHint(err_msg, provider, mod
         GROUNDING_TIP_HEAD .. ", not a plugin error. On free-tier keys, Gemini 3 models " ..
         "reject requests that include web search or book tools, even though plain requests " ..
         "work. Options: turn off web search and book tools for this chat, use a Gemini 2.5 " ..
-        "model (works on free keys, but only for Google accounts old enough to still have " ..
-        "the 2.5 models), switch to another provider, or add paid credits to your Gemini " ..
+        "model (add one with Fetch models; it works on free keys, but only for Google " ..
+        "accounts old enough to still have the 2.5 models), switch to another provider, or add paid credits to your Gemini " ..
         "key in Google AI Studio (confirmed to lift this limit)."
 end
 
@@ -3011,7 +3019,7 @@ end
 -- dialog inspects them for display.
 ModelConstraints.REASONING_WIRE_KEYS = {
     "thinking", "output_config", "reasoning", "thinking_budget", "thinking_level",
-    "deepseek_thinking", "zai_thinking", "sambanova_thinking", "kimi_thinking",
+    "deepseek_thinking", "zai_thinking", "sambanova_thinking", "kimi_thinking", "qwen_thinking",
     "openrouter_reasoning", "requesty_reasoning", "groq_reasoning", "nvidia_reasoning",
     "together_reasoning", "fireworks_reasoning", "xai_reasoning", "opencode_reasoning",
     "a2agent_reasoning",
@@ -3085,6 +3093,10 @@ function ModelConstraints.applyReasoningParams(provider, api_params, decision)
         -- so emit nothing for on. kimi.lua translates and drops temperature
         -- (temp is mode-locked; see the forced-params note).
         if not on then api_params.kimi_thinking = { type = "disabled" } end
+    elseif provider == "qwen" then
+        -- The curated Qwen rows think by DEFAULT; only an explicit OFF needs a wire
+        -- param (enable_thinking=false, battery 2026-10-14). qwen.lua translates.
+        if not on then api_params.qwen_thinking = { enabled = false } end
     elseif provider == "zai" then
         api_params.zai_thinking = { type = on and "enabled" or "disabled" }
     elseif provider == "sambanova" then
