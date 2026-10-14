@@ -21,6 +21,55 @@ local function imageModelOptions(provider)
     return opts
 end
 
+-- The provider image generation uses (the Provider row, else the main chat
+-- provider): its rows can be changed, the other providers' are grayed (B458).
+local function imageRowsProvider(plugin)
+    local f = plugin.settings:readSetting("features") or {}
+    local pick = f.image_gen_provider
+    if type(pick) == "string" and pick ~= "" and pick ~= "auto" then return pick end
+    return require("koassistant.core.config_helper").mainProvider(f)
+end
+
+-- A model row's value: "Default (<model>)", or the model a pick sends (a
+-- retired pick shows its replacement)
+local function imageModelLabel(provider, stored)
+    if type(stored) ~= "string" or stored == "" or stored == "default" then
+        return T(_("Default (%1)"), ModelLists.getDefaultImageModel(provider) or "?")
+    end
+    return ModelLists.resolveImageModel(provider, stored)
+end
+
+-- A radio row's value in words: the option's own text (B458)
+local function optionText(options, value)
+    for _idx, o in ipairs(options) do
+        if o.value == (value or "default") then return o.text end
+    end
+    return tostring(value)
+end
+
+local IMAGE_SIZE_OPTIONS = {
+    { value = "default", text = _("Default") },
+    { value = "1024x1024", text = "1024x1024" },
+    { value = "1536x1024", text = _("1536x1024 (landscape)") },
+    { value = "1024x1536", text = _("1024x1536 (portrait)") },
+}
+
+local IMAGE_QUALITY_OPTIONS = {
+    { value = "default", text = _("Default") },
+    { value = "low", text = _("Low") },
+    { value = "medium", text = _("Medium") },
+    { value = "high", text = _("High") },
+}
+
+local IMAGE_ASPECT_OPTIONS = {
+    { value = "default", text = _("Default") },
+    { value = "1:1", text = "1:1" },
+    { value = "16:9", text = "16:9" },
+    { value = "9:16", text = "9:16" },
+    { value = "3:2", text = "3:2" },
+    { value = "2:3", text = "2:3" },
+}
+
 -- Helper: Build model list string from capabilities
 local function getModelList(provider, capability)
     local caps = ModelConstraints.capabilities[provider]
@@ -682,7 +731,7 @@ local SettingsSchema = {
                         { value = "basic", label = _("Title & author") },
                         { value = "full", label = _("Title, author & position") },
                     },
-                    help_text = _("Default book context sent with freeform chats and book-aware actions (Explain, etc.). 'None' sends no book line; 'Title only' omits the author; 'Title & author' is the default; 'Title, author & position' also adds reading progress, chapter, and page (when basic stats are enabled). Override per book in Book Settings. Actions that don't request book info (e.g. Translate) are unaffected."),
+                    help_text = _("Default book context sent with freeform chats and book-aware actions (Explain, etc.). 'None' sends no book line; 'Title only' omits the author; 'Title & author' is the default; 'Title, author & position' also adds reading progress, chapter, and page (when basic stats are enabled). Override per book in Book Settings. Image prompts follow it too (title and author only). Actions that don't request book info (e.g. Translate) are unaffected."),
                     separator = true,
                 },
                 -- Content Format submenu
@@ -2995,37 +3044,39 @@ local SettingsSchema = {
                             type = "radio",
                             text_func = function(plugin)
                                 local f = plugin.settings:readSetting("features") or {}
-                                return T(_("OpenAI model: %1"), f.image_gen_model_openai or _("Default"))
+                                return T(_("OpenAI model: %1"), imageModelLabel("openai", f.image_gen_model_openai))
                             end,
-                            help_text = _("gpt-image-1-mini is fast (~15 s) and cheapest; gpt-image-2 is highest quality but slow (~60 s)."),
+                            help_text = _("gpt-image-2.5-flare is fast (about 11 s at low quality) and cheap; gpt-image-2.5-sunburst gives the finest detail but is slower."),
                             path = "features.image_gen_model_openai",
                             default = "default",
                             options = imageModelOptions("openai"),
-                            depends_on = { id = "image_gen_provider", value = "openai" },
+                            enabled_func = function(plugin) return imageRowsProvider(plugin) == "openai" end,
                         },
                         {
                             id = "image_gen_model_xai",
                             type = "radio",
                             text_func = function(plugin)
                                 local f = plugin.settings:readSetting("features") or {}
-                                return T(_("xAI model: %1"), f.image_gen_model_xai or _("Default"))
+                                return T(_("xAI model: %1"), imageModelLabel("xai", f.image_gen_model_xai))
                             end,
+                            help_text = _("grok-imagine-image is fast and the cheapest; grok-imagine-image-2.0 makes better pictures at about twice the price."),
                             path = "features.image_gen_model_xai",
                             default = "default",
                             options = imageModelOptions("xai"),
-                            depends_on = { id = "image_gen_provider", value = "xai" },
+                            enabled_func = function(plugin) return imageRowsProvider(plugin) == "xai" end,
                         },
                         {
                             id = "image_gen_model_gemini",
                             type = "radio",
                             text_func = function(plugin)
                                 local f = plugin.settings:readSetting("features") or {}
-                                return T(_("Gemini model: %1"), f.image_gen_model_gemini or _("Default"))
+                                return T(_("Gemini model: %1"), imageModelLabel("gemini", f.image_gen_model_gemini))
                             end,
+                            help_text = _("Nano Banana 2.1 is Google's everyday image model; Flash Lite is the fastest and cheapest; 3 Pro gives the finest detail but is slower."),
                             path = "features.image_gen_model_gemini",
                             default = "default",
                             options = imageModelOptions("gemini"),
-                            depends_on = { id = "image_gen_provider", value = "gemini" },
+                            enabled_func = function(plugin) return imageRowsProvider(plugin) == "gemini" end,
                             separator = true,
                         },
                         {
@@ -3033,56 +3084,39 @@ local SettingsSchema = {
                             type = "radio",
                             text_func = function(plugin)
                                 local f = plugin.settings:readSetting("features") or {}
-                                return T(_("OpenAI size: %1"), f.image_gen_size or _("Default"))
+                                return T(_("OpenAI size: %1"), optionText(IMAGE_SIZE_OPTIONS, f.image_gen_size))
                             end,
                             help_text = _("Image dimensions (OpenAI only). Default lets the API decide."),
                             path = "features.image_gen_size",
                             default = "default",
-                            options = {
-                                { value = "default", text = _("Default") },
-                                { value = "1024x1024", text = "1024x1024" },
-                                { value = "1536x1024", text = _("1536x1024 (landscape)") },
-                                { value = "1024x1536", text = _("1024x1536 (portrait)") },
-                            },
-                            depends_on = { id = "image_gen_provider", value = "openai" },
+                            options = IMAGE_SIZE_OPTIONS,
+                            enabled_func = function(plugin) return imageRowsProvider(plugin) == "openai" end,
                         },
                         {
                             id = "image_gen_quality",
                             type = "radio",
                             text_func = function(plugin)
                                 local f = plugin.settings:readSetting("features") or {}
-                                return T(_("OpenAI quality: %1"), f.image_gen_quality or _("Default"))
+                                return T(_("OpenAI quality: %1"), optionText(IMAGE_QUALITY_OPTIONS, f.image_gen_quality))
                             end,
                             help_text = _("Higher quality is slower and costs more (OpenAI only)."),
                             path = "features.image_gen_quality",
                             default = "default",
-                            options = {
-                                { value = "default", text = _("Default") },
-                                { value = "low", text = _("Low") },
-                                { value = "medium", text = _("Medium") },
-                                { value = "high", text = _("High") },
-                            },
-                            depends_on = { id = "image_gen_provider", value = "openai" },
+                            options = IMAGE_QUALITY_OPTIONS,
+                            enabled_func = function(plugin) return imageRowsProvider(plugin) == "openai" end,
                         },
                         {
                             id = "image_gen_aspect",
                             type = "radio",
                             text_func = function(plugin)
                                 local f = plugin.settings:readSetting("features") or {}
-                                return T(_("Aspect ratio: %1"), f.image_gen_aspect or _("Default"))
+                                return T(_("Aspect ratio: %1"), optionText(IMAGE_ASPECT_OPTIONS, f.image_gen_aspect))
                             end,
                             help_text = _("Output aspect ratio (xAI only). Default lets the API decide."),
                             path = "features.image_gen_aspect",
                             default = "default",
-                            options = {
-                                { value = "default", text = _("Default") },
-                                { value = "1:1", text = "1:1" },
-                                { value = "16:9", text = "16:9" },
-                                { value = "9:16", text = "9:16" },
-                                { value = "3:2", text = "3:2" },
-                                { value = "2:3", text = "2:3" },
-                            },
-                            depends_on = { id = "image_gen_provider", value = "xai" },
+                            options = IMAGE_ASPECT_OPTIONS,
+                            enabled_func = function(plugin) return imageRowsProvider(plugin) == "xai" end,
                             separator = true,
                         },
                         -- Prompt framing (2026-08-13): what surrounds the raw

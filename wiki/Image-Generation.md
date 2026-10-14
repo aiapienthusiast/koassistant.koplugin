@@ -7,7 +7,7 @@ KOAssistant can turn a passage you highlight into an AI-generated image: a chara
 1. Highlight a passage of any length. By default the plugin frames it with the book's title and author and a slice of the surrounding text before sending it as the image prompt (the framing switches are below); the selected text is always the core of the prompt.
 2. In the highlight menu, tap **Generate Image (KOA)**.
 3. A progress window shows "Generating image with … / …" with an elapsed-seconds counter; **Stop** cancels a request in flight.
-4. The finished image opens full screen in KOReader's image viewer, and is saved (below). If the provider refuses the prompt or the request fails, an error message shows instead and nothing is saved.
+4. The finished image opens full screen in KOReader's image viewer, and is saved (below). If the provider refuses the prompt or the request fails, an error message shows instead and nothing is saved. A refusal says why when the provider gives a reason: Google's safety filter and the reason it names, or OpenAI's moderation and whether it refused the prompt or the picture.
 
 The button appears only when the resolved image provider can generate images and has an API key. With no such provider, it is hidden.
 
@@ -17,9 +17,11 @@ Three providers offer image generation, each with its own models (the first is t
 
 | Provider | Models | Notes |
 |---|---|---|
-| **OpenAI** | `gpt-image-1-mini` (default, fast, about 15 s, cheapest), `gpt-image-1.5`, `gpt-image-2` (flagship quality, slow, about 60 s), `gpt-image-1`, `chatgpt-image-latest` | size (1024x1024, landscape, portrait) and quality (low / medium / high) settings |
-| **xAI (Grok)** | `grok-imagine-image` (default, fast, about 7 s), `grok-imagine-image-quality` (higher quality) | an aspect ratio setting (1:1, 16:9, 9:16, 3:2, 2:3) |
-| **Gemini** | `gemini-3.1-flash-image` (default, "Nano Banana"), `gemini-3-pro-image` | no size or quality parameters |
+| **OpenAI** | `gpt-image-2.5-flare` (default: fast, about 11 s at low quality), `gpt-image-2.5-sunburst` (finest detail, slower), `gpt-image-2`, `gpt-image-1-mini` | size (1024x1024, landscape, portrait) and quality (low / medium / high) settings |
+| **xAI (Grok)** | `grok-imagine-image` (default: fast, about 7 s, the cheapest), `grok-imagine-image-2.0` (better pictures, about twice the price) | an aspect ratio setting (1:1, 16:9, 9:16, 3:2, 2:3) |
+| **Gemini** | `gemini-nano-banana-2.1` (default: Nano Banana 2.1, Google's everyday image model), `gemini-3.1-flash-lite-image` (the fastest and cheapest, a few seconds), `gemini-3-pro-image` (Nano Banana Pro: finest detail, slower) | no size or quality settings; requests follow **Settings → Advanced → Provider Settings → Gemini Content Filter**, as chat does |
+
+A model you picked that has left this list keeps working (`gpt-image-1.5`, `gpt-image-1`, `chatgpt-image-latest`, `gemini-3.1-flash-image`). xAI retires `grok-imagine-image-quality` on November 2, 2026, so a pick of it goes out as `grok-imagine-image-2.0`, the model xAI answers it with.
 
 KOAssistant generates images only through these three; Anthropic (Claude), DeepSeek, OpenAI Subscription and the other chat providers are not used for images. With one of them as your main provider, pick a dedicated image provider below, or the button stays hidden (OpenAI there needs an OpenAI API key: the subscription sign-in does not cover images).
 
@@ -31,15 +33,15 @@ Image generation has its own provider and model, independent of your chat provid
 - **OpenAI model**, **xAI model**, **Gemini model**: a model per provider, each defaulting to Default (the provider's first, recommended model).
 - **OpenAI size** and **OpenAI quality**: dimensions and quality tier, OpenAI only.
 - **Aspect ratio**: xAI only.
-- **Include book title/author in prompt** and **Include surrounding text in prompt** (both on by default): whether the prompt is framed with the book's title and author and a short slice of the surrounding text, so illustrations match the work's setting and era. A framed prompt also tells the model to put no text, titles or captions in the image. Turn both off for a prompt that is just your selection.
+- **Include book title/author in prompt** and **Include surrounding text in prompt** (both on by default): whether the prompt is framed with the book's title and author and a short slice of the surrounding text, so illustrations match the work's setting and era. A framed prompt also tells the model to put no text, titles or captions in the image. Turn both off for a prompt that is just your selection. The frame follows the same rules as chat: the title and author go only as far as **Settings → Chat & Export Settings → Book Info in Chat** (or the book's own value in Book Settings) allows, so None sends neither and Title only sends the title; and the text after your selection is cut the way chat's context is, by **Settings → Highlight Settings → Context Direction** and, while [spoiler protection](Spoiler-Protection) is on, **Context Under Spoiler Protection**.
 - **Prompt template…**: the exact prompt the image API will receive, with your framing switches applied.
 - **Generated images…**: opens the gallery.
 
-The model, size, quality and aspect ratio rows can be changed only while **Provider** names their provider: under Follow main provider they are grayed out, and the values they hold still apply. A size, quality or aspect ratio left at Default is left out of the request, so the provider decides.
+A provider's model, size, quality and aspect ratio rows can be changed while that provider makes the images: the one **Provider** names, or your chat provider under Follow main provider. The other providers' rows are grayed out, and the values they hold apply when that provider is used. A size, quality or aspect ratio left at Default is left out of the request, so the provider decides.
 
 ## Where images are stored
 
-Generated images are kept, not temporary, in `koassistant_images` under KOReader's data folder (for example `~/.config/koreader/koassistant_images` on a Linux desktop). Each file is named with its creation date and time plus the start of the selected text, so the folder is self-describing. They are your data: preserved across plugin updates, and no reset or uninstall removes them. They are not part of KOAssistant backups; copy the folder yourself when moving to another device ([Backups and Updates](Backups-and-Updates)).
+Generated images are kept, not temporary, in `koassistant_images` under KOReader's data folder (for example `~/.config/koreader/koassistant_images` on a Linux desktop). Each file is named with its creation date and time plus the start of the selected text, so the folder is self-describing, and carries the type the provider sent: `.png` from OpenAI, `.jpg` from Gemini and xAI. They are your data: preserved across plugin updates, and no reset or uninstall removes them. They are not part of KOAssistant backups; copy the folder yourself when moving to another device ([Backups and Updates](Backups-and-Updates)).
 
 ## The gallery
 

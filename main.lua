@@ -98,6 +98,7 @@ if configuration.features then
         config_file_defaults.features[k] = v
     end
 end
+require("koassistant.core.config_helper").setFileProvider(config_file_defaults.provider)
 
 -- Helper function to count table entries
 local function table_count(t)
@@ -1784,7 +1785,7 @@ function AskGPT:updateConfigFromSettings()
   local features = self.settings:readSetting("features") or {}
 
   -- Settings UI > configuration.lua > default
-  configuration.provider = features.provider or config_file_defaults.provider or "anthropic"
+  configuration.provider = require("koassistant.core.config_helper").mainProvider(features)
   configuration.model = features.model or config_file_defaults.model
 
   -- Merge settings into existing features table instead of replacing it.

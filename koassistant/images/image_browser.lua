@@ -93,7 +93,7 @@ function ImageBrowser.show(opts)
     -- One index read serves every row's prompt lookup
     local prompt_index = ImageGenerator.readIndex()
     for _idx, f in ipairs(files) do
-        local display = f.name:gsub("%.png$", "")
+        local display = f.name:gsub("%.png$", ""):gsub("%.jpg$", ""):gsub("%.webp$", "")
         local ie = prompt_index[f.name]
         local full_prompt = type(ie) == "table" and type(ie.prompt) == "string"
             and ie.prompt or nil

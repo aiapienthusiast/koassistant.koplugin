@@ -885,7 +885,7 @@ function ActionService:getHighlightMenuActionObjects(has_open_book, document_pat
                 local ImageGenerator = require("koassistant.images.image_generator")
                 local feats = self.settings:readSetting("features") or {}
                 include = ImageGenerator.effectiveProvider(feats,
-                    feats.provider or "anthropic", self.settings) ~= nil
+                    require("koassistant.core.config_helper").mainProvider(feats), self.settings) ~= nil
             end
             if include then
                 table.insert(result, action)
@@ -1037,7 +1037,7 @@ function ActionService:getDictionaryPopupActionObjects(has_open_book, document_p
                 local ImageGenerator = require("koassistant.images.image_generator")
                 local feats = self.settings:readSetting("features") or {}
                 include = ImageGenerator.effectiveProvider(feats,
-                    feats.provider or "anthropic", self.settings) ~= nil
+                    require("koassistant.core.config_helper").mainProvider(feats), self.settings) ~= nil
             end
             if include then
                 table.insert(result, action)
@@ -2248,7 +2248,7 @@ function ActionService:getInputActionObjects(ctx_name, document_path)
                 local ImageGenerator = require("koassistant.images.image_generator")
                 local feats = self.settings:readSetting("features") or {}
                 include = ImageGenerator.effectiveProvider(feats,
-                    feats.provider or "anthropic", self.settings) ~= nil
+                    require("koassistant.core.config_helper").mainProvider(feats), self.settings) ~= nil
             end
             if include then
                 table.insert(result, action)

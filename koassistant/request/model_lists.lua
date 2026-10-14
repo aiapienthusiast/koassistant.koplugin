@@ -1080,21 +1080,37 @@ local ModelLists = {
 -- _-prefixed so provider iteration (getAllProviders) skips it.
 -------------------------------------------------------------------------------
 
+-- Refreshed 2026-10-14 (docs/image_round_plan.md, rulings R1 + R2): the chat
+-- lists' rule, current models then one previous version per line. Left the
+-- picker, still served (a saved pick keeps working): gpt-image-1.5,
+-- gpt-image-1, chatgpt-image-latest, gemini-3.1-flash-image (deprecated by
+-- Google for gemini-nano-banana-2.1).
 ModelLists._image_models = {
     openai = {
-        "gpt-image-1-mini",       -- fast (~15 s), cheapest (default)
-        "gpt-image-1.5",
-        "gpt-image-2",            -- flagship quality, slow (~60 s)
-        "gpt-image-1",
-        "chatgpt-image-latest",
+        "gpt-image-2.5-flare",     -- default: OpenAI's pick for new work; 11 s at low quality (2026-10-14)
+        "gpt-image-2.5-sunburst",  -- the base model: finest detail, slower
+        "gpt-image-2",             -- previous flagship
+        "gpt-image-1-mini",        -- previous fast pick
     },
     xai = {
-        "grok-imagine-image",          -- fast (~7 s) (default)
-        "grok-imagine-image-quality",  -- higher quality (alias: grok-imagine-image-pro)
+        "grok-imagine-image",      -- default: fast (~7 s), $0.02
+        "grok-imagine-image-2.0",  -- better pictures, $0.04 at low (15 s, 2026-10-14)
     },
     gemini = {
-        "gemini-3.1-flash-image",  -- "Nano Banana" (default)
-        "gemini-3-pro-image",
+        "gemini-nano-banana-2.1",       -- default: Nano Banana 2.1, the successor of gemini-3.1-flash-image at half its price
+        "gemini-3.1-flash-lite-image",  -- fastest and cheapest, 1K only
+        "gemini-3-pro-image",           -- Nano Banana Pro: finest detail, slower
+    },
+}
+
+-- Image models the provider answers with another model: a stored pick goes out
+-- as the replacement (ModelLists.resolveImageModel). xAI serves
+-- grok-imagine-image-quality (and its alias -pro) with grok-imagine-image-2.0
+-- at low quality from 2026-11-02.
+ModelLists._image_retired = {
+    xai = {
+        ["grok-imagine-image-quality"] = "grok-imagine-image-2.0",
+        ["grok-imagine-image-pro"] = "grok-imagine-image-2.0",
     },
 }
 
@@ -1111,6 +1127,16 @@ end
 function ModelLists.getDefaultImageModel(provider)
     local list = ModelLists._image_models[provider]
     return list and list[1]
+end
+
+-- The image model a stored pick sends: nil, "" or "default" = the list's
+-- first; a retired id = its replacement; anything else as stored.
+function ModelLists.resolveImageModel(provider, stored)
+    if type(stored) ~= "string" or stored == "" or stored == "default" then
+        return ModelLists.getDefaultImageModel(provider)
+    end
+    local retired = ModelLists._image_retired[provider]
+    return (retired and retired[stored]) or stored
 end
 
 -- Get sorted list of all provider names

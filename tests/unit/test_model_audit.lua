@@ -919,6 +919,36 @@ local rel = ModelAudit.vendorReleases({
 TestRunner:check("vendor releases: recent, on no list, noise, variants and snapshots skipped, newest first",
     #rel == 2 and rel[1].id == "openai/gpt-6.1-sol" and rel[2].id == "google/gemini-3.9-flash")
 
+TestRunner:suite("Image lists (--images, docs/image_round_plan.md S1)")
+
+local oa = ModelAudit.imageIdsFrom("openai", { data = {
+    { id = "gpt-image-2.5-flare" }, { id = "gpt-image-2-2026-04-21" }, { id = "chatgpt-image-latest" },
+    { id = "dall-e-3" }, { id = "gpt-6-sol" } } })
+TestRunner:check("image ids, OpenAI: the image families only",
+    oa["gpt-image-2.5-flare"] and oa["chatgpt-image-latest"] and oa["dall-e-3"] and not oa["gpt-6-sol"])
+local gm = ModelAudit.imageIdsFrom("gemini", { models = {
+    { name = "models/gemini-nano-banana-2.1" }, { name = "models/gemini-3.1-flash-lite-image" },
+    { name = "models/gemini-3.8-flash" } } })
+TestRunner:check("image ids, Gemini: \"banana\" counts (gemini-nano-banana-2.1 has no \"image\")",
+    gm["gemini-nano-banana-2.1"] and gm["gemini-3.1-flash-lite-image"] and not gm["gemini-3.8-flash"])
+local xs, xa = ModelAudit.imageIdsFrom("xai", { models = {
+    { id = "grok-imagine-image", aliases = { "grok-imagine-image-2026-03-02" } } } })
+TestRunner:check("image ids, xAI: aliases map to their model",
+    xs["grok-imagine-image"] and xa["grok-imagine-image-2026-03-02"] == "grok-imagine-image")
+
+local d = ModelAudit.diffImageLists(
+    { "gpt-image-2.5-flare", "gpt-image-gone" },
+    { ["old-image"] = "gpt-image-2.5-flare" },
+    { ["gpt-image-1"] = "left the picker" },
+    { ["gpt-image-2.5-flare"] = true, ["gpt-image-2.5-flare-2026-09-08"] = true, ["gpt-image-1"] = true,
+      ["old-image"] = true, ["gpt-image-3"] = true }, {})
+TestRunner:check("image diff: a listed id the provider dropped",
+    #d.missing == 1 and d.missing[1] == "gpt-image-gone")
+TestRunner:check("image diff: new ids, a dated snapshot of a listed one is not new",
+    #d.new == 1 and d.new[1] == "gpt-image-3")
+TestRunner:check("image diff: retired and skipped ids still listed are reported apart",
+    d.retired_listed[1] == "old-image" and d.skipped[1] == "gpt-image-1")
+
 -- Summary
 print(string.format("\n%d passed, %d failed", TestRunner.passed, TestRunner.failed))
 return TestRunner.failed == 0

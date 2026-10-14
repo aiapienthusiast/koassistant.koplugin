@@ -3,6 +3,21 @@ local ModelConstraints = require("koassistant.request.model_constraints")
 
 local ConfigHelper = {}
 
+-- configuration.lua's provider, recorded once by main.lua at load, so every
+-- reader of the main provider resolves it the same way (B462).
+local file_provider = nil
+
+--- Record configuration.lua's provider (main.lua, once at load).
+function ConfigHelper.setFileProvider(provider)
+    file_provider = provider
+end
+
+--- THE main chat provider: the one picked in Settings, else configuration.lua's,
+--- else Anthropic. main.lua's settings sync and the image button's gates read it.
+function ConfigHelper.mainProvider(features)
+    return (type(features) == "table" and features.provider) or file_provider or "anthropic"
+end
+
 function ConfigHelper:mergeWithDefaults(config, provider)
     if not config then return nil end
 

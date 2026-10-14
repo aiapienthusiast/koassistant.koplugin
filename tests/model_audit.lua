@@ -33,6 +33,10 @@
 --   lua tests/model_audit.lua --keys [providers]       # ONE request per keyed provider on its
 --                                                      # default model: which keys work, which
 --                                                      # accounts are empty or on a plan without it
+--   lua tests/model_audit.lua --images [providers]     # the image lists (_image_models) against
+--                                                      # what openai, xai and gemini list (free)
+--   lua tests/model_audit.lua --image-probe <provider> <model>   # ONE image through the plugin's
+--                                                      # own builder and reader (costs cents)
 --   Every mode that sends requests ends with SPEND: the tokens each reply reported,
 --   per provider, and an estimate at OpenRouter's list prices (its public catalog,
 --   free). Discovery also lists where a NEW direct id is served but not curated
@@ -3681,6 +3685,220 @@ function ModelAudit.redact(text, max)
     return (s:sub(1, max or 170))
 end
 
+--------------------------------------------------------------------------------
+-- Image models (docs/image_round_plan.md S1, 2026-10-14)
+--------------------------------------------------------------------------------
+-- Chat discovery files every image id under noise, so the image lists
+-- (ModelLists._image_models) are checked on their own: --images diffs them
+-- against what each provider lists (free), --image-probe makes ONE image with
+-- the plugin's own builder and reader (costs cents: never part of a routine run).
+
+-- Ids a provider lists that the image lists leave out on purpose. Refresh an
+-- entry at each review.
+ModelAudit.IMAGE_SKIPS = {
+    openai = {
+        ["gpt-image-1.5"] = "left the picker 2026-10-14 (one previous version per line)",
+        ["gpt-image-1"] = "left the picker 2026-10-14",
+        ["chatgpt-image-latest"] = "left the picker 2026-10-14 (ChatGPT's own alias)",
+        ["dall-e-2"] = "retired generation",
+        ["dall-e-3"] = "retired generation",
+    },
+    gemini = {
+        ["gemini-3.1-flash-image"] = "deprecated for gemini-nano-banana-2.1; left the picker 2026-10-14",
+        ["gemini-2.5-flash-image"] = "shuts down 2027-03-15",
+        ["gemini-3-pro-image-preview"] = "preview of gemini-3-pro-image",
+        ["gemini-3.1-flash-image-preview"] = "preview of gemini-3.1-flash-image",
+        ["nano-banana-pro-preview"] = "alias of gemini-3-pro-image-preview",
+    },
+    xai = {},
+}
+
+--- The image model ids in a provider's list answer (pure). OpenAI: /v1/models
+--- ids of the gpt-image, chatgpt-image and dall-e families; xAI:
+--- /v1/image-generation-models, each alias mapped to its model; Gemini:
+--- /v1beta/models names with "image" or "banana" in them (gemini-nano-banana-2.1
+--- has no "image" in its name).
+--- @return table served (id -> true), table aliases (alias -> id)
+function ModelAudit.imageIdsFrom(provider, data)
+    local served, aliases = {}, {}
+    if type(data) ~= "table" then return served, aliases end
+    if provider == "openai" then
+        for _i, m in ipairs(type(data.data) == "table" and data.data or {}) do
+            local id = type(m) == "table" and type(m.id) == "string" and m.id or ""
+            if id:find("^gpt%-image") or id:find("^chatgpt%-image") or id:find("^dall%-e") then
+                served[id] = true
+            end
+        end
+    elseif provider == "xai" then
+        for _i, m in ipairs(type(data.models) == "table" and data.models or {}) do
+            if type(m) == "table" and type(m.id) == "string" then
+                served[m.id] = true
+                for _j, a in ipairs(type(m.aliases) == "table" and m.aliases or {}) do
+                    if type(a) == "string" then aliases[a] = m.id end
+                end
+            end
+        end
+    elseif provider == "gemini" then
+        for _i, m in ipairs(type(data.models) == "table" and data.models or {}) do
+            local name = type(m) == "table" and type(m.name) == "string" and m.name or ""
+            local id = name:match("^models/(.+)$") or name
+            if id:find("image", 1, true) or id:find("banana", 1, true) then served[id] = true end
+        end
+    end
+    return served, aliases
+end
+
+--- One image list against what its provider serves (pure).
+--- @return table { missing = {curated ids not served}, new = {served ids nobody
+---   curated, skipped or retired}, retired_listed = {retired ids still listed},
+---   skipped = {skipped ids still listed} }, every list sorted
+function ModelAudit.diffImageLists(curated, retired, skips, served, aliases)
+    curated, retired, skips = curated or {}, retired or {}, skips or {}
+    aliases = aliases or {}
+    local curated_set = {}
+    for _i, id in ipairs(curated) do curated_set[id] = true end
+    local out = { missing = {}, new = {}, retired_listed = {}, skipped = {} }
+    for _i, id in ipairs(curated) do
+        if not served[id] and not aliases[id] then table.insert(out.missing, id) end
+    end
+    for id in pairs(served) do
+        if not curated_set[id] then
+            if retired[id] then
+                table.insert(out.retired_listed, id)
+            elseif skips[id] then
+                table.insert(out.skipped, id)
+            elseif not ModelAudit.isSnapshotOf(id, curated_set) then
+                table.insert(out.new, id)
+            end
+        end
+    end
+    for _i, list in pairs(out) do table.sort(list) end
+    return out
+end
+
+local IMAGE_LISTS = {
+    openai = { url = "https://api.openai.com/v1/models",
+               headers = function(key) return bearerHeaders(key) end },
+    xai = { url = "https://api.x.ai/v1/image-generation-models",
+            headers = function(key) return bearerHeaders(key) end },
+    gemini = { url = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000",
+               headers = function(key) return { ["x-goog-api-key"] = key } end },
+}
+
+local function runImageDiscovery(providers, apikeys, verbose)
+    local problems = 0
+    for _i, provider in ipairs(providers) do
+        banner("IMAGES: " .. provider)
+        local src = IMAGE_LISTS[provider]
+        local key = keyFor(apikeys, provider)
+        if not src then
+            printf("  %sno image list for %s%s", C.dim, provider, C.off)
+        elseif not TestConfig.isValidApiKey(key) then
+            printf("  %sskipped: no API key in apikeys.lua%s", C.dim, C.off)
+        else
+            local text, err = httpGet(src.url, src.headers(key))
+            local ok, data = pcall(json.decode, text or "")
+            if not text or not ok then
+                printf("  %sfetch failed: %s%s", C.red, tostring(err), C.off)
+                problems = problems + 1
+            else
+                local served, aliases = ModelAudit.imageIdsFrom(provider, data)
+                local d = ModelAudit.diffImageLists(ModelLists.getImageModels(provider),
+                    ModelLists._image_retired[provider], ModelAudit.IMAGE_SKIPS[provider], served, aliases)
+                printf("  listed: %d, served by the provider: %d",
+                    #(ModelLists.getImageModels(provider) or {}), (function()
+                        local n = 0
+                        for _id in pairs(served) do n = n + 1 end
+                        return n
+                    end)())
+                for _j, id in ipairs(d.missing) do
+                    printf("  %sNOT SERVED  %s%s (listed here)", C.red, id, C.off)
+                    problems = problems + 1
+                end
+                for _j, id in ipairs(d.new) do
+                    printf("  %sNEW         %s%s (not listed; --image-probe it)", C.yellow, id, C.off)
+                end
+                for _j, id in ipairs(d.retired_listed) do
+                    printf("  %sretired here, still listed: %s -> %s%s", C.dim, id,
+                        ModelLists._image_retired[provider][id], C.off)
+                end
+                if #d.skipped > 0 then
+                    printf("  %sleft out on purpose: %d%s", C.dim, #d.skipped, C.off)
+                    if verbose then
+                        for _j, id in ipairs(d.skipped) do
+                            printf("    %s%s: %s%s", C.dim, id, ModelAudit.IMAGE_SKIPS[provider][id], C.off)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return problems
+end
+
+local IMAGE_PROBE_PASSAGE = "The lighthouse stood on the black rocks at the edge of the bay, its lamp dark, "
+    .. "while gulls wheeled over the grey water."
+
+-- One image through the plugin's own builder and reader, at the cheapest
+-- setting the provider takes (OpenAI quality low). Saves it under TMPDIR.
+local function runImageProbe(provider, model, api_key)
+    banner("IMAGE PROBE " .. provider .. " / " .. model)
+    if not TestConfig.isValidApiKey(api_key) then
+        printf("  %sno API key for %s in apikeys.lua%s", C.red, provider, C.off)
+        return false
+    end
+    local ImageGenerator = require("koassistant.images.image_generator")
+    local features = {}
+    if provider == "openai" then features.image_gen_quality = "low" end
+    local prompt = ImageGenerator.buildPrompt(IMAGE_PROBE_PASSAGE, {
+        book_metadata = { title = "The Lighthouse Keeper", author = "A. Writer" } }, features)
+    local request = ImageGenerator.buildRequest(provider, model, prompt, features)
+    if not request then
+        printf("  %s%s has no image endpoint in image_generator.lua%s", C.red, provider, C.off)
+        return false
+    end
+    local headers = { [request.key_header] = request.key_header == "Authorization"
+        and ("Bearer " .. api_key) or api_key }
+    RUN.provider, RUN.model = provider, model
+    local t0 = require("socket").gettime()
+    local code, decoded, raw = httpPostJson(request.url, headers, request.body)
+    local secs = require("socket").gettime() - t0
+    if code ~= 200 then
+        printf("  %sHTTP %s in %.1f s: %s%s", C.red, tostring(code), secs,
+            ImageGenerator.errorMessage(code, raw), C.off)
+        return false
+    end
+    local result, err = ImageGenerator.parseResponse(provider, raw)
+    if not result then
+        printf("  %sanswered in %.1f s without an image: %s%s", C.red, secs, tostring(err), C.off)
+        return false
+    end
+    if result.url then
+        printf("  %sanswered in %.1f s with a link (no b64): %s%s", C.yellow, secs, result.url, C.off)
+        return true
+    end
+    local ext = ImageGenerator.imageExtension(result.bytes)
+    local path = (os.getenv("TMPDIR") or "/tmp/"):gsub("/?$", "/")
+        .. "koassistant_image_probe_" .. provider .. "_" .. model:gsub("[^%w%.%-]", "_") .. "." .. ext
+    local f = io.open(path, "wb")
+    if f then f:write(result.bytes); f:close() end
+    printf("  %sOK%s in %.1f s: %s, %d KB -> %s", C.green, C.off, secs, ext,
+        math.floor(#result.bytes / 1024 + 0.5), path)
+    if type(decoded) == "table" then
+        if type(decoded.usage) == "table" and tonumber(decoded.usage.cost_in_usd_ticks) then
+            printf("  cost: $%.4f (xAI's own figure)", tonumber(decoded.usage.cost_in_usd_ticks) / 1e10)
+        elseif type(decoded.usage) == "table" then
+            printf("  usage: input %s, output %s tokens", tostring(decoded.usage.input_tokens),
+                tostring(decoded.usage.output_tokens))
+        elseif type(decoded.usageMetadata) == "table" then
+            local u = decoded.usageMetadata
+            printf("  usage: output %s tokens, thinking %s", tostring(u.candidatesTokenCount),
+                tostring(u.thoughtsTokenCount))
+        end
+    end
+    return true
+end
+
 local KEY_LABEL = { ok = "OK", key = "KEY", credits = "CREDITS", plan = "PLAN", rate = "BUSY",
                     model = "MODEL", error = "ERROR" }
 
@@ -3771,7 +3989,8 @@ local function main()
         local a = arg[i]
         if a == "--help" or a == "-h" then
             print("Usage: lua tests/model_audit.lua [providers...] [--probe <provider> <model>] " ..
-                  "[--probe-new] [--recheck [--ceilings]] [--pins] [--keys] [--verbose]")
+                  "[--probe-new] [--recheck [--ceilings]] [--pins] [--keys] [--images] " ..
+                  "[--image-probe <provider> <model>] [--verbose]")
             os.exit(0)
         elseif a == "--verbose" or a == "-v" then
             verbose = true
@@ -3793,6 +4012,16 @@ local function main()
             mode = "pins"
         elseif a == "--keys" then
             mode = "keys"
+        elseif a == "--images" then
+            mode = "images"
+        elseif a == "--image-probe" then
+            mode = "image-probe"
+            probe_provider, probe_model = arg[i + 1], arg[i + 2]
+            i = i + 2
+            if not probe_provider or not probe_model then
+                print("--image-probe needs <provider> <model>")
+                os.exit(1)
+            end
         elseif a:match("^%-") then
             printf("unknown option: %s (see --help)", a)
             os.exit(1)
@@ -3821,6 +4050,15 @@ local function main()
     if mode == "probe" then
         local facts = probeModel(probe_provider, probe_model, keyFor(apikeys, probe_provider), verbose)
         finish((facts and facts.reachable) and 0 or 1)
+    end
+
+    if mode == "images" then
+        if #providers == 0 then providers = { "openai", "xai", "gemini" } end
+        finish(runImageDiscovery(providers, apikeys, verbose) > 0 and 1 or 0)
+    end
+
+    if mode == "image-probe" then
+        finish(runImageProbe(probe_provider, probe_model, keyFor(apikeys, probe_provider)) and 0 or 1)
     end
 
     if mode == "keys" then

@@ -24,6 +24,11 @@ Public API:
       images index (per-book gallery / artifact browser row).
   ImageGenerator.effectiveProvider(features, main_provider, settings)
       → provider|nil, reason — the button-visibility / dispatch gate.
+  ImageGenerator.buildPrompt / buildRequest / parseResponse / errorMessage /
+      imageExtension — pure: the framed prompt, the request as sent, the
+      answer read, the refusal worded, the file type from the bytes
+      (unit-tested; tests/inspect.lua --image and the audit's image probe
+      build and read with them).
   ImageGenerator.getImagesDir()
   Index API (book associations): readIndex, recordImage, removeIndexEntries,
   booksWithImages, updateIndexForMove, getIndexFilename.
@@ -110,13 +115,10 @@ function ImageGenerator.effectiveProvider(features, main_provider, settings)
     return provider
 end
 
---- Resolve the image model: explicit per-provider setting > list default.
+--- Resolve the image model: explicit per-provider setting (a retired id sent
+--- as its replacement) > list default.
 local function resolveImageModel(provider, features)
-    local m = features and features["image_gen_model_" .. provider]
-    if type(m) == "string" and m ~= "" and m ~= "default" then
-        return m
-    end
-    return ModelLists.getDefaultImageModel(provider)
+    return ModelLists.resolveImageModel(provider, features and features["image_gen_model_" .. provider])
 end
 
 --- Show a simple error / informational notice.
@@ -136,6 +138,48 @@ end
 function ImageGenerator.getImagesDir()
     local DataStorage = require("datastorage")
     return DataStorage:getDataDir() .. "/koassistant_images"
+end
+
+--- The file extension an image's bytes call for: JPEG and WebP by their magic
+--- bytes, PNG otherwise. Gemini and xAI answer JPEG; every image used to be
+--- named .png. KOReader decodes by content either way.
+function ImageGenerator.imageExtension(bytes)
+    if type(bytes) == "string" then
+        if bytes:sub(1, 3) == "\255\216\255" then return "jpg" end
+        if bytes:sub(1, 4) == "RIFF" and bytes:sub(9, 12) == "WEBP" then return "webp" end
+    end
+    return "png"
+end
+
+--- What a refused or failed request (status other than 200) shows (B459): the
+--- provider's own message where the body carries one, and OpenAI's moderation
+--- refusal named as such, with the stage it refused at. Runs in the fetch child.
+function ImageGenerator.errorMessage(code, body)
+    local msg = type(body) == "string" and body or ""
+    local okj, parsed = pcall(json.decode, msg)
+    local err = okj and type(parsed) == "table" and parsed.error or nil
+    if type(err) == "table" then
+        local text = str(err.message) or ""
+        if str(err.code) == "moderation_blocked" then
+            local details = type(err.moderation_details) == "table" and err.moderation_details
+                or (type(parsed.moderation_details) == "table" and parsed.moderation_details) or {}
+            local stage = str(details.moderation_stage)
+            local head
+            if stage == "input" then
+                head = _("OpenAI's moderation refused the prompt (the passage or its framing).")
+            elseif stage == "output" then
+                head = _("OpenAI's moderation refused the picture it made.")
+            else
+                head = _("OpenAI's moderation refused this request.")
+            end
+            if text ~= "" then head = head .. "\n\n" .. text:sub(1, 300) end
+            return head
+        end
+        if text ~= "" then msg = text end
+    elseif type(err) == "string" and err ~= "" then
+        msg = err
+    end
+    return "HTTP " .. tostring(code) .. ": " .. msg:sub(1, 300)
 end
 
 -- ---------------------------------------------------------------------------
@@ -292,11 +336,12 @@ local function showImage(image_data, description, on_close, book_info, full_prom
     local snippet = description and sanitizeForFilename(description) or ""
     if snippet == "" then snippet = "image" end
     local base = string.format("%s/%s %s", dir, os.date("%Y-%m-%d %H.%M.%S"), snippet)
-    local path = base .. ".png"
+    local ext = ImageGenerator.imageExtension(image_data)
+    local path = base .. "." .. ext
     local n = 1
     while lfs.attributes(path, "mode") do
         n = n + 1
-        path = string.format("%s (%d).png", base, n)
+        path = string.format("%s (%d).%s", base, n, ext)
     end
     local f = io.open(path, "wb")
     if not f then
@@ -370,14 +415,7 @@ local function makePipeFetchFn(fetch, err_prefix)
             if code ~= 200 then
                 -- a refusal arrives as JSON with error.message (an OpenAI
                 -- moderation refusal is a 400): show the message, not the body (B459)
-                local msg = body or ""
-                local okj, parsed = pcall(json.decode, msg)
-                if okj and type(parsed) == "table" and type(parsed.error) == "table"
-                        and type(parsed.error.message) == "string" and parsed.error.message ~= "" then
-                    msg = parsed.error.message
-                end
-                BaseHandler.writeAllToFD(child_write_fd,
-                    "ERR:HTTP " .. tostring(code) .. ": " .. msg:sub(1, 300))
+                BaseHandler.writeAllToFD(child_write_fd, "ERR:" .. ImageGenerator.errorMessage(code, body))
             else
                 BaseHandler.writeAllToFD(child_write_fd, "OK:" .. (body or ""))
             end
@@ -412,7 +450,8 @@ local function makeBackgroundFn(url, api_key, request_body_str, endpoint)
             headers = headers,
             body = request_body_str,
             resolved_ip = resolved_ip,
-            timeout = 120,
+            -- OpenAI: "complex prompts may take up to 2 minutes"
+            timeout = 180,
         })
     end, "Subprocess error: ")
 end
@@ -507,7 +546,10 @@ end
 --- Assemble the prompt actually sent to the image API (context framing,
 --- 2026-08-13). Exported so the action-details view and the settings screen
 --- render the SAME template through the same code — no display copy to drift.
---- opts: { book_metadata = {title, author}, window = {prev, next} }.
+--- opts: { book_metadata = {title, author}, window = {prev, next},
+---        after_limit = ScopeResolver.limitAfter's value (Context Direction and
+---        the spoiler clamp, B461), book_info_level = "none"|"title"|"basic"|"full"
+---        (the Book info level, P7; nil = basic) }.
 --- features gates the frame parts: image_gen_frame_identity /
 --- image_gen_frame_context (both opt-out, default on — schema defaults).
 --- `description` stays the raw selection (filename + viewer title); English
@@ -518,8 +560,12 @@ function ImageGenerator.buildPrompt(description, opts, features)
     local frame = {}
     local meta = (features.image_gen_frame_identity ~= false)
         and opts and opts.book_metadata or nil
+    -- The Book info level decides the identity, as it does in chat: None sends
+    -- neither, Title the title alone (data_access_picture.md P7)
+    local info_level = opts and opts.book_info_level or "basic"
+    if info_level == "none" then meta = nil end
     if meta and meta.title and meta.title ~= "" then
-        if meta.author and meta.author ~= "" then
+        if info_level ~= "title" and meta.author and meta.author ~= "" then
             table.insert(frame, string.format('The passage is from the book "%s" by %s; match the book\'s setting and period.', meta.title, meta.author))
         else
             table.insert(frame, string.format('The passage is from the book "%s"; match the book\'s setting and period.', meta.title))
@@ -529,6 +575,10 @@ function ImageGenerator.buildPrompt(description, opts, features)
         and opts and opts.window or nil
     local prev = w and type(w.prev) == "string" and w.prev or ""
     local next_ = w and type(w.next) == "string" and w.next or ""
+    -- The text after the selection is cut as chat's context is: Context
+    -- Direction "before" drops it, spoiler protection keeps the selection's
+    -- own sentence or paragraph (B461)
+    next_ = require("koassistant.request.scope_resolver").limitAfter(next_, opts and opts.after_limit)
     if prev ~= "" or next_ ~= "" then
         -- Image prompts reward brevity: ~400 chars a side, UTF-8-safe cuts
         if #prev > 400 then prev = "…" .. fixUtf8(prev:sub(-400), "") end
@@ -560,6 +610,150 @@ function ImageGenerator.promptTemplateText(features)
     }, features)
 end
 
+--- The frame options a request may use. The text around the selection is a
+--- kind of its own ("text around what you tap", data_access_picture.md), asked
+--- for the provider that receives it, the image provider; without it the frame
+--- keeps the title and author alone.
+function ImageGenerator.allowedFrame(opts, features, provider)
+    if opts and opts.window and not require("koassistant.request.privacy_gates").allows("nearby_text",
+            { features = features, provider = provider, book = opts.book_privacy }) then
+        return { book_metadata = opts.book_metadata, after_limit = opts.after_limit,
+                 book_info_level = opts.book_info_level }
+    end
+    return opts
+end
+
+--- The request one image costs (B064): the URL, the authentication header's
+--- name and the body, exactly as sent. Pure; tests/inspect.lua --image and the
+--- audit's image probe build with it too.
+--- @return table|nil { url, key_header, body } (nil for a provider with no image endpoint)
+function ImageGenerator.buildRequest(provider, model, prompt, features)
+    features = features or {}
+    local endpoint = IMAGE_ENDPOINTS[provider]
+    if not endpoint then return nil end
+    if endpoint.is_gemini then
+        -- generateContent with image output; model in the path. The Gemini
+        -- Content Filter setting applies here as it does to chat (a book
+        -- passage is refused by Google's default filter more often)
+        return {
+            url = endpoint.url .. "/" .. model .. ":generateContent",
+            key_header = endpoint.key_header,
+            body = {
+                contents = { { role = "user", parts = { { text = prompt } } } },
+                generationConfig = { responseModalities = { "IMAGE", "TEXT" } },
+                safetySettings = require("koassistant.api.gemini").safetySettings(features),
+            },
+        }
+    end
+    -- OpenAI-style images/generations request. Parameter support diverges
+    -- (verified live 2026-07-16): OpenAI's gpt-image models reject
+    -- response_format (b64_json is their default output); xAI rejects
+    -- size/quality/style but honors response_format.
+    local body = { model = model, prompt = prompt, n = 1 }
+    if provider == "openai" then
+        -- "default"/nil = omit the param and let the API decide
+        local size = str(features.image_gen_size)
+        if size and size ~= "default" then body.size = size end
+        local quality = str(features.image_gen_quality)
+        if quality and quality ~= "default" then body.quality = quality end
+    else
+        body.response_format = "b64_json"
+        if provider == "xai" then
+            local aspect = str(features.image_gen_aspect)
+            if aspect and aspect ~= "default" then body.aspect_ratio = aspect end
+        end
+    end
+    return { url = endpoint.url, key_header = endpoint.key_header, body = body }
+end
+
+-- A Gemini answer without a picture, worded with its reason (B459): the
+-- prompt's blockReason, else the candidate's finishReason, then whatever the
+-- model said in text.
+local function geminiNoImageMessage(resp, candidate, texts)
+    local feedback = type(resp.promptFeedback) == "table" and resp.promptFeedback or {}
+    local block = str(feedback.blockReason)
+    local finish = str(candidate.finishReason)
+    local head
+    if block then
+        head = T(_("Gemini refused the prompt (%1)."), block)
+    elseif finish == "IMAGE_SAFETY" or finish == "SAFETY" or finish == "IMAGE_PROHIBITED_CONTENT"
+            or finish == "PROHIBITED_CONTENT" or finish == "BLOCKLIST" or finish == "SPII" then
+        head = T(_("Google's safety filter refused the picture (%1)."), finish)
+    elseif finish and finish ~= "STOP" then
+        head = T(_("Gemini returned no picture (%1)."), finish)
+    else
+        head = _("Gemini answered without a picture.")
+    end
+    local said = table.concat(texts, " "):gsub("%s+", " "):match("^%s*(.-)%s*$") or ""
+    if said ~= "" then
+        if #said > 300 then said = require("util").fixUtf8(said:sub(1, 300), "") .. "…" end
+        head = head .. "\n\n" .. said
+    end
+    return head
+end
+
+--- Read an image provider's answer (B064): { bytes = <binary> }, or
+--- { url = <string> } when an OpenAI-style answer links the image, or nil and
+--- the message to show. A Gemini answer without a picture names its reason.
+function ImageGenerator.parseResponse(provider, body)
+    local ok_parse, resp = pcall(json.decode, body or "")
+    if not ok_parse or type(resp) ~= "table" then
+        return nil, _("Failed to parse image generation response.")
+    end
+    -- API-level error ({ error = {...} } or { error = "..." }); type-checked
+    -- so a JSON null (truthy sentinel) doesn't trip this on a success response
+    if type(resp.error) == "table" or type(resp.error) == "string" then
+        local err_msg = str(resp.error)
+            or (type(resp.error) == "table" and str(resp.error.message))
+            or _("Unknown API error")
+        return nil, T(_("Image generation API error:\n\n%1"), err_msg)
+    end
+    local endpoint = IMAGE_ENDPOINTS[provider]
+    if endpoint and endpoint.is_gemini then
+        -- Images arrive as inlineData parts inside candidates[].content.parts
+        local candidates = type(resp.candidates) == "table" and resp.candidates or {}
+        local first = type(candidates[1]) == "table" and candidates[1] or {}
+        local content = type(first.content) == "table" and first.content or {}
+        local parts = type(content.parts) == "table" and content.parts or {}
+        local texts = {}
+        for _idx, part in ipairs(parts) do
+            if type(part) == "table" and type(part.inlineData) == "table" then
+                local mime_type = str(part.inlineData.mimeType)
+                local data_b64 = str(part.inlineData.data)
+                if mime_type and mime_type:sub(1, 6) == "image/" and data_b64 then
+                    local bytes = mime.unb64(data_b64)
+                    if not bytes or bytes == "" then
+                        return nil, _("Failed to decode image data.")
+                    end
+                    return { bytes = bytes }
+                end
+            elseif type(part) == "table" and type(part.text) == "string" and part.thought ~= true then
+                table.insert(texts, part.text)
+            end
+        end
+        return nil, geminiNoImageMessage(resp, first, texts)
+    end
+    -- OpenAI-style answer: data[1].b64_json (preferred) or data[1].url
+    local data_list = type(resp.data) == "table" and resp.data or nil
+    local entry = data_list and type(data_list[1]) == "table" and data_list[1] or nil
+    if not entry then
+        return nil, _("No image data in response.")
+    end
+    local b64 = str(entry.b64_json)
+    if b64 and b64 ~= "" then
+        local bytes = mime.unb64(b64)
+        if not bytes or bytes == "" then
+            return nil, _("Failed to decode image data.")
+        end
+        return { bytes = bytes }
+    end
+    local image_url = str(entry.url)
+    if image_url and image_url ~= "" then
+        return { url = image_url }
+    end
+    return nil, _("No image URL in response.")
+end
+
 function ImageGenerator.generate(word, config_table, settings, book_info, opts)
     local ok, err = pcall(function()
         ImageGenerator._generateImpl(word, config_table, settings, book_info, opts)
@@ -571,10 +765,13 @@ function ImageGenerator.generate(word, config_table, settings, book_info, opts)
 end
 
 --- Internal implementation — called via pcall from generate() for error catching.
---- opts (optional): { book_metadata = {title, author}, window = {prev, next} } —
---- context the prompt is framed with (2026-08-13). book_metadata carries the
---- per-book AI-identity overrides already applied; window is the pre-extracted
---- surrounding-context selection window (consent-exempt, hard-capped upstream).
+--- opts (optional): { book_metadata = {title, author}, window = {prev, next},
+--- after_limit, book_info_level, book_privacy } — context the prompt is framed
+--- with (2026-08-13). book_metadata carries the per-book AI-identity overrides
+--- already applied; window is the pre-extracted surrounding-context selection
+--- window (hard-capped upstream; sent only where privacy_gates allows the
+--- "nearby_text" kind for the image provider); book_privacy is the book's own
+--- privacy values (PrivacyGates.overridesOf).
 function ImageGenerator._generateImpl(word, config_table, settings, book_info, opts)
     local UIManager = require("ui/uimanager")
 
@@ -603,53 +800,18 @@ function ImageGenerator._generateImpl(word, config_table, settings, book_info, o
         return
     end
 
+    opts = ImageGenerator.allowedFrame(opts, features, provider)
+
     -- Context-framed prompt (device 2026-08-13 "more context"): book identity +
     -- a trimmed slice of the surrounding passage, framed as context so the
     -- model illustrates the SELECTION, not the frame. The FULL prompt is what
     -- gets sent and recorded (viewable via the gallery + viewer caption).
     local final_prompt = ImageGenerator.buildPrompt(description, opts, features)
 
-    -- Build request JSON (provider-specific format)
-    local request_body_str
-    if endpoint.is_gemini then
-        -- Gemini generateContent request with image output modality
-        local request_body = {
-            contents = {
-                {
-                    role  = "user",
-                    parts = {{ text = final_prompt }},
-                }
-            },
-            generationConfig = {
-                responseModalities = { "IMAGE", "TEXT" },
-            },
-        }
-        request_body_str = BaseHandler.encodeBody(request_body)
-    else
-        -- OpenAI-style images/generations request. Parameter support diverges
-        -- (verified live 2026-07-16): OpenAI's gpt-image models reject
-        -- response_format (b64_json is their default output); xAI rejects
-        -- size/quality/style but honors response_format.
-        local request_body = {
-            model  = resolved_model,
-            prompt = final_prompt,
-            n      = 1,
-        }
-        if provider == "openai" then
-            -- "default"/nil = omit the param and let the API decide
-            local size = str(features.image_gen_size)
-            if size and size ~= "default" then request_body.size = size end
-            local quality = str(features.image_gen_quality)
-            if quality and quality ~= "default" then request_body.quality = quality end
-        else
-            request_body.response_format = "b64_json"
-            if provider == "xai" then
-                local aspect = str(features.image_gen_aspect)
-                if aspect and aspect ~= "default" then request_body.aspect_ratio = aspect end
-            end
-        end
-        request_body_str = BaseHandler.encodeBody(request_body)
-    end
+    -- The request as the provider takes it (OpenAI-style images API, or
+    -- Gemini's generateContent with image output)
+    local request = ImageGenerator.buildRequest(provider, resolved_model, final_prompt, features)
+    local request_body_str = BaseHandler.encodeBody(request.body)
 
     -- Progress window: the tool-status dialog (setText handle + Stop button)
     -- avoids InfoMessage's fire-dismiss_callback-on-any-close trap and gives
@@ -712,15 +874,9 @@ function ImageGenerator._generateImpl(word, config_table, settings, book_info, o
         end
     end
 
-    -- Build the actual request URL (Gemini interpolates the model into the path)
-    local request_url = endpoint.url
-    if endpoint.is_gemini then
-        request_url = endpoint.url .. "/" .. resolved_model .. ":generateContent"
-    end
-
     -- Launch subprocess
     logger.dbg("KOAssistant: image gen request:", provider, resolved_model)
-    local bg_fn = makeBackgroundFn(request_url, api_key, request_body_str, endpoint)
+    local bg_fn = makeBackgroundFn(request.url, api_key, request_body_str, endpoint)
     local pid, parent_read_fd = ffiutil.runInSubProcess(bg_fn, true)
 
     if not pid then
@@ -760,84 +916,19 @@ function ImageGenerator._generateImpl(word, config_table, settings, book_info, o
             return
         end
 
-        -- Strip "OK:" prefix
-        local body = raw:sub(4)
-
-        -- Parse JSON response
-        local ok_parse, resp = pcall(json.decode, body)
-        if not ok_parse or type(resp) ~= "table" then
-            fail(_("Failed to parse image generation response."))
+        -- Strip "OK:" prefix and read the answer: the image's bytes, a link
+        -- to it, or the reason there is none
+        local result, parse_err = ImageGenerator.parseResponse(provider, raw:sub(4))
+        if not result then
+            fail(parse_err)
             return
         end
-
-        -- API-level error ({ error = {...} } or { error = "..." }); type-checked
-        -- so a JSON null (truthy sentinel) doesn't trip this on a success response
-        if type(resp.error) == "table" or type(resp.error) == "string" then
-            local err_msg = str(resp.error)
-                or (type(resp.error) == "table" and str(resp.error.message))
-                or _("Unknown API error")
-            fail(T(_("Image generation API error:\n\n%1"), err_msg))
-            return
-        end
-
-        -- Gemini returns images as inlineData parts inside candidates[].content.parts
-        if endpoint.is_gemini then
-            local candidates = type(resp.candidates) == "table" and resp.candidates or nil
-            local first = candidates and type(candidates[1]) == "table" and candidates[1] or nil
-            local content = first and type(first.content) == "table" and first.content or nil
-            local parts = content and type(content.parts) == "table" and content.parts or nil
-            if not parts then
-                fail(_("No image data in Gemini response."))
-                return
-            end
-            -- Find the first IMAGE part (mimeType starts with "image/")
-            for _idx, part in ipairs(parts) do
-                if type(part) == "table" and type(part.inlineData) == "table" then
-                    local mime_type = str(part.inlineData.mimeType)
-                    local data_b64 = str(part.inlineData.data)
-                    if mime_type and mime_type:sub(1, 6) == "image/" and data_b64 then
-                        local image_bytes = mime.unb64(data_b64)
-                        if not image_bytes or image_bytes == "" then
-                            fail(_("Failed to decode image data."))
-                            return
-                        end
-                        status.close()
-                        showImage(image_bytes, description, nil, book_info, final_prompt)
-                        return
-                    end
-                end
-            end
-            fail(_("No image part found in Gemini response."))
-            return
-        end
-
-        -- OpenAI-style response: data[1].b64_json or data[1].url
-        local data_list = type(resp.data) == "table" and resp.data or nil
-        local image_data_entry = data_list and type(data_list[1]) == "table" and data_list[1] or nil
-        if not image_data_entry then
-            fail(_("No image data in response."))
-            return
-        end
-
-        -- b64_json response (preferred)
-        local b64 = str(image_data_entry.b64_json)
-        if b64 and b64 ~= "" then
-            local image_bytes = mime.unb64(b64)
-            if not image_bytes or image_bytes == "" then
-                fail(_("Failed to decode image data."))
-                return
-            end
+        if result.bytes then
             status.close()
-            showImage(image_bytes, description, nil, book_info, final_prompt)
+            showImage(result.bytes, description, nil, book_info, final_prompt)
             return
         end
-
-        -- url response fallback: download the image
-        local image_url = str(image_data_entry.url)
-        if not image_url or image_url == "" then
-            fail(_("No image URL in response."))
-            return
-        end
+        local image_url = result.url
 
         -- Download phase: fresh status window, same elapsed clock
         openStatus(_("Downloading generated image…"))

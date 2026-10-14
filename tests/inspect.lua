@@ -214,6 +214,13 @@ local function parseArgs(args)
                 table.insert(parsed.providers, args[i])
             end
 
+        elseif arg == "--image" then
+            parsed.mode = "image"
+            if args[i + 1] and not args[i + 1]:match("^%-") then
+                i = i + 1
+                table.insert(parsed.providers, args[i])
+            end
+
         elseif arg == "--list" or arg == "-l" then
             parsed.mode = "list"
 
@@ -322,6 +329,7 @@ MODES:
     --inspect, -i <provider>     Inspect request for a single provider
     --compare, -c <p1> <p2> ...  Compare requests across providers
     --export, -e <provider>      Export request as JSON
+    --image <provider>           The image request (openai, xai, gemini): framed prompt + body
     --list, -l                   List supported providers
     --web, -w                    Start web UI server (http://localhost:8080)
     --help, -h                   Show this help
@@ -534,6 +542,34 @@ local function exportProvider(provider, options)
     -- Export as JSON (to stdout for redirection)
     print(RequestInspector:exportJSON(request, config))
 
+    return true
+end
+
+-- The image request the plugin builds for one image provider (B064): the
+-- framed prompt and the body exactly as sent, from ImageGenerator's own
+-- builders. No network; the key is never printed (only its header's name).
+local function inspectImage(provider, options)
+    if not pcall(require, "mime") then
+        package.loaded["mime"] = { b64 = function(s) return s end, unb64 = function(s) return s end }
+    end
+    local ImageGenerator = require("koassistant.images.image_generator")
+    local ModelLists = require("koassistant.request.model_lists")
+    if not ModelLists.getImageModels(provider) then
+        io.stderr:write("Error: '" .. tostring(provider) .. "' makes no images here (openai, xai, gemini).\n")
+        return false
+    end
+    local features = {}
+    local prompt = ImageGenerator.buildPrompt(options.test_message
+            or "The lighthouse stood on the black rocks at the edge of the bay, its lamp dark.", {
+        book_metadata = { title = "Sample Book", author = "A. Writer" },
+        window = { prev = "The path climbed the headland.", next = " Gulls wheeled over the water. Then the rain came." },
+        after_limit = "sentence",
+    }, features)
+    local model = ModelLists.resolveImageModel(provider, options.model)
+    local request = ImageGenerator.buildRequest(provider, model, prompt, features)
+    print("POST " .. request.url)
+    print("Auth header: " .. request.key_header)
+    print(require("json").encode(request.body))
     return true
 end
 
@@ -1817,6 +1853,13 @@ local function main()
     elseif args.mode == "compare" then
         local success = compareProviders(args.providers, args.options)
         return success and 0 or 1
+
+    elseif args.mode == "image" then
+        if #args.providers == 0 then
+            io.stderr:write("Error: Please name an image provider (openai, xai, gemini).\n")
+            return 1
+        end
+        return inspectImage(args.providers[1], args.options) and 0 or 1
 
     elseif args.mode == "web" then
         startWebServer(args.options)

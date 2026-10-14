@@ -10189,7 +10189,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                             local ImageGenerator = require("koassistant.images.image_generator")
                             local feats = (configuration and configuration.features) or {}
                             excluded = ImageGenerator.effectiveProvider(feats,
-                                feats.provider or "anthropic",
+                                require("koassistant.core.config_helper").mainProvider(feats),
                                 plugin and plugin.settings) == nil
                         end
                         if not excluded then
@@ -12567,12 +12567,24 @@ local function handleLocalAction(handler_name, ui, highlighted_text, document_pa
         -- points nil it for other local handlers)
         local window = config and config.features and config.features._selection_context_window
         if config and config.features then config.features._selection_context_window = nil end
+        -- The frame follows chat's rules: the text after the selection is cut by
+        -- Context Direction and the spoiler clamp (B461), the title and author
+        -- by the Book info level (data_access_picture.md P7), and the book's own
+        -- privacy values reach the generator's gate for the text around it
+        local features = (config and config.features) or {}
+        local book_ds = book_info and require("koassistant.storage.doc_settings").resolve(book_info.file, ui) or nil
+        local frame_opts = {
+            window = window,
+            book_metadata = book_metadata,
+            after_limit = contextAfterLimit(features, BookSettings.resolveSpoilerFree(book_ds, features) or false),
+            book_info_level = BookSettings.resolveBookInfoLevel(book_ds, features),
+            book_privacy = require("koassistant.request.privacy_gates").overridesOf(book_ds),
+        }
         local NetworkMgr = require("ui/network/manager")
         NetworkMgr:runWhenConnected(function()
             if plugin and plugin.updateConfigFromSettings then plugin:updateConfigFromSettings() end
             require("koassistant.images.image_generator").generate(highlighted_text, config,
-                plugin and plugin.settings, book_info,
-                { window = window, book_metadata = book_metadata })
+                plugin and plugin.settings, book_info, frame_opts)
         end)
     else
         logger.warn("KOAssistant: Unknown local handler: " .. tostring(handler_name))

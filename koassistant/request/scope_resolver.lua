@@ -353,6 +353,25 @@ function ScopeResolver.chipScope(pick, p)
     return nil, "bad_pick"
 end
 
+--- The text after a selection, cut by an after-side limit: "none" drops it,
+-- "sentence" keeps the rest of the selection's sentence, "paragraph" the rest
+-- of its paragraph, nil keeps it all. THE rule (B436); trimContext and the
+-- image prompt's frame (B461) both cut with it.
+function ScopeResolver.limitAfter(next_text, after_limit)
+    next_text = next_text or ""
+    if after_limit == "none" then return "" end
+    if after_limit == "sentence" and next_text ~= "" then
+        -- Keep only to the end of the sentence the selection sits in
+        local e = next_text:find("[%.!%?]%s") or next_text:find("[%.!%?]$")
+        if e then next_text = next_text:sub(1, e) end
+    elseif after_limit == "paragraph" and next_text ~= "" then
+        -- Keep only the remainder of the selection's own paragraph
+        local e = next_text:find("\n")
+        if e then next_text = next_text:sub(1, e - 1) end
+    end
+    return next_text
+end
+
 --- Trim a raw context window to the requested mode and mark the selection.
 -- Modes: "sentence" (default; falls back to characters when boundaries yield too
 -- little), "paragraph" (opts.paragraphs per side), "characters" (opts.char_count
@@ -377,17 +396,7 @@ function ScopeResolver.trimContext(prev, next_text, highlighted_text, mode, opts
     -- into unread text, but the sentence/paragraph the selection sits in is on
     -- the visible page). Truncating next_text up front covers every mode,
     -- including the sentence→characters starve fallback.
-    if opts.after_limit == "none" then
-        next_text = ""
-    elseif opts.after_limit == "sentence" and next_text ~= "" then
-        -- Keep only to the end of the sentence the selection sits in
-        local e = next_text:find("[%.!%?]%s") or next_text:find("[%.!%?]$")
-        if e then next_text = next_text:sub(1, e) end
-    elseif opts.after_limit == "paragraph" and next_text ~= "" then
-        -- Keep only the remainder of the selection's own paragraph
-        local e = next_text:find("\n")
-        if e then next_text = next_text:sub(1, e - 1) end
-    end
+    next_text = ScopeResolver.limitAfter(next_text, opts.after_limit)
     if prev == "" and next_text == "" then return "" end
 
     local max_per_side = math.floor(ScopeResolver.MAX_CONTEXT_CHARS / 2)
