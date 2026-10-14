@@ -324,6 +324,11 @@ ModelConstraints.capabilities = {
         -- same battery; kimi-k2.6/k2.5, deepseek-v4-flash-vision-exp and
         -- nemotron-3.5-lightning-free stopped serving on this door and left.
         -- ("glm-5" stays: deprecated as a model, it is the glm-5.x family prefix.)
+        -- B368 (battery 2026-10-14): qwen3.8-flash refuses a forced tool call while
+        -- it thinks; auto calls the tool and the replay holds, so gather rounds send
+        -- it auto (the OpenRouter precedent) and its reasoning stays as set.
+        -- qwen3.8-max took the forced call, thinking, the same day.
+        no_forced_tool_choice = { "qwen3.8-flash" },
         reasoning = {
             "glm-5.3-flash",
             "glm-5.3",
@@ -338,6 +343,7 @@ ModelConstraints.capabilities = {
             "glm-5",
             "minimax-m2.5",
             "qwen3.8-max",
+            "qwen3.8-flash",
             "qwen3.6-plus",
             "qwen3.5-plus",
         },
@@ -354,7 +360,8 @@ ModelConstraints.capabilities = {
             "glm-5.1",
             "glm-5",
             "minimax-m2.5",
-            "qwen3.8-max",   -- forced tool_choice accepted on this door (the Qwen API refuses it)
+            "qwen3.8-max",   -- forced tool_choice accepted on this door (rechecked 2026-10-14)
+            "qwen3.8-flash",   -- auto on gather rounds (no_forced_tool_choice above)
             "qwen3.6-plus",
             "qwen3.5-plus",
         },
@@ -365,7 +372,12 @@ ModelConstraints.capabilities = {
         -- DEFAULT. tools = forced tool_choice + two-round replay green;
         -- kimi-k2.6, qwen3.8-max, qwen3.8-flash and qwen3.7-plus answer tools
         -- but REJECT tool_choice="required" on this endpoint (Zen's kimi-k2.6
-        -- accepts it — different backends), so they get no tools grant.
+        -- accepts it — different backends), so they got no tools grant.
+        -- B368 (2026-10-14): the three Qwen ids get tools with auto on gather
+        -- rounds, UNVERIFIED by request on this endpoint (no Go subscription: 403).
+        -- The same models pass auto + replay while thinking elsewhere the same day
+        -- (Zen qwen3.8-flash, A2Agent's 3.8 pair, qwen3.7-plus on the Qwen API),
+        -- and auto works whether or not a forced call would.
         -- Not served on this wire (excluded from the seed list): gpt-5.6-luna
         -- (500), grok-4.6 ("not supported for format oa-compat"), grok-4.5,
         -- hy3-preview, mimo-v2-pro/omni, kimi-k2.5, minimax-m2.7,
@@ -373,6 +385,7 @@ ModelConstraints.capabilities = {
         -- (alpha: rejects forced tools and one effort level). Opt-in ids
         -- (deepseek-v4-flash/pro: China-hosted opt-in; muse-spark-*: data
         -- collection opt-in) are listed but unprobed = no grants, no profile.
+        no_forced_tool_choice = { "qwen3.8-max", "qwen3.8-flash", "qwen3.7-plus" },
         reasoning = {
             "kimi-k3",
             "hy4-preview",
@@ -414,15 +427,20 @@ ModelConstraints.capabilities = {
             "mimo-v2.5-pro",
             "mimo-v2.5",
             "hy3",
+            "qwen3.8-max",     -- auto on gather rounds, unverified here (above)
+            "qwen3.8-flash",
+            "qwen3.7-plus",
         },
     },
     a2agent = {
         -- Probed live 2026-09-27 (#108, donated key, model_audit battery on
         -- every seed id). Every model reasons (MiniMax-M3 in <think> tags).
         -- tools = forced tool_choice + two-round replay green, with reasoning
-        -- on and no reasoning_content echo. The Qwen ids answer tools but
-        -- refuse tool_choice="required" while thinking, so they get no tools
-        -- grant (the opencode_go precedent).
+        -- on and no reasoning_content echo. The Qwen ids refuse
+        -- tool_choice="required" while thinking; auto calls the tool and the
+        -- replay holds, thinking on or disabled (B368, batteries 2026-10-14), so
+        -- gather rounds send them auto (the OpenRouter precedent).
+        no_forced_tool_choice = { "qwen3.8-max", "qwen3.8-flash" },
         reasoning = {
             "deepseek-v4-flash",
             "deepseek-v4-pro",
@@ -441,6 +459,8 @@ ModelConstraints.capabilities = {
             "glm-5.3-flash",
             "glm-5.3",
             "kimi-k3",
+            "qwen3.8-max",
+            "qwen3.8-flash",
             "MiniMax-M3",
         },
     },
@@ -696,6 +716,7 @@ ModelConstraints._max_output_tokens = {
         -- (model_audit battery 2026-09-05); the others accepted silently.
         ["qwen3.6-plus"] = 65536,
         ["qwen3.5-plus"] = 65536,
+        ["qwen3.8-flash"] = 131072,   -- battery 2026-10-14
         ["nemotron-3.5-lightning-free"] = 1000000,
     },
     opencode_go = {
@@ -1616,6 +1637,11 @@ ModelConstraints.reasoning_profiles = {
           stance_map = { minimal = { state = "off" }, maximum = { state = "on", option = "max" } } },
         { match = "qwen3.8-max", axis = "effort", default_state = "on", can_disable = true, can_enable = true,
           options = { "low", "medium", "high", "xhigh", "max" }, default_option = "high", off_option = "none",
+          stance_map = { minimal = { state = "off" }, maximum = { state = "on", option = "max" } } },
+        -- B368 (battery 2026-10-14): reasons by default, takes minimal..max, and
+        -- "none" turns the thinking off (checked against the reply, on 3.8-max too).
+        { match = "qwen3.8-flash", axis = "effort", default_state = "on", can_disable = true, can_enable = true,
+          options = { "minimal", "low", "medium", "high", "xhigh", "max" }, default_option = "high", off_option = "none",
           stance_map = { minimal = { state = "off" }, maximum = { state = "on", option = "max" } } },
     },
     opencode_go = {

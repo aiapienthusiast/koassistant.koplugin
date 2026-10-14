@@ -548,6 +548,7 @@ local ModelLists = {
         "glm-5.3",
         "kimi-k3",
         "qwen3.8-max",                              -- third sweep 2026-09-28 (forced tools OK here)
+        "qwen3.8-flash",                            -- B368 2026-10-14: book tools without a forced call
         "minimax-m3",
         "minimax-m2.7",
         -- Second sweep 2026-09-05 (every remaining open-weight Zen id ran the
@@ -566,9 +567,8 @@ local ModelLists = {
         -- _retired): glm-5 ("deprecated, use glm-5.3"), kimi-k2.6 + kimi-k2.5
         -- ("Endpoint is unavailable", twice), deepseek-v4-flash-vision-exp (no chat
         -- route), nemotron-3.5-lightning-free (free models now answer only inside
-        -- OpenCode's own client). Left out: qwen3.8-flash (refuses the forced tool
-        -- call; no tools grant, the opencode_go precedent), jev-1.13 ("does not
-        -- support this protocol" on the chat door).
+        -- OpenCode's own client). Left out: jev-1.13 ("does not support this
+        -- protocol" on the chat door).
     },
     -- OpenCode Go (the subscription catalog; CURATED 2026-09-05: all 35
     -- /zen/go/v1/models ids ran the model_audit battery on the Go endpoint
@@ -595,9 +595,9 @@ local ModelLists = {
         -- (2026-09-28, answered even without a Go subscription: glm-5.1, minimax-m2.5,
         -- qwen3.7-max, qwen3.6-plus and kimi-k2.6 "deprecated, use ...", glm-5 and
         -- qwen3.5-plus "unavailable"; saved picks move via _retired.)
-        "qwen3.8-max",                              -- reasoning-only
-        "qwen3.8-flash",                            -- reasoning-only
-        "qwen3.7-plus",                             -- reasoning-only
+        "qwen3.8-max",                              -- book tools without a forced call (B368; unverified here)
+        "qwen3.8-flash",                            -- same
+        "qwen3.7-plus",                             -- same
         "deepseek-v4-flash",                        -- OPT-IN (China-hosted; enable in the OpenCode console)
         "deepseek-v4-pro",                          -- OPT-IN (same)
         "muse-spark-1.3-contributor",               -- OPT-IN (data-collection consent)
@@ -616,7 +616,7 @@ local ModelLists = {
         "glm-5.3",
         "glm-5.3-flash",
         "kimi-k3",
-        "qwen3.8-max",                              -- no book tools: forced tool calls refused while thinking
+        "qwen3.8-max",                              -- book tools without a forced call (refused while thinking; B368)
         "qwen3.8-flash",                            -- same
         "MiniMax-M3",                               -- reasoning arrives as <think> tags (parser strips)
     },
