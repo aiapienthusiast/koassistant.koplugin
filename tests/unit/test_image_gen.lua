@@ -214,6 +214,64 @@ local function runAll()
         TestRunner:assertEquals(reason, "no_endpoint")
     end)
 
+    print("  [When the chat provider cannot draw (S4)]")
+    TestRunner:test("offered: the button shows for a text-only chat provider when an image key exists", function()
+        withApikeys({ gemini = "gm-real-key", openrouter = "sk-or-real-key" }, function()
+            local settings = mockSettings({})
+            TestRunner:assertEquals(ImageGenerator.offered({}, "anthropic", settings), true)
+            local keyed = ImageGenerator.keyedProviders(settings)
+            TestRunner:assertEquals(table.concat(keyed, ","), "gemini,openrouter", "keyed only, the settings' order")
+            TestRunner:assertEquals(ImageGenerator.offered({ image_gen_provider = "auto" }, "deepseek", settings), true)
+            TestRunner:assertEquals(ImageGenerator.offered({ image_gen_provider = "openai" }, "anthropic", settings), false,
+                "an explicit pick without a key stays hidden")
+            TestRunner:assertEquals(ImageGenerator.offered({}, "openai", settings), false,
+                "a chat provider that can draw but has no key: hidden, as before")
+        end)
+        withApikeys({}, function()
+            TestRunner:assertEquals(ImageGenerator.offered({}, "anthropic", mockSettings({})), false, "no key at all")
+        end)
+    end)
+    TestRunner:test("the first tap asks; a pick is saved as Provider and the run goes on; Cancel saves nothing", function()
+        withApikeys({ gemini = "gm-real-key", xai = "xai-real-key" }, function()
+            local stored = {}
+            local settings = {
+                readSetting = function(_self, key) return key == "features" and stored or nil end,
+                saveSetting = function(_self, key, val) if key == "features" then stored = val end end,
+                flush = function() end,
+            }
+            local UIManager = require("ui/uimanager")
+            local real_show, real_generate = UIManager.show, ImageGenerator.generate
+            local shown, reran = {}, nil
+            UIManager.show = function(_self, w) shown[#shown + 1] = w end
+            ImageGenerator.generate = function(word, config) reran = { word = word, config = config } end
+            local ok, err = pcall(function()
+                local config = { provider = "anthropic", features = {} }
+                ImageGenerator._generateImpl("a castle", config, settings, nil, {})
+                local dialog = shown[1]
+                TestRunner:assert(dialog and dialog.title:find("can't make images", 1, true), "the question")
+                TestRunner:assertEquals(#dialog.buttons, 3, "the two keyed providers and Cancel")
+                TestRunner:assertEquals(dialog.buttons[1][1].text, "xAI (Grok)")
+                dialog.buttons[3][1].callback()  -- Cancel
+                TestRunner:assertEquals(stored.image_gen_provider, nil, "Cancel saves nothing")
+                TestRunner:assertEquals(reran, nil)
+                ImageGenerator._generateImpl("a castle", config, settings, nil, {})
+                shown[2].buttons[2][1].callback()  -- Gemini
+                TestRunner:assertEquals(stored.image_gen_provider, "gemini", "saved as Provider")
+                TestRunner:assertEquals(config.features.image_gen_provider, "gemini", "in effect now")
+                TestRunner:assertEquals(reran and reran.word, "a castle", "the run goes on")
+            end)
+            UIManager.show, ImageGenerator.generate = real_show, real_generate
+            if not ok then error(err, 0) end
+        end)
+    end)
+    TestRunner:test("providerName: the image providers by brand, the others through the plugin", function()
+        TestRunner:assertEquals(ImageGenerator.providerName("openrouter"), "OpenRouter")
+        TestRunner:assertEquals(ImageGenerator.providerName("xai"), "xAI (Grok)")
+        local plugin = { getProviderDisplayName = function(_self, id) return id == "anthropic" and "Anthropic" or id end }
+        TestRunner:assertEquals(ImageGenerator.providerName("anthropic", plugin), "Anthropic")
+        TestRunner:assertEquals(ImageGenerator.providerName("anthropic"), "anthropic", "no plugin: the id")
+    end)
+
     print("  [Images index: book associations]")
     TestRunner:test("recordImage → readIndex roundtrip; no-op without book info", function()
         withImageIndex(function()

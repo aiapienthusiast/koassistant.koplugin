@@ -24,7 +24,11 @@ Public API:
       { file, title } — associates the saved image with a book in the
       images index (per-book gallery / artifact browser row).
   ImageGenerator.effectiveProvider(features, main_provider, settings)
-      → provider|nil, reason — the button-visibility / dispatch gate.
+      → provider|nil, reason — the dispatch's provider.
+  ImageGenerator.offered(features, main_provider, settings) — the button
+      gates: the provider in effect draws, or the chat provider cannot draw
+      and some image provider has a key (askProvider asks on the first tap;
+      keyedProviders, providerName).
   ImageGenerator.buildPrompt / buildRequest / parseResponse / errorMessage /
       imageExtension — pure: the framed prompt, the request as sent (Shape
       and Detail turned into each model's own parameters, with
@@ -124,6 +128,79 @@ function ImageGenerator.effectiveProvider(features, main_provider, settings)
         return nil, "no_key"
     end
     return provider
+end
+
+-- The image providers in the order the settings list them, with their names
+ImageGenerator.PROVIDERS = { "openai", "xai", "gemini", "openrouter" }
+local PROVIDER_NAMES = { openai = "OpenAI", xai = "xAI (Grok)", gemini = "Gemini", openrouter = "OpenRouter" }
+
+--- A provider's name on the image surfaces: an image provider by its brand
+--- (as the Provider row names it), any other by the plugin's display name.
+function ImageGenerator.providerName(provider, plugin)
+    if PROVIDER_NAMES[provider] then return PROVIDER_NAMES[provider] end
+    if provider and plugin and plugin.getProviderDisplayName then
+        local ok, name = pcall(plugin.getProviderDisplayName, plugin, provider)
+        if ok and type(name) == "string" and name ~= "" then return name end
+    end
+    return tostring(provider)
+end
+
+-- Provider on Follow main provider (unset, empty or "auto")
+local function followsMain(features)
+    local pick = features and features.image_gen_provider
+    return not (type(pick) == "string" and pick ~= "" and pick ~= "auto")
+end
+
+--- The image providers with an API key, in the settings' order.
+function ImageGenerator.keyedProviders(settings)
+    local out = {}
+    for _idx, p in ipairs(ImageGenerator.PROVIDERS) do
+        if resolveApiKey(p, settings) then out[#out + 1] = p end
+    end
+    return out
+end
+
+--- Whether Generate Image is offered (the button gates; image round S4,
+--- ruling R4): the provider in effect can draw and has a key, or Provider
+--- follows a chat provider that cannot draw while an image provider has a
+--- key, and the first tap asks which one (askProvider).
+function ImageGenerator.offered(features, main_provider, settings)
+    if ImageGenerator.effectiveProvider(features, main_provider, settings) then return true end
+    return followsMain(features) and not (main_provider and IMAGE_ENDPOINTS[main_provider])
+        and #ImageGenerator.keyedProviders(settings) > 0
+end
+
+--- The question when the chat provider cannot draw (S4): which of the keyed
+--- image providers makes the images. Every keyed one is listed, even a single
+--- one: the answer decides who is billed. on_pick(provider) after a pick;
+--- Cancel and a tap outside do nothing, so the next tap asks again.
+function ImageGenerator.askProvider(main_provider, keyed, plugin, on_pick)
+    local UIManager = require("ui/uimanager")
+    local ButtonDialog = require("ui/widget/buttondialog")
+    local dialog
+    local rows = {}
+    for _idx, p in ipairs(keyed) do
+        local provider = p
+        rows[#rows + 1] = { {
+            text = ImageGenerator.providerName(provider),
+            callback = function()
+                UIManager:close(dialog)
+                on_pick(provider)
+            end,
+        } }
+    end
+    rows[#rows + 1] = { {
+        text = _("Cancel"),
+        id = "close",
+        callback = function() UIManager:close(dialog) end,
+    } }
+    dialog = ButtonDialog:new{
+        title = T(_("%1 can't make images. Make them with:"), ImageGenerator.providerName(main_provider, plugin))
+            .. "\n\n" .. _("Your answer is saved as the image provider (Settings → Advanced → Image Generation → Provider)."),
+        buttons = rows,
+    }
+    UIManager:show(dialog)
+    return dialog
 end
 
 --- Resolve the image model: explicit per-provider setting (a retired id sent
@@ -1049,12 +1126,13 @@ end
 
 --- Internal implementation — called via pcall from generate() for error catching.
 --- opts (optional): { book_metadata = {title, author}, window = {prev, next},
---- after_limit, book_info_level, book_privacy } — context the prompt is framed
---- with (2026-08-13). book_metadata carries the per-book AI-identity overrides
---- already applied; window is the pre-extracted surrounding-context selection
---- window (hard-capped upstream; sent only where privacy_gates allows the
---- "nearby_text" kind for the image provider); book_privacy is the book's own
---- privacy values (PrivacyGates.overridesOf).
+--- after_limit, book_info_level, book_privacy, plugin } — context the prompt is
+--- framed with (2026-08-13). book_metadata carries the per-book AI-identity
+--- overrides already applied; window is the pre-extracted surrounding-context
+--- selection window (hard-capped upstream; sent only where privacy_gates allows
+--- the "nearby_text" kind for the image provider); book_privacy is the book's
+--- own privacy values (PrivacyGates.overridesOf); plugin names the chat
+--- provider in the questions and refreshes the settings after an answer.
 function ImageGenerator._generateImpl(word, config_table, settings, book_info, opts)
     local UIManager = require("ui/uimanager")
 
@@ -1062,13 +1140,34 @@ function ImageGenerator._generateImpl(word, config_table, settings, book_info, o
     -- image_gen_provider > image-capable main provider; never fall back to a
     -- merely-keyed provider. Model: per-provider setting > list default.
     local features = (config_table and config_table.features) or {}
-    local provider, unavailable = ImageGenerator.effectiveProvider(
-        features, config_table and config_table.provider, settings)
+    local main_provider = config_table and config_table.provider
+    local provider, unavailable = ImageGenerator.effectiveProvider(features, main_provider, settings)
+    if not provider and unavailable == "no_endpoint" and followsMain(features) then
+        -- The chat provider cannot draw (S4, ruling R4): ask once which keyed
+        -- image provider makes the images, and save the answer as Provider
+        local keyed = ImageGenerator.keyedProviders(settings)
+        if #keyed > 0 then
+            local plugin = opts and opts.plugin
+            ImageGenerator.askProvider(main_provider, keyed, plugin, function(picked)
+                if settings then
+                    local f = settings:readSetting("features") or {}
+                    f.image_gen_provider = picked
+                    settings:saveSetting("features", f)
+                    settings:flush()
+                end
+                features.image_gen_provider = picked
+                if plugin and plugin.updateConfigFromSettings then plugin:updateConfigFromSettings() end
+                logger.info("KOAssistant: image provider set by the first-tap question:", picked)
+                ImageGenerator.generate(word, config_table, settings, book_info, opts)
+            end)
+            return
+        end
+    end
     if not provider then
         if unavailable == "no_key" then
             showNotice(_("No API key found for the image generation provider.\n\nPlease add your key in KOAssistant settings."))
         else
-            showNotice(_("Image generation is not available for the current provider.\n\nSupported: OpenAI, xAI (Grok), Gemini. You can also pick a dedicated image provider in KOAssistant settings (Advanced)."))
+            showNotice(_("Image generation is not available for the current provider.\n\nSupported: OpenAI, xAI (Grok), Gemini, OpenRouter. You can also pick a dedicated image provider in KOAssistant settings (Advanced)."))
         end
         return
     end

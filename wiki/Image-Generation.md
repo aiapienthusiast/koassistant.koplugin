@@ -9,7 +9,7 @@ KOAssistant can turn a passage you highlight into an AI-generated image: a chara
 3. A progress window shows "Generating image with … / …" with an elapsed-seconds counter; **Stop** cancels a request in flight.
 4. The finished image opens full screen in KOReader's image viewer, and is saved (below). If the provider refuses the prompt or the request fails, an error message shows instead and nothing is saved. A refusal says why when the provider gives a reason: Google's safety filter and the reason it names, or OpenAI's moderation and whether it refused the prompt or the picture.
 
-The button appears only when the resolved image provider can generate images and has an API key. With no such provider, it is hidden.
+The button appears when the image provider in effect can generate images and has an API key. If Provider is Follow main provider and your chat provider cannot make images (Anthropic, DeepSeek and the other text providers), it appears when any image provider has a key: the first tap asks which one makes your images, listing only those you have a key for, and saves the answer as **Provider** (below). Cancel leaves it unset, so the next tap asks again. With no image provider key at all, the button is hidden.
 
 ## Providers and models
 
@@ -24,7 +24,7 @@ Four providers offer image generation, each with its own models (the first is th
 
 A model you picked that has left this list keeps working (`gpt-image-1.5`, `gpt-image-1`, `chatgpt-image-latest`, `gemini-3.1-flash-image`). xAI retires `grok-imagine-image-quality` on November 2, 2026, so a pick of it goes out as `grok-imagine-image-2.0`, the model xAI answers it with.
 
-KOAssistant generates images only through these four; Anthropic (Claude), DeepSeek, OpenAI Subscription and the other chat providers are not used for images. With one of them as your main provider, pick a dedicated image provider below, or the button stays hidden (OpenAI there needs an OpenAI API key: the subscription sign-in does not cover images).
+KOAssistant generates images only through these four; Anthropic (Claude), DeepSeek, OpenAI Subscription and the other chat providers are not used for images. With one of them as your main provider, the first tap of Generate Image asks which image provider to use, or pick one yourself under Provider below (OpenAI there needs an OpenAI API key: the subscription sign-in does not cover images).
 
 ## Choosing the provider and model
 

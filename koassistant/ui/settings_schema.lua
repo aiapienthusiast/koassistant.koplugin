@@ -3078,7 +3078,7 @@ local SettingsSchema = {
                                 }
                                 return T(_("Provider: %1"), labels[v] or v)
                             end,
-                            help_text = _("Which provider generates images.\n\n'Follow main provider' uses your current chat provider when it supports images (OpenAI, xAI, Gemini, OpenRouter). Picking one explicitly lets image generation work no matter which chat provider is active: it uses that provider's own API key.\n\nThe highlight-menu button only appears when the resolved provider has an API key."),
+                            help_text = _("Which provider generates images.\n\n'Follow main provider' uses your current chat provider when it supports images (OpenAI, xAI, Gemini, OpenRouter). Picking one explicitly lets image generation work no matter which chat provider is active: it uses that provider's own API key.\n\nThe highlight-menu button appears when the provider in effect has an API key. If your chat provider can't make images, it appears when any image provider has a key, and the first tap asks which one to use (the answer is saved here)."),
                             path = "features.image_gen_provider",
                             default = "auto",
                             options = {

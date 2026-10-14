@@ -10272,9 +10272,9 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         if not excluded and action.requires_image_provider then
                             local ImageGenerator = require("koassistant.images.image_generator")
                             local feats = (configuration and configuration.features) or {}
-                            excluded = ImageGenerator.effectiveProvider(feats,
+                            excluded = not ImageGenerator.offered(feats,
                                 require("koassistant.core.config_helper").mainProvider(feats),
-                                plugin and plugin.settings) == nil
+                                plugin and plugin.settings)
                         end
                         if not excluded then
                             table.insert(more_actions, action)
@@ -12663,6 +12663,7 @@ local function handleLocalAction(handler_name, ui, highlighted_text, document_pa
             after_limit = contextAfterLimit(features, BookSettings.resolveSpoilerFree(book_ds, features) or false),
             book_info_level = BookSettings.resolveBookInfoLevel(book_ds, features),
             book_privacy = require("koassistant.request.privacy_gates").overridesOf(book_ds),
+            plugin = plugin,
         }
         local NetworkMgr = require("ui/network/manager")
         NetworkMgr:runWhenConnected(function()

@@ -884,8 +884,8 @@ function ActionService:getHighlightMenuActionObjects(has_open_book, document_pat
             if include and action.requires_image_provider then
                 local ImageGenerator = require("koassistant.images.image_generator")
                 local feats = self.settings:readSetting("features") or {}
-                include = ImageGenerator.effectiveProvider(feats,
-                    require("koassistant.core.config_helper").mainProvider(feats), self.settings) ~= nil
+                include = ImageGenerator.offered(feats,
+                    require("koassistant.core.config_helper").mainProvider(feats), self.settings)
             end
             if include then
                 table.insert(result, action)
@@ -1036,8 +1036,8 @@ function ActionService:getDictionaryPopupActionObjects(has_open_book, document_p
             if include and action.requires_image_provider then
                 local ImageGenerator = require("koassistant.images.image_generator")
                 local feats = self.settings:readSetting("features") or {}
-                include = ImageGenerator.effectiveProvider(feats,
-                    require("koassistant.core.config_helper").mainProvider(feats), self.settings) ~= nil
+                include = ImageGenerator.offered(feats,
+                    require("koassistant.core.config_helper").mainProvider(feats), self.settings)
             end
             if include then
                 table.insert(result, action)
@@ -2247,8 +2247,8 @@ function ActionService:getInputActionObjects(ctx_name, document_path)
             if include and action.requires_image_provider then
                 local ImageGenerator = require("koassistant.images.image_generator")
                 local feats = self.settings:readSetting("features") or {}
-                include = ImageGenerator.effectiveProvider(feats,
-                    require("koassistant.core.config_helper").mainProvider(feats), self.settings) ~= nil
+                include = ImageGenerator.offered(feats,
+                    require("koassistant.core.config_helper").mainProvider(feats), self.settings)
             end
             if include then
                 table.insert(result, action)
