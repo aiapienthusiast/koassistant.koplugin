@@ -102,7 +102,7 @@ TestRunner:test("a run option to an untrusted provider is refused, with a messag
         "ollama", { notebook = true })
     TestRunner:assertEqual(n, 0, "not sent")
     TestRunner:assertEqual(#msgs, 1, "one message")
-    TestRunner:assertTrue((msgs[1].text or ""):find("Notebook sharing", 1, true), "names the setting")
+    TestRunner:assertTrue((msgs[1].text or ""):find("Allow Notebook", 1, true), "names the setting")
 end)
 
 TestRunner:test("the book's deny beats a trusted provider; its allow passes an untrusted one", function()
