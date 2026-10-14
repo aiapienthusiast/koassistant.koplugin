@@ -143,6 +143,7 @@ Registry.SETTINGS_SUBKEYS = {
         -- reads these; do not clear them while the installed state remains.
         "_wizard_pretend_unconfigured", "_wizard_font_pending_confirm",
         "_wizard_font_install", "_wizard_gesture_writes",
+        "_emoji_font_offered",  -- the one-time font offer when icons are on without a font (B397, setup_wizard.lua maybeOfferFont)
     },
 }
 

@@ -21299,6 +21299,12 @@ function AskGPT:showSetupWizardDev()
   require("koassistant.ui.setup_wizard").showDevMenu(self)
 end
 
+-- Settings ▸ Display Settings ▸ Emoji ▸ "Emoji Font" (B397): the bundled
+-- Noto Emoji font installed into KOReader, the wizard's installer reused
+function AskGPT:showEmojiFontSetup()
+  require("koassistant.ui.setup_wizard").showFontRow(self)
+end
+
 -- Quick reset: Settings only
 function AskGPT:quickResetSettings()
   self:_resetFeatureSettingsInternal()
@@ -23104,7 +23110,13 @@ function AskGPT:ensureInitialized()
   self:checkSetupWizard()
 
   -- One-time language prompt for existing users who never configured languages
-  self:checkLanguagePrompt()
+  local language_prompted = self:checkLanguagePrompt()
+
+  -- One-time offer of the bundled emoji font when icons are on without one
+  -- (B397); not on top of the language prompt
+  if not language_prompted then
+    require("koassistant.ui.setup_wizard").maybeOfferFont(self)
+  end
 end
 
 --[[
@@ -23457,6 +23469,7 @@ function AskGPT:checkLanguagePrompt()
       end
     end,
   })
+  return true
 end
 
 -- Orchestrate the setup wizard steps
@@ -23634,7 +23647,7 @@ function AskGPT:showSetupStep3EmojiTest(next_step)
     "📄 Document  📝 Notes  📓 Notebook\n" ..
     "🔍 Search  🌐 Web  🎭 Behavior\n" ..
     "📜 History  🔖 Bookmark  📖 Book" .. "\n\n" ..
-    _("The wiki's Troubleshooting page explains how to add an emoji font to KOReader.") .. "\n\n" ..
+    _("If not, Settings → Display Settings → Emoji → Emoji Font installs the bundled emoji font once the wizard is done.") .. "\n\n" ..
     _("If you see blank boxes or question marks, choose \"No\".")
 
   local wizard_advancing = false

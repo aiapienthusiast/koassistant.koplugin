@@ -118,6 +118,29 @@ function SetupWizard.findEmojiFallback(list)
     return nil
 end
 
+-- The emoji font's state for the Emoji Font row in Settings (B397):
+-- "missing" (not registered, or the registered file is gone), "restart"
+-- (registered, but KOReader reads the list at startup and has not loaded
+-- it), "installed".
+function SetupWizard.fontState(registered_path, file_exists, loaded)
+    if not registered_path or not file_exists then
+        return "missing"
+    end
+    if not loaded then
+        return "restart"
+    end
+    return "installed"
+end
+
+function SetupWizard.fontRowLabel(state)
+    if state == "installed" then
+        return _("Emoji Font: Installed")
+    elseif state == "restart" then
+        return _("Emoji Font: Restart KOReader")
+    end
+    return _("Emoji Font: Not Installed")
+end
+
 function SetupWizard.probeLanguageF(features)
     if features.interaction_languages and #features.interaction_languages > 0 then
         return true, features.interaction_languages[1]
@@ -215,6 +238,28 @@ local function saveFeats(plugin, features)
     plugin.settings:flush()
 end
 
+-- The emoji font as KOReader sees it now: registered in font_ui_fallbacks,
+-- its file present, and loaded into Font.fallbacks (read once at startup, so
+-- a fresh install waits for the restart). Returns the state and the path.
+function SetupWizard.readFontState()
+    local registered = G_reader_settings
+        and SetupWizard.findEmojiFallback(G_reader_settings:readSetting("font_ui_fallbacks"))
+    local exists, loaded = false, false
+    if registered then
+        local lfs = require("libs/libkoreader-lfs")
+        exists = lfs.attributes(registered, "mode") ~= nil
+        local ok, Font = pcall(require, "ui/font")
+        local fallbacks = (ok and type(Font) == "table") and Font.fallbacks or {}
+        for _idx, path in ipairs(fallbacks) do
+            if path == registered then
+                loaded = true
+                break
+            end
+        end
+    end
+    return SetupWizard.fontState(registered, exists, loaded), registered
+end
+
 local function fontInstallDir()
     local Device = require("device")
     local DataStorage = require("datastorage")
@@ -310,7 +355,15 @@ end
 --  Font install
 --========================================================================--
 
-local function installEmojiFont(plugin, ctx, next_step)
+-- Install the bundled font into KOReader's fonts folder and enable it as a UI
+-- fallback: ONE installer, run by the wizard's Icons step and by the Emoji
+-- Font row in Settings (B397). opts.wizard = the wizard's session (its results
+-- line, its restart flag, the glyph test after the restart); opts.done(installed)
+-- runs when the flow's last popup closes.
+function SetupWizard.installFont(plugin, opts)
+    opts = opts or {}
+    local ctx = opts.wizard
+    local done = opts.done or function() end
     local UIManager = require("ui/uimanager")
     local InfoMessage = require("ui/widget/infomessage")
     local lfs = require("libs/libkoreader-lfs")
@@ -326,7 +379,7 @@ local function installEmojiFont(plugin, ctx, next_step)
             UIManager:show(InfoMessage:new{
                 icon = "notice-warning",
                 text = _("The bundled emoji font is missing from this build. The wiki's Troubleshooting page has the manual route."),
-                dismiss_callback = next_step,
+                dismiss_callback = function() done(false) end,
             })
             return
         end
@@ -336,7 +389,7 @@ local function installEmojiFont(plugin, ctx, next_step)
             UIManager:show(InfoMessage:new{
                 icon = "notice-warning",
                 text = T(_("Could not install the font: %1"), tostring(err)),
-                dismiss_callback = next_step,
+                dismiss_callback = function() done(false) end,
             })
             return
         end
@@ -357,31 +410,80 @@ local function installEmojiFont(plugin, ctx, next_step)
     -- "full reset actually resets" audit reads this).
     local f = feats(plugin)
     f._wizard_font_install = { path = dest, fallback_added = fallback_added }
-    f._wizard_font_pending_confirm = true
+    if ctx then
+        f._wizard_font_pending_confirm = true
+    end
     saveFeats(plugin, f)
 
-    table.insert(ctx.results, _("Emoji font installed (restart pending)"))
-    ctx.restart_needed = true
+    if ctx then
+        table.insert(ctx.results, _("Emoji font installed (restart pending)"))
+        ctx.restart_needed = true
+    end
+
+    local function restartThen()
+        local UIM = require("ui/uimanager")
+        UIM:askForRestart()
+        done(true)
+    end
 
     if reason == "cap" then
         UIManager:show(InfoMessage:new{
             icon = "notice-warning",
             text = T(_("The font was installed, but KOReader's additional fallback list is full (limit %1). Uncheck one in KOReader Settings > Device > Additional UI fallback fonts, then check Noto Emoji there."), SetupWizard.FALLBACK_MAX),
-            dismiss_callback = function()
-                local UIM = require("ui/uimanager")
-                UIM:askForRestart()
-                next_step()
-            end,
+            dismiss_callback = restartThen,
         })
         return
     end
 
+    local text
+    if ctx then
+        text = _("Emoji font installed and registered. After the restart, the wizard shows a quick glyph test to confirm it works.")
+    else
+        text = _("Noto Emoji is installed and enabled as a UI fallback font. Restart KOReader to load it, then tap Emoji Font again to test the icons.")
+    end
     UIManager:show(InfoMessage:new{
-        text = _("Emoji font installed and registered. After the restart, the wizard shows a quick glyph test to confirm it works."),
-        dismiss_callback = function()
-            local UIM = require("ui/uimanager")
-            UIM:askForRestart()
-            next_step()
+        text = text,
+        dismiss_callback = restartThen,
+    })
+end
+
+-- The install offer, ONE copy: the wizard's Icons step (opts.wizard = its
+-- session), the Emoji Font row in Settings, and the one-time offer when icons
+-- are on without a font (opts.intro replaces the first sentence, opts.later
+-- names the row for next time).
+function SetupWizard.offerFontInstall(plugin, opts)
+    opts = opts or {}
+    local UIManager = require("ui/uimanager")
+    local ConfirmBox = require("ui/widget/confirmbox")
+    local ctx = opts.wizard
+    local done = opts.done or function() end
+    local intro = opts.intro
+        or _("KOReader ships no emoji font, so KOAssistant's menu icons show as empty boxes. Install the bundled Noto Emoji font (about 860 KB) into KOReader now?")
+    local tail
+    if ctx then
+        tail = _("Icons appear in plugin menus, buttons and panels, never inside the Markdown chat view. Requires a KOReader restart; a glyph test follows after it.")
+    else
+        tail = _("Icons appear in plugin menus, buttons and panels, never inside the Markdown chat view. Requires a KOReader restart; the Emoji Font row then offers a display test.")
+    end
+    local parts = {}
+    if ctx then table.insert(parts, _("ICONS")) end
+    table.insert(parts, intro)
+    table.insert(parts, tail)
+    if opts.later then table.insert(parts, opts.later) end
+    local advancing = false
+    UIManager:show(ConfirmBox:new{
+        text = table.concat(parts, "\n\n"),
+        ok_text = _("Install"),
+        cancel_text = ctx and _("Skip") or _("Not now"),
+        ok_callback = function()
+            advancing = true
+            SetupWizard.installFont(plugin, { wizard = ctx, done = done })
+        end,
+        cancel_callback = function()
+            if not advancing then
+                advancing = true
+                done(false)
+            end
         end,
     })
 end
@@ -394,7 +496,7 @@ local function showGlyphTest(plugin, ctx, next_step)
         "📄 Document  📝 Notes  📓 Notebook\n" ..
         "🔍 Search  🌐 Web  🎭 Behavior\n" ..
         "📜 History  🔖 Bookmark  📖 Book" .. "\n\n" ..
-        _("Emoji appear in plugin menus, buttons and panels — not in the Markdown chat view (a KOReader renderer limit).") .. "\n\n" ..
+        _("Emoji appear in plugin menus, buttons and panels, never inside the Markdown chat view (a KOReader renderer limit).") .. "\n\n" ..
         _("If you see blank boxes or question marks, choose \"No\".")
 
     local advancing = false
@@ -430,6 +532,56 @@ local function showGlyphTest(plugin, ctx, next_step)
             end
         end,
     })
+end
+
+-- The Emoji Font row, Settings → Display Settings → Emoji (B397): the install
+-- offer while the font is missing, the restart ask while KOReader has not
+-- loaded it, the display test (which turns the icons on) once it has.
+function SetupWizard.showFontRow(plugin)
+    local state = SetupWizard.readFontState()
+    if state == "installed" then
+        return showGlyphTest(plugin, { results = {} }, function() end)
+    end
+    if state == "restart" then
+        local UIManager = require("ui/uimanager")
+        local ConfirmBox = require("ui/widget/confirmbox")
+        UIManager:show(ConfirmBox:new{
+            text = _("Noto Emoji is installed and enabled as a UI fallback font, but KOReader loads fonts at startup. Restart KOReader now?"),
+            ok_text = _("Restart"),
+            cancel_text = _("Later"),
+            ok_callback = function()
+                UIManager:askForRestart()
+            end,
+        })
+        return
+    end
+    SetupWizard.offerFontInstall(plugin, {})
+end
+
+-- Once per install: emoji icons are on but no emoji font is there (B397).
+-- Runs from ensureInitialized after the first-run wizard and the language
+-- prompt; the stamp is written whatever the answer. Returns true when shown.
+function SetupWizard.maybeOfferFont(plugin)
+    if not plugin.settings:readSetting("setup_wizard_completed") then
+        return false
+    end
+    local f = feats(plugin)
+    if f._emoji_font_offered then
+        return false
+    end
+    if not (f.enable_emoji_icons or f.enable_emoji_panel_icons or f.enable_data_access_indicators) then
+        return false
+    end
+    if SetupWizard.readFontState() ~= "missing" then
+        return false
+    end
+    f._emoji_font_offered = true
+    saveFeats(plugin, f)
+    SetupWizard.offerFontInstall(plugin, {
+        intro = _("Emoji icons are on, but KOReader has no emoji font, so they show as empty boxes. Install the bundled Noto Emoji font (about 860 KB) into KOReader now?"),
+        later = _("Later: Settings → Display Settings → Emoji → Emoji Font."),
+    })
+    return true
 end
 
 --========================================================================--
@@ -710,28 +862,9 @@ function SetupWizard.stepIcons(plugin, ctx, next_step)
     if registered then
         return showGlyphTest(plugin, ctx, next_step)
     end
-
-    local UIManager = require("ui/uimanager")
-    local ConfirmBox = require("ui/widget/confirmbox")
-    local advancing = false
-    UIManager:show(ConfirmBox:new{
-        text = _("ICONS") .. "\n\n" ..
-            _("KOReader ships no emoji font, so KOAssistant's menu icons show as empty boxes. Install the bundled Noto Emoji font (about 860 KB) into KOReader now?") .. "\n\n" ..
-            _("Icons appear in plugin menus, buttons and panels — not in the Markdown chat view. Requires a KOReader restart; a glyph test follows after it."),
-        ok_text = _("Install"),
-        cancel_text = _("Skip"),
-        ok_callback = function()
-            advancing = true
-            installEmojiFont(plugin, ctx, next_step)
-        end,
-        cancel_callback = function()
-            if not advancing then
-                advancing = true
-                next_step()
-            end
-        end,
-    })
+    SetupWizard.offerFontInstall(plugin, { wizard = ctx, done = next_step })
 end
+
 
 function SetupWizard.stepGestures(plugin, ctx, next_step)
     if not ctx.force and SetupWizard.probe(plugin, "gestures") then

@@ -48,6 +48,8 @@ Why it is off by default: extraction sends the book's content to the provider, r
 
 Emoji icons in the plugin's menus and buttons (Emoji Menu Icons, Emoji Data Access Indicators) need an emoji font installed in KOReader, which ships none. The icons work in menus, the action manager, the X-Ray browser and chat-window buttons; they do not render inside the Markdown chat view, whose renderer (MuPDF) has no per-glyph font fallback. That is a KOReader limitation.
 
+**The short route:** **Settings → Display Settings → Emoji → Emoji Font** installs the bundled Noto Emoji font into KOReader's fonts folder, enables it as a UI fallback font and asks for a restart; after the restart the same row shows a display test whose **Yes, enable** turns the icons on. The row's label says where you are (Not Installed, Restart KOReader, Installed). If the icons are on and no emoji font is there, the plugin offers the install once when it starts. The steps below are the same thing by hand.
+
 **Step 1, install the font.** KOAssistant carries a copy in its own folder, `koassistant.koplugin/fonts/NotoEmoji-Regular.ttf`; you can also download **Noto Emoji** (monochrome, `.ttf`) from [Google Fonts](https://fonts.google.com/noto/specimen/Noto+Emoji): `NotoEmoji-Regular.ttf`, not Noto Color Emoji, which KOReader's text renderer cannot use. Copy it to KOReader's fonts folder (KOReader does not look for fonts inside plugin folders) and restart KOReader:
 
 | Platform | Font folder |

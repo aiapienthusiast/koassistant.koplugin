@@ -99,6 +99,7 @@ Gen.PAGE_NAMES = {
 -- the row shows, with its live part as "…".
 Gen.DYNAMIC_LABELS = {
     provider_model = "Model: current model (provider)",
+    emoji_font = "Emoji Font: Installed / Restart KOReader / Not Installed",
     quick_preset_nudge_mode = "Brevity nudge: …",
     quick_preset_behavior = "Behavior: …",
     quick_preset_model_mode = "Model override: … (or Keep current / Fastest for provider / a tier)",

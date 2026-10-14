@@ -274,4 +274,34 @@ TestRunner:test("gesture candidates: unique ids, labels present", function()
     end
 end)
 
+--=== the Emoji Font row (B397) ===--
+
+TestRunner:suite("fontState / fontRowLabel — the Emoji Font row in Settings")
+
+TestRunner:test("not registered: missing", function()
+    TestRunner:assertEqual(SetupWizard.fontState(nil, false, false), "missing")
+end)
+
+TestRunner:test("registered but the file is gone: missing (the install copies it again)", function()
+    TestRunner:assertEqual(SetupWizard.fontState("/fonts/NotoEmoji-Regular.ttf", false, false), "missing")
+end)
+
+TestRunner:test("registered, present, not loaded yet: restart", function()
+    TestRunner:assertEqual(SetupWizard.fontState("/fonts/NotoEmoji-Regular.ttf", true, false), "restart")
+end)
+
+TestRunner:test("registered, present, loaded: installed", function()
+    TestRunner:assertEqual(SetupWizard.fontState("/fonts/NotoEmoji-Regular.ttf", true, true), "installed")
+end)
+
+TestRunner:test("every state has its own label, all under the static head", function()
+    local seen = {}
+    for _idx, state in ipairs({ "missing", "restart", "installed" }) do
+        local label = SetupWizard.fontRowLabel(state)
+        TestRunner:assertTrue(label:find("^Emoji Font: ") ~= nil, state .. " label starts with the head")
+        TestRunner:assertFalse(seen[label], "label reused for " .. state)
+        seen[label] = true
+    end
+end)
+
 return TestRunner:summary()

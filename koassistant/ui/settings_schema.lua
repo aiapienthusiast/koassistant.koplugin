@@ -271,13 +271,27 @@ local SettingsSchema = {
                     type = "submenu",
                     text = _("Emoji"),
                     items = {
+                        -- The bundled Noto Emoji font, installed from here (B397):
+                        -- the wizard's installer, one copy (setup_wizard.lua)
+                        {
+                            id = "emoji_font",
+                            type = "action",
+                            text_func = function(plugin)
+                                local SetupWizard = require("koassistant.ui.setup_wizard")
+                                return SetupWizard.fontRowLabel(SetupWizard.readFontState())
+                            end,
+                            help_text = _("KOReader ships no emoji font, so the icons below show as empty boxes without one. This row installs the bundled Noto Emoji font into KOReader's fonts folder and enables it as a UI fallback font (KOReader restarts afterwards); once installed, it shows a display test that turns the icons on."),
+                            callback = "showEmojiFontSetup",
+                            keep_menu_open = true,
+                            separator = true,
+                        },
                         {
                             id = "enable_emoji_icons",
                             type = "toggle",
                             text = _("Emoji Menu Icons"),
                             path = "features.enable_emoji_icons",
                             default = false,
-                            help_text = _("Show emoji icons (🔍, 📖) in UI buttons and status indicators. Requires emoji font support in KOReader. Does not work on all devices. If icons appear as question marks, disable this option."),
+                            help_text = _("Show emoji icons (🔍, 📖) in UI buttons and status indicators. Needs the emoji font (the Emoji Font row above installs it). If icons still appear as boxes or question marks after a restart, turn this off."),
                         },
                         {
                             id = "enable_emoji_panel_icons",
@@ -285,7 +299,7 @@ local SettingsSchema = {
                             text = _("Emoji Panel Icons"),
                             path = "features.enable_emoji_panel_icons",
                             default = false,
-                            help_text = _("Show emoji icons on Quick Settings and Quick Actions panel buttons (🔗 Provider, 🎭 Behavior, 📜 Chat History, etc.). Requires emoji font support."),
+                            help_text = _("Show emoji icons on Quick Settings and Quick Actions panel buttons (🔗 Provider, 🎭 Behavior, 📜 Chat History, etc.). Needs the emoji font (the Emoji Font row above installs it)."),
                         },
                         {
                             id = "enable_data_access_indicators",
@@ -293,7 +307,7 @@ local SettingsSchema = {
                             text = _("Emoji Data Access Indicators"),
                             path = "features.enable_data_access_indicators",
                             default = false,
-                            help_text = _("Show emoji indicators on action names showing what data they access: 📄 document text, 🔖 highlights, 📝 annotations, 📓 notebook, 📚 library, 📊 reading stats, 🌐 web search. Requires emoji font support."),
+                            help_text = _("Show emoji indicators on action names showing what data they access: 📄 document text, 🔖 highlights, 📝 annotations, 📓 notebook, 📚 library, 📊 reading stats, 🌐 web search. Needs the emoji font (the Emoji Font row above installs it)."),
                         },
                     },
                 },
