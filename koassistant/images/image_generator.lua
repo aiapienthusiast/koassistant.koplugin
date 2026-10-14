@@ -203,6 +203,44 @@ function ImageGenerator.askProvider(main_provider, keyed, plugin, on_pick)
     return dialog
 end
 
+--- "Generate with a note…" (S5, D9): the reader's note for one picture, asked
+--- after the selection was taken. on_ok(text), or on_ok(nil) when the note
+--- was left empty (the picture goes ahead without one); Cancel does nothing.
+--- opts.optional (Illustrate… from X-Ray): the title says the note is
+--- optional and the keyboard waits for a tap. opts.confirm_text names the
+--- button.
+function ImageGenerator.askNote(prefill, on_ok, opts)
+    opts = opts or {}
+    local UIManager = require("ui/uimanager")
+    local InputDialog = require("ui/widget/inputdialog")
+    local dialog
+    dialog = InputDialog:new{
+        title = opts.optional and _("Note for the picture (optional)") or _("Note for the picture"),
+        description = _("What the picture should show, or how. The prompt writer follows it; with the writer off, it is added to the prompt."),
+        input = prefill or "",
+        allow_newline = true,
+        keyboard_visible = not opts.optional,
+        buttons = { {
+            {
+                text = _("Cancel"),
+                id = "close",
+                callback = function() UIManager:close(dialog) end,
+            },
+            {
+                text = opts.confirm_text or _("Generate"),
+                is_enter_default = true,
+                callback = function()
+                    local text = dialog:getInputText()
+                    UIManager:close(dialog)
+                    on_ok((type(text) == "string" and text:match("%S")) and text or nil)
+                end,
+            },
+        } },
+    }
+    UIManager:show(dialog)
+    if not opts.optional then dialog:onShowKeyboard() end
+end
+
 --- Resolve the image model: explicit per-provider setting (a retired id sent
 --- as its replacement) > list default.
 local function resolveImageModel(provider, features)
@@ -304,17 +342,28 @@ local function writeIndex(index)
 end
 
 --- Record a saved image's book association (called at save time; no-op
---- without book info — the image just stays unassigned).
-function ImageGenerator.recordImage(filename, book_info, prompt)
+--- without book info — the image just stays unassigned). provenance = the
+--- prompt writer's line (who wrote the prompt, from what), nil without it.
+function ImageGenerator.recordImage(filename, book_info, prompt, provenance)
     if not (book_info and book_info.file) then return end
     local index = ImageGenerator.readIndex()
     index[filename] = {
         book_file = book_info.file,
         book_title = book_info.title,
         prompt = prompt,
+        provenance = provenance,
         created = os.time(),
     }
     writeIndex(index)
+end
+
+--- What an image's caption and the gallery's hold view show: the provenance
+--- line first (D13), then the prompt sent.
+function ImageGenerator.promptShown(prompt, provenance)
+    if type(provenance) == "string" and provenance ~= "" then
+        return provenance .. "\n\n" .. (prompt or "")
+    end
+    return prompt
 end
 
 --- Drop index entries for deleted images.
@@ -413,7 +462,8 @@ end
 --- full_prompt (optional): the exact prompt sent to the API (context-framed);
 --- recorded in the index so the gallery's "Show full prompt" shows the truth.
 --- `description` stays the raw selection — it drives filename + viewer title.
-local function showImage(image_data, description, on_close, book_info, full_prompt)
+--- provenance = the prompt writer's line, recorded and shown before the prompt.
+local function showImage(image_data, description, on_close, book_info, full_prompt, provenance)
     local UIManager  = require("ui/uimanager")
     local lfs = require("libs/libkoreader-lfs")
 
@@ -438,7 +488,7 @@ local function showImage(image_data, description, on_close, book_info, full_prom
     end
     f:write(image_data)
     f:close()
-    ImageGenerator.recordImage(path:match("([^/]+)$"), book_info, full_prompt or description)
+    ImageGenerator.recordImage(path:match("([^/]+)$"), book_info, full_prompt or description, provenance)
 
     -- Try to load KOReader's ImageViewer
     local ok, ImageViewer = pcall(require, "ui/widget/imageviewer")
@@ -463,8 +513,8 @@ local function showImage(image_data, description, on_close, book_info, full_prom
     -- frame as a title-bar subtitle would squeeze the image out; the complete
     -- prompt is a gallery hold away. Skipped when unframed (= title already).
     local caption
-    if full_prompt and full_prompt ~= description then
-        caption = full_prompt
+    if (full_prompt and full_prompt ~= description) or provenance then
+        caption = ImageGenerator.promptShown(full_prompt or description, provenance)
         if #caption > 400 then
             caption = require("util").fixUtf8(caption:sub(1, 400), "") .. "…"
         end
@@ -676,6 +726,9 @@ function ImageGenerator.buildPrompt(description, opts, features)
         table.insert(frame, "Surrounding text, for context only: "
             .. prev .. " […] " .. next_)
     end
+    -- The style (S6) when it is not the frame's own "illustration", and the
+    -- reader's note (S5), as lines after the frame
+    local extra = ImageGenerator.extraLines(opts, features)
     -- Subject-first (2026-08-14 audit): the passage leads, the frame follows as
     -- labeled context — image models weight the opening as the subject, and the
     -- old shape (up to ~900 frame chars before the passage) risked the model
@@ -685,32 +738,104 @@ function ImageGenerator.buildPrompt(description, opts, features)
         return "Create an illustration of the following passage from a book. "
             .. "Illustrate the passage itself; do not render any text, titles, or captions in the image."
             .. "\n\nPassage to illustrate: " .. description
-            .. "\n\n" .. table.concat(frame, " ")
+            .. "\n\n" .. table.concat(frame, " ") .. extra
     end
-    return description
+    return description .. extra
+end
+
+--- The lines a framed prompt ends with: the style when it is not the
+--- default, the reader's note. "" when there are none.
+function ImageGenerator.extraLines(opts, features)
+    local lines = {}
+    local style, is_default = require("koassistant.images.prompt_writer").styleText(features)
+    if not is_default then lines[#lines + 1] = "Style: " .. style .. "." end
+    local note = opts and opts.note
+    if type(note) == "string" and note:match("%S") then
+        lines[#lines + 1] = "The reader's note: " .. note:gsub("%s+", " "):match("^%s*(.-)%s*$")
+    end
+    if #lines == 0 then return "" end
+    return "\n\n" .. table.concat(lines, "\n")
+end
+
+--- The framed prompt for an X-Ray entry (Illustrate from X-Ray with the
+--- writer off, or its fallback): the entry's name and description, the title
+--- and author per the Book info level, the style and the note. Pure.
+function ImageGenerator.buildEntryPrompt(entry, opts, features)
+    features = features or {}
+    entry = entry or {}
+    local kind = type(entry.type) == "string" and entry.type ~= "" and entry.type or "thing"
+    local parts = { "Create an illustration of " .. (kind:match("^[aeiou]") and "an " or "a ") .. kind
+        .. " from a book, as described below. Do not render any text, titles, or captions in the image." }
+    local desc = type(entry.description) == "string" and entry.description ~= "" and (": " .. entry.description) or ""
+    parts[#parts + 1] = "To illustrate: " .. (entry.name or "") .. desc
+    local meta = (features.image_gen_frame_identity ~= false) and opts and opts.book_metadata or nil
+    local level = opts and opts.book_info_level or "basic"
+    if level ~= "none" and meta and type(meta.title) == "string" and meta.title ~= "" then
+        if level ~= "title" and type(meta.author) == "string" and meta.author ~= "" then
+            parts[#parts + 1] = string.format('From the book "%s" by %s; match the book\'s setting and period.', meta.title, meta.author)
+        else
+            parts[#parts + 1] = string.format('From the book "%s"; match the book\'s setting and period.', meta.title)
+        end
+    end
+    return table.concat(parts, "\n\n") .. ImageGenerator.extraLines(opts, features)
 end
 
 --- The prompt template as display text: the real builder run with placeholder
---- tokens, honoring the caller's current frame toggles. Tokens stay English —
---- this shows the wire truth, and the frame itself is English.
+--- tokens, honoring the caller's current frame toggles, style and writer
+--- setting. Tokens stay English — this shows the wire truth, and the frame
+--- itself is English. With the prompt writer on, its instructions and the
+--- material it reads come first, then the framed prompt it falls back to.
 function ImageGenerator.promptTemplateText(features)
-    return ImageGenerator.buildPrompt("{selected text}", {
+    features = features or {}
+    local plain = ImageGenerator.buildPrompt("{selected text}", {
         book_metadata = { title = "{book title}", author = "{book author}" },
         window = { prev = "{text before selection}", next = "{text after selection}" },
     }, features)
+    if features.image_gen_writer == false then return plain end
+    local PromptWriter = require("koassistant.images.prompt_writer")
+    local material = PromptWriter.material({
+        passage = "{selected text}",
+        note = "{your note, when you add one}",
+        around = (features.image_gen_frame_context ~= false)
+            and { before = "{text before selection}", after = "{text after selection}" } or nil,
+        entries = { { name = "{a name in the passage}", type = "person",
+            description = "{its description from the book's X-Ray}" } },
+        book = (features.image_gen_frame_identity ~= false)
+            and { title = "{book title}", author = "{book author}" } or nil,
+        background = "{the book's Background}",
+        style = (PromptWriter.styleText(features)),
+        shape = PromptWriter.shapeLine(features.image_gen_shape or "fit", 3 / 4, true),
+    })
+    return T(_("Write the prompt with AI is on: your chat provider's fast model reads the material below and writes the prompt the image model receives (with \"The picture contains no text, letters, titles or captions.\" added). Its instructions:\n\n%1\n\nThe material (each block only when there is something for it):\n\n%2\n\nIf the writer fails, this prompt is sent instead:\n\n%3"),
+        PromptWriter.systemText({}), material, plain)
 end
 
---- The frame options a request may use. The text around the selection is a
---- kind of its own ("text around what you tap", data_access_picture.md), asked
---- for the provider that receives it, the image provider; without it the frame
---- keeps the title and author alone.
-function ImageGenerator.allowedFrame(opts, features, provider)
-    if opts and opts.window and not require("koassistant.request.privacy_gates").allows("nearby_text",
-            { features = features, provider = provider, book = opts.book_privacy }) then
-        return { book_metadata = opts.book_metadata, after_limit = opts.after_limit,
-                 book_info_level = opts.book_info_level }
+--- What of a run's material may go (S5): a kind goes only when it is allowed
+--- for every provider it reaches, the prompt writer's and the image
+--- provider's (the text around the passage is "text around what you tap",
+--- data_access_picture.md; X-Ray descriptions are stored material, judged by
+--- the kinds the X-Ray was built from). spec = { features (the run's, with an
+--- Allow once on it), recipients, book (the book's own values), path, window
+--- (whether the text around is in the material), stored (the X-Ray's cache
+--- entry) }. Pure.
+--- @return table { around = boolean, stored = boolean }
+function ImageGenerator.allowedMaterial(spec)
+    local Gates = require("koassistant.request.privacy_gates")
+    local function forAll(kind)
+        for _idx, p in ipairs(spec.recipients or {}) do
+            local ctx = { features = spec.features, provider = p, book = spec.book,
+                once = Gates.onceFor(spec.features, spec.path) }
+            if not Gates.allows(kind, ctx) then return false end
+        end
+        return true
     end
-    return opts
+    local out = { around = (spec.window and forAll("nearby_text")) or false, stored = true }
+    if spec.stored then
+        for kind, used in pairs(Gates.stampedKinds(spec.stored)) do
+            if used and not forAll(kind) then out.stored = false end
+        end
+    end
+    return out
 end
 
 -- ---------------------------------------------------------------------------
@@ -1171,32 +1296,186 @@ function ImageGenerator._generateImpl(word, config_table, settings, book_info, o
         end
         return
     end
-    local endpoint = IMAGE_ENDPOINTS[provider]
-    local api_key = resolveApiKey(provider, settings)
-    local resolved_model = resolveImageModel(provider, features)
-
-    -- Trim and validate description
-    local description = word:match("^%s*(.-)%s*$")
+    -- The subject: the selection, or (Illustrate from X-Ray, S8) an entry of
+    -- the book's X-Ray
+    opts = opts or {}
+    local description
+    if opts.entry then
+        description = type(opts.entry.name) == "string" and opts.entry.name or ""
+    else
+        description = (word or ""):match("^%s*(.-)%s*$") or ""
+    end
     if description == "" then
         showNotice(_("No description selected."))
         return
     end
+    ImageGenerator._askAndRun(provider, description, config_table, settings, book_info, opts)
+end
 
-    opts = ImageGenerator.allowedFrame(opts, features, provider)
+--- What a run sends and to whom, the question for it, then the run (S5, D12):
+--- with the prompt writer on, the text around the passage and the X-Ray
+--- descriptions reach two providers (the writer's, which reads them, and the
+--- image provider's, whose prompt carries what the writer took from them), so
+--- each kind must be allowed for both and one question names both. Kinds on
+--- Never are left out (an X-Ray entry to draw is required, so Never refuses).
+function ImageGenerator._askAndRun(provider, description, config_table, settings, book_info, opts)
+    local PromptWriter = require("koassistant.images.prompt_writer")
+    local Gates = require("koassistant.request.privacy_gates")
+    local features = (config_table and config_table.features) or {}
+    local plugin = opts.plugin
+    local writer_on = features.image_gen_writer ~= false
+    local writer_provider, writer_model
+    if writer_on then
+        writer_provider, writer_model = PromptWriter.target(features,
+            (config_table and config_table.provider) or require("koassistant.core.config_helper").mainProvider(features))
+        if not writer_provider then writer_on = false end
+    end
+    local recipients = { provider }
+    if writer_on and writer_provider ~= provider then recipients = { writer_provider, provider } end
+    local path = book_info and book_info.file
+    -- The book's own installed X-Ray: the entries the passage names (the
+    -- writer reads them, D10), or the entry to draw; stored material, judged
+    -- by the kinds it was built from
+    local xray = path and (opts.entry or writer_on)
+        and require("koassistant.artifacts.action_cache").parsedXrayFor(path) or nil
+    local entries = {}
+    if writer_on and not opts.entry and xray then
+        entries = PromptWriter.entriesFor(description, xray.data)
+    end
+    local stored = (#entries > 0) and xray.entry or nil
+    if opts.entry then
+        -- the entry to draw is stored material whatever happens: no stamps
+        -- known reads as made from the book's text (the legacy rule)
+        stored = (xray and xray.entry) or {}
+    end
+    -- The text around, as it would go: the side after the selection cut by
+    -- Context Direction and the spoiler clamp first, so nothing is asked for
+    -- text that would not be sent
+    local window
+    if features.image_gen_frame_context ~= false and not opts.entry and type(opts.window) == "table" then
+        local prev = type(opts.window.prev) == "string" and opts.window.prev or ""
+        local nxt = require("koassistant.request.scope_resolver").limitAfter(
+            type(opts.window.next) == "string" and opts.window.next or "", opts.after_limit)
+        if prev:match("%S") or nxt:match("%S") then window = { prev = prev, next = nxt } end
+    end
+    local kinds, amounts = {}, {}
+    if window then
+        kinds[#kinds + 1] = "nearby_text"
+        amounts.nearby_text = _("the text around the passage")
+    end
+    if stored then
+        local stamped = Gates.stampedKinds(stored)
+        for _idx, kind in ipairs({ "book_text", "highlights", "annotations" }) do
+            if stamped[kind] then kinds[#kinds + 1] = kind end
+        end
+        if opts.entry then
+            amounts.book_text = _("this entry's description from the book's X-Ray (made from its text)")
+        else
+            local names = {}
+            for _idx, e in ipairs(entries) do names[#names + 1] = e.name end
+            amounts.book_text = T(_("the X-Ray descriptions of %1 (made from the book's text)"), table.concat(names, ", "))
+        end
+        amounts.highlights = _("X-Ray descriptions made with your highlights")
+        amounts.annotations = _("X-Ray descriptions made with your notes on highlights")
+    end
+    -- The run's own features: an Allow once lands here, never on the shared config
+    local run_features = {}
+    for k, v in pairs(features) do run_features[k] = v end
+    run_features._data_once = nil
+    local st = {
+        provider = provider, description = description, config_table = config_table, settings = settings,
+        book_info = book_info, opts = opts, features = run_features, writer_on = writer_on,
+        writer_provider = writer_provider, writer_model = writer_model, recipients = recipients,
+        entries = entries, stored = stored, window = window, path = path,
+    }
+    if #kinds == 0 then
+        ImageGenerator._run(st)
+        return
+    end
+    local who
+    if #recipients == 2 then
+        who = T(_("%1, to write the prompt, and to %2, to draw it"),
+            ImageGenerator.providerName(writer_provider, plugin), ImageGenerator.providerName(provider, plugin))
+    elseif writer_on then
+        who = T(_("%1, to write the prompt and to draw it"), ImageGenerator.providerName(provider, plugin))
+    else
+        who = ImageGenerator.providerName(provider, plugin)
+    end
+    require("koassistant.ui.data_access").withAccess(plugin, nil, {
+        features = run_features, kinds = kinds, providers = recipients,
+        -- the entry to draw cannot go without its description; the rest can,
+        -- and declining them is for this picture only (a book-wide Never for
+        -- book text would also stop the book's X-Ray updates)
+        required = opts.entry ~= nil, decline_once = true,
+        path = path, ui = opts.ui,
+        action_name = opts.entry and _("Illustrate") or _("Generate Image"),
+        provider_name = who, amounts = amounts,
+    }, function()
+        -- the answer runs from the dialog's callback, outside generate()'s pcall
+        local ok, err = pcall(ImageGenerator._run, st)
+        if not ok then
+            logger.err("KOAssistant: image generation error:", err)
+            showNotice(T(_("Image generation error:\n\n%1"), tostring(err)))
+        end
+    end)
+end
 
-    -- Context-framed prompt (device 2026-08-13 "more context"): book identity +
-    -- a trimmed slice of the surrounding passage, framed as context so the
-    -- model illustrates the SELECTION, not the frame. The FULL prompt is what
-    -- gets sent and recorded (viewable via the gallery + viewer caption).
-    local final_prompt = ImageGenerator.buildPrompt(description, opts, features)
-
-    -- The request as the provider takes it (OpenAI-style images API, or
-    -- Gemini's generateContent with image output); Fit my screen fits the
-    -- screen as it is held now
+--- The written or framed prompt for a run whose material the question
+--- settled, then the picture. One status window and one Stop for both
+--- requests; a writer that fails leaves the framed prompt, said in one line.
+function ImageGenerator._run(st)
+    local UIManager = require("ui/uimanager")
+    local PromptWriter = require("koassistant.images.prompt_writer")
+    local Gates = require("koassistant.request.privacy_gates")
+    local features = st.features
+    local opts = st.opts
+    local provider = st.provider
+    local description = st.description
+    local book_info = st.book_info
+    local settings = st.settings
+    local endpoint = IMAGE_ENDPOINTS[provider]
+    local api_key = resolveApiKey(provider, settings)
+    local resolved_model = resolveImageModel(provider, features)
     local Screen = require("device").screen
-    local request = ImageGenerator.buildRequest(provider, resolved_model, final_prompt, features,
-        { w = Screen:getWidth(), h = Screen:getHeight() })
-    local request_body_str = BaseHandler.encodeBody(request.body)
+    local screen = { w = Screen:getWidth(), h = Screen:getHeight() }
+
+    -- What may go: every kind allowed for every provider it reaches (the
+    -- question's answer is on the run's features, or the book's own values,
+    -- read again here)
+    local allowed = ImageGenerator.allowedMaterial({
+        features = features, recipients = st.recipients, path = st.path,
+        book = st.path and Gates.bookOverrides(st.path, opts.ui) or opts.book_privacy,
+        window = st.window ~= nil, stored = st.stored,
+    })
+    local left_out = {}
+    local around_ok = allowed.around
+    if st.window and not around_ok then left_out[#left_out + 1] = _("the text around the passage") end
+    local stored_ok = allowed.stored
+    if st.stored then
+        if not stored_ok then
+            if opts.entry then
+                -- the subject itself cannot go (a refusal the question missed)
+                showNotice(_("This entry's description can't be sent: its X-Ray was made from data your privacy settings keep from these providers."))
+                return
+            end
+            left_out[#left_out + 1] = _("the X-Ray descriptions")
+        end
+    end
+    local entries = stored_ok and st.entries or {}
+
+    -- The framed prompt: the writer's fallback, and the prompt itself with the
+    -- writer off (S1's frame; the style and the note as lines)
+    local frame_opts = {
+        book_metadata = opts.book_metadata, after_limit = opts.after_limit,
+        book_info_level = opts.book_info_level, note = opts.note,
+        window = around_ok and st.window or nil,
+    }
+    local function framedPrompt()
+        if opts.entry then
+            return ImageGenerator.buildEntryPrompt(opts.entry, frame_opts, features)
+        end
+        return ImageGenerator.buildPrompt(description, frame_opts, features)
+    end
 
     -- Progress window: the tool-status dialog (setText handle + Stop button)
     -- avoids InfoMessage's fire-dismiss_callback-on-any-close trap and gives
@@ -1204,9 +1483,9 @@ function ImageGenerator._generateImpl(word, config_table, settings, book_info, o
     local StreamHandler = require("koassistant.request.stream_handler")
     local cancelled = false
     local active_pid  -- reassigned per fork; Stop kills whichever is live
+    local writer_cancel  -- the writer request's cancel, while it runs
     local start_ts = os.time()
-    local provider_label = string.upper(provider:sub(1,1)) .. provider:sub(2)
-    local phase_text = T(_("Generating image with %1 / %2…"), provider_label, resolved_model)
+    local phase_text = ""
     local status, tick
     local ticking = false
     local function statusText()
@@ -1226,24 +1505,27 @@ function ImageGenerator._generateImpl(word, config_table, settings, book_info, o
     local function cancelRequest()
         cancelled = true
         stopTicker()
+        if writer_cancel then pcall(writer_cancel) end
         if active_pid then
             ffiutil.terminateSubProcess(active_pid)
         end
         if status then status.close() end
     end
-    local function openStatus(text)
-        if status then status.close() end
+    local function setPhase(text)
         phase_text = text
+        if status then
+            status.setText(statusText())
+            return
+        end
         status = StreamHandler.showToolStatusDialog({
             settings = { large_stream_dialog = false, response_font_size = features.markdown_font_size },
-            title = _("Generating image"),
+            title = opts.entry and _("Illustrating") or _("Generating image"),
             initial_text = statusText(),
             on_stop = cancelRequest,
         })
         ticking = true
         UIManager:scheduleIn(5, tick)
     end
-    openStatus(phase_text)
 
     -- pollSubprocess callbacks run from the UI task queue, outside generate()'s
     -- pcall — guard them so a parsing bug can't crash KOReader
@@ -1259,89 +1541,208 @@ function ImageGenerator._generateImpl(word, config_table, settings, book_info, o
         end
     end
 
-    -- Launch subprocess
-    logger.dbg("KOAssistant: image gen request:", provider, resolved_model)
-    local bg_fn = makeBackgroundFn(request.url, api_key, request_body_str, endpoint, request.headers)
-    local pid, parent_read_fd = ffiutil.runInSubProcess(bg_fn, true)
-
-    if not pid then
-        stopTicker()
-        status.close()
-        showNotice(_("Failed to start image generation subprocess."))
-        return
-    end
-    active_pid = pid
-
     -- Close the status window and report an error
     local function fail(msg)
         stopTicker()
-        status.close()
+        if status then status.close() end
         showNotice(msg)
     end
 
-    -- Poll for result
-    pollSubprocess(pid, parent_read_fd, guarded(function(raw)
-        stopTicker()
-        logger.dbg("KOAssistant: image gen result:", raw and #raw or 0, "bytes; head:", raw and raw:sub(1, 120) or "<empty>")
-        if cancelled then return end
-
-        if not raw or raw == "" then
-            fail(_("Empty response from image generation API."))
+    -- The picture: the request as the provider takes it (OpenAI-style images
+    -- API, or Gemini's generateContent with image output); Fit my screen fits
+    -- the screen as it is held now. note = a line above the phase (the
+    -- writer's failure)
+    local function draw(final_prompt, provenance, note)
+        local request = ImageGenerator.buildRequest(provider, resolved_model, final_prompt, features, screen)
+        local request_body_str = BaseHandler.encodeBody(request.body)
+        setPhase((note and (note .. "\n\n") or "")
+            .. T(_("Generating image with %1 / %2…"), ImageGenerator.providerName(provider), resolved_model))
+        logger.dbg("KOAssistant: image gen request:", provider, resolved_model, "prompt", #final_prompt, "bytes")
+        local bg_fn = makeBackgroundFn(request.url, api_key, request_body_str, endpoint, request.headers)
+        local pid, parent_read_fd = ffiutil.runInSubProcess(bg_fn, true)
+        if not pid then
+            fail(_("Failed to start image generation subprocess."))
             return
         end
-
-        -- Check for error prefix
-        if raw:sub(1, 4) == "ERR:" then
-            fail(T(_("Image generation failed:\n\n%1"), raw:sub(5)))
-            return
-        end
-        if raw:sub(1, 3) ~= "OK:" then
-            -- Subprocess died mid-write; show what we got
-            fail(T(_("Image generation failed:\n\n%1"), raw:sub(1, 200)))
-            return
-        end
-
-        -- Strip "OK:" prefix and read the answer: the image's bytes, a link
-        -- to it, or the reason there is none
-        local result, parse_err = ImageGenerator.parseResponse(provider, raw:sub(4))
-        if not result then
-            fail(parse_err)
-            return
-        end
-        if result.bytes then
-            status.close()
-            showImage(result.bytes, description, nil, book_info, final_prompt)
-            return
-        end
-        local image_url = result.url
-
-        -- Download phase: fresh status window, same elapsed clock
-        openStatus(_("Downloading generated image…"))
-
-        local dl_fn = makeDownloadFn(image_url)
-        local dl_pid, dl_fd = ffiutil.runInSubProcess(dl_fn, true)
-        if not dl_pid then
-            fail(_("Failed to download generated image."))
-            return
-        end
-        active_pid = dl_pid
-
-        pollSubprocess(dl_pid, dl_fd, guarded(function(dl_raw)
-            stopTicker()
+        active_pid = pid
+        pollSubprocess(pid, parent_read_fd, guarded(function(raw)
+            logger.dbg("KOAssistant: image gen result:", raw and #raw or 0, "bytes; head:", raw and raw:sub(1, 120) or "<empty>")
             if cancelled then return end
-            if not dl_raw or dl_raw:sub(1, 4) == "ERR:" then
-                fail(T(_("Image download failed:\n\n%1"), dl_raw and dl_raw:sub(5) or ""))
+            if not raw or raw == "" then
+                fail(_("Empty response from image generation API."))
                 return
             end
-            if dl_raw:sub(1, 3) ~= "OK:" or #dl_raw <= 3 then
-                fail(_("Image download failed."))
+            -- Check for error prefix
+            if raw:sub(1, 4) == "ERR:" then
+                fail(T(_("Image generation failed:\n\n%1"), raw:sub(5)))
                 return
             end
-            -- "OK:" prefix + binary
-            status.close()
-            showImage(dl_raw:sub(4), description, nil, book_info, final_prompt)
+            if raw:sub(1, 3) ~= "OK:" then
+                -- Subprocess died mid-write; show what we got
+                fail(T(_("Image generation failed:\n\n%1"), raw:sub(1, 200)))
+                return
+            end
+            -- Strip "OK:" prefix and read the answer: the image's bytes, a link
+            -- to it, or the reason there is none
+            local result, parse_err = ImageGenerator.parseResponse(provider, raw:sub(4))
+            if not result then
+                fail(parse_err)
+                return
+            end
+            if result.bytes then
+                stopTicker()
+                status.close()
+                showImage(result.bytes, description, nil, book_info, final_prompt, provenance)
+                return
+            end
+            -- Download phase: same window, same elapsed clock
+            setPhase(_("Downloading generated image…"))
+            local dl_pid, dl_fd = ffiutil.runInSubProcess(makeDownloadFn(result.url), true)
+            if not dl_pid then
+                fail(_("Failed to download generated image."))
+                return
+            end
+            active_pid = dl_pid
+            pollSubprocess(dl_pid, dl_fd, guarded(function(dl_raw)
+                if cancelled then return end
+                if not dl_raw or dl_raw:sub(1, 4) == "ERR:" then
+                    fail(T(_("Image download failed:\n\n%1"), dl_raw and dl_raw:sub(5) or ""))
+                    return
+                end
+                if dl_raw:sub(1, 3) ~= "OK:" or #dl_raw <= 3 then
+                    fail(_("Image download failed."))
+                    return
+                end
+                -- "OK:" prefix + binary
+                stopTicker()
+                status.close()
+                showImage(dl_raw:sub(4), description, nil, book_info, final_prompt, provenance)
+            end))
         end))
-    end))
+    end
+
+    if not st.writer_on then
+        draw(framedPrompt(), nil)
+        return
+    end
+
+    -- The prompt writer (S5): the material the question settled, in tagged
+    -- blocks; the title and author per the Book info level and the identity
+    -- toggle, the book's Background, the style and the shape
+    local meta = (features.image_gen_frame_identity ~= false) and opts.book_metadata or nil
+    if opts.book_info_level == "none" then meta = nil end
+    local book, book_said
+    if meta and type(meta.title) == "string" and meta.title ~= "" then
+        local with_author = opts.book_info_level ~= "title" and type(meta.author) == "string" and meta.author ~= ""
+        book = { title = meta.title, author = with_author and meta.author or nil }
+        book_said = with_author and "both" or "title"
+    end
+    local shape = features.image_gen_shape or "fit"
+    local okc, color = pcall(function() return Screen:isColorEnabled() end)
+    local grayscale = okc and color == false
+    local around
+    if around_ok then
+        around = { before = st.window.prev, after = st.window.next }
+    end
+    local background = type(opts.background) == "string" and opts.background:match("%S") and opts.background or nil
+    local note = type(opts.note) == "string" and opts.note:match("%S") and opts.note or nil
+    local material = PromptWriter.material({
+        passage = not opts.entry and description or nil,
+        entry = opts.entry,
+        note = note,
+        around = around,
+        entries = entries,
+        book = book,
+        background = background,
+        style = (PromptWriter.styleText(features)),
+        shape = PromptWriter.shapeLine(shape, ImageGenerator.shapeRatio(shape, screen), grayscale),
+    })
+    local system = PromptWriter.systemText({ subject = opts.entry and "entry" or "passage", spoiler = opts.spoiler })
+    local cfg, writer_model = ImageGenerator.writerConfig(st.config_table, st.writer_provider, st.writer_model, system)
+    cfg._register_cancel = function(fn) writer_cancel = fn end
+    setPhase(T(_("Writing the prompt with %1 / %2…"),
+        ImageGenerator.providerName(st.writer_provider, opts.plugin), writer_model or "?"))
+    logger.dbg("KOAssistant: image prompt writer:", st.writer_provider, writer_model, "material", #material, "bytes")
+    local history = require("koassistant.request.message_history"):new()
+    history:addUserMessage(material)
+    -- OpenCode wants its session header, OpenRouter a session id: the
+    -- writer's request is a conversation of its own
+    cfg.conversation_id = history.conversation_id
+    local writer_done = false
+    local function written(prompt, failure)
+        if writer_done then return end
+        writer_done = true
+        writer_cancel = nil
+        if cancelled then return end
+        if prompt then
+            draw(prompt, PromptWriter.provenance({
+                model = writer_model, entry = opts.entry, around = around ~= nil, entries = entries,
+                book = book_said, background = background ~= nil, note = note ~= nil, left_out = left_out,
+            }))
+            return
+        end
+        local why = PromptWriter.failureText(failure)
+        logger.warn("KOAssistant: image prompt writer failed:", tostring(failure))
+        draw(framedPrompt(), PromptWriter.provenance({ failed = why, entry = opts.entry, left_out = left_out }),
+            opts.entry and T(_("The prompt writer failed (%1); drawing from the entry's description."), why)
+                or T(_("The prompt writer failed (%1); drawing from the passage as framed."), why))
+    end
+    local ok_query, query_err = pcall(require("koassistant.request.gpt_query").query, history:getMessages(), cfg,
+        guarded(function(success, answer, err)
+            if success and type(answer) == "string" and not answer:match("^Error:") then
+                written(PromptWriter.finish(answer))
+            else
+                local msg = err or answer
+                written(nil, type(msg) == "string" and msg:gsub("%s+", " "):sub(1, 120) or nil)
+            end
+        end), settings)
+    if not ok_query then written(nil, tostring(query_err):sub(1, 120)) end
+end
+
+--- The request config for the prompt writer: a copy of the configuration on
+--- the writer's provider and model, its own system text, no web, no tools, no
+--- streaming, reasoning off (D8), its loading dialog left to the image's
+--- status window. Returns the config and the model id it sends.
+function ImageGenerator.writerConfig(configuration, provider, model, system_text)
+    local ModelConstraints = require("koassistant.request.model_constraints")
+    local ReasoningPrefs = require("koassistant.request.reasoning_prefs")
+    local cfg = {}
+    for k, v in pairs(configuration or {}) do cfg[k] = v end
+    cfg.features = {}
+    for k, v in pairs((configuration and configuration.features) or {}) do cfg.features[k] = v end
+    if provider and provider ~= cfg.provider then
+        cfg.provider = provider
+        cfg.model = nil
+    end
+    if model then
+        cfg.model = model
+        -- the per-provider table is shared with the configuration: clone it
+        cfg.provider_settings = {}
+        for k, v in pairs((configuration and configuration.provider_settings) or {}) do cfg.provider_settings[k] = v end
+        local ps = {}
+        for k, v in pairs(cfg.provider_settings[cfg.provider] or {}) do ps[k] = v end
+        ps.model = model
+        cfg.provider_settings[cfg.provider] = ps
+    end
+    cfg.system = { text = system_text, enable_caching = false }
+    cfg.api_params = {}
+    cfg.enable_web_search = false
+    cfg.features.enable_web_search = false
+    cfg.features.enable_streaming = false
+    cfg.features._tools_active = false
+    cfg.features._suppress_loading_dialog = true
+    -- the dictionary popup a lookup came from rides the shared features; the
+    -- request's copy has no use for its widget graph
+    cfg.features._source_widget = nil
+    local sent = ModelConstraints.dispatchModel({ provider = cfg.provider, model = cfg.model, features = cfg.features })
+    local decision = ModelConstraints.resolveReasoning(cfg.provider, sent, {
+        global_stance = ReasoningPrefs.getStance(cfg.features),
+        model_pref = ReasoningPrefs.getModelPref(cfg.features, cfg.provider, sent),
+        action_override = { force = "off" },
+    })
+    cfg.api_params._reasoning = decision
+    ModelConstraints.applyReasoningParams(cfg.provider, cfg.api_params, decision)
+    return cfg, sent
 end
 
 return ImageGenerator

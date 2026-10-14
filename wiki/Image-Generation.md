@@ -1,13 +1,13 @@
 # Image Generation
 
-KOAssistant can turn a passage you highlight into an AI-generated image: a character, a described setting, a diagram, a scene straight from the text. It is a paid feature that uses your own provider key, like chat; each image costs what the provider charges per image, which is separate from and usually more than text, so use it deliberately.
+KOAssistant can turn a passage you highlight, or an entry of a book's X-Ray, into an AI-generated image: a character, a described setting, a diagram, a scene straight from the text. It is a paid feature that uses your own provider key, like chat; each image costs what the provider charges per image, which is separate from and usually more than text, so use it deliberately.
 
 ## Generating an image
 
-1. Highlight a passage of any length. By default the plugin frames it with the book's title and author and a slice of the surrounding text before sending it as the image prompt (the framing switches are below); the selected text is always the core of the prompt.
-2. In the highlight menu, tap **Generate Image (KOA)**.
-3. A progress window shows "Generating image with … / …" with an elapsed-seconds counter; **Stop** cancels a request in flight.
-4. The finished image opens full screen in KOReader's image viewer, and is saved (below). If the provider refuses the prompt or the request fails, an error message shows instead and nothing is saved. A refusal says why when the provider gives a reason: Google's safety filter and the reason it names, or OpenAI's moderation and whether it refused the prompt or the picture.
+1. Highlight a passage of any length.
+2. In the highlight menu, tap **Generate Image (KOA)**. Long-press it for **Generate with a note…**: type what the picture should show, or how ("from behind", "at night, one lit window"). In the highlight input dialog, whatever you typed is the note.
+3. By default your chat provider's fast model first writes the image prompt from the passage and what surrounds it ([the prompt writer](#the-prompt-writer), below); the progress window shows "Writing the prompt with … / …", then "Generating image with … / …", with an elapsed-seconds counter. **Stop** cancels whichever request is in flight.
+4. The finished image opens full screen in KOReader's image viewer, and is saved (below). Its caption (the triangle in the title bar) starts with who wrote the prompt and from what, then the prompt itself. If the provider refuses the prompt or the request fails, an error message shows instead and nothing is saved. A refusal says why when the provider gives a reason: Google's safety filter and the reason it names, or OpenAI's moderation and whether it refused the prompt or the picture.
 
 The button appears when the image provider in effect can generate images and has an API key. If Provider is Follow main provider and your chat provider cannot make images (Anthropic, DeepSeek and the other text providers), it appears when any image provider has a key: the first tap asks which one makes your images, listing only those you have a key for, and saves the answer as **Provider** (below). Cancel leaves it unset, so the next tap asks again. With no image provider key at all, the button is hidden.
 
@@ -24,7 +24,29 @@ Four providers offer image generation, each with its own models (the first is th
 
 A model you picked that has left this list keeps working (`gpt-image-1.5`, `gpt-image-1`, `chatgpt-image-latest`, `gemini-3.1-flash-image`). xAI retires `grok-imagine-image-quality` on November 2, 2026, so a pick of it goes out as `grok-imagine-image-2.0`, the model xAI answers it with.
 
-KOAssistant generates images only through these four; Anthropic (Claude), DeepSeek, OpenAI Subscription and the other chat providers are not used for images. With one of them as your main provider, the first tap of Generate Image asks which image provider to use, or pick one yourself under Provider below (OpenAI there needs an OpenAI API key: the subscription sign-in does not cover images).
+KOAssistant generates images only through these four; Anthropic (Claude), DeepSeek, OpenAI Subscription and the other chat providers are not used for images (they write the prompt: see below). With one of them as your main provider, the first tap of Generate Image asks which image provider to use, or pick one yourself under Provider below (OpenAI there needs an OpenAI API key: the subscription sign-in does not cover images).
+
+## The prompt writer
+
+Image models draw what a prompt describes, and a passage from the middle of a book often names people and places the model knows nothing about. So, unless you turn **Write the prompt with AI** off, a fast text model writes the prompt first, from material it is told where each piece comes from:
+
+- the passage (the picture shows it),
+- your note, when you add one (it is followed),
+- the text around the passage, cut the way chat's context is,
+- the entries of this book's X-Ray that the passage names, up to five, with their descriptions as of the X-Ray you have installed (so nothing from further ahead than it), found by the same matching the X-Ray marks use,
+- the book's title and author, as far as Book Info in Chat allows,
+- the book's Background (Book Settings), and
+- the Style and the Shape below; on a black-and-white screen it is also told the picture is for e-ink (clear shapes, strong contrast).
+
+The writer describes people by how they look, never by name, adds nothing from its own knowledge of the book, and keeps text, titles and captions out of the picture; with [spoiler protection](Spoiler-Protection) on, it is told to show nothing later in the story than the passage. The model is your chat provider's fast model (a global tier pin for Fast is honored, and with **Settings → Advanced → Faster Models for Quick Actions** off, your chat model), with reasoning off: a few seconds and a fraction of a cent per picture.
+
+What goes where: the material goes to your chat provider; the image provider receives only the prompt the writer wrote. The text around the passage and the X-Ray descriptions are your data under [Privacy and Data](Privacy-and-Data), so each must be allowed for both providers, and when one is on Ask, one question names both ("Generate Image will send to Anthropic, to write the prompt, and to OpenAI, to draw it"). **Continue without** makes this picture without them and changes no setting; a kind set to Never is left out, and the caption says so.
+
+If the writer fails (an error, an empty answer, or one far too long for a prompt), the picture is drawn from the passage framed as before, and the progress window and the caption say the writer failed and why. With the writer off, the passage goes to the image model framed with the title and author and the text around it, the style and your note as lines at the end.
+
+## Illustrate from X-Ray
+
+An entry of a book's X-Ray can be drawn too: open the entry (from the X-Ray browser, or by tapping a marked name and its card), then **More… → Illustrate…**. A short dialog takes an optional note; **Illustrate** starts. The entry's description is the subject, with the book's title and author, its Background, the Style and the Shape; an abstract entry (an idea, an argument) gets a scene that carries it. It works for every entry of the book's own installed X-Ray, not for carried entries, other books' entries or upcoming entries, and only while an image provider is available. The description is your stored data: it is sent only where the kinds the X-Ray was made from are allowed (book text, and your highlights if it used them).
 
 ## Choosing the provider and model
 
@@ -34,8 +56,10 @@ Image generation has its own provider and model, independent of your chat provid
 - **OpenAI model**, **xAI model**, **Gemini model**, **OpenRouter model**: a model per provider, each defaulting to Default (the provider's first, recommended model). OpenRouter's row also has **More models…**, which fetches OpenRouter's image catalog (dozens of models, with a filter) and remembers what the model you pick can draw, so Shape and Detail fit it.
 - **Shape**, for every provider: **Fit my screen** (the default: your screen's proportions as you hold it, so the picture fills an e-reader's page), **Portrait**, **Landscape**, **Square**, or **Let the model choose** (the provider decides, and often draws a square or a wide picture). Each model gets the nearest proportions it can draw.
 - **Detail**, for every provider: **Draft** (the default: the fastest and cheapest), **Standard** or **Best** (the slowest and costs the most). It sets OpenAI's quality (low, medium, high; xhigh on the 2.5 models), the quality and size of `grok-imagine-image-2.0` (low quality at Draft, medium above it, and twice the size at Best), Gemini's size (2K at Best, 1K otherwise) and, on OpenRouter, the quality or the resolution the model takes (1K, 2K at Best). It is grayed out while the model in use has a single setting: `grok-imagine-image`, Gemini Flash Lite, and OpenRouter models that take neither.
+- **Write the prompt with AI** (on by default): [the prompt writer](#the-prompt-writer) above. Off sends the framed passage straight to the image model.
+- **Style**, for every provider: **Book illustration** (the default), **Watercolor**, **Ink drawing**, **Pencil sketch**, **Woodcut**, **Photographic**, **Comic**, **Map or diagram**, or **Custom…** (your own words, such as "a 1920s travel poster"). The writer works it into the prompt; with the writer off, a style other than Book illustration is a line at the end of the prompt.
 - **Include book title/author in prompt** and **Include surrounding text in prompt** (both on by default): whether the prompt is framed with the book's title and author and a short slice of the surrounding text, so illustrations match the work's setting and era. A framed prompt also tells the model to put no text, titles or captions in the image. Turn both off for a prompt that is just your selection. The frame follows the same rules as chat: the title and author go only as far as **Settings → Chat & Export Settings → Book Info in Chat** (or the book's own value in Book Settings) allows, so None sends neither and Title only sends the title; and the text after your selection is cut the way chat's context is, by **Settings → Highlight Settings → Context Direction** and, while [spoiler protection](Spoiler-Protection) is on, **Context Under Spoiler Protection**.
-- **Prompt template…**: the exact prompt the image API will receive, with your framing switches applied.
+- **Prompt template…**: what goes to the models with your current settings: the writer's instructions and the material it reads (with the writer on), then the framed prompt (the writer's fallback, or the prompt itself with the writer off).
 - **Generated images…**: opens the gallery.
 
 A provider's model row can be changed while that provider makes the images: the one **Provider** names, or your chat provider under Follow main provider. The other providers' model rows are grayed out, and the models they hold apply when that provider is used. Shape and Detail apply to whichever provider makes the images.
@@ -46,7 +70,7 @@ Generated images are kept, not temporary, in `koassistant_images` under KOReader
 
 ## The gallery
 
-Open it from **Settings → Advanced → Image Generation → Generated images…**, or from any View Artifacts surface (below). Images are listed newest first with their file size. Tap an image to view it full screen; hold it to read the full prompt that was sent, with **Delete image…** under it (an image with no recorded prompt goes straight to the delete confirmation). The menu button in the title bar deletes every image after a confirmation, or just the book's in a per-book view.
+Open it from **Settings → Advanced → Image Generation → Generated images…**, or from any View Artifacts surface (below). Images are listed newest first with their file size. Tap an image to view it full screen; hold it to read who wrote the prompt and from what, then the full prompt that was sent, with **Delete image…** under it (an image with no recorded prompt goes straight to the delete confirmation). The menu button in the title bar deletes every image after a confirmation, or just the book's in a per-book view.
 
 ## Per-book association
 

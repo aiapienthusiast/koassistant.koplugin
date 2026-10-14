@@ -306,6 +306,11 @@ function ActionHold.show(plugin, action, opts)
         else
             logger.warn("KOAssistant: hold menu run options failed:", res)
         end
+    elseif opts.run and action.local_handler == "image_gen" then
+        -- Generate Image's one run option (image round S5, D9): a note for
+        -- this picture, asked after the selection is taken
+        local label = _("Generate with a note…")
+        run_buttons = { { label = label, run = function() opts.run({ image_note = true }, label) end } }
     end
     if run_buttons then
         local row = {}

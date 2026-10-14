@@ -6542,7 +6542,7 @@ function AskGPT:executeDictAction(action, word, dict_popup, non_reader_lookup, l
     -- Chat-originated lookups carry the chat's own book — it beats whatever
     -- the reader happens to have open (device 2026-08-13: wrong-book lookups)
     Dialogs.executeDirectAction(self.ui, action, word, configuration, self,
-      lookup_book and { document_path = lookup_book } or nil)
+      { document_path = lookup_book, run_variant = run_variant })
   else
     -- Ensure network is available (use runWhenConnected to avoid blocking DNS check)
     NetworkMgr:runWhenConnected(function()
@@ -6916,6 +6916,81 @@ function AskGPT:openRouterImageModelItems()
           return self_ref:openRouterImageModelItems()
         end)
       end)
+    end,
+  }
+  return items
+end
+
+-- The Style row's submenu (image round S6): the styles, then Custom…, which
+-- asks for the reader's own words (image_gen_style = "custom" +
+-- image_gen_style_custom)
+function AskGPT:imageStyleItems()
+  local self_ref = self
+  local PromptWriter = require("koassistant.images.prompt_writer")
+  local function features() return self_ref.settings:readSetting("features") or {} end
+  local function current()
+    local v = features().image_gen_style
+    return (type(v) == "string" and v ~= "") and v or PromptWriter.DEFAULT_STYLE
+  end
+  local function save(value, custom_text)
+    local f = features()
+    f.image_gen_style = value
+    if custom_text then f.image_gen_style_custom = custom_text end
+    self_ref.settings:saveSetting("features", f)
+    self_ref.settings:flush()
+    self_ref:updateConfigFromSettings()
+  end
+  local items = {}
+  for _idx, style in ipairs(PromptWriter.STYLES) do
+    local value = style.value
+    items[#items + 1] = {
+      text = style.text,
+      radio = true,
+      checked_func = function() return current() == value end,
+      callback = function() save(value) end,
+      keep_menu_open = true,
+    }
+  end
+  items[#items + 1] = {
+    text_func = function()
+      local f = features()
+      if current() == "custom" and type(f.image_gen_style_custom) == "string" and f.image_gen_style_custom ~= "" then
+        return T(_("Custom (%1)"), f.image_gen_style_custom)
+      end
+      return _("Custom…")
+    end,
+    radio = true,
+    checked_func = function() return current() == "custom" end,
+    keep_menu_open = true,
+    callback = function(touchmenu_instance)
+      local InputDialog = require("ui/widget/inputdialog")
+      local dialog
+      dialog = InputDialog:new{
+        title = _("Custom style"),
+        description = _("How the pictures should look, in your words (for example: a 1920s travel poster)."),
+        input = features().image_gen_style_custom or "",
+        buttons = {{
+          {
+            text = _("Cancel"),
+            id = "close",
+            callback = function() UIManager:close(dialog) end,
+          },
+          {
+            text = _("Save"),
+            is_enter_default = true,
+            callback = function()
+              local text = (dialog:getInputText() or ""):gsub("%s+", " "):match("^%s*(.-)%s*$")
+              UIManager:close(dialog)
+              if text ~= "" then
+                save("custom", text)
+                if touchmenu_instance and touchmenu_instance.updateItems then touchmenu_instance:updateItems() end
+              end
+            end,
+          },
+        }},
+      }
+      UIManager:show(dialog)
+      dialog:onShowKeyboard()
     end,
   }
   return items
@@ -19882,9 +19957,10 @@ function AskGPT:registerHighlightMenuActions()
         reader_highlight_instance:onClose()
 
         if action.local_handler then
-          -- Local actions don't need network
+          -- Local actions don't need network (a run option reaches them too:
+          -- Generate Image's "Generate with a note…")
           self:updateConfigFromSettings()
-          self:executeQuickAction(action, selected_text, context, selection_data, sc_window)
+          self:executeQuickAction(action, selected_text, context, selection_data, sc_window, variant)
         else
           NetworkMgr:runWhenConnected(function()
             self:updateConfigFromSettings()

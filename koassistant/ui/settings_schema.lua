@@ -3170,6 +3170,29 @@ local SettingsSchema = {
                             enabled_func = function(plugin) return imageDetailApplies(plugin) end,
                             separator = true,
                         },
+                        -- The prompt writer (image round S5, ruling R5: on by
+                        -- default) and the style (S6). Opt-out: read ~= false
+                        {
+                            id = "image_gen_writer",
+                            type = "toggle",
+                            text = _("Write the prompt with AI"),
+                            path = "features.image_gen_writer",
+                            default = true,
+                            help_text = _("Before each picture, your chat provider's fast model writes the prompt the image model receives: from the passage, the text around it, the book's title and author, the book's Background, the X-Ray entries the passage names and your note, under rules that keep it to what the book says (and, with spoiler protection on, to nothing later than the passage).\n\nIt adds one quick text request (a fraction of a cent) and sends that material to your chat provider (or to the provider a global Fast tier pin names) as well. The viewer's caption and the gallery say who wrote the prompt and from what.\n\nOff: the passage goes to the image model framed as before."),
+                        },
+                        {
+                            -- A submenu built when opened (main.lua
+                            -- imageStyleItems): the styles, then Custom…
+                            id = "image_gen_style",
+                            type = "submenu",
+                            callback = "imageStyleItems",
+                            text_func = function(plugin)
+                                local f = plugin.settings:readSetting("features") or {}
+                                return T(_("Style: %1"), require("koassistant.images.prompt_writer").styleLabel(f))
+                            end,
+                            help_text = _("How pictures look, for every image provider: Book illustration (the default), Watercolor, Ink drawing, Pencil sketch, Woodcut, Photographic, Comic, Map or diagram, or Custom… (your own words, such as \"a 1920s travel poster\").\n\nThe prompt writer works it into the prompt; with the writer off it is one line at the end of the prompt."),
+                            separator = true,
+                        },
                         -- Prompt framing (2026-08-13): what surrounds the raw
                         -- selection in the prompt sent to the image API. Both
                         -- opt-out (default true) — ImageGenerator.buildPrompt
@@ -3196,7 +3219,7 @@ local SettingsSchema = {
                             text = _("Prompt template…"),
                             callback = "showImageGenPromptTemplate",
                             keep_menu_open = true,
-                            help_text = _("Shows the exact prompt sent to the image API, with your current framing toggles applied."),
+                            help_text = _("Shows what goes to the models, with your current settings applied: the prompt writer's instructions and the material it reads when Write the prompt with AI is on, and the framed prompt (the writer's fallback, or the prompt itself with the writer off)."),
                             separator = true,
                         },
                         {

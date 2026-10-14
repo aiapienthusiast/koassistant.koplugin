@@ -705,10 +705,10 @@ Use plain language first, adding the technical term in parentheses when it helps
     image_gen = {
         id = "image_gen",
         text = _("Generate Image"),
-        description = _("Generate an image from the selected text description using the current AI provider."),
+        description = _("Generate an image of the selected passage."),
         context = "highlight",
         local_handler = "image_gen",
-        local_note = _("This action skips the chat pipeline, but it does send one AI request: the framed prompt below goes to the image provider's API. Provider, model, size and prompt framing are set in Settings → Advanced → Image Generation."),
+        local_note = _("This action skips the chat pipeline. With Write the prompt with AI on (the default) it sends two requests: your chat provider's fast model writes the prompt from the material below, then the image provider draws it; with it off, the framed prompt goes straight to the image provider. Provider, model, shape, detail, style and the prompt writer are set in Settings → Advanced → Image Generation."),
         requires_image_provider = true,
         in_highlight_menu = 9,  -- A9 pare-down 2026-08-17: last, it is conditional (maintainer)
         exclude_from_compact = true,

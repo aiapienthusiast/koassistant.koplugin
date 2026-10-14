@@ -3168,8 +3168,8 @@ function XrayBrowser:showItemDetail(item, category_key, title, source, nav_conte
     local fallback_row = {}
     if DISTRIBUTION_EXCLUDED[category_key] and self.metadata.book_file
         and not self.scope and not self.metadata.checkpoint
-        and type(item) == "table" and type(item.background) == "table"
-        and #item.background > 0 then
+        and type(item) == "table" and ((type(item.background) == "table"
+        and #item.background > 0) or self:_canIllustrate(item, category_key)) then
         table.insert(fallback_row, {
             text = _("More…"),
             callback = function()
@@ -3598,6 +3598,70 @@ function XrayBrowser:showEntityHistory(item, category_key, reveal)
     UIManager:show(viewer)
 end
 
+--- Whether an entry can be illustrated (image round S8, D16): an entry of this
+--- book's own installed X-Ray (the live main view: not a section, not a
+--- checkpoint or other version; a carried row and another book's entry open
+--- in their own views), while Generate Image is offered.
+-- The X-Ray's status block (where things stand, the conclusion) is no entry
+-- to draw: it has no name and no description of its own
+local ILLUSTRATE_SKIPS = { current_state = true, current_position = true, conclusion = true,
+    reader_engagement = true }
+
+function XrayBrowser:_canIllustrate(item, category_key)
+    if ILLUSTRATE_SKIPS[category_key] then return false end
+    if self.scope or self.metadata.checkpoint or not self.metadata.book_file then return false end
+    local plugin = self.metadata.plugin
+    if type(item) ~= "table" or not (plugin and plugin.settings and self.metadata.configuration) then return false end
+    local name = XrayParser.getItemName(item, category_key)
+    if type(name) ~= "string" or name == "" then return false end
+    local feats = plugin.settings:readSetting("features") or {}
+    return require("koassistant.images.image_generator").offered(feats,
+        require("koassistant.core.config_helper").mainProvider(feats), plugin.settings)
+end
+
+--- Illustrate… (S8): an optional note, then the picture, drawn from the
+--- entry's description (the entry is the subject; the book's identity per the
+--- Book info level, its Background and spoiler posture as for a passage).
+function XrayBrowser:_illustrate(item, category_key)
+    local plugin = self.metadata.plugin
+    local configuration = self.metadata.configuration
+    local file = self.metadata.book_file
+    local ui = self.ui
+    local BookSettings = require("koassistant.books.book_settings")
+    local ImageGenerator = require("koassistant.images.image_generator")
+    local SafeDocSettings = require("koassistant.storage.doc_settings")
+    local ds = SafeDocSettings.resolve(file, ui)
+    local features = (configuration and configuration.features) or {}
+    -- A page opened from a lookup or a card carries the title alone: the
+    -- author comes from the book's own properties then
+    local title, author = self.metadata.title, self.metadata.book_author
+    if not (type(author) == "string" and author ~= "") or not (type(title) == "string" and title ~= "") then
+        local props = SafeDocSettings.overlayCustomProps(ds and ds:readSetting("doc_props"), file) or {}
+        if not (type(title) == "string" and title ~= "") then title = props.title end
+        if not (type(author) == "string" and author ~= "") and type(props.authors) == "string" then
+            author = props.authors:gsub("\n", ", ")
+        end
+    end
+    local gen_opts = {
+        entry = require("koassistant.images.prompt_writer").entryMaterial(item, category_key),
+        book_metadata = BookSettings.applyMetadataOverride({ title = title, author = author or "" }, ds),
+        book_info_level = BookSettings.resolveBookInfoLevel(ds, features),
+        book_privacy = require("koassistant.request.privacy_gates").overridesOf(ds),
+        spoiler = BookSettings.resolveSpoilerFree(ds, features) or false,
+        background = BookSettings.getBackground(ds),
+        ui = ui,
+        plugin = plugin,
+    }
+    local book_info = { file = file, title = title }
+    ImageGenerator.askNote(nil, function(note)
+        gen_opts.note = note
+        require("ui/network/manager"):runWhenConnected(function()
+            if plugin.updateConfigFromSettings then plugin:updateConfigFromSettings() end
+            ImageGenerator.generate(nil, configuration, plugin.settings, book_info, gen_opts)
+        end)
+    end, { optional = true, confirm_text = _("Illustrate") })
+end
+
 --- One popup for per-entry management (2026-08-09 unified entry-management
 --- direction, "Manage…"): search terms + rename + move-back-to-carried;
 --- merge-with-another-entry is the queued addition (needs an entity picker —
@@ -3669,6 +3733,17 @@ function XrayBrowser:_showEntityManagePopup(item, category_key, title, source, n
                     width = Screen:getWidth() * 0.9,
                     height = Screen:getHeight() * 0.8,
                 })
+            end,
+        }})
+    end
+    -- Illustrate… (image round S8): a picture of this entry, drawn from its
+    -- description through the prompt writer (image_generator.lua)
+    if self:_canIllustrate(item, category_key) then
+        table.insert(buttons, {{
+            text = _("Illustrate…"),
+            callback = function()
+                UIManager:close(dialog)
+                self_ref:_illustrate(item, category_key)
             end,
         }})
     end

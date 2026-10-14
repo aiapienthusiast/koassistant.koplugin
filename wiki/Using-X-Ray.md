@@ -182,7 +182,7 @@ Tap an entry for its page: its description, the aliases the AI found (a nickname
 - **→ Group**, when the book is in a group: the same entry in the group's other books.
 - The arrows step through the category; **Chat about this** starts a chat about the entry.
 
-Entries of Story Arc, Argument Development, Arguments, Findings and Figures & Data, and the status entry, have no Chapter Appearances or AI Wiki button, and More… only when the entry carries background from other books.
+Entries of Story Arc, Argument Development, Arguments, Findings and Figures & Data, and the status entry, have no Chapter Appearances or AI Wiki button, and More… only when the entry carries background from other books or can be illustrated.
 
 **Connections.** Character connections and cross-category references (places to characters, themes to characters, and so on) are buttons that open the referenced entry. References are matched across all categories by name, alias and partial name, and repeated links to the same entry are always collapsed. Settings → Reading & Library → X-Ray → Connection Buttons per Entry caps how many boxes they may take (default 9, range 0-30): past the cap the last box becomes **All connections (N)…**; at or under it, the full list with the relationship text is in More… (**List connections (N)…**). 0 draws no buttons and lists every connection instead.
 
@@ -191,6 +191,7 @@ Entries of Story Arc, Argument Development, Arguments, Findings and Figures & Da
 - **History through checkpoints…**: how this one entry changed across the versions you have built (when the book has checkpoints). Versions past your reading position stay hidden until you confirm **Show later versions**.
 - **List connections (N)…**.
 - **Your highlights (N)…**: the passages you highlighted that mention this entry. Only with highlight sharing on; matched on your device, not sent anywhere.
+- **Illustrate…**: a picture of this entry, drawn from its description, with an optional note. On the book's own installed X-Ray, while an image provider is available; see [Image Generation](Image-Generation#illustrate-from-x-ray).
 - Under the **Edit this entry** divider: **Edit search terms**, **Rename…**, **Merge with another entry…**, and **Link with a group member's entry…** in a book group. See [Managing entries](#managing-entries). An entry that carries background from other books also has **Move back to carried list** (see [Book Groups and Series](Book-Groups-and-Series)).
 
 In a book group, an entry page also lists what the group's other X-Rays say about it, under "In other books of the group:" (one line per book, display only; a later volume appears only once every book before it is read or has spoiler protection off).

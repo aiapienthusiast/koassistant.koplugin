@@ -7386,9 +7386,12 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
         -- showChatGPTDialog, which sits near the 60-upvalue LuaJIT cap). The
         -- dialog's own book beats whatever the reader has open.
         if action.local_handler then
+            -- Generate Image takes what was typed as its note (S5, D9), and a
+            -- hold menu's "Generate with a note…" asks for one
             require("koassistant.ui.dialogs").executeDirectAction(
                 ui_instance, action, highlighted_text or "", configuration, plugin,
-                document_path and { document_path = document_path } or nil)
+                { document_path = document_path, run_variant = run_variant,
+                  note = action.local_handler == "image_gen" and additional_input or nil })
             return
         end
 
@@ -12622,8 +12625,10 @@ local function handleLocalXrayLookup(ui, query, document_path, book_metadata, co
     end
 end
 
--- Dispatch a local (non-AI) action handler
-local function handleLocalAction(handler_name, ui, highlighted_text, document_path, book_metadata, config, plugin)
+-- Dispatch a local (non-AI) action handler. opts (optional): run_variant (a
+-- hold menu's run option: { image_note = true } asks Generate Image's note),
+-- note (the text typed in the input dialog: Generate Image's note)
+local function handleLocalAction(handler_name, ui, highlighted_text, document_path, book_metadata, config, plugin, opts)
     local logger = require("koassistant.core.logger")
 
     if handler_name == "xray_lookup" then
@@ -12654,23 +12659,41 @@ local function handleLocalAction(handler_name, ui, highlighted_text, document_pa
         -- The frame follows chat's rules: the text after the selection is cut by
         -- Context Direction and the spoiler clamp (B461), the title and author
         -- by the Book info level (data_access_picture.md P7), and the book's own
-        -- privacy values reach the generator's gate for the text around it
+        -- privacy values reach the generator's gate for the text around it. The
+        -- prompt writer (S5) also reads the book's Background, the spoiler
+        -- posture and the reader's note (the input dialog's text, or the one
+        -- "Generate with a note…" asks for)
         local features = (config and config.features) or {}
         local book_ds = book_info and require("koassistant.storage.doc_settings").resolve(book_info.file, ui) or nil
-        local frame_opts = {
+        local spoiler = BookSettings.resolveSpoilerFree(book_ds, features) or false
+        local gen_opts = {
             window = window,
             book_metadata = book_metadata,
-            after_limit = contextAfterLimit(features, BookSettings.resolveSpoilerFree(book_ds, features) or false),
+            after_limit = contextAfterLimit(features, spoiler),
             book_info_level = BookSettings.resolveBookInfoLevel(book_ds, features),
             book_privacy = require("koassistant.request.privacy_gates").overridesOf(book_ds),
+            spoiler = spoiler,
+            background = BookSettings.getBackground(book_ds),
+            note = opts and type(opts.note) == "string" and opts.note:match("%S") and opts.note or nil,
+            ui = ui,
             plugin = plugin,
         }
-        local NetworkMgr = require("ui/network/manager")
-        NetworkMgr:runWhenConnected(function()
-            if plugin and plugin.updateConfigFromSettings then plugin:updateConfigFromSettings() end
-            require("koassistant.images.image_generator").generate(highlighted_text, config,
-                plugin and plugin.settings, book_info, frame_opts)
-        end)
+        local ImageGenerator = require("koassistant.images.image_generator")
+        local function run()
+            local NetworkMgr = require("ui/network/manager")
+            NetworkMgr:runWhenConnected(function()
+                if plugin and plugin.updateConfigFromSettings then plugin:updateConfigFromSettings() end
+                ImageGenerator.generate(highlighted_text, config, plugin and plugin.settings, book_info, gen_opts)
+            end)
+        end
+        if opts and type(opts.run_variant) == "table" and opts.run_variant.image_note then
+            ImageGenerator.askNote(gen_opts.note, function(text)
+                gen_opts.note = text
+                run()
+            end)
+        else
+            run()
+        end
     else
         logger.warn("KOAssistant: Unknown local handler: " .. tostring(handler_name))
         UIManager:show(InfoMessage:new{
@@ -12822,7 +12845,8 @@ local function executeDirectAction(ui, action, highlighted_text, configuration, 
 
     -- Handle local-only actions (no AI call)
     if action.local_handler then
-        handleLocalAction(action.local_handler, ui, highlighted_text, document_path, book_metadata, configuration, plugin)
+        handleLocalAction(action.local_handler, ui, highlighted_text, document_path, book_metadata, configuration, plugin,
+            opts and { run_variant = opts.run_variant, note = opts.note } or nil)
         return
     end
 

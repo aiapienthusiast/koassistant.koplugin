@@ -112,10 +112,13 @@ function DataAccess.questionText(spec)
 end
 
 --- Show the question. on_answer(choice): "once" | "book" | "not_book" |
---- "always" | "more" | "cancel". spec: the questionText fields plus
---- spec.plan (DataAccess.plan), spec.set (a request over many books: Allow
---- once and Cancel only), spec.standing_only (no Allow once: a feature with no
---- moment to ask offers Allow for this book alone).
+--- "without" | "always" | "more" | "cancel". spec: the questionText fields
+--- plus spec.plan (DataAccess.plan), spec.set (a request over many books:
+--- Allow once and Cancel only), spec.standing_only (no Allow once: a feature
+--- with no moment to ask offers Allow for this book alone), spec.decline_once
+--- (Continue without in place of Not for this book: the run goes on without
+--- the optional kinds and nothing is stored; the image run, whose kinds reach
+--- it indirectly, where a book-wide Never would stop the book's X-Ray updates).
 function DataAccess.ask(plugin, spec, on_answer)
     local dialog
     local answered = false
@@ -138,7 +141,9 @@ function DataAccess.ask(plugin, spec, on_answer)
         end
     end
     local rows = { first }
-    if not spec.set and plan.optional_only and plan.per_book then
+    if not spec.set and plan.optional_only and spec.decline_once then
+        rows[#rows + 1] = { { text = _("Continue without"), callback = function() answer("without") end } }
+    elseif not spec.set and plan.optional_only and plan.per_book then
         rows[#rows + 1] = { { text = _("Not for this book"), callback = function() answer("not_book") end } }
     end
     local last = {}
@@ -287,9 +292,15 @@ local function needsForSet(action, opts)
     return out, never_books
 end
 
+-- How strict a state is, for a kind sent to more than one provider
+local STATE_RANK = { allow = 0, ask = 1, never = 2 }
+
 --- What a run wants, with each kind's state: the action's declarations for
 --- its book (Gates.needs), a set of picked books (needsForSet), or an
---- explicit list of kinds (a pick that is not an action).
+--- explicit list of kinds (a pick that is not an action). With opts.kinds,
+--- opts.providers lists every provider the data reaches (the image action
+--- with its prompt writer: the writer's and the image provider's); a kind's
+--- state is the strictest of theirs (Never, then Ask, then Allow).
 --- @return table needs, number|nil never_books (sets only)
 function DataAccess.needsFor(action, opts)
     action = action or {}
@@ -303,7 +314,17 @@ function DataAccess.needsFor(action, opts)
     if opts.kinds then
         local needs = {}
         for _idx, kind in ipairs(opts.kinds) do
-            local state, layer = Gates.resolve(kind, ctx)
+            local state, layer
+            for _p, provider in ipairs(opts.providers or {}) do
+                ctx.provider = provider
+                local s, l = Gates.resolve(kind, ctx)
+                if not state or STATE_RANK[s] > STATE_RANK[state] then state, layer = s, l end
+            end
+            if not state then
+                -- one recipient (opts.provider, which may be unknown: nil)
+                ctx.provider = opts.provider
+                state, layer = Gates.resolve(kind, ctx)
+            end
             needs[#needs + 1] = { kind = kind, state = state, layer = layer, required = opts.required ~= false }
         end
         return needs
@@ -314,6 +335,8 @@ end
 --- The funnel: resolve what the run wants, refuse a required kind on Never,
 --- ask for the kinds on Ask, then run.
 --- opts: features (the config the run uses), provider (the dispatch provider),
+--- providers + provider_name (with kinds: every provider the data reaches, and
+--- the words that name them in the question), decline_once (see ask),
 --- path (the book's file, nil = no book), ui, action_name, source, stamps,
 --- nearby, amounts (kind = line), note, standing_only, kinds (an explicit list
 --- of kinds, for a pick that is not an action), books (a set, see needsForSet),
@@ -348,9 +371,9 @@ function DataAccess.withAccess(plugin, action, opts, run_fn)
     end
     DataAccess.ask(plugin, {
         action_name = opts.action_name or action.text,
-        provider_name = providerName(plugin, opts.provider),
+        provider_name = opts.provider_name or providerName(plugin, opts.provider),
         asked = plan.asked, plan = plan, amounts = opts.amounts, note = note,
-        set = opts.books ~= nil, standing_only = opts.standing_only,
+        set = opts.books ~= nil, standing_only = opts.standing_only, decline_once = opts.decline_once,
     }, function(choice)
         if choice == "once" then
             Gates.grantOnce(features, opts.books and nil or opts.path, asked_kinds)
@@ -372,6 +395,8 @@ function DataAccess.withAccess(plugin, action, opts, run_fn)
                 if Gates.BOOK_KINDS[kind] then stored[#stored + 1] = kind end
             end
             writeBookValues(opts.path, opts.ui, stored, false)
+            run_fn({})
+        elseif choice == "without" then
             run_fn({})
         elseif choice == "always" then
             writeGlobalAllow(plugin, asked_kinds)

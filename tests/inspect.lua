@@ -566,6 +566,26 @@ local function inspectImage(provider, options)
         after_limit = "sentence",
     }, features)
     local model = ModelLists.resolveImageModel(provider, options.model)
+    -- The prompt writer's request first (on by default, image round S5): its
+    -- system text and the material, on the fast model of a sample chat
+    -- provider (Anthropic); the image request below then carries the framed
+    -- prompt, which the writer's paragraph replaces at run time
+    local PromptWriter = require("koassistant.images.prompt_writer")
+    local wp, wm = PromptWriter.target(features, "anthropic")
+    local wcfg = ImageGenerator.writerConfig({ provider = "anthropic", features = {} }, wp, wm,
+        PromptWriter.systemText({}))
+    print("== The prompt writer: " .. tostring(wcfg.provider) .. " / " .. tostring(wm))
+    print("-- system:")
+    print(wcfg.system.text)
+    print("-- material (the user message):")
+    print(PromptWriter.material({
+        passage = options.test_message or "The lighthouse stood on the black rocks at the edge of the bay, its lamp dark.",
+        around = { before = "The path climbed the headland.", after = " Gulls wheeled over the water." },
+        book = { title = "Sample Book", author = "A. Writer" },
+        style = (PromptWriter.styleText(features)),
+        shape = PromptWriter.shapeLine("fit", 1264 / 1680, true),
+    }))
+    print("== The image request (the framed prompt: the writer's fallback, or the prompt with the writer off)")
     -- The defaults (Fit my screen, Draft), fitted to a 3:4 e-reader screen
     local request = ImageGenerator.buildRequest(provider, model, prompt, features, { w = 1264, h = 1680 })
     print("POST " .. request.url)

@@ -49,11 +49,13 @@ It names the action, the provider the request goes to, and every kind of data th
 - **More…**: opens the book's Privacy screen (or the settings), and asks again when you come back.
 - **Cancel**: nothing is sent.
 
+Generate Image with its prompt writer on (and Illustrate… on an X-Ray entry) sends the text around the passage and X-Ray descriptions to two providers: the one that writes the prompt and the one that draws it, which receives a prompt made from them. Each kind must be allowed for both, and the question names both ("Generate Image will send to Anthropic, to write the prompt, and to OpenAI, to draw it"). Its **Continue without** (in place of Not for this book) makes this picture without them and stores nothing, since a Never for the book's text would also stop its X-Ray updates; see [Image Generation](Image-Generation#the-prompt-writer).
+
 A required kind (X-Ray's book text, say) on Never is a short refusal that names where the value comes from (this book, all books, or trusted providers) with one button to that screen. A request over several picked books asks once for the set; each book's own value still decides for its data, and books set to Never stay out.
 
 ### Where it is asked
 
-At the moment of need, and nowhere else: when an action starts (from a menu, a gesture, the Quick Actions panel, the highlight menu, the file browser or an input dialog), on the **Run** button of an action's scope and source popup (where the spoiler reminder also sits, so the two are one dialog), when you pick a Scope chip range or turn the Tools chip on and send, when you attach your notebook or chat about it, when you chat about an X-Ray entry whose page lists your highlights, and when a library chat sends your book list. Viewing, browsing and deleting what is already on the device never ask.
+At the moment of need, and nowhere else: when an action starts (from a menu, a gesture, the Quick Actions panel, the highlight menu, the file browser or an input dialog), on the **Run** button of an action's scope and source popup (where the spoiler reminder also sits, so the two are one dialog), when you pick a Scope chip range or turn the Tools chip on and send, when you attach your notebook or chat about it, when you chat about an X-Ray entry whose page lists your highlights, when you generate an image or illustrate an X-Ray entry, and when a library chat sends your book list. Viewing, browsing and deleting what is already on the device never ask.
 
 ### Background features
 

@@ -95,8 +95,10 @@ function ImageBrowser.show(opts)
     for _idx, f in ipairs(files) do
         local display = f.name:gsub("%.png$", ""):gsub("%.jpg$", ""):gsub("%.webp$", "")
         local ie = prompt_index[f.name]
+        -- the prompt writer's provenance line first (image round S5, D13)
         local full_prompt = type(ie) == "table" and type(ie.prompt) == "string"
-            and ie.prompt or nil
+            and ImageGenerator.promptShown(ie.prompt, type(ie.provenance) == "string" and ie.provenance or nil)
+            or nil
         local function confirmDelete(also_close)
             UIManager:show(ConfirmBox:new{
                 text = T(_("Delete this image?\n\n%1"), display),

@@ -630,14 +630,317 @@ local function runAll()
         p = ImageGenerator.buildPrompt("sel", { window = window }, {})
         TestRunner:assert(p:find("Next paragraph.", 1, true), "no limit: all of it")
     end)
-    TestRunner:test("allowedFrame: the text around goes only where nearby_text is allowed", function()
-        local opts = { window = { prev = "a", next = "b" }, book_metadata = { title = "T" }, after_limit = "none" }
-        TestRunner:assert(ImageGenerator.allowedFrame(opts, {}, "openai").window ~= nil, "allowed by default")
-        opts.book_privacy = { nearby_text = false }
-        local kept = ImageGenerator.allowedFrame(opts, {}, "openai")
-        TestRunner:assertEquals(kept.window, nil, "a book's Never for the kind drops it")
-        TestRunner:assertEquals(kept.book_metadata.title, "T", "the identity stays")
-        TestRunner:assertEquals(kept.after_limit, "none")
+    TestRunner:test("allowedMaterial: the text around goes only where nearby_text is allowed for every recipient", function()
+        local spec = { features = {}, recipients = { "anthropic", "openai" }, window = true }
+        TestRunner:assertEquals(ImageGenerator.allowedMaterial(spec).around, true, "Allow by default")
+        spec.book = { nearby_text = false }
+        TestRunner:assertEquals(ImageGenerator.allowedMaterial(spec).around, false, "a book's Never drops it")
+        spec.book = nil
+        spec.features = { nearby_text_sharing = "ask" }
+        TestRunner:assertEquals(ImageGenerator.allowedMaterial(spec).around, false, "Ask is not yet allowed")
+        spec.features._data_once = { book = "/b.epub", kinds = { nearby_text = true } }
+        spec.path = "/b.epub"
+        TestRunner:assertEquals(ImageGenerator.allowedMaterial(spec).around, true, "Allow once covers both")
+        TestRunner:assertEquals(ImageGenerator.allowedMaterial({ features = {}, recipients = { "openai" } }).around,
+            false, "no window, nothing to send")
+    end)
+    TestRunner:test("allowedMaterial: X-Ray descriptions by the kinds they were made from", function()
+        local stored = { used_book_text = true, used_highlights = true }
+        local spec = { features = { enable_book_text_extraction = true, enable_highlights_sharing = true },
+            recipients = { "anthropic", "openai" }, stored = stored }
+        TestRunner:assertEquals(ImageGenerator.allowedMaterial(spec).stored, true)
+        spec.features.enable_highlights_sharing = nil
+        TestRunner:assertEquals(ImageGenerator.allowedMaterial(spec).stored, false,
+            "made with highlights, highlights on Ask: not yet")
+        spec.stored = { used_book_text = true, used_highlights = false }
+        TestRunner:assertEquals(ImageGenerator.allowedMaterial(spec).stored, true, "highlights not used: text alone")
+        spec.book = { book_text = false }
+        TestRunner:assertEquals(ImageGenerator.allowedMaterial(spec).stored, false, "the book's Never")
+    end)
+    TestRunner:test("the question resolves a kind across both recipients (the strictest)", function()
+        local DataAccess = require("koassistant.ui.data_access")
+        local features = { trusted_providers = { "anthropic" }, nearby_text_sharing = "ask" }
+        local needs = DataAccess.needsFor(nil, { features = features, kinds = { "nearby_text" },
+            providers = { "anthropic", "openai" }, required = false, book = {} })
+        TestRunner:assertEquals(needs[1].state, "ask", "trusted Anthropic allows, OpenAI asks: ask")
+        needs = DataAccess.needsFor(nil, { features = features, kinds = { "nearby_text" },
+            providers = { "anthropic" }, book = {} })
+        TestRunner:assertEquals(needs[1].state, "allow", "the trusted column alone")
+        needs = DataAccess.needsFor(nil, { features = features, kinds = { "nearby_text" },
+            providers = { "anthropic", "openai" }, book = { nearby_text = false } })
+        TestRunner:assertEquals(needs[1].state, "never")
+        TestRunner:assertEquals(needs[1].layer, "book")
+    end)
+
+    TestRunner:test("the question with one unknown provider still resolves (the X-Ray askers pass none)", function()
+        local DataAccess = require("koassistant.ui.data_access")
+        local needs = DataAccess.needsFor({}, { kinds = { "book_text" }, required = true, features = {} })
+        TestRunner:assertEquals(needs[1].state, "ask", "book text on Ask, no provider known: ask")
+        needs = DataAccess.needsFor({}, { kinds = { "book_text" }, features = { enable_book_text_extraction = "never" } })
+        TestRunner:assertEquals(needs[1].state, "never")
+    end)
+
+    print("  [The framed prompt: style, note, an X-Ray entry (S5, S6, S8)]")
+    TestRunner:test("a style other than the default and the reader's note end the framed prompt", function()
+        local opts = { book_metadata = { title = "T", author = "A" }, note = "  from behind  " }
+        local p = ImageGenerator.buildPrompt("sel", opts, { image_gen_style = "watercolor" })
+        TestRunner:assert(p:find("\n\nStyle: a watercolor painting.\nThe reader's note: from behind$"), p)
+        p = ImageGenerator.buildPrompt("sel", { book_metadata = { title = "T" } }, {})
+        TestRunner:assert(not p:find("Style:", 1, true), "the default style adds nothing")
+        TestRunner:assertEquals(ImageGenerator.buildPrompt("sel", {}, {}), "sel", "no frame, no lines: the selection")
+        TestRunner:assertEquals(ImageGenerator.buildPrompt("sel", {}, { image_gen_style = "comic" }),
+            "sel\n\nStyle: a comic-book panel.", "a picked style even without a frame")
+    end)
+    TestRunner:test("buildEntryPrompt: the entry, the book per the Book info level, the article", function()
+        local entry = { name = "Solitude", type = "idea", description = "Living apart." }
+        local p = ImageGenerator.buildEntryPrompt(entry, { book_metadata = { title = "T", author = "A" } }, {})
+        TestRunner:assert(p:find("Create an illustration of an idea from a book", 1, true), p)
+        TestRunner:assert(p:find("To illustrate: Solitude: Living apart.", 1, true), p)
+        TestRunner:assert(p:find('From the book "T" by A', 1, true), p)
+        p = ImageGenerator.buildEntryPrompt({ name = "Mara", type = "person" },
+            { book_metadata = { title = "T", author = "A" }, book_info_level = "none" }, {})
+        TestRunner:assert(p:find("of a person", 1, true) and not p:find("From the book", 1, true), p)
+    end)
+    TestRunner:test("promptShown: the provenance line first", function()
+        TestRunner:assertEquals(ImageGenerator.promptShown("the prompt", "Prompt written by m from: the passage."),
+            "Prompt written by m from: the passage.\n\nthe prompt")
+        TestRunner:assertEquals(ImageGenerator.promptShown("the prompt", nil), "the prompt")
+    end)
+    TestRunner:test("recordImage keeps the provenance beside the prompt", function()
+        withImageIndex(function()
+            ImageGenerator.recordImage("c.jpg", { file = "/books/b1.epub", title = "B" }, "p", "Prompt written by m.")
+            TestRunner:assertEquals(ImageGenerator.readIndex()["c.jpg"].provenance, "Prompt written by m.")
+        end)
+    end)
+    TestRunner:test("writerConfig: the writer's provider and model, its system text, no web, no stream, reasoning off", function()
+        local configuration = { provider = "anthropic", model = "claude-big",
+            provider_settings = { anthropic = { model = "claude-big" } },
+            features = { enable_web_search = true, enable_streaming = true } }
+        local cfg, sent = ImageGenerator.writerConfig(configuration, "anthropic", "claude-haiku-5-5", "SYSTEM")
+        TestRunner:assertEquals(cfg.provider, "anthropic")
+        TestRunner:assertEquals(cfg.model, "claude-haiku-5-5")
+        TestRunner:assertEquals(sent, "claude-haiku-5-5")
+        TestRunner:assertEquals(cfg.system.text, "SYSTEM")
+        TestRunner:assertEquals(cfg.features.enable_web_search, false)
+        TestRunner:assertEquals(cfg.features.enable_streaming, false)
+        TestRunner:assertEquals(cfg.features._suppress_loading_dialog, true)
+        TestRunner:assertEquals(cfg.api_params.thinking and cfg.api_params.thinking.type, "disabled", "reasoning off")
+        TestRunner:assertEquals(configuration.provider_settings.anthropic.model, "claude-big",
+            "the shared per-provider table untouched")
+        TestRunner:assertEquals(configuration.features.enable_web_search, true, "the shared features untouched")
+        cfg = ImageGenerator.writerConfig(configuration, "gemini", "gemini-fast", "S")
+        TestRunner:assertEquals(cfg.provider, "gemini", "a tier pin's provider")
+        TestRunner:assertEquals(cfg.model, "gemini-fast")
+        cfg = ImageGenerator.writerConfig(configuration, "anthropic", nil, "S")
+        TestRunner:assertEquals(cfg.model, "claude-big", "no fast model: the chat model as configured")
+    end)
+
+    print("  [The run: the question, the writer, the picture (S5)]")
+    -- The run with the requests stubbed: the writer's router call is
+    -- answered here, the image request is captured where it is built
+    local function withRun(answer, fn)
+        local UIManager = require("ui/uimanager")
+        local ffiutil = require("ffi/util")
+        local saved = {
+            gq = package.loaded["koassistant.request.gpt_query"],
+            sh = package.loaded["koassistant.request.stream_handler"],
+            show = UIManager.show, unschedule = UIManager.unschedule,
+            run = ffiutil.runInSubProcess, build = ImageGenerator.buildRequest,
+        }
+        UIManager.unschedule = function() end
+        local cap = { shown = {} }
+        package.loaded["koassistant.request.gpt_query"] = {
+            query = function(messages, cfg, cb)
+                cap.writer = { messages = messages, cfg = cfg }
+                if answer == false then cb(false, nil, "HTTP 500: upstream down") else cb(true, answer) end
+            end,
+        }
+        package.loaded["koassistant.request.stream_handler"] = {
+            showToolStatusDialog = function(o)
+                cap.status = o
+                return { setText = function(t) cap.status_text = t end, close = function() cap.closed = true end }
+            end,
+        }
+        UIManager.show = function(_self, w) cap.shown[#cap.shown + 1] = w end
+        ffiutil.runInSubProcess = function() return nil end
+        ImageGenerator.buildRequest = function(provider, model, prompt, ...)
+            cap.image = { provider = provider, model = model, prompt = prompt }
+            return saved.build(provider, model, prompt, ...)
+        end
+        local ok, err = pcall(fn, cap)
+        package.loaded["koassistant.request.gpt_query"] = saved.gq
+        package.loaded["koassistant.request.stream_handler"] = saved.sh
+        UIManager.show, ffiutil.runInSubProcess, ImageGenerator.buildRequest = saved.show, saved.run, saved.build
+        UIManager.unschedule = saved.unschedule
+        if not ok then error(err, 0) end
+    end
+    local function config(features)
+        return { provider = "anthropic", features = features or {} }
+    end
+    TestRunner:test("writer on: the writer's request, then its paragraph as the image prompt", function()
+        withApikeys({ openai = "sk-real-key" }, function()
+            withRun("A girl in a red scarf on black rocks.", function(cap)
+                ImageGenerator._askAndRun("openai", "Mara ran to the rocks.", config(), mockSettings({}), nil,
+                    { note = "from behind", background = "Cornwall", spoiler = true,
+                      book_metadata = { title = "T", author = "A" } })
+                local w = cap.writer
+                TestRunner:assert(w, "the writer was asked")
+                TestRunner:assertEquals(w.cfg.provider, "anthropic", "the chat provider's")
+                TestRunner:assertEquals(w.cfg.features._suppress_loading_dialog, true)
+                TestRunner:assert(w.cfg.system.text:find("has not finished the book", 1, true), "spoiler rule")
+                local material = w.messages[#w.messages].content
+                TestRunner:assert(material:find("<passage>Mara ran to the rocks.</passage>", 1, true), material)
+                TestRunner:assert(material:find("<reader_note>from behind</reader_note>", 1, true), material)
+                TestRunner:assert(material:find("<background>Cornwall</background>", 1, true), material)
+                TestRunner:assert(material:find('<book title="T" author="A"/>', 1, true), material)
+                TestRunner:assertEquals(cap.image.provider, "openai")
+                TestRunner:assertEquals(cap.image.prompt,
+                    "A girl in a red scarf on black rocks. The picture contains no text, letters, titles or captions.")
+                TestRunner:assert(cap.status_text:find("Generating image with OpenAI", 1, true), cap.status_text)
+            end)
+        end)
+    end)
+    TestRunner:test("a writer that fails leaves the framed prompt, said in one line", function()
+        withApikeys({ openai = "sk-real-key" }, function()
+            withRun(false, function(cap)
+                ImageGenerator._askAndRun("openai", "Mara ran to the rocks.", config(), mockSettings({}), nil,
+                    { book_metadata = { title = "T", author = "A" } })
+                TestRunner:assert(cap.image.prompt:find("Passage to illustrate: Mara ran to the rocks.", 1, true),
+                    cap.image.prompt)
+                TestRunner:assert(cap.status_text:find("The prompt writer failed (HTTP 500: upstream down)", 1, true),
+                    cap.status_text)
+            end)
+        end)
+    end)
+    TestRunner:test("writer off: no writer request, the framed prompt", function()
+        withApikeys({ openai = "sk-real-key" }, function()
+            withRun("unused", function(cap)
+                ImageGenerator._askAndRun("openai", "Mara ran.", config({ image_gen_writer = false,
+                    image_gen_style = "ink" }), mockSettings({}), nil, { note = "dusk" })
+                TestRunner:assertEquals(cap.writer, nil)
+                TestRunner:assertEquals(cap.image.prompt, "Mara ran.\n\nStyle: an ink drawing.\nThe reader's note: dusk")
+            end)
+        end)
+    end)
+    TestRunner:test("the text around on Ask: one question names both providers; Allow once sends it to both", function()
+        withApikeys({ openai = "sk-real-key" }, function()
+            withRun("A scene.", function(cap)
+                local plugin = { getProviderDisplayName = function(_self, id) return id == "anthropic" and "Anthropic" or id end }
+                ImageGenerator._askAndRun("openai", "Mara ran.", config({ nearby_text_sharing = "ask" }),
+                    mockSettings({}), nil, { window = { prev = "The storm broke.", next = " Waves rose." }, plugin = plugin })
+                TestRunner:assertEquals(cap.writer, nil, "nothing sent before the answer")
+                local q = cap.shown[1]
+                TestRunner:assert(q and q.title:find("Generate Image will send to Anthropic, to write the prompt, and to OpenAI, to draw it:", 1, true),
+                    q and q.title)
+                TestRunner:assertEquals(q.buttons[1][1].text, "Allow once")
+                q.buttons[1][1].callback()
+                local material = cap.writer.messages[#cap.writer.messages].content
+                TestRunner:assert(material:find("<before>The storm broke.</before>", 1, true), material)
+            end)
+        end)
+    end)
+    TestRunner:test("Continue without: this picture goes without the text around, and nothing is stored", function()
+        withApikeys({ openai = "sk-real-key" }, function()
+            withRun("A scene.", function(cap)
+                ImageGenerator._askAndRun("openai", "Mara ran.", config({ nearby_text_sharing = "ask" }),
+                    mockSettings({}), nil, { window = { prev = "Before.", next = " After." } })
+                local q = cap.shown[1]
+                local without
+                for _idx, row in ipairs(q.buttons) do
+                    for _j, b in ipairs(row) do
+                        if b.text == "Continue without" then without = b end
+                        TestRunner:assert(b.text ~= "Not for this book", "no book-wide Never from an image")
+                    end
+                end
+                TestRunner:assert(without, "Continue without offered")
+                without.callback()
+                local material = cap.writer.messages[#cap.writer.messages].content
+                TestRunner:assert(not material:find("<text_around>", 1, true), material)
+            end)
+        end)
+    end)
+    TestRunner:test("nothing is asked for text the clamp would not send", function()
+        withApikeys({ openai = "sk-real-key" }, function()
+            withRun("A scene.", function(cap)
+                -- Context Direction "before" and nothing before the selection
+                ImageGenerator._askAndRun("openai", "Mara ran.", config({ nearby_text_sharing = "ask" }),
+                    mockSettings({}), nil, { window = { prev = "", next = " After." }, after_limit = "none" })
+                for _idx, w in ipairs(cap.shown) do
+                    TestRunner:assert(not (type(w.title) == "string" and w.title:find("will send to", 1, true)),
+                        "no question")
+                end
+                TestRunner:assert(cap.writer, "the run went on")
+            end)
+        end)
+    end)
+    TestRunner:test("an entry to draw with no stamps known is judged as made from the book's text", function()
+        local real_ac = package.loaded["koassistant.artifacts.action_cache"]
+        package.loaded["koassistant.artifacts.action_cache"] = { parsedXrayFor = function() return nil end }
+        local Gates = require("koassistant.request.privacy_gates")
+        local real_overrides = Gates.bookOverrides
+        Gates.bookOverrides = function() return { book_text = false } end
+        local ok, err = pcall(withApikeys, { openai = "sk-real-key" }, function()
+            withRun("A scene.", function(cap)
+                ImageGenerator._askAndRun("openai", "Mara", config({}), mockSettings({}),
+                    { file = "/books/b.epub", title = "B" },
+                    { entry = { name = "Mara", type = "person", description = "A red scarf." } })
+                TestRunner:assertEquals(cap.writer, nil, "the book's Never refuses the entry: nothing sent")
+                local refusal = cap.shown[1]
+                TestRunner:assert(refusal and refusal.title:find("Illustrate needs book text", 1, true),
+                    refusal and refusal.title)
+            end)
+        end)
+        package.loaded["koassistant.artifacts.action_cache"], Gates.bookOverrides = real_ac, real_overrides
+        if not ok then error(err, 0) end
+    end)
+    TestRunner:test("the book's Never for the text around: no question, the run goes on without it", function()
+        local Gates = require("koassistant.request.privacy_gates")
+        local real_overrides, real_ac = Gates.bookOverrides, package.loaded["koassistant.artifacts.action_cache"]
+        Gates.bookOverrides = function() return { nearby_text = false } end
+        package.loaded["koassistant.artifacts.action_cache"] = { parsedXrayFor = function() return nil end }
+        local ok, err = pcall(withApikeys, { openai = "sk-real-key" }, function()
+            withRun("A scene.", function(cap)
+                ImageGenerator._askAndRun("openai", "Mara ran.", config({ nearby_text_sharing = "ask" }),
+                    mockSettings({}), { file = "/books/b.epub", title = "B" },
+                    { window = { prev = "Before.", next = " After." } })
+                for _idx, w in ipairs(cap.shown) do
+                    TestRunner:assert(not (type(w.title) == "string" and w.title:find("will send to", 1, true)),
+                        "Never asks nothing")
+                end
+                local material = cap.writer.messages[#cap.writer.messages].content
+                TestRunner:assert(not material:find("<text_around>", 1, true), material)
+            end)
+        end)
+        Gates.bookOverrides = real_overrides
+        package.loaded["koassistant.artifacts.action_cache"] = real_ac
+        if not ok then error(err, 0) end
+    end)
+    TestRunner:test("the passage's X-Ray entries reach the writer, judged by the X-Ray's stamps", function()
+        local Gates = require("koassistant.request.privacy_gates")
+        local real_ac, real_overrides = package.loaded["koassistant.artifacts.action_cache"], Gates.bookOverrides
+        package.loaded["koassistant.artifacts.action_cache"] = { parsedXrayFor = function()
+            return { data = { type = "fiction", characters = { { name = "Mara", description = "A red scarf." } } },
+                     entry = { used_book_text = true } }
+        end }
+        Gates.bookOverrides = function() return {} end
+        local ok, err = pcall(withApikeys, { openai = "sk-real-key" }, function()
+            withRun("A scene.", function(cap)
+                ImageGenerator._askAndRun("openai", "Mara ran.", config({ enable_book_text_extraction = true }),
+                    mockSettings({}), { file = "/books/b.epub", title = "B" }, {})
+                local material = cap.writer.messages[#cap.writer.messages].content
+                TestRunner:assert(material:find('<xray_entry name="Mara" type="person">A red scarf.</xray_entry>', 1, true),
+                    material)
+            end)
+            withRun("A scene.", function(cap)
+                -- book text on Ask: the question lists the descriptions
+                ImageGenerator._askAndRun("openai", "Mara ran.", config({}),
+                    mockSettings({}), { file = "/books/b.epub", title = "B" }, {})
+                TestRunner:assert(cap.shown[1] and cap.shown[1].title:find("the X-Ray descriptions of Mara", 1, true),
+                    cap.shown[1] and cap.shown[1].title)
+            end)
+        end)
+        package.loaded["koassistant.artifacts.action_cache"], Gates.bookOverrides = real_ac, real_overrides
+        if not ok then error(err, 0) end
     end)
 
     print("  [The main provider (B462)]")

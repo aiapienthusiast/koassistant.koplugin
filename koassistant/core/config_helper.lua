@@ -142,6 +142,7 @@ local SKIP_DEEP_COPY = {
     _rerun_action = true,   -- Action objects for re-execution
     _rerun_ui = true,       -- UI objects for re-execution
     _rerun_plugin = true,   -- Plugin objects for re-execution
+    _source_widget = true,  -- the dictionary popup a local action came from (its whole widget graph)
 }
 
 --- Normalize a user-entered local-server address to a root URL: trimmed,

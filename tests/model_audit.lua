@@ -4007,6 +4007,108 @@ local function runImageProbe(provider, model, api_key, shape, detail)
     return true
 end
 
+-- The prompt writer's bench (docs/image_round_plan.md S5): fixed material
+-- through the writer on a provider's fast model (the plugin's own system
+-- text, material, request config and handler), each written prompt printed
+-- and saved for reading. Invented passages and names: no book's text.
+ModelAudit.WRITER_BENCH = {
+    { id = "scene", passage = IMAGE_PROBE_PASSAGE,
+      book = { title = "The Lighthouse Keeper", author = "A. Writer" } },
+    { id = "entry-in-passage", passage = "Mara pulled the red scarf tighter and stepped onto the jetty.",
+      entries = { { name = "Mara", type = "person", aliases = { "the girl" },
+          description = "The keeper's daughter, about twelve, quick and watchful; dark hair cut short, a red wool scarf, oilskin boots too big for her." } },
+      around = { before = "The ferry was already pulling away.", after = " Behind her the lamp began to turn." } },
+    { id = "abstract", passage = "Grief, she had learned, was not a weight but a room you kept walking into." },
+    { id = "dialogue", passage = '"You\'re late," said the ferryman, not looking up from his ropes.',
+      around = { before = "The tide was turning when Ilse reached the slip.", after = " She dropped her bag into the boat." } },
+    { id = "setting", passage = "The market at Varn filled the square from the fountain to the cathedral steps; awnings of every colour snapped in the wind.",
+      book = { title = "The Salt Road", author = "B. Author" }, background = "Feels late medieval to me, somewhere on the Baltic." },
+    { id = "nonfiction", passage = "The printing press did not merely copy books faster; it changed who could argue with whom, and over what distance.",
+      book = { title = "Ink and Argument", author = "C. Historian" } },
+    { id = "map", passage = "The road ran north from the river ford, split at the old mill, and climbed in two arms toward the pass.",
+      style = "map" },
+    { id = "note", passage = "A small cottage at the edge of the moor.", note = "make it night, with one lit window" },
+    { id = "spoiler", passage = "She opened the letter.", spoiler = true,
+      around = { before = "The postman had come late, soaked through.", after = " Her hands shook." } },
+    { id = "entry-place", entry = { name = "the Black Rocks", type = "place",
+        description = "Jagged basalt at the mouth of the bay where the lighthouse stands; covered at high tide, black and slick with weed." } },
+    { id = "entry-idea", entry = { name = "Solitude", type = "idea",
+        description = "Living apart from others, chosen by the keeper and dreaded by his daughter; the book returns to it through the empty lamp room." },
+      style = "woodcut" },
+}
+
+local function runWriterBench(providers, apikeys)
+    local PromptWriter = require("koassistant.images.prompt_writer")
+    local ImageGenerator = require("koassistant.images.image_generator")
+    local ResponseParser = require("koassistant.api.response_parser")
+    local Base = require("koassistant.api.base")
+    local failures = 0
+    local saved = {}
+    for _i, main in ipairs(providers) do
+        local provider, model = PromptWriter.target({}, main)
+        banner("IMAGE PROMPT WRITER " .. tostring(provider) .. " / " .. tostring(model))
+        local key = keyFor(apikeys, provider)
+        local hok, Handler = pcall(require, "koassistant.api." .. tostring(provider))
+        if not TestConfig.isValidApiKey(key) then
+            printf("  %sno API key for %s%s", C.red, tostring(provider), C.off)
+            failures = failures + 1
+        elseif not hok or type(Handler) ~= "table" or type(Handler.buildRequestBody) ~= "function" then
+            printf("  %sno request builder for %s%s", C.red, tostring(provider), C.off)
+            failures = failures + 1
+        else
+            for _j, case in ipairs(ModelAudit.WRITER_BENCH) do
+                local features = { image_gen_style = case.style }
+                local system = PromptWriter.systemText({ subject = case.entry and "entry" or "passage",
+                    spoiler = case.spoiler })
+                local material = PromptWriter.material({
+                    passage = case.passage, entry = case.entry, note = case.note, around = case.around,
+                    entries = case.entries, book = case.book, background = case.background,
+                    style = (PromptWriter.styleText(features)),
+                    shape = PromptWriter.shapeLine("fit", PROBE_SCREEN.w / PROBE_SCREEN.h, true),
+                })
+                local cfg, sent = ImageGenerator.writerConfig({ provider = provider, features = {} },
+                    provider, model, system)
+                cfg.api_key = key
+                RUN.provider, RUN.model = provider, sent
+                local bok, built = pcall(Handler.buildRequestBody, Handler,
+                    { { role = "user", content = material } }, cfg)
+                if not bok or type(built) ~= "table" or not built.url then
+                    printf("  %s%-18s request not built: %s%s", C.red, case.id, tostring(built), C.off)
+                    failures = failures + 1
+                else
+                    if built.body.stream then built.body.stream = false end
+                    local t0 = require("socket").gettime()
+                    local code, decoded, raw = httpPostJson(built.url, Base.withUserAgent(built.headers), built.body)
+                    local secs = require("socket").gettime() - t0
+                    local ok, text = false, nil
+                    if code == 200 and decoded then ok, text = ResponseParser:parseResponse(decoded, provider) end
+                    local prompt, why = PromptWriter.finish(ok and type(text) == "string" and text or nil)
+                    if prompt then
+                        local words = select(2, prompt:gsub("%S+", ""))
+                        printf("  %s%-18s%s %.1f s, %d words\n    %s", C.green, case.id, C.off, secs, words, prompt)
+                        saved[#saved + 1] = string.format("## %s / %s / %s\n\n%s\n\n%s\n", provider, sent, case.id,
+                            material, prompt)
+                    else
+                        printf("  %s%-18s HTTP %s, no prompt (%s): %s%s", C.red, case.id, tostring(code),
+                            tostring(why), ModelAudit.errText(decoded, raw) or "", C.off)
+                        failures = failures + 1
+                    end
+                end
+            end
+        end
+    end
+    if #saved > 0 then
+        local path = (os.getenv("TMPDIR") or "/tmp/"):gsub("/?$", "/") .. "koassistant_image_writer_bench.md"
+        local f = io.open(path, "w")
+        if f then
+            f:write(table.concat(saved, "\n"))
+            f:close()
+            printf("\n  saved: %s", path)
+        end
+    end
+    return failures
+end
+
 local KEY_LABEL = { ok = "OK", key = "KEY", credits = "CREDITS", plan = "PLAN", rate = "BUSY",
                     model = "MODEL", error = "ERROR" }
 
@@ -4100,7 +4202,7 @@ local function main()
             print("Usage: lua tests/model_audit.lua [providers...] [--probe <provider> <model>] " ..
                   "[--probe-new] [--recheck [--ceilings]] [--pins] [--keys] [--images] " ..
                   "[--image-probe <provider> <model> [--shape fit|portrait|landscape|square|auto] " ..
-                  "[--detail draft|standard|best]] [--verbose]")
+                  "[--detail draft|standard|best]] [--image-writer [providers]] [--verbose]")
             os.exit(0)
         elseif a == "--verbose" or a == "-v" then
             verbose = true
@@ -4124,6 +4226,8 @@ local function main()
             mode = "keys"
         elseif a == "--images" then
             mode = "images"
+        elseif a == "--image-writer" then
+            mode = "image-writer"
         elseif a == "--image-probe" then
             mode = "image-probe"
             probe_provider, probe_model = arg[i + 1], arg[i + 2]
@@ -4170,8 +4274,13 @@ local function main()
     end
 
     if mode == "images" then
-        if #providers == 0 then providers = { "openai", "xai", "gemini" } end
+        if #providers == 0 then providers = { "openai", "xai", "gemini", "openrouter" } end
         finish(runImageDiscovery(providers, apikeys, verbose) > 0 and 1 or 0)
+    end
+
+    if mode == "image-writer" then
+        if #providers == 0 then providers = { "anthropic", "gemini" } end
+        finish(runWriterBench(providers, apikeys) > 0 and 1 or 0)
     end
 
     if mode == "image-probe" then
