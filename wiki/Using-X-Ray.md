@@ -4,7 +4,7 @@ X-Ray builds a browsable guide to the book you are reading: its people, places, 
 
 ## Quick start
 
-1. Turn on text extraction: Settings → Privacy & Data → Text Extraction → Allow Text Extraction. It is off by default to avoid unexpected token costs.
+1. Allow the book's text when X-Ray asks (the question names the amount; **Allow for this book** keeps your answer). Settings → Privacy & Data → Text Extraction → Book text sets it for all books.
 2. Open a book and tap **X-Ray** in the Quick Actions panel (or use a gesture you assigned, or **Show More Actions…** in the book's input dialog).
 3. In the X-Ray popup, tap **Create X-Ray…**, check the coverage and build picks, and tap **Create**. The AI needs a moment, longer for long books.
 4. Browse the result, or just read on: names the X-Ray knows get a dotted underline on the page, and a tap on one opens a short card.
@@ -13,20 +13,20 @@ The X-Ray is saved with the book. Build it once, then update it as you read furt
 
 ## Before you start
 
-**Text extraction is required.** X-Ray reads the book's text and nothing else: not your highlights, not your notes. Without text extraction it is blocked, with a message pointing you to the setting or to X-Ray (Simple). If you turn text extraction off after building an X-Ray, you can still view it but cannot update or rebuild it.
+**The book's text is required.** X-Ray reads the book's text and nothing else: not your highlights, not your notes. It asks for it the first time; with the text set to Never it is refused, with a button to the screen that holds the value, or use X-Ray (Simple). If you set the text to Never after building an X-Ray, you can still view it but cannot update or rebuild it.
 
 | Action | What it reads | Privacy setting |
 |---|---|---|
-| X-Ray | The book text up to your position (or the whole book, if you pick it) | Allow Text Extraction (required). Allow Highlights only adds your matching highlights to entry pages, matched on your device; nothing extra is sent |
-| X-Ray (Simple) | The AI's training knowledge of the book, and your reading progress | Allow Basic Stats (on by default), for the reading progress only |
+| X-Ray | The book text up to your position (or the whole book, if you pick it) | Book text (required; asked the first time). Your matching highlights are listed on entry pages whatever their value, matched on your device; nothing extra is sent |
+| X-Ray (Simple) | The AI's training knowledge of the book, and your reading progress | Reading position (on by default), for the reading progress only |
 
-**X-Ray does not send your highlights.** With Allow Highlights on, the browser matches your highlights on the device and lists them on each entry page. They leave the device only if you then chat about that entry, and only to a provider your highlight settings allow. See [Privacy and Data](Privacy-and-Data).
+**X-Ray does not send your highlights.** The browser matches your highlights on the device and lists them on each entry page. They leave the device only if you then chat about that entry: on Ask that chat asks first, under Never they stay out, and only a provider your highlights value allows receives them. See [Privacy and Data](Privacy-and-Data).
 
 **Building needs the book open.** X-Ray reads the live document, so it is not among the file browser's actions. An X-Ray you built can still be opened from the file browser: long-press the book → **Book Hub (KOA)** (its X-Ray, chats, notebook and settings in one place) or **View Artifacts (KOA)**.
 
 ## X-Ray and X-Ray (Simple)
 
-**X-Ray (Simple)** is a separate action: a prose overview (Characters, Themes, Setting, Key Terms, Where Things Stand) from the AI's training knowledge, with no text extraction. It uses your reading progress for spoiler gating. It is saved as its own artifact, so both can exist for the same book. Every run is fresh (no incremental updates); when your position advances, its popup offers an update, which regenerates at the new position. It is not in the Quick Actions panel by default (add it from the Quick Actions manager if you want it one tap away), and since it needs no open document it is a button in the input dialog of a book that is not open (a long-press in the file browser). It is best for well-known books when you don't want to enable text extraction; for obscure works or research papers the results are limited, since the AI may not recognize the title.
+**X-Ray (Simple)** is a separate action: a prose overview (Characters, Themes, Setting, Key Terms, Where Things Stand) from the AI's training knowledge, with no text extraction. It uses your reading progress for spoiler gating. It is saved as its own artifact, so both can exist for the same book. Every run is fresh (no incremental updates); when your position advances, its popup offers an update, which regenerates at the new position. It is not in the Quick Actions panel by default (add it from the Quick Actions manager if you want it one tap away), and since it needs no open document it is a button in the input dialog of a book that is not open (a long-press in the file browser). It is best for well-known books when you don't want to send the book's text; for obscure works or research papers the results are limited, since the AI may not recognize the title.
 
 The rest of this page is about X-Ray.
 
@@ -345,11 +345,11 @@ Automatic X-Ray keeps a book's X-Ray up to your reading position in the backgrou
 - Incremental track only: it never touches complete, AI-knowledge, older-format or section X-Rays.
 - After a step is declined, fails or is cancelled, it waits out the cooldown before trying again (Settings → Reading & Library → X-Ray → Cooldown (minutes), default 15, 0 = no wait; the row shows while Automatic X-Ray (all books) is on). A build that completes does not wait. Each step is bounded by the book's checkpoint spacing, so a single step is never oversized.
 - It runs only when WiFi is already on, and never turns WiFi on. After a book's first build is confirmed, it never prompts again.
-- It sends exactly what a manual update sends (the saved X-Ray, the entry index and only the newly read text) to your configured provider, and checks text-extraction consent (or a trusted provider) each time, like a manual update. Revoking consent silently stops it.
+- It sends exactly what a manual update sends (the saved X-Ray, the entry index and only the newly read text) to your configured provider, and checks that the book's text is allowed (the book's value, Allow for all books, or a trusted provider) each time, like a manual update. Never stops it; a book still on Ask is asked once, in the foreground.
 - A section end picked in the creation form also bounds it; Book Settings → X-Ray → **Build up to** shows or changes that limit.
 - EPUB and other flowing formats only: for a page-based book (PDF) the X-Ray popup leaves the row out, and Book Settings marks it "(no effect: page-based book)".
 
-Once you have confirmed a book's first build, Automatic X-Ray extracts book text and spends API tokens **without a per-request tap**. The interactive truncation and size warnings don't apply to background runs (an oversized background extraction stops instead of asking). Leave it off if you want every request to be deliberate.
+Once you have confirmed a book's first build, Automatic X-Ray extracts book text and spends API tokens **without a per-request tap**, under a standing Allow for the book's text: the confirm that turns it on carries the question when the book is still on Ask (**Allow for this book and start**), and a book whose automatic building is on but whose text is still on Ask is asked once, at the moment a checkpoint would build; Cancel there pauses automatic building for the book. The interactive truncation and size warnings don't apply to background runs (an oversized background extraction stops instead of asking). Leave it off if you want every request to be deliberate.
 
 Automatic building is quiet: a step that fails for a passing reason is retried without a word, and only a build that stops anyway shows a notice, which stays until you close it (see [When a build stops](#when-a-build-stops)). Turn on Settings → Reading & Library → X-Ray → Notify on Background Activity for a brief notification when background work starts and completes, and when a checkpoint is swapped in.
 

@@ -1945,9 +1945,9 @@ function PromptsManager:showStep3_Settings(state)
                 state.use_book_text = not state.use_book_text
                 if state.use_book_text then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if not features.enable_book_text_extraction then
+                    if require("koassistant.request.privacy_gates").summary({ features = features }).book_text.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Text extraction enabled. Note: Allow Text Extraction must be on (Settings → Privacy & Data → Text Extraction)."),
+                            text = _("Text extraction enabled. Note: book text is set to Never for all books (Settings → Privacy & Data → Text Extraction), so this action is refused until that changes."),
                             timeout = 4,
                         })
                     end
@@ -1975,9 +1975,9 @@ function PromptsManager:showStep3_Settings(state)
                 state.use_highlights = not state.use_highlights
                 if state.use_highlights then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_highlights_sharing ~= true and features.enable_annotations_sharing ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
+                    if require("koassistant.request.privacy_gates").summary({ features = features }).highlights.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Highlight use enabled. Note: Enable in Settings → Privacy & Data first."),
+                            text = _("Highlight use enabled. Note: highlights are set to Never for all books (Settings → Privacy & Data), so none are sent until that changes."),
                             timeout = 4,
                         })
                     end
@@ -1993,9 +1993,9 @@ function PromptsManager:showStep3_Settings(state)
                 if state.use_annotations then
                     state.use_highlights = true
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_annotations_sharing ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
+                    if require("koassistant.request.privacy_gates").summary({ features = features }).annotations.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Annotation use enabled. Note: Enable in Settings → Privacy & Data first."),
+                            text = _("Annotation use enabled. Note: annotation notes are set to Never for all books (Settings → Privacy & Data), so none are sent until that changes."),
                             timeout = 4,
                         })
                     end
@@ -2010,9 +2010,9 @@ function PromptsManager:showStep3_Settings(state)
                 state.use_notebook = not state.use_notebook
                 if state.use_notebook then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_notebook_sharing ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
+                    if require("koassistant.request.privacy_gates").summary({ features = features }).notebook.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Notebook use enabled. Note: Enable in Settings → Privacy & Data first."),
+                            text = _("Notebook use enabled. Note: the notebook is set to Never for all books (Settings → Privacy & Data), so it is not sent until that changes."),
                             timeout = 4,
                         })
                     end
@@ -2027,9 +2027,9 @@ function PromptsManager:showStep3_Settings(state)
                 state.use_library = not state.use_library
                 if state.use_library then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_library_scanning ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
+                    if require("koassistant.request.privacy_gates").summary({ features = features }).book_list.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Library use enabled. Note: Allow Library Scanning must be on (Settings → Privacy & Data)."),
+                            text = _("Library use enabled. Note: the book list is set to Never (Settings → Privacy & Data), so it is not sent until that changes."),
                             timeout = 4,
                         })
                     end
@@ -2048,9 +2048,9 @@ function PromptsManager:showStep3_Settings(state)
                 state.use_advanced_stats = not state.use_advanced_stats
                 if state.use_advanced_stats then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_advanced_stats ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
+                    if require("koassistant.request.privacy_gates").summary({ features = features }).habits.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Advanced stats enabled. Note: Enable in Settings → Privacy & Data first."),
+                            text = _("Advanced stats enabled. Note: reading habits are set to Never (Settings → Privacy & Data), so they are not sent until that changes."),
                             timeout = 4,
                         })
                     end
@@ -3722,9 +3722,9 @@ function PromptsManager:showBuiltinSettingsDialog(state)
                 state.use_book_text = not state.use_book_text
                 if state.use_book_text then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if not features.enable_book_text_extraction then
+                    if require("koassistant.request.privacy_gates").summary({ features = features }).book_text.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Text extraction enabled. Note: Allow Text Extraction must be on (Settings → Privacy & Data → Text Extraction)."),
+                            text = _("Text extraction enabled. Note: book text is set to Never for all books (Settings → Privacy & Data → Text Extraction), so this action is refused until that changes."),
                             timeout = 4,
                         })
                     else
@@ -3757,9 +3757,9 @@ function PromptsManager:showBuiltinSettingsDialog(state)
                 state.use_highlights = not state.use_highlights
                 if state.use_highlights then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_highlights_sharing ~= true and features.enable_annotations_sharing ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
+                    if require("koassistant.request.privacy_gates").summary({ features = features }).highlights.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Highlight use enabled. Note: Enable in Settings → Privacy & Data first."),
+                            text = _("Highlight use enabled. Note: highlights are set to Never for all books (Settings → Privacy & Data), so none are sent until that changes."),
                             timeout = 4,
                         })
                     end
@@ -3775,9 +3775,9 @@ function PromptsManager:showBuiltinSettingsDialog(state)
                 if state.use_annotations then
                     state.use_highlights = true
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_annotations_sharing ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
+                    if require("koassistant.request.privacy_gates").summary({ features = features }).annotations.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Annotation use enabled. Note: Enable in Settings → Privacy & Data first."),
+                            text = _("Annotation use enabled. Note: annotation notes are set to Never for all books (Settings → Privacy & Data), so none are sent until that changes."),
                             timeout = 4,
                         })
                     end
@@ -3793,9 +3793,9 @@ function PromptsManager:showBuiltinSettingsDialog(state)
                 state.use_notebook = not state.use_notebook
                 if state.use_notebook then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_notebook_sharing ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
+                    if require("koassistant.request.privacy_gates").summary({ features = features }).notebook.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Notebook use enabled. Note: Enable in Settings → Privacy & Data first."),
+                            text = _("Notebook use enabled. Note: the notebook is set to Never for all books (Settings → Privacy & Data), so it is not sent until that changes."),
                             timeout = 4,
                         })
                     else
@@ -3819,9 +3819,9 @@ function PromptsManager:showBuiltinSettingsDialog(state)
                 state.use_advanced_stats = not state.use_advanced_stats
                 if state.use_advanced_stats then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_advanced_stats ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
+                    if require("koassistant.request.privacy_gates").summary({ features = features }).habits.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Advanced stats enabled. Note: Enable in Settings → Privacy & Data first."),
+                            text = _("Advanced stats enabled. Note: reading habits are set to Never (Settings → Privacy & Data), so they are not sent until that changes."),
                             timeout = 4,
                         })
                     end
@@ -4717,9 +4717,9 @@ function PromptsManager:showCustomQuickSettingsDialog(state)
                 state.use_book_text = not state.use_book_text
                 if state.use_book_text then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if not features.enable_book_text_extraction then
+                    if require("koassistant.request.privacy_gates").summary({ features = features }).book_text.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Text extraction enabled. Note: Allow Text Extraction must be on (Settings → Privacy & Data → Text Extraction)."),
+                            text = _("Text extraction enabled. Note: book text is set to Never for all books (Settings → Privacy & Data → Text Extraction), so this action is refused until that changes."),
                             timeout = 4,
                         })
                     else
@@ -4752,9 +4752,9 @@ function PromptsManager:showCustomQuickSettingsDialog(state)
                 state.use_highlights = not state.use_highlights
                 if state.use_highlights then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_highlights_sharing ~= true and features.enable_annotations_sharing ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
+                    if require("koassistant.request.privacy_gates").summary({ features = features }).highlights.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Highlight use enabled. Note: Enable in Settings → Privacy & Data first."),
+                            text = _("Highlight use enabled. Note: highlights are set to Never for all books (Settings → Privacy & Data), so none are sent until that changes."),
                             timeout = 4,
                         })
                     end
@@ -4770,9 +4770,9 @@ function PromptsManager:showCustomQuickSettingsDialog(state)
                 if state.use_annotations then
                     state.use_highlights = true
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_annotations_sharing ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
+                    if require("koassistant.request.privacy_gates").summary({ features = features }).annotations.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Annotation use enabled. Note: Enable in Settings → Privacy & Data first."),
+                            text = _("Annotation use enabled. Note: annotation notes are set to Never for all books (Settings → Privacy & Data), so none are sent until that changes."),
                             timeout = 4,
                         })
                     end
@@ -4788,9 +4788,9 @@ function PromptsManager:showCustomQuickSettingsDialog(state)
                 state.use_notebook = not state.use_notebook
                 if state.use_notebook then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_notebook_sharing ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
+                    if require("koassistant.request.privacy_gates").summary({ features = features }).notebook.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Notebook use enabled. Note: Enable in Settings → Privacy & Data first."),
+                            text = _("Notebook use enabled. Note: the notebook is set to Never for all books (Settings → Privacy & Data), so it is not sent until that changes."),
                             timeout = 4,
                         })
                     else
@@ -4814,9 +4814,9 @@ function PromptsManager:showCustomQuickSettingsDialog(state)
                 state.use_advanced_stats = not state.use_advanced_stats
                 if state.use_advanced_stats then
                     local features = self.plugin.settings:readSetting("features") or {}
-                    if features.enable_advanced_stats ~= true then  -- raw-gate: an editor hint about the global switch, not a gate
+                    if require("koassistant.request.privacy_gates").summary({ features = features }).habits.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Advanced stats enabled. Note: Enable in Settings → Privacy & Data first."),
+                            text = _("Advanced stats enabled. Note: reading habits are set to Never (Settings → Privacy & Data), so they are not sent until that changes."),
                             timeout = 4,
                         })
                     end

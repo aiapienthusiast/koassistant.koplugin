@@ -85,6 +85,15 @@ function Attachments.count()
     return #staged
 end
 
+--- Whether an entry of this type is staged (the Send's data question asks
+--- for the notebook kind when one is).
+function Attachments.hasType(kind)
+    for _idx, e in ipairs(staged) do
+        if e.type == kind then return true end
+    end
+    return false
+end
+
 function Attachments.add(entry)
     if entry then table.insert(staged, entry) end
 end
@@ -103,24 +112,27 @@ function Attachments.isTrustedProvider(features, provider)
 end
 
 --- The notebook's consent for the provider a request goes to (the use_notebook
---- gate, attach_plan.md §4): the book's privacy override wins in both
---- directions (deny beats trusted), else notebook sharing or a trusted provider.
-function Attachments.notebookAllowed(features, provider, book_override)
+--- gate, attach_plan.md §4): the book's own value wins in both directions
+--- (Never beats trusted), then the run's allowance (the question's Allow once,
+--- on this config, for `path`), then notebook sharing or a trusted provider.
+function Attachments.notebookAllowed(features, provider, book_override, path)
+    local Gates = require("koassistant.request.privacy_gates")
     local book
     if book_override ~= nil then book = { notebook = book_override } end
-    return require("koassistant.request.privacy_gates").allows("notebook",
-        { features = features, provider = provider, book = book })
+    return Gates.allows("notebook",
+        { features = features, provider = provider, book = book, once = Gates.onceFor(features, path) })
 end
 
 --- The highlights' consent for the provider a request goes to (the
---- use_highlights gate): the book's override wins in both directions (deny
---- beats trusted), else highlights or annotations sharing, or a trusted
---- provider. Same rule as the extractor's.
-function Attachments.highlightsAllowed(features, provider, book_override)
+--- use_highlights gate): the book's own value wins in both directions (Never
+--- beats trusted), then the run's allowance for `path`, then highlights or
+--- annotations sharing, or a trusted provider. Same rule as the extractor's.
+function Attachments.highlightsAllowed(features, provider, book_override, path)
+    local Gates = require("koassistant.request.privacy_gates")
     local book
     if book_override ~= nil then book = { highlights = book_override } end
-    return require("koassistant.request.privacy_gates").allows("highlights",
-        { features = features, provider = provider, book = book })
+    return Gates.allows("highlights",
+        { features = features, provider = provider, book = book, once = Gates.onceFor(features, path) })
 end
 
 --- The X-Ray chat's text for the provider it goes to (B396 d). Its "Your
@@ -136,7 +148,9 @@ function Attachments.xrayChatTextFor(text, features, provider)
             or hl.block == "" then
         return text
     end
-    if Attachments.highlightsAllowed(features, provider, hl.override) then return text end
+    -- the chat's allowance (the question's Allow once) is bound to its book
+    local book_path = features.book_metadata and features.book_metadata.file
+    if Attachments.highlightsAllowed(features, provider, hl.override, book_path) then return text end
     if #text >= #hl.block and text:sub(-#hl.block) == hl.block then
         return text:sub(1, #text - #hl.block)
     end
@@ -163,7 +177,7 @@ function Attachments.forProvider(list, features, provider, ui)
     local out, dropped = {}, 0
     for _idx, e in ipairs(list) do
         if e.type == "notebook" and not Attachments.notebookAllowed(features, provider,
-                Attachments.notebookOverrideFor(e.path, ui)) then
+                Attachments.notebookOverrideFor(e.path, ui), e.path) then
             dropped = dropped + 1
         else
             out[#out + 1] = e
@@ -173,7 +187,7 @@ function Attachments.forProvider(list, features, provider, ui)
         require("koassistant.core.logger").warn("KOAssistant: notebook attachment left out: not allowed for", provider)
         local UIManager = require("ui/uimanager")
         UIManager:show(require("ui/widget/notification"):new{
-            text = _("Your notebook was left out: notebook sharing is off for this provider."),
+            text = _("Your notebook was left out: it is not allowed for this provider."),
             timeout = 3,
         })
     end

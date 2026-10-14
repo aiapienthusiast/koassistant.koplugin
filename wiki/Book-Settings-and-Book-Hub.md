@@ -43,7 +43,7 @@ Each row shows its current value: most read "Follow global (X)" when the book ha
 | **Highlight context** | Follow global / None / Sentence / Paragraph(s) / Characters | how much surrounding text goes with highlight chats and actions on this book |
 | **Dictionary context** | Follow global / None / Sentence / Paragraph(s) / Characters | the same for dictionary lookups on this book |
 
-**Book info** decides the generic context line: **None** sends no "Book: …" line (useful when the metadata clutters the context; explicit `{title}` and `{author}` placeholders still resolve, in built-in prompts and custom actions alike, so X-Ray and the other artifacts keep working); **Title only**; **Title & author** (the default, "Book: Title by Author"); **Title, author & position** adds the reading progress, the current chapter and the page, which needs Allow Basic Stats. A chat about a closed book includes its saved position too.
+**Book info** decides the generic context line: **None** sends no "Book: …" line (useful when the metadata clutters the context; explicit `{title}` and `{author}` placeholders still resolve, in built-in prompts and custom actions alike, so X-Ray and the other artifacts keep working); **Title only**; **Title & author** (the default, "Book: Title by Author"); **Title, author & position** adds the reading progress, the current chapter and the page, which needs Reading position (Settings → Privacy & Data). A chat about a closed book includes its saved position too.
 
 ### X-Ray
 
@@ -64,7 +64,7 @@ Everything these rows control is explained on [Using X-Ray](Using-X-Ray).
 
 ### Privacy
 
-Four overrides of the global sharing switches, **Highlights sharing**, **Annotations sharing**, **Notebook sharing** and **Text extraction**, each Follow global (On or Off) / On / Off, with a "How overrides work…" row. A per-book Off always wins, even over trusted providers; a per-book On lifts only the global switch, and actions still need their own data access. The rules are on [Privacy and Data](Privacy-and-Data#per-book-overrides).
+Five values of this book's own: **Book text**, **Highlights**, **Annotation notes**, **Notebook** and **Text around what you tap**, each Follow all books (the row shows the value that applies: Allow, Ask or Never) / Allow / Never, with a "How this works…" row. The question an action asks writes these rows too ("Allow for this book", "Not for this book"). A book's Never always wins, even over trusted providers; a book's Allow lifts only the global gate, and actions still need their own data access. The rules are on [Privacy and Data](Privacy-and-Data#per-book-values).
 
 ### Identity
 
@@ -111,5 +111,5 @@ Open it from a file-browser long-press ("Book Hub (KOA)", switchable under **Set
 - [Book Groups and Series](Book-Groups-and-Series): group settings, which a book can follow.
 - [Settings Reference](Settings-Reference): the global rows these override.
 - [Using X-Ray](Using-X-Ray): the X-Ray sub-screen's rows explained.
-- [Privacy and Data](Privacy-and-Data): the per-book privacy overrides.
+- [Privacy and Data](Privacy-and-Data): the per-book privacy values and the question that writes them.
 - [Artifacts and Caching](Artifacts-and-Caching): the artifacts the hub lists.

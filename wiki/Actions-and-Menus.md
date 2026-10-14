@@ -212,15 +212,15 @@ What the request includes:
 
 Data the action may use. The sensitive flags are double-gated: they need the global setting too, and a placeholder never switches them on ([Privacy and Data](Privacy-and-Data#double-gating-for-custom-actions)).
 
-- `use_book_text`: allow text extraction for this action. It is a permission gate and also needs the global **Allow Text Extraction**; the placeholders trigger the extraction: `{book_text_section}` extracts up to your position, `{full_document_section}` the whole document. It also gates the document cache placeholders.
-- `use_highlights`: include the book's highlights (text only, no notes). Needs Allow Highlights or Allow Annotation Notes.
-- `use_annotations`: include annotations (highlights with your notes). Needs Allow Annotation Notes.
-- `use_notebook`: include the book's KOAssistant notebook. Needs Allow Notebook.
-- `use_library`: include the library catalog (`{library_section}`). Needs Allow Library Scanning plus configured scan folders (triple-gated).
-- `use_advanced_stats`: include reading engagement groups (`{deep_reads}`, `{stalled}`, `{recently_finished}`, `{briefly_started}` and their section forms) and per-book engagement labels in library output. Needs Allow Advanced Stats and this flag. Used by the library scan actions Next Read, Discover New, Analyze Library and Challenge My Taste.
+- `use_book_text`: allow text extraction for this action. It is a permission gate and also needs the book's text allowed (**Settings → Privacy & Data → Text Extraction → Book text**, or your answer when it asks); the placeholders trigger the extraction: `{book_text_section}` extracts up to your position, `{full_document_section}` the whole document. It also gates the document cache placeholders.
+- `use_highlights`: include the book's highlights (text only, no notes). Needs highlights or annotation notes allowed.
+- `use_annotations`: include annotations (highlights with your notes). Needs annotation notes allowed.
+- `use_notebook`: include the book's KOAssistant notebook. Needs the notebook allowed.
+- `use_library`: include the library catalog (`{library_section}`). Needs the book list allowed plus configured scan folders (triple-gated).
+- `use_advanced_stats`: include reading engagement groups (`{deep_reads}`, `{stalled}`, `{recently_finished}`, `{briefly_started}` and their section forms) and per-book engagement labels in library output. Needs reading habits allowed and this flag. Used by the library scan actions Next Read, Discover New, Analyze Library and Challenge My Taste.
 - `use_summary_cache` / `use_xray_cache` / `use_analyze_cache`: let the matching document cache placeholder resolve (double-gated; see [Document caches](#tips-for-custom-actions) above).
-- `use_reading_progress`: include the reading position (`{reading_progress}`, `{progress_decimal}`, `{time_since_last_read}`). Needs Allow Basic Stats.
-- `use_reading_stats`: chapter information (`{chapter_title}`, `{chapters_read}`, `{page_number}`). Needs Allow Basic Stats; inferred from those placeholders.
+- `use_reading_progress`: include the reading position (`{reading_progress}`, `{progress_decimal}`, `{time_since_last_read}`). Needs Reading position on.
+- `use_reading_stats`: chapter information (`{chapter_title}`, `{chapters_read}`, `{page_number}`). Needs Reading position on; inferred from those placeholders.
 - `use_surrounding_context`: include the text around a highlight; inferred from the `{surrounding_context}` placeholder. `false` never includes it, `true` always does, unset follows the Surrounding Context setting.
 - `use_page_text`: include the text of the visible page (`{page_text_section}`). A single page, so no text-extraction gate; inferred from the placeholder.
 

@@ -943,6 +943,9 @@ function XrayAuto.beginLadderBuild(file, rungs, labels, opts)
     one_shot = (opts and opts.one_shot) or nil,
     -- A run option (B345) on a one-shot build: its rung runs on that model
     run_variant = (opts and opts.one_shot and opts.run_variant) or nil,
+    -- The kinds the build's start was allowed once (B395): every rung it
+    -- planned runs under them, never the automatic continuation
+    data_once = (opts and opts.data_once) or nil,
     -- Planned to the reader's position (no introduction step): a Resume
     -- re-plans it the same way (B389)
     to_position = (opts and opts.to_position) or nil,
@@ -1078,11 +1081,19 @@ function XrayAuto.isAutoSuppressed(file)
   return file ~= nil and auto_suppressed[file] ~= nil
 end
 
---- A book close lifts a cancel's pause (reopening the book starts fresh) and
---- keeps a stop's: the step that stopped would fail the same way. Either ends
---- with the session (B362).
+--- Why automatic building is paused for a book ("cancelled", "stopped",
+--- "consent": the data question was declined), nil when it is not.
+function XrayAuto.autoSuppressReason(file)
+  return file ~= nil and auto_suppressed[file] or nil
+end
+
+--- A book close lifts a cancel's pause and a declined question's (reopening
+--- the book starts fresh, and asks again) and keeps a stop's: the step that
+--- stopped would fail the same way. Either ends with the session (B362).
 function XrayAuto.liftPauseOnClose(file)
-  if file and auto_suppressed[file] == "cancelled" then auto_suppressed[file] = nil end
+  if file and (auto_suppressed[file] == "cancelled" or auto_suppressed[file] == "consent") then
+    auto_suppressed[file] = nil
+  end
 end
 
 -- B362: the stops the same step would hit again (the answer cut off at its

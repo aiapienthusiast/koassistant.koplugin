@@ -850,7 +850,7 @@ end
 -- wire adapter), "consent" (no text-extraction consent), or "no_book". The reason lets
 -- UI callers (the smart-retrieval popup row) explain a grayed option; boolean-only
 -- callers are unaffected.
-function BookToolRunner.sessionEligible(config, ui)
+function BookToolRunner.sessionEligible(config, ui, opts)
     local features = config and config.features or {}
     -- The tools search the OPEN book: a request about another book (a chat
     -- started from a Book Hub or a group hub while this one is open) has
@@ -867,12 +867,16 @@ function BookToolRunner.sessionEligible(config, ui)
     if not (ModelConstraints.supportsCapability(provider, model, "tools") and ToolWire.hasAdapter(provider)) then
         return false, "provider"
     end
-    -- Tools are a form of book-text extraction → respect the consent gate
-    -- (trusted bypass); the per-book privacy override wins in both directions
-    -- (deny beats trusted).
+    -- Tools are a form of book-text extraction → the book-text gate of
+    -- koassistant/request/privacy_gates.lua, for the provider the passages
+    -- reach: the book's own value, the run's allowance (Allow once), trust,
+    -- the switch. opts.offer = true asks whether tools can be OFFERED (a row,
+    -- a chip): everything but Never; the session itself needs "allow", and the
+    -- question comes from the surface that starts it (B395 slice 2).
     local Gates = require("koassistant.request.privacy_gates")
-    local consent = Gates.allows("book_text", { features = features, provider = provider,
-        book = Gates.overridesOf(ui and ui.doc_settings) })
+    local ctx = Gates.context(features, provider,
+        { ds = ui and ui.doc_settings, path = ui and ui.document and ui.document.file })
+    local consent = (opts and opts.offer) and Gates.usable("book_text", ctx) or Gates.allows("book_text", ctx)
     if not consent then
         return false, "consent"
     end
@@ -882,13 +886,23 @@ function BookToolRunner.sessionEligible(config, ui)
     return true
 end
 
+--- The book-text state a tool session would run under, for the surface that
+--- must ask before it starts: "allow" | "ask" | "never".
+function BookToolRunner.consentState(config, ui)
+    local features = config and config.features or {}
+    local provider = config and (config.provider or config.default_provider)
+    local Gates = require("koassistant.request.privacy_gates")
+    return (Gates.resolve("book_text", Gates.context(features, provider,
+        { ds = ui and ui.doc_settings, path = ui and ui.document and ui.document.file })))
+end
+
 -- D3 smart retrieval gate (tools_ux_plan.md §4): allowed when the session could
 -- run tools. The old posture-off master switch is gone (binary collapse
 -- 2026-08-12 — Off is a chip DEFAULT, not a hard kill), so this is now a thin
 -- alias of sessionEligible kept for its call sites and reason strings:
--- "provider" | "consent" | "no_book".
-function BookToolRunner.smartRetrievalAllowed(config, ui)
-    return BookToolRunner.sessionEligible(config, ui)
+-- "provider" | "consent" | "no_book". opts.offer: see sessionEligible.
+function BookToolRunner.smartRetrievalAllowed(config, ui, opts)
+    return BookToolRunner.sessionEligible(config, ui, opts)
 end
 
 function BookToolRunner.shouldUse(config, ui)

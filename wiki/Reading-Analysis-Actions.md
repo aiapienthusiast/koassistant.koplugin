@@ -4,7 +4,7 @@ The book actions that work on what you are reading: Recap to get back into a boo
 
 ## X-Ray
 
-X-Ray builds a browsable reference guide to the book from its text, up to your reading position, and keeps it current as you read. It requires text extraction and blocks without it. **X-Ray (Simple)** is a separate prose overview (Characters, Themes, Setting, Key Terms, Where Things Stand) from the AI's training knowledge: no text extraction needed, spoiler-gated by your reading progress, best for well-known books. Both are covered in [Using X-Ray](Using-X-Ray).
+X-Ray builds a browsable reference guide to the book from its text, up to your reading position, and keeps it current as you read. It requires the book's text: it asks the first time, and is refused when the text is set to Never. **X-Ray (Simple)** is a separate prose overview (Characters, Themes, Setting, Key Terms, Where Things Stand) from the AI's training knowledge: no text extraction needed, spoiler-gated by your reading progress, best for well-known books. Both are covered in [Using X-Ray](Using-X-Ray).
 
 ## What each action reads
 
@@ -12,32 +12,32 @@ Most of these actions read your own reading data, so they need the matching sett
 
 | Action | What it analyzes | Setting required |
 |---|---|---|
-| **X-Ray** | Book text up to your current position | Allow Text Extraction (required). Allow Highlights only adds the local highlights list on entry pages; nothing extra is sent |
+| **X-Ray** | Book text up to your current position | Book text (required; asked the first time). Highlights are only listed locally on entry pages; nothing extra is sent |
 | **X-Ray (Simple)** | AI training knowledge + reading progress | None |
-| **Recap** | Book text up to your current position, or AI knowledge (your choice), + your highlights | Allow Text Extraction (for extracted text), Allow Highlights |
-| **Analyze Notes** | Your highlights and annotations, plus the book's notebook and summary when allowed | Allow Highlights or Allow Annotation Notes (your notes need Allow Annotation Notes, the notebook Allow Notebook) |
-| **Key Arguments** | Full text, summary, or AI knowledge (your choice) | Allow Text Extraction (for full text or summary) |
-| **Counterarguments** | Full text, summary, or AI knowledge (your choice) | Allow Text Extraction (for full text or summary) |
-| **Discussion Questions** | Full text, summary, or AI knowledge (your choice) | Allow Text Extraction (for full text or summary) |
-| **Quiz** | Full text, summary, or AI knowledge (your choice) | Allow Text Extraction (for full text or summary) |
-| **Extract Key Insights** | Full text, summary, or AI knowledge (your choice) | Allow Text Extraction (for full text or summary) |
-| **Reading Guide** | Full text, summary, or AI knowledge (your choice) + reading progress | Allow Text Extraction (for full text or summary) |
-| **Document Analysis** | The entire document or a section (your choice) | Allow Text Extraction (required) |
-| **Document Summary** | The entire document or a section (your choice) | Allow Text Extraction (required) |
+| **Recap** | Book text up to your current position, or AI knowledge (your choice), + your highlights | Book text (for extracted text), Highlights |
+| **Analyze Notes** | Your highlights and annotations, plus the book's notebook and summary when allowed | Highlights (required) or Annotation notes (your notes need Annotation notes, the notebook Notebook) |
+| **Key Arguments** | Full text, summary, or AI knowledge (your choice) | Book text (for full text or summary) |
+| **Counterarguments** | Full text, summary, or AI knowledge (your choice) | Book text (for full text or summary) |
+| **Discussion Questions** | Full text, summary, or AI knowledge (your choice) | Book text (for full text or summary) |
+| **Quiz** | Full text, summary, or AI knowledge (your choice) | Book text (for full text or summary) |
+| **Extract Key Insights** | Full text, summary, or AI knowledge (your choice) | Book text (for full text or summary) |
+| **Reading Guide** | Full text, summary, or AI knowledge (your choice) + reading progress | Book text (for full text or summary) |
+| **Document Analysis** | The entire document or a section (your choice) | Book text (required) |
+| **Document Summary** | The entire document or a section (your choice) | Book text (required) |
 | **About** | AI training knowledge (+ web search when it is on) | None |
-| **Suggest from Library** | Library catalog + current book + reading progress | Allow Library Scanning + folders configured |
-| **Next Read** | Library catalog + engagement groups (recently finished, stalled, briefly started) | Allow Library Scanning + folders configured; Allow Advanced Stats (optional, adds engagement data) |
-| **Discover New** | Library catalog + engagement groups (deep reads, recently finished) | Allow Library Scanning + folders configured; Allow Advanced Stats (optional) |
-| **Analyze Library** | Library catalog + all engagement groups | Allow Library Scanning + folders configured; Allow Advanced Stats (optional) |
-| **Challenge My Taste** | Library catalog + all engagement groups | Allow Library Scanning + folders configured; Allow Advanced Stats (optional) |
+| **Suggest from Library** | Library catalog + current book + reading progress | Book list (required) + folders configured |
+| **Next Read** | Library catalog + engagement groups (recently finished, stalled, briefly started) | Book list (required) + folders configured; Reading habits (optional, adds engagement data) |
+| **Discover New** | Library catalog + engagement groups (deep reads, recently finished) | Book list (required) + folders configured; Reading habits (optional) |
+| **Analyze Library** | Library catalog + all engagement groups | Book list (required) + folders configured; Reading habits (optional) |
+| **Challenge My Taste** | Library catalog + all engagement groups | Book list (required) + folders configured; Reading habits (optional) |
 
 The last four are library actions: see [Contexts and Chat](Contexts-and-Chat) for library mode and [Privacy and Data](Privacy-and-Data) for what each setting shares.
 
-These actions don't get your reading data unless you enable the matching setting. Without text extraction, an action with source selection has only **AI knowledge only** available; the other actions fall back to the AI's training knowledge, with a "*Response generated without: ...*" notice in the chat. X-Ray, Document Summary and Document Analysis are the exception: they block, with a message telling you to enable text extraction (or, for X-Ray, to use X-Ray (Simple) instead). A result you generated earlier stays viewable after you turn text extraction off, but you cannot regenerate or redo it.
+These actions don't get your reading data unless you allow it: each kind is asked for the first time an action wants it (the question names the action, the provider and the amount), and your answer can be kept for the book. With book text set to Never, an action with source selection has only **AI knowledge only** available; the other actions fall back to the AI's training knowledge, with a "*Response generated without: ...*" notice in the chat. X-Ray, Document Summary and Document Analysis are the exception: they are refused, with a button to the screen that holds the value (or, for X-Ray, use X-Ray (Simple) instead). A result you generated earlier stays viewable after you set the text to Never, but you cannot regenerate or redo it.
 
 With **AI knowledge only** as the source, an action that normally runs without web search follows your web search setting, since without the book's text a search can help check what the AI recalls.
 
-> **To enable text extraction:** Settings → Privacy & Data → Text Extraction → Allow Text Extraction. It is off by default to avoid unexpected token costs.
+> **Book text:** Settings → Privacy & Data → Text Extraction → Book text, Ask by default (the question names the amount, to avoid unexpected token costs), Allow to skip the question, Never to refuse.
 
 Highlight actions use text extraction too: **Explain in Context** and **Analyze in Context** send the document text through their source popup (`{document_context_section}`: the full text, a section, the summary or the passages smart retrieval finds, as you pick) to understand your passage within the work. See [Contexts and Chat](Contexts-and-Chat#source-selection).
 
@@ -55,8 +55,8 @@ A "Previously on..." refresher to help you get back into a book after time away:
 
 Recap works with source selection: choose between extracted text (recommended, with incremental updates as you read) or AI knowledge only.
 
-- **With text extraction** (recommended): the AI analyzes the actual book content and produces accurate, book-specific results. Results are cached and labeled "Based on extracted document text."
-- **Without text extraction** (the default, since extraction is off by default): the AI uses only the title and author and its training knowledge. This works reasonably for well-known titles but produces generic results. Results are labeled "Based on AI training data knowledge."
+- **With the book's text** (recommended): the AI analyzes the actual book content and produces accurate, book-specific results. Results are cached and labeled "Based on extracted document text."
+- **Without it** (when you pick AI knowledge, or the text is set to Never): the AI uses only the title and author and its training knowledge. This works reasonably for well-known titles but produces generic results. Results are labeled "Based on AI training data knowledge."
 
 A recap always runs up to your current position: its scope row reads **Up to current position (NN%)**, and **From section… (to NN%)** starts it at a chapter you pick. It cannot be pointed at an arbitrary section or a section range (a catch-up is always up to where you are), and a summary cannot stand in for the text.
 
@@ -68,7 +68,7 @@ Use KOReader's hidden flows to limit Recap to specific chapters or parts of the 
 
 A comprehensive summary that keeps the key details, arguments and structure and covers the whole work evenly from beginning to end. It is saved as the **Summary** artifact, which other actions can use as their document source: actions with source selection can send this summary (a few thousand tokens) instead of the full text (often 100K tokens or more), which is much cheaper for repeated use and follow-up conversations. See [Artifacts and Caching](Artifacts-and-Caching) for the summary as a reusable source.
 
-- It requires text extraction: it blocks when extraction is off, and its other sources are grayed out.
+- It requires the book's text: it asks the first time, is refused when the text is set to Never, and its other sources are grayed out.
 - It can target a section. When another action is scoped to that section and uses the summary, the section summary is used.
 - For documents you'll query several times, generate the summary early.
 - Custom actions read it with `{summary_cache_section}` ([Template Variables](Template-Variables)).
@@ -77,7 +77,7 @@ A comprehensive summary that keeps the key details, arguments and structure and 
 
 A deep analysis suited to the document's type and purpose: the core thesis, argument or narrative, how the ideas are organized, the key insights, findings or themes, the intended audience and context, and strengths and areas for improvement. It is saved as the **Analysis** artifact; custom actions can reference it with `{analyze_cache_section}`.
 
-- It requires text extraction (it blocks without it) and reads the entire document or a section.
+- It requires the book's text (asked the first time; refused under Never) and reads the entire document or a section.
 - It is in neither Quick Actions nor the input dialog's list by default: run it from **Show More Actions…** in the book's input dialog, or add it where you want it.
 - It follows your reasoning setting (unlike X-Ray, it has no reasoning pin). On short, dense works more reasoning can noticeably improve it: see [Reasoning, Web Search and Book Tools](Reasoning-Web-Search-and-Book-Tools).
 
@@ -95,8 +95,8 @@ For a paper in research mode, About writes a research overview instead: see [Res
 
 Looks at you as a reader, through your highlights and notes, rather than summarizing the work: the kinds of passages that catch your attention, the threads you seem to be tracking and connections between highlights you may not have noticed, what your notes reveal about how your thinking is evolving, the questions you seem to be asking, and suggestions (parts to revisit, themes to watch for, connections to other works). It is asked not to reveal anything beyond your reading position.
 
-- It needs **Allow Highlights** or **Allow Annotation Notes** and blocks when neither is allowed. With highlights only, it works from the highlighted passages; your notes reach it with Allow Annotation Notes.
-- With **Allow Notebook** on it also reads the book's notebook. When the book has a Document Summary and text extraction is allowed, it sends the summary too, so the AI knows what your notes are about.
+- It needs your highlights or annotation notes: it asks the first time and is refused when both are set to Never. With highlights only, it works from the highlighted passages; your notes reach it when annotation notes are allowed.
+- When the notebook is allowed it also reads the book's notebook. When the book has a Document Summary and the book's text is allowed, it sends the summary too, so the AI knows what your notes are about.
 - It reads the book's sidecar files, so it also runs from the file browser.
 - The result is saved as an artifact; run it again as you add notes.
 
@@ -138,7 +138,7 @@ Question count, difficulty and the question types come from the [chapter quiz se
 
 KOAssistant can offer a quiz when you finish a chapter. It is off by default: turn on **Settings → Reading & Library → Chapter Quiz → Quiz on Chapter End** (the submenu row reads "Chapter Quiz: On" or "Chapter Quiz: Off"). It needs a book with a table of contents.
 
-When you turn the page out of a chapter into the next one, a popup says "End of: *chapter*. Would you like a comprehension quiz?" with **Quiz**, **Skip**, **Not for this book** (turns chapter quizzes off for this book) and **Quiz settings…** (this book's quiz settings, after which the offer comes back). The quiz covers that chapter's own pages (their text is sent when text extraction is allowed). If you read through several chapters, the newest offer replaces the previous one.
+When you turn the page out of a chapter into the next one, a popup says "End of: *chapter*. Would you like a comprehension quiz?" with **Quiz**, **Skip**, **Not for this book** (turns chapter quizzes off for this book) and **Quiz settings…** (this book's quiz settings, after which the offer comes back). The quiz covers that chapter's own pages (their text is sent when the book's text is allowed; the first time, it asks). If you read through several chapters, the newest offer replaces the previous one.
 
 No offer comes:
 
@@ -182,14 +182,14 @@ It skips books you haven't started and books past 95%. For a book with no record
 
 When you reach the end of a book, KOAssistant offers to suggest what to read next from your library ("Would you like an AI suggestion for what to read next from your library?"), just after KOReader's own end-of-book popup. **Suggest** runs **Suggest from Library**, which suggests three to five books you already own, based on the book you are reading and your reading patterns.
 
-- **Settings → Reading & Library → Suggest Next Read on Finish** (default: On). It only activates when library scanning is enabled with at least one folder configured: **Settings → Reading & Library → Allow Library Scanning** and **Permanent Scan Folders**.
+- **Settings → Reading & Library → Suggest Next Read on Finish** (default: On). It only activates when the book list is on Allow with at least one folder configured (it has no moment to ask): **Settings → Reading & Library → Book list** and **Permanent Scan Folders**.
 - When the book's last chapter has a quiz to offer, the quiz takes the end-of-book moment and the suggestion is skipped that time.
 
 Suggest from Library is also an ordinary book action, in Quick Actions by default. It sends your library catalog (title, author, series, status, progress, last read date): see [Privacy and Data](Privacy-and-Data).
 
 ## Scope, sections and spoilers
 
-**Whole-document actions.** Document Analysis, Document Summary, Extract Key Insights, Key Arguments, Counterarguments, Discussion Questions, Quiz and Reading Guide (and, on highlights, Explain in Context, Analyze in Context and Thematic Connection) use the entire document as their context. Document Analysis and Document Summary require text extraction and block without it, like X-Ray. The actions with source selection let you choose full text, a saved summary or AI knowledge only; [Contexts and Chat](Contexts-and-Chat) describes the scope and source popup. They adapt to your content type and work especially well with [domains](Prompts-Behaviors-and-Domains): with a "Linguistics" domain active, analyzing a linguistics paper naturally focuses on the relevant aspects.
+**Whole-document actions.** Document Analysis, Document Summary, Extract Key Insights, Key Arguments, Counterarguments, Discussion Questions, Quiz and Reading Guide (and, on highlights, Explain in Context, Analyze in Context and Thematic Connection) use the entire document as their context. Document Analysis and Document Summary require the book's text and are refused when it is set to Never, like X-Ray. The actions with source selection let you choose full text, a saved summary or AI knowledge only; [Contexts and Chat](Contexts-and-Chat) describes the scope and source popup. They adapt to your content type and work especially well with [domains](Prompts-Behaviors-and-Domains): with a "Linguistics" domain active, analyzing a linguistics paper naturally focuses on the relevant aspects.
 
 **Spoiler safety.** Recap, like X-Ray, extracts only up to your current reading position (`{book_text_section}`). The other text-extraction actions default to the full document, but their scope popup also offers **Up to current position**, **From section…** and section ranges, and pre-selects **Up to current position** while spoiler protection is on for the book; running a scope that covers text you haven't read asks once first ([Spoiler Protection](Spoiler-Protection)). For a spoiler-free variant of a custom action, use `{book_text_section}` instead of `{full_document_section}` ([Template Variables](Template-Variables)).
 

@@ -24,7 +24,7 @@ The document view lists, in order: a **Starred** folder with every starred chat 
 
 ## Notebooks
 
-A notebook is one persistent Markdown file per book for the AI insights, notes and observations you want to keep, as opposed to chat history, which keeps whole conversations. Custom actions can read it with the `{notebook}` placeholder ([Template Variables](Template-Variables)), and **→ Chat** in the notebook's window ("Chat about this notebook") tells the AI the notebook is your own notes. Both need notebook sharing: **Settings → Privacy & Data → Allow Notebook** (off by default), a trusted provider, or an allow in the book's own privacy overrides ([Privacy and Data](Privacy-and-Data)).
+A notebook is one persistent Markdown file per book for the AI insights, notes and observations you want to keep, as opposed to chat history, which keeps whole conversations. Custom actions can read it with the `{notebook}` placeholder ([Template Variables](Template-Variables)), and **→ Chat** in the notebook's window ("Chat about this notebook") tells the AI the notebook is your own notes. Both follow the notebook's value: Ask by default (the chat asks the first time, and **Allow for this book** keeps your answer), **Settings → Privacy & Data → Notebook** for all books, a trusted provider, or the book's own value ([Privacy and Data](Privacy-and-Data)).
 
 ### Where notebooks are stored
 

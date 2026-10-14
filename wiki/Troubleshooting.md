@@ -4,45 +4,45 @@ What to check when something does not work, in the order people usually need it:
 
 ## Features not working or empty data
 
-If Analyze Notes, Connect (With Notes), X-Ray or Recap seem to ignore your reading data: **most reading data is opt-in.** Check **Settings → Privacy & Data** and enable the setting the feature needs.
+If Analyze Notes, Connect (With Notes), X-Ray or Recap seem to ignore your reading data: **every kind of reading data is asked for the first time an action wants it, and a kind set to Never is left out.** Check what you answered (Book Settings → Privacy for the book) and **Settings → Privacy & Data** for all books.
 
 | Feature not working | Enable this setting |
 |---|---|
-| Analyze Notes is blocked ("This action requires access to your highlights or annotations") | Allow Highlights or Allow Annotation Notes |
-| Connect (With Notes) ignores your notes | Allow Annotation Notes and Allow Notebook |
-| Recap misses your highlights | Allow Highlights (or Allow Annotation Notes). X-Ray does not use highlights: it reads the book's text only |
-| X-Ray is blocked ("Text extraction is required to generate this artifact") | Allow Text Extraction (**Settings → Privacy & Data → Text Extraction**), or use X-Ray (Simple) instead |
-| Document Analysis or Document Summary is blocked | Allow Text Extraction |
-| Recap uses only the book's title | Allow Text Extraction |
-| Explain in Context or Analyze in Context use only the title | Allow Text Extraction |
-| Analyze in Context ignores your highlights or notes | Allow Highlights; Allow Annotation Notes adds your notes, Allow Notebook your notebook |
-| A custom action with `{highlights}` stays empty | Allow Highlights (or Allow Annotation Notes), and the action's own "Allow highlight use" flag |
-| A custom action with `{notebook}` stays empty | Allow Notebook, and the action's own "Allow notebook use" flag |
-| A custom action with `{book_text}` stays empty | Allow Text Extraction, and the action's own "Allow text extraction" flag |
+| Analyze Notes is refused ("needs highlights, which is set to Never") | Highlights or Annotation notes set to Never for the book or for all books; set it to Ask or Allow |
+| Connect (With Notes) ignores your notes | Annotation notes and Notebook: answer Allow when it asks, or set them to Allow |
+| Recap misses your highlights | Highlights (or Annotation notes): answer Allow when it asks, or check for a Never. X-Ray does not use highlights: it reads the book's text only |
+| X-Ray is refused ("needs book text, which is set to Never") | Book text set to Never for the book or for all books (**Settings → Privacy & Data → Text Extraction**); set it to Ask or Allow, or use X-Ray (Simple) instead |
+| Document Analysis or Document Summary is refused | Book text set to Never |
+| Recap uses only the book's title | Book text: answer Allow when it asks, or check for a Never |
+| Explain in Context or Analyze in Context use only the title | Book text: pick a text source in their popup and answer Allow, or check for a Never |
+| Analyze in Context ignores your highlights or notes | Highlights; Annotation notes add your notes, Notebook your notebook: answer Allow when it asks |
+| A custom action with `{highlights}` stays empty | Highlights (or Annotation notes) allowed, and the action's own "Allow highlight use" flag |
+| A custom action with `{notebook}` stays empty | Notebook allowed, and the action's own "Allow notebook use" flag |
+| A custom action with `{book_text}` stays empty | Book text allowed, and the action's own "Allow text extraction" flag |
 
-**Why:** personal data (highlights, annotations, notebook) is not shared with AI providers by default; you opt in. Highlights, annotations, notebook and text extraction can each be set for one book in **Book Settings → Privacy**, and a book set to deny wins over the setting here, even for a trusted provider. The whole model is on [Privacy and Data](Privacy-and-Data).
+**Why:** personal data (highlights, annotation notes, notebook, book text) is not shared with AI providers unasked: each kind is on Ask, the first action that wants it asks, and "Not for this book" in that question sets the book's value to Never. Book text, highlights, annotation notes, the notebook and the text around what you tap can each be set for one book in **Book Settings → Privacy**, and a book's Never wins over the value here, even for a trusted provider. The whole model is on [Privacy and Data](Privacy-and-Data).
 
-Actions that use document text still work when text extraction is off: they do not fail, the AI is told to use its training knowledge and to be honest about what it does not recognize. For well-known books that often gives reasonable results; for obscure works or papers, enable text extraction. With text extraction on and a provider and model that support tool calls, Explain in Context and Analyze in Context can search the book for the passages they need (**Smart retrieval** in their source popup) instead of sending a full extraction; see [Reasoning, Web Search and Book Tools](Reasoning-Web-Search-and-Book-Tools).
+Actions that use document text still work without it: they do not fail, the AI is told to use its training knowledge and to be honest about what it does not recognize. For well-known books that often gives reasonable results; for obscure works or papers, allow the book's text. With book text allowed and a provider and model that support tool calls, Explain in Context and Analyze in Context can search the book for the passages they need (**Smart retrieval** in their source popup) instead of sending a full extraction; see [Reasoning, Web Search and Book Tools](Reasoning-Web-Search-and-Book-Tools).
 
-**Quick fix:** **Settings → Privacy & Data → Preset: Full** turns on all data sharing at once; then enable **Allow Text Extraction** separately, since the preset leaves it alone and most rows above need it.
+**Quick fix:** **Settings → Privacy & Data → Preset: Allow everything** sends every kind without a question, book text included; **Preset: Ask about everything** brings the questions back.
 
 **See what an action needs:** **Settings → Display Settings → Emoji → Emoji Data Access Indicators** adds a suffix to each action's name showing what it accesses (📄 🔖 📝 📓 📚 📊 🌐; the legend is on [Privacy and Data](Privacy-and-Data#seeing-what-an-action-uses)). It needs an emoji font, below.
 
 ## Text extraction not working
 
-If Recap, Explain in Context, Analyze in Context or a custom action with `{book_text}` or `{full_document}` return empty or generic answers based only on the title (X-Ray blocks generation entirely without it; X-Ray (Simple) is the alternative):
+If Recap, Explain in Context, Analyze in Context or a custom action with `{book_text}` or `{full_document}` return empty or generic answers based only on the title (X-Ray is refused without it; X-Ray (Simple) is the alternative):
 
-**Text extraction is off by default.** Turn it on by hand:
+**Book text is asked for the first time an action wants it.** If you answered "Not for this book", the book's value is Never: Book Settings → Privacy → Book text sets it back to Follow all books or Allow. For all books:
 
 1. Open **Settings → Privacy & Data → Text Extraction**.
-2. Enable **Allow Text Extraction**, the master switch.
-3. A notice explains the token cost; that is expected.
+2. Set **Book text** to Ask (the question comes back) or Allow (no question).
+3. On Allow a notice explains the token cost; that is expected.
 
 For a custom action, also check that the action has **Allow text extraction** on in its settings, and that its prompt uses a text placeholder (`{book_text_section}` or `{full_document_section}`).
 
-Why it is off by default: extraction sends the book's content to the provider, raises token use and cost, some readers prefer AI knowledge only, and the content may be sensitive. Without it most actions degrade rather than fail: the AI is told that no document text was provided and asked to use its knowledge of the work, with a guard against inventing details for works it does not recognize. X-Ray, Document Summary and Document Analysis are the exception: they do not run without extraction ([Privacy and Data](Privacy-and-Data#when-an-action-is-blocked)).
+Why it asks: extraction sends the book's content to the provider, raises token use and cost, some readers prefer AI knowledge only, and the content may be sensitive. Without it most actions degrade rather than fail: the AI is told that no document text was provided and asked to use its knowledge of the work, with a guard against inventing details for works it does not recognize. X-Ray, Document Summary and Document Analysis are the exception: they are refused when book text is Never ([Privacy and Data](Privacy-and-Data#when-an-action-is-blocked)).
 
-**Quick check:** if a Recap or a context-aware highlight action answers from the book's title and author alone, extraction is not on. X-Ray shows a blocking message with instructions.
+**Quick check:** if a Recap or a context-aware highlight action answers from the book's title and author alone, the book's text was not allowed for that run. X-Ray shows the refusal with a button to the screen that holds the value.
 
 ## Emoji font setup
 

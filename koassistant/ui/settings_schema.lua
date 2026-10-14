@@ -11,6 +11,20 @@ local ModelLists = require("koassistant.request.model_lists")
 
 -- Helper: radio options for an image-generation model picker
 -- ("default" = first entry of the provider's image model list)
+-- The three values of a kind of data (B395): the seven switches keep their
+-- keys (true = Allow, false or unset = Ask, "never" = Never); the eighth kind
+-- and the trusted column are string-valued, default Allow.
+local PRIVACY_VALUE_OPTIONS = {
+    { value = false, label = _("Ask") },
+    { value = true, label = _("Allow") },
+    { value = "never", label = _("Never") },
+}
+local TRUSTED_VALUE_OPTIONS = {
+    { value = "allow", label = _("Allow") },
+    { value = "ask", label = _("Ask") },
+    { value = "never", label = _("Never") },
+}
+
 local function imageModelOptions(provider)
     local opts = {
         { value = "default", text = T(_("Default (%1)"), ModelLists.getDefaultImageModel(provider) or "?") },
@@ -1394,20 +1408,12 @@ local SettingsSchema = {
                 },
                 {
                     id = "enable_library_scanning_reading",
-                    type = "toggle",
-                    text = _("Allow Library Scanning"),
+                    type = "dropdown",
+                    text = _("Book list"),
                     path = "features.enable_library_scanning",
                     default = false,
-                    help_text = _("Enables library actions that analyze your book collection. Add permanent scan folders below, or pick folders on the fly in the input dialog."),
-                    on_change = function(new_value)
-                        if new_value then
-                            local InfoMessage = require("ui/widget/infomessage")
-                            local UIManager = require("ui/uimanager")
-                            UIManager:show(InfoMessage:new{
-                                text = _("Enables library actions that analyze your book collection.\n\nAdd permanent scan folders below, or pick folders on the fly in the input dialog."),
-                            })
-                        end
-                    end,
+                    options = PRIVACY_VALUE_OPTIONS,
+                    help_text = _("The same value as in Privacy & Data: whether the titles, authors and reading status of the books in your scan folders may go to the AI for the library actions. Ask (the default) asks the first time; Allow sends without a question; Never refuses those actions. Add permanent scan folders below, or pick folders on the fly in the input dialog."),
                 },
                 {
                     id = "library_scan_folders_reading",
@@ -1421,7 +1427,10 @@ local SettingsSchema = {
                             return T(_("Permanent Scan Folders: %1"), #folders)
                         end
                     end,
-                    depends_on = { id = "enable_library_scanning_reading", value = true },
+                    enabled_func = function(plugin)
+                        -- usable unless the book list is Never (the question comes at the run)
+                        return require("koassistant.request.privacy_gates").summary({ features = plugin.settings:readSetting("features") or {} }).book_list.state ~= "never"
+                    end,
                     help_text = _("Folders always scanned for library actions. You can also pick folders on the fly in the input dialog."),
                     callback = "getLibraryFoldersMenuItems",
                 },
@@ -2143,56 +2152,82 @@ local SettingsSchema = {
                             return T(_("Trusted Providers: %1"), table.concat(trusted, ", "))
                         end
                     end,
-                    help_text = _("Providers you trust bypass all data sharing controls below AND text extraction. All data types (highlights, annotations, notebook, book text) are available without toggling individual settings. Use for local Ollama instances or providers you fully trust.\n\nTrust also satisfies the consent that background features (such as Automatic X-Ray and X-Ray checkpoint builds) check before running; those can then extract text and spend tokens without a per-request tap."),
+                    help_text = _("Providers you trust (a local Ollama, say) follow their own column of values, \"What trusted providers may use\", Allow for everything unless you change it, so nothing is asked for requests that go to them. A book's own Never still wins.\n\nA standing Allow is also what background features (Automatic X-Ray, checkpoint builds) need: with a trusted provider they build without a question."),
                     callback = "showTrustedProvidersDialog",
+                },
+                -- The trusted column (ruling 19 of 2026-10-14, shape B)
+                {
+                    id = "trusted_column",
+                    type = "submenu",
+                    text = _("What trusted providers may use"),
+                    help_text = _("The value of each kind of data for requests that go to a trusted provider. Allow by default: nothing is asked. Ask or Never here applies to trusted providers only; every other provider follows the rows below."),
+                    items = {
+                        { id = "trusted_book_text", type = "dropdown", text = _("Book text"), path = "features.trusted_book_text",
+                          default = "allow", options = TRUSTED_VALUE_OPTIONS },
+                        { id = "trusted_highlights", type = "dropdown", text = _("Highlights"), path = "features.trusted_highlights",
+                          default = "allow", options = TRUSTED_VALUE_OPTIONS },
+                        { id = "trusted_annotations", type = "dropdown", text = _("Annotation notes"), path = "features.trusted_annotations",
+                          default = "allow", options = TRUSTED_VALUE_OPTIONS },
+                        { id = "trusted_notebook", type = "dropdown", text = _("Notebook"), path = "features.trusted_notebook",
+                          default = "allow", options = TRUSTED_VALUE_OPTIONS },
+                        { id = "trusted_position", type = "toggle", text = _("Reading position"), path = "features.trusted_position",
+                          default = true, help_text = _("Your reading progress, the current chapter and the time since you last read. Sent or not; never asked.") },
+                        { id = "trusted_habits", type = "dropdown", text = _("Reading habits"), path = "features.trusted_habits",
+                          default = "allow", options = TRUSTED_VALUE_OPTIONS },
+                        { id = "trusted_book_list", type = "dropdown", text = _("Book list"), path = "features.trusted_book_list",
+                          default = "allow", options = TRUSTED_VALUE_OPTIONS },
+                        { id = "trusted_nearby_text", type = "dropdown", text = _("Text around what you tap"), path = "features.trusted_nearby_text",
+                          default = "allow", options = TRUSTED_VALUE_OPTIONS },
+                    },
                     separator = true,
                 },
-                -- Quick Presets
+                -- The three presets (ruling 10 of 2026-10-14)
                 {
                     id = "privacy_preset_default",
                     type = "action",
-                    text = _("Preset: Default"),
-                    help_text = _("Recommended balance. Share reading progress and chapter info for context-aware features. Personal content (highlights, annotations, notebook) stays private."),
+                    text = _("Preset: Ask about everything"),
+                    help_text = _("The default. Each kind of data is asked for the first time an action wants it, and your answer can be kept for the book. Reading position is sent."),
                     callback = "applyPrivacyPresetDefault",
-                    keep_menu_open = true,
-                },
-                {
-                    id = "privacy_preset_minimal",
-                    type = "action",
-                    text = _("Preset: Minimal"),
-                    help_text = _("Maximum privacy. Disable all extended data sharing including progress and chapter info. Only your question and book metadata are sent."),
-                    callback = "applyPrivacyPresetMinimal",
                     keep_menu_open = true,
                 },
                 {
                     id = "privacy_preset_full",
                     type = "action",
-                    text = _("Preset: Full"),
-                    help_text = _("Enable all data sharing for full functionality. Does not enable text extraction (see Text Extraction submenu)."),
+                    text = _("Preset: Allow everything"),
+                    help_text = _("Every kind of data goes without a question, book text included (it raises token costs). Per-book values still apply."),
                     callback = "applyPrivacyPresetFull",
+                    keep_menu_open = true,
+                },
+                {
+                    id = "privacy_preset_minimal",
+                    type = "action",
+                    text = _("Preset: Never send anything extra"),
+                    help_text = _("Nothing but your question, the selected text and the book's title and author. Reading position off too. Actions that need more are refused until you allow it."),
+                    callback = "applyPrivacyPresetMinimal",
                     keep_menu_open = true,
                     separator = true,
                 },
-                -- Per-book override pattern, made explicit (device note 2026-08-13)
+                -- The per-book values, made explicit (device note 2026-08-13)
                 {
                     id = "privacy_per_book_tip",
                     type = "action",
-                    text = _("Tip: Per-book overrides"),
-                    help_text = _("Every sharing toggle here can be overridden per book (Book Settings → Privacy). Two patterns: keep a global toggle off and allow it for specific books, or keep it on and deny it for sensitive books. A per-book deny always wins, even over trusted providers."),
+                    text = _("Tip: Per-book values"),
+                    help_text = _("Every kind of data here can have its own value for one book (Book Settings → Privacy, or \"Allow for this book\" in the question). A book's Never always wins, even over trusted providers; its Allow sends without asking."),
                     callback = "showPrivacyOverridesTip",
                     keep_menu_open = true,
                 },
-                -- Individual toggles
+                -- The kinds of data, one value each: Ask (the default), Allow, Never
                 {
                     id = "enable_annotations_sharing",
-                    type = "toggle",
-                    text = _("Allow Annotation Notes"),
+                    type = "dropdown",
+                    text = _("Annotation notes"),
                     path = "features.enable_annotations_sharing",
                     default = false,
-                    help_text = _("Share your personal notes attached to highlights with the AI. Automatically enables highlight sharing. Used by Analyze Notes, Connect with Notes, and actions with {annotations} placeholders."),
+                    options = PRIVACY_VALUE_OPTIONS,
+                    help_text = _("Your personal notes attached to highlights. Allowing notes allows highlights too. Used by Analyze Notes, Connect with Notes, and actions with {annotations} placeholders."),
                     on_change = function(new_value, plugin)
-                        if new_value then
-                            -- Auto-enable highlights (annotations implies highlights)
+                        if new_value == true then
+                            -- Allowing notes allows highlights (the pairing)
                             local f = plugin.settings:readSetting("features") or {}
                             f.enable_highlights_sharing = true
                             plugin.settings:saveSetting("features", f)
@@ -2204,57 +2239,61 @@ local SettingsSchema = {
                 },
                 {
                     id = "enable_highlights_sharing",
-                    type = "toggle",
-                    text = _("Allow Highlights"),
+                    type = "dropdown",
+                    text = _("Highlights"),
                     path = "features.enable_highlights_sharing",
                     default = false,
-                    help_text = _("Share your highlighted text passages with the AI. Used by Recap, Analyze Notes, and actions with {highlights} placeholders. Does not include personal notes. X-Ray does not send them: it only matches them locally, to offer them on an entity page."),
+                    options = PRIVACY_VALUE_OPTIONS,
+                    help_text = _("Your highlighted passages, without the notes. Never here is Never for notes too. Used by Recap, Analyze Notes, and actions with {highlights} placeholders. X-Ray does not send them: it only matches them locally, to offer them on an entity page."),
                     enabled_func = function(plugin)
-                        -- Grayed out when annotations is enabled (annotations implies highlights)
+                        -- Grayed out when notes are allowed (allowing notes allows highlights)
                         local f = plugin.settings:readSetting("features") or {}
                         return f.enable_annotations_sharing ~= true  -- raw-gate: the row's gray state, not a gate
                     end,
                 },
                 {
                     id = "enable_notebook_sharing",
-                    type = "toggle",
-                    text = _("Allow Notebook"),
+                    type = "dropdown",
+                    text = _("Notebook"),
                     path = "features.enable_notebook_sharing",
                     default = false,
-                    help_text = _("Send notebook entries to AI. Used by Connect with Notes and actions with {notebook} placeholder."),
+                    options = PRIVACY_VALUE_OPTIONS,
+                    help_text = _("Your notebook for the book. Used by Connect with Notes, \"Chat about this notebook\", the Attach chip and actions with the {notebook} placeholder."),
                 },
                 {
                     id = "enable_basic_stats",
                     type = "toggle",
-                    text = _("Allow Basic Stats"),
+                    text = _("Reading position"),
                     path = "features.enable_basic_stats",
                     default = true,
-                    help_text = _("Send reading progress (percentage), current chapter title, chapters read count, and time since last opened. Used by X-Ray, Recap."),
+                    help_text = _("Your reading progress (percentage), the current chapter, chapters read and the time since you last read. On by default: spoiler protection relies on it. Sent or not; never asked. Used by X-Ray, Recap."),
                 },
                 {
                     id = "enable_library_scanning",
-                    type = "toggle",
-                    text = _("Allow Library Scanning"),
+                    type = "dropdown",
+                    text = _("Book list"),
                     path = "features.enable_library_scanning",
                     default = false,
-                    help_text = _("Enables library actions that analyze your book collection. Configure permanent scan folders in Reading & Library, or pick folders on the fly in the input dialog."),
-                    on_change = function(new_value)
-                        if new_value then
-                            local InfoMessage = require("ui/widget/infomessage")
-                            local UIManager = require("ui/uimanager")
-                            UIManager:show(InfoMessage:new{
-                                text = _("Enables library actions that analyze your book collection.\n\nConfigure permanent scan folders in Reading & Library, or pick folders on the fly in the input dialog."),
-                            })
-                        end
-                    end,
+                    options = PRIVACY_VALUE_OPTIONS,
+                    help_text = _("The titles, authors and reading status of the books in your scan folders, for the library actions. Configure permanent scan folders in Reading & Library, or pick folders on the fly in the input dialog. The question offers \"Always allow\", which sets Allow here."),
                 },
                 {
                     id = "enable_advanced_stats",
-                    type = "toggle",
-                    text = _("Allow Advanced Stats"),
+                    type = "dropdown",
+                    text = _("Reading habits"),
                     path = "features.enable_advanced_stats",
                     default = false,
-                    help_text = _("Share reading engagement data with AI. Includes curated groups based on reading time and completion patterns (e.g. books read extensively, stalled reads, briefly started)."),
+                    options = PRIVACY_VALUE_OPTIONS,
+                    help_text = _("Groups made from your reading statistics (books read extensively, stalled reads, briefly started), computed on the device; only the lists leave it. Used by the library actions."),
+                },
+                {
+                    id = "nearby_text_sharing",
+                    type = "dropdown",
+                    text = _("Text around what you tap"),
+                    path = "features.nearby_text_sharing",
+                    default = "allow",
+                    options = TRUSTED_VALUE_OPTIONS,
+                    help_text = _("The bounded text around a selection (the context of a highlight or a dictionary lookup), your current page (page translate, the Scope chip's \"Current page\") and the text around an image prompt: a few sentences or one page, never more. Allow by default; independent of book text, so a book can keep its text to itself while these still work."),
                     separator = true,
                 },
                 -- Text Extraction settings (moved from Advanced)
@@ -2263,33 +2302,25 @@ local SettingsSchema = {
                     type = "submenu",
                     text_func = function(plugin)
                         local f = plugin.settings:readSetting("features") or {}
-                        if f.enable_book_text_extraction then
-                            return _("Text Extraction (enabled)")
-                        else
-                            return _("Text Extraction (disabled)")
-                        end
+                        local state = require("koassistant.request.privacy_gates").summary({ features = f }).book_text.state
+                        return T(_("Text Extraction (book text: %1)"),
+                            require("koassistant.books.book_settings").privacyStateLabel(state))
                     end,
                     items = {
                         {
                             id = "enable_book_text_extraction",
-                            type = "toggle",
-                            text = _("Allow Text Extraction"),
+                            type = "dropdown",
+                            text = _("Book text"),
                             path = "features.enable_book_text_extraction",
                             default = false,
-                            help_text = _("When enabled, actions can extract and send book text to the AI. Used by X-Ray, Recap, and actions with text placeholders.\n\nThis consent also covers background features you opt into separately (such as Automatic X-Ray and X-Ray checkpoint builds): those extract text and spend API tokens without a per-request confirmation, within their own size guards. Revoking this consent stops them.\n\nTip: Use Hidden Flows to exclude front matter, appendices, etc. You can also focus actions on a specific section or section range to extract only a chapter or part; for X-Ray, checkpoints cover the book in bounded incremental steps."),
+                            options = PRIVACY_VALUE_OPTIONS,
+                            help_text = _("The book's own text, up to your position or the whole of it: X-Ray, Recap, Summarize, book tools and actions with text placeholders. Ask (the default): the first action that wants it asks, and \"Allow for this book\" keeps your answer. Allow: sent without a question, and background features (Automatic X-Ray, checkpoint builds) run on it. Never: those actions are refused.\n\nText raises token costs. Tip: Use Hidden Flows to exclude front matter, appendices, etc. You can also focus actions on a specific section or section range to extract only a chapter or part; for X-Ray, checkpoints cover the book in bounded incremental steps."),
                             on_change = function(new_value, plugin)
-                                if new_value then
-                                    -- Unlock QS panel toggle after first manual enable
-                                    local f = plugin.settings:readSetting("features") or {}
-                                    if not f._text_extraction_acknowledged then
-                                        f._text_extraction_acknowledged = true
-                                        plugin.settings:saveSetting("features", f)
-                                        plugin.settings:flush()
-                                    end
+                                if new_value == true then
                                     local InfoMessage = require("ui/widget/infomessage")
                                     local UIManager = require("ui/uimanager")
                                     UIManager:show(InfoMessage:new{
-                                        text = _("Text extraction sends actual book content to the AI. This uses tokens (increases API costs) and processing time. Features like X-Ray and Recap use this to analyze your reading progress.\n\nBackground features you opt into separately (such as Automatic X-Ray) will also extract text without asking per request.\n\nTip: Use Hidden Flows to exclude front matter, appendices, etc. You can also focus actions on a specific section or section range to extract only a chapter or part; for X-Ray, checkpoints cover the book in bounded incremental steps."),
+                                        text = _("Book text goes to the AI without a question now, for every book without its own value. This uses tokens (increases API costs) and processing time; background features you opt into separately (such as Automatic X-Ray) will also read text without asking.\n\nTip: Use Hidden Flows to exclude front matter, appendices, etc. You can also focus actions on a specific section or section range to extract only a chapter or part; for X-Ray, checkpoints cover the book in bounded incremental steps."),
                                     })
                                 end
                             end,
@@ -2305,7 +2336,10 @@ local SettingsSchema = {
                             step = 100000,
                             precision = "%d",
                             help_text = _("Maximum characters to extract (100,000-10,000,000). Higher = more context but more tokens. Default: 4,000,000 (~1M tokens). The API will reject requests that exceed the model's context window.\n\nTip: Use Hidden Flows to exclude irrelevant content, or focus on a specific section instead of the full document."),
-                            depends_on = { id = "enable_book_text_extraction", value = true },
+                            enabled_func = function(plugin)
+                                -- usable unless book text is Never (the question comes at the run)
+                                return require("koassistant.request.privacy_gates").summary({ features = plugin.settings:readSetting("features") or {} }).book_text.state ~= "never"
+                            end,
                         },
                         {
                             id = "max_pdf_pages",
@@ -2318,7 +2352,10 @@ local SettingsSchema = {
                             step = 100,
                             precision = "%d",
                             help_text = _("Maximum pages to extract from page-based formats like PDF, DJVU, and CBZ (100-5,000). Higher = more context but slower. Default: 2,000.\n\nTip: Use Hidden Flows to exclude irrelevant pages, or focus on a specific section instead of the full document."),
-                            depends_on = { id = "enable_book_text_extraction", value = true },
+                            enabled_func = function(plugin)
+                                -- usable unless book text is Never (the question comes at the run)
+                                return require("koassistant.request.privacy_gates").summary({ features = plugin.settings:readSetting("features") or {} }).book_text.state ~= "never"
+                            end,
                         },
                         {
                             id = "suppress_truncation_warning",
@@ -2327,7 +2364,10 @@ local SettingsSchema = {
                             path = "features.suppress_truncation_warning",
                             default = false,
                             help_text = _("When unchecked, a blocking warning is shown before sending requests when extracted text was truncated to fit the character limit. Shows coverage percentage so you know how much of the book was included.\n\nBackground runs (Automatic X-Ray, checkpoint builds) never show this warning: a truncated background extraction aborts the run instead of sending dishonest coverage.\n\nCheck this if you don't need the reminder."),
-                            depends_on = { id = "enable_book_text_extraction", value = true },
+                            enabled_func = function(plugin)
+                                -- usable unless book text is Never (the question comes at the run)
+                                return require("koassistant.request.privacy_gates").summary({ features = plugin.settings:readSetting("features") or {} }).book_text.state ~= "never"
+                            end,
                         },
                         {
                             id = "suppress_large_extraction_warning",
@@ -2336,7 +2376,10 @@ local SettingsSchema = {
                             path = "features.suppress_large_extraction_warning",
                             default = false,
                             help_text = _("When unchecked, a warning is shown before sending requests with large text extractions (over 500K characters / ~125K tokens). Most models have smaller context windows and will reject oversized requests.\n\nBackground runs (Automatic X-Ray, checkpoint builds) never show this warning; their size is bounded instead: automatic updates by the Maximum Progress Gap, checkpoints by their incremental steps.\n\nCheck this if you know your model's limits and don't need the reminder."),
-                            depends_on = { id = "enable_book_text_extraction", value = true },
+                            enabled_func = function(plugin)
+                                -- usable unless book text is Never (the question comes at the run)
+                                return require("koassistant.request.privacy_gates").summary({ features = plugin.settings:readSetting("features") or {} }).book_text.state ~= "never"
+                            end,
                         },
                         {
                             id = "clear_action_cache",
@@ -2345,7 +2388,10 @@ local SettingsSchema = {
                             help_text = _("Delete every saved artifact for the current book: the X-Ray (with its archived versions and checkpoints), summaries, analyses and wiki entries. They regenerate from scratch next time you run the actions."),
                             callback = "clearActionCache",
                             keep_menu_open = true,
-                            depends_on = { id = "enable_book_text_extraction", value = true },
+                            enabled_func = function(plugin)
+                                -- usable unless book text is Never (the question comes at the run)
+                                return require("koassistant.request.privacy_gates").summary({ features = plugin.settings:readSetting("features") or {} }).book_text.state ~= "never"
+                            end,
                         },
                     },
                 },

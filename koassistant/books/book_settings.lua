@@ -799,19 +799,31 @@ function BookSettings.applyResponseLanguageOverride(config, doc_settings)
     return c
 end
 
--- Per-book PRIVACY overrides (2026-08-02): tri-state sidecar keys — true = allow
--- for this book, false = deny for this book, nil = follow global. Enforcement
--- semantics (koassistant/request/context_extractor.lua + the notebook/pre-flight/tools
--- gates): a per-book DENY beats everything including trusted providers (most
--- specific intent — "never share this book's data"); a per-book ALLOW satisfies
--- the GLOBAL gate only, so per-action flags still apply (double-gating holds).
+-- Per-book PRIVACY values (2026-08-02; the eighth kind 2026-10-14): tri-state
+-- sidecar keys — true = Allow for this book, false = Never for this book, nil =
+-- follow the global value. Enforced by koassistant/request/privacy_gates.lua
+-- (ctx.book at every site): a book's Never beats everything, trusted providers
+-- and an allowance for one run included (most specific intent — "never share
+-- this book's data"); a book's Allow satisfies the global gate only, so the
+-- per-action flags still apply (double-gating holds).
 BookSettings.KEY_HIGHLIGHTS_SHARING = "koassistant_book_highlights_sharing"
 BookSettings.KEY_ANNOTATIONS_SHARING = "koassistant_book_annotations_sharing"
 BookSettings.KEY_NOTEBOOK_SHARING = "koassistant_book_notebook_sharing"
 BookSettings.KEY_TEXT_EXTRACTION = "koassistant_book_text_extraction"
+BookSettings.KEY_NEARBY_TEXT = "koassistant_book_nearby_text"
+
+--- The per-book key of each kind a book can hold a value for (privacy_gates'
+--- BOOK_KINDS), for the question's "Allow for this book" and "Not for this book".
+BookSettings.PRIVACY_KEY_OF_KIND = {
+    highlights = BookSettings.KEY_HIGHLIGHTS_SHARING,
+    annotations = BookSettings.KEY_ANNOTATIONS_SHARING,
+    notebook = BookSettings.KEY_NOTEBOOK_SHARING,
+    book_text = BookSettings.KEY_TEXT_EXTRACTION,
+    nearby_text = BookSettings.KEY_NEARBY_TEXT,
+}
 
 --- Raw per-book privacy overrides. Pure.
--- @return table { highlights = tri, annotations = tri, notebook = tri, book_text = tri }
+-- @return table { highlights = tri, annotations = tri, notebook = tri, book_text = tri, nearby_text = tri }
 function BookSettings.getPrivacyOverrides(doc_settings)
     doc_settings = BookStore.wrap(doc_settings)
     if not doc_settings then return {} end
@@ -820,13 +832,14 @@ function BookSettings.getPrivacyOverrides(doc_settings)
         annotations = doc_settings:readSetting(BookSettings.KEY_ANNOTATIONS_SHARING),
         notebook = doc_settings:readSetting(BookSettings.KEY_NOTEBOOK_SHARING),
         book_text = doc_settings:readSetting(BookSettings.KEY_TEXT_EXTRACTION),
+        nearby_text = doc_settings:readSetting(BookSettings.KEY_NEARBY_TEXT),
     }
 end
 
 --- Effective per-book privacy overrides, with the same implication the globals
 -- have: allowing annotations implies highlights; denying highlights denies
 -- annotations too (the promise is "no highlighted text from this book"). Pure.
--- @return table { highlights = tri, annotations = tri, notebook = tri, book_text = tri }
+-- @return table { highlights = tri, annotations = tri, notebook = tri, book_text = tri, nearby_text = tri }
 function BookSettings.effectivePrivacyOverrides(doc_settings)
     doc_settings = BookStore.wrap(doc_settings)
     local raw = BookSettings.getPrivacyOverrides(doc_settings)
@@ -836,7 +849,8 @@ function BookSettings.effectivePrivacyOverrides(doc_settings)
         if v == true then return true elseif v == false then return false end
         return nil
     end
-    local out = { notebook = tri(raw.notebook), book_text = tri(raw.book_text) }
+    local out = { notebook = tri(raw.notebook), book_text = tri(raw.book_text),
+        nearby_text = tri(raw.nearby_text) }
     if raw.highlights == false then out.highlights = false
     elseif raw.highlights == true or raw.annotations == true then out.highlights = true end
     if raw.annotations == false or raw.highlights == false then out.annotations = false
@@ -890,6 +904,7 @@ BookSettings.SIDECAR_KEYS = {
     BookSettings.KEY_ANNOTATIONS_SHARING,
     BookSettings.KEY_NOTEBOOK_SHARING,
     BookSettings.KEY_TEXT_EXTRACTION,
+    BookSettings.KEY_NEARBY_TEXT,
 }
 
 --- Count how many per-book settings deviate from the global defaults (any non-nil key).
@@ -3173,6 +3188,7 @@ function BookSettings.show(opts)
     addButton(subScreenRow(_("Privacy"), groupCount({
         BookSettings.KEY_HIGHLIGHTS_SHARING, BookSettings.KEY_ANNOTATIONS_SHARING,
         BookSettings.KEY_NOTEBOOK_SHARING, BookSettings.KEY_TEXT_EXTRACTION,
+        BookSettings.KEY_NEARBY_TEXT,
     }), BookSettings.showPrivacyConfig))
     addButton(subScreenRow(_("Identity"), groupCount({
         BookSettings.KEY_AI_TITLE, BookSettings.KEY_AI_AUTHOR,
@@ -3760,11 +3776,20 @@ function BookSettings.showXrayConfig(opts)
     UIManager:show(dialog)
 end
 
---- Per-book PRIVACY overrides — a sub-screen of Book Settings. Allow/Deny beat the
--- global Privacy & Data toggles for THIS book (deny also beats trusted providers);
+--- The word for a gates state ("allow" | "ask" | "never"), one copy for every
+--- surface that names one.
+function BookSettings.privacyStateLabel(state)
+    if state == "allow" then return _("Allow") end
+    if state == "never" then return _("Never") end
+    return _("Ask")
+end
+
+--- Per-book PRIVACY values — a sub-screen of Book Settings. A book's Allow or
+-- Never beats the value for all books (Settings → Privacy & Data) for THIS
+-- book (Never also beats trusted providers and an allowance for one run);
 -- per-action flags still apply on top (double-gating). Implications ride the
 -- resolver, same as the globals: allow-annotations implies allow-highlights,
--- deny-highlights implies deny-annotations.
+-- never-highlights implies never-annotations.
 -- @param opts table: { plugin, ui, document_path, on_close }
 function BookSettings.showPrivacyConfig(opts)
     opts = opts or {}
@@ -3788,15 +3813,15 @@ function BookSettings.showPrivacyConfig(opts)
         if plugin and plugin.updateConfigFromSettings then plugin:updateConfigFromSettings() end
     end
     local function dot(active) return active and "● " or "○ " end
-    -- P4: follow-global rows carry the effective global value
-    local function boolLabel(v, global_on)
-        if v == true then return _("On")
-        elseif v == false then return _("Off") end
-        return T(_("Follow global (%1)"), global_on and _("On") or _("Off"))
+    -- The follow row carries the value for all books (Allow / Ask / Never)
+    local function valueLabel(v, global_state)
+        if v == true then return _("Allow")
+        elseif v == false then return _("Never") end
+        return T(_("Follow all books (%1)"), BookSettings.privacyStateLabel(global_state))
     end
 
-    -- Tri-state picker (Follow global / On / Off) for one privacy key.
-    local function showBoolSubPicker(key, dialog_title, global_on)
+    -- Tri-state picker (follow / Allow / Never) for one privacy key.
+    local function showValuePicker(key, dialog_title, global_state)
         closeDialog()
         local cur = doc_settings:readSetting(key)  -- true | false | nil
         local picker
@@ -3808,10 +3833,10 @@ function BookSettings.showPrivacyConfig(opts)
             BookSettings.showPrivacyConfig(opts)
         end
         local rows = {
-            {{ text = dot(cur == nil) .. T(_("Follow global (%1)"), global_on and _("On") or _("Off")),
+            {{ text = dot(cur == nil) .. T(_("Follow all books (%1)"), BookSettings.privacyStateLabel(global_state)),
                 callback = function() pick(nil) end }},
-            {{ text = dot(cur == true) .. _("On"), callback = function() pick(true) end }},
-            {{ text = dot(cur == false) .. _("Off"), callback = function() pick(false) end }},
+            {{ text = dot(cur == true) .. _("Allow: sent without asking"), callback = function() pick(true) end }},
+            {{ text = dot(cur == false) .. _("Never: not sent, whatever else says"), callback = function() pick(false) end }},
             {{ text = _("Cancel"), id = "close",
                 callback = function() UIManager:close(picker); BookSettings.showPrivacyConfig(opts) end }},
         }
@@ -3820,36 +3845,20 @@ function BookSettings.showPrivacyConfig(opts)
         UIManager:show(picker)
     end
 
+    local function row(label, key, kind, picker_title)
+        return {{ text = T(label, valueLabel(doc_settings:readSetting(key), g[kind].state)),
+            callback = function() showValuePicker(key, picker_title, g[kind].state) end }}
+    end
     local buttons = {
-        {{ text = T(_("Highlights sharing: %1"), boolLabel(doc_settings:readSetting(BookSettings.KEY_HIGHLIGHTS_SHARING),
-                g.highlights.state == "allow")),
-            callback = function()
-                showBoolSubPicker(BookSettings.KEY_HIGHLIGHTS_SHARING,
-                    _("Highlights sharing (this book)"),
-                    g.highlights.state == "allow")
-            end }},
-        {{ text = T(_("Annotations sharing: %1"), boolLabel(doc_settings:readSetting(BookSettings.KEY_ANNOTATIONS_SHARING),
-                g.annotations.state == "allow")),
-            callback = function()
-                showBoolSubPicker(BookSettings.KEY_ANNOTATIONS_SHARING,
-                    _("Annotations sharing (this book)"), g.annotations.state == "allow")
-            end }},
-        {{ text = T(_("Notebook sharing: %1"), boolLabel(doc_settings:readSetting(BookSettings.KEY_NOTEBOOK_SHARING),
-                g.notebook.state == "allow")),
-            callback = function()
-                showBoolSubPicker(BookSettings.KEY_NOTEBOOK_SHARING,
-                    _("Notebook sharing (this book)"), g.notebook.state == "allow")
-            end }},
-        {{ text = T(_("Text extraction: %1"), boolLabel(doc_settings:readSetting(BookSettings.KEY_TEXT_EXTRACTION),
-                g.book_text.state == "allow")),
-            callback = function()
-                showBoolSubPicker(BookSettings.KEY_TEXT_EXTRACTION,
-                    _("Text extraction (this book)"), g.book_text.state == "allow")
-            end }},
-        -- The override rules, spelled out (device note 2026-08-13)
-        {{ text = _("How overrides work…"), callback = function()
+        row(_("Book text: %1"), BookSettings.KEY_TEXT_EXTRACTION, "book_text", _("Book text (this book)")),
+        row(_("Highlights: %1"), BookSettings.KEY_HIGHLIGHTS_SHARING, "highlights", _("Highlights (this book)")),
+        row(_("Annotation notes: %1"), BookSettings.KEY_ANNOTATIONS_SHARING, "annotations", _("Annotation notes (this book)")),
+        row(_("Notebook: %1"), BookSettings.KEY_NOTEBOOK_SHARING, "notebook", _("Notebook (this book)")),
+        row(_("Text around what you tap: %1"), BookSettings.KEY_NEARBY_TEXT, "nearby_text", _("Text around what you tap (this book)")),
+        -- The rules, spelled out (device note 2026-08-13; the model of 2026-10-14)
+        {{ text = _("How this works…"), callback = function()
             UIManager:show(require("ui/widget/infomessage"):new{
-                text = _("These override the global privacy toggles for this book. Deny always wins — even over trusted providers. Allow satisfies only the global gate: actions still need their own data-access settings. Allowing annotations implies highlights; denying highlights denies annotations."),
+                text = _("Each kind of data has a value for all books (Settings → Privacy & Data) and can have its own for this book. Ask means KOAssistant asks the first time an action wants it, and \"Allow for this book\" in that question sets Allow here. Never wins over everything, trusted providers included. Allow lets the data go without a question; actions still take only the kinds they declare. Allowing annotation notes allows highlights; Never for highlights is Never for notes."),
             })
         end }},
         {{ text = _("Close"), id = "close", callback = function()

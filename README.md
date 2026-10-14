@@ -38,7 +38,7 @@
 - **Multilingual** → chat in any of 47 languages the AI understands; the plugin's UI in 26. [Languages](https://github.com/zeeyado/koassistant.koplugin/wiki/Languages)
 - **Generate images** → a highlight becomes an image (OpenAI, xAI or Gemini image models), kept on the device in a gallery. [Image Generation](https://github.com/zeeyado/koassistant.koplugin/wiki/Image-Generation)
 - **Customizable** → custom actions, behaviors, domains, per-action models, template variables, and control over every menu the plugin appears in. [Actions and Menus](https://github.com/zeeyado/koassistant.koplugin/wiki/Actions-and-Menus), [Prompts, Behaviors and Domains](https://github.com/zeeyado/koassistant.koplugin/wiki/Prompts-Behaviors-and-Domains)
-- **Private by default** → highlights, annotations, notebooks and book text are sent only when you turn them on, globally or per book. [Privacy and Data](https://github.com/zeeyado/koassistant.koplugin/wiki/Privacy-and-Data)
+- **Private by default** → nothing of yours leaves the device unasked: the first time an action wants your highlights, notes, notebook or the book's text, it shows what it sends and to whom, and your answer can be kept for the book. [Privacy and Data](https://github.com/zeeyado/koassistant.koplugin/wiki/Privacy-and-Data)
 - **Keeps itself current** → one-tap updates, backups and restore. [Backups and Updates](https://github.com/zeeyado/koassistant.koplugin/wiki/Backups-and-Updates)
 
 [32 built-in providers](#supported-providers) (Anthropic, OpenAI, Gemini, Ollama and more) plus custom OpenAI-compatible providers. OpenAI can also be used without an API key by signing in with your ChatGPT plan (OpenAI Subscription). Reasoning is configured per model. Personal reading data (highlights, annotations, notebooks) is opt-in and is not sent to the AI unless you enable it.
@@ -96,7 +96,7 @@ Restart KOReader after editing the file (it is read once per session); keys ente
 
 ### 4. Privacy settings
 
-Some features are opt-in. **Settings → Privacy & Data** holds the switches; **Preset: Full** turns on all data sharing at once, and text extraction is enabled separately. See [Privacy at a glance](#privacy-at-a-glance).
+Every kind of reading data is asked for the first time an action wants it. **Settings → Privacy & Data** holds one value per kind (Ask, Allow or Never); **Preset: Allow everything** sends everything without a question, book text included. See [Privacy at a glance](#privacy-at-a-glance).
 
 ## First steps
 
@@ -105,7 +105,7 @@ Some features are opt-in. **Settings → Privacy & Data** holds the switches; **
 **Two quick panels, one gesture.** Quick Settings (everywhere) and Quick Actions (while reading) hold most of what you need, and in the reader each has a button to open the other. The wizard assigns both to "tap bottom-right corner"; by hand: KOReader's gear menu → Taps and gestures → Gesture manager, pick a gesture, choose **KOAssistant: Quick Settings** in the file browser and **KOAssistant: Quick Actions** in a book. Without a gesture, both are the first rows of the KOAssistant menu.
 
 **Then:**
-- Turn on the data you want to share: **Settings → Privacy & Data**. [Privacy and Data](https://github.com/zeeyado/koassistant.koplugin/wiki/Privacy-and-Data)
+- Answer the question the first time an action wants your data, or set a kind to Allow or Never for all books: **Settings → Privacy & Data**. [Privacy and Data](https://github.com/zeeyado/koassistant.koplugin/wiki/Privacy-and-Data)
 - Try the highlight menu: Translate, Explain, Quick Explain, Summarize, Quick Define and Dictionary are there by default; add more under **Settings → Menus & Buttons → Highlight Menu Actions**. [Actions and Menus](https://github.com/zeeyado/koassistant.koplugin/wiki/Actions-and-Menus)
 - Try the bypass modes: a single word straight to the AI dictionary, a longer selection straight to a translation. [Dictionary and Translation](https://github.com/zeeyado/koassistant.koplugin/wiki/Dictionary-and-Translation)
 - Hold any action button, in the highlight menu, the dictionary popup, Quick Actions or the input dialog, for its description, one-time run options (Quick answer, another model, no reasoning, web search) and its placements.
@@ -118,16 +118,16 @@ Everything about the panels, gestures and shortcuts: [Setup, Gestures and Panels
 KOAssistant sends data to AI providers to generate answers. The threat model is simple: you may include sensitive data (annotations, notes, book content) by accident. Pick providers thoughtfully; local or self-hosted models (Ollama and the local presets) keep everything on your own hardware.
 
 - **Always sent:** your question, and the selected text for highlight actions.
-- **Sent by default:** the book's title and author, the enabled system content (languages, domain, behavior), basic reading stats (progress, chapter, time since last opened), and a per-book Background note if you wrote one.
-- **Opt-in, off by default:** highlights, annotations, notebook entries, the book's text (for X-Ray, Recap and the like), the library catalog, advanced reading stats (curated groups with rounded hours and days; the raw statistics stay on the device).
+- **Sent by default:** the book's title and author, the enabled system content (languages, domain, behavior), your reading position (progress, chapter, time since last opened), the text around what you tap (a few sentences or one page), and a per-book Background note if you wrote one.
+- **Asked the first time:** highlights, annotation notes, the notebook, the book's text (for X-Ray, Recap and the like), the book list, reading habits (curated groups with rounded hours and days; the raw statistics stay on the device). The question names the action, the provider and the amount; **Allow once** covers that run, **Allow for this book** keeps your answer.
 
 | Preset | What it does |
 |---|---|
-| **Default** | Basic stats shared; highlights, annotations and notebook stay private; text extraction and library scanning off. |
-| **Minimal** | Only your question and the book's metadata are sent; text extraction off. |
-| **Full** | All data sharing on. Text extraction stays a separate switch. |
+| **Ask about everything** | The default: each kind is asked for the first time an action wants it. |
+| **Allow everything** | Every kind goes without a question, book text included. |
+| **Never send anything extra** | Only your question, the selected text and the book's title and author. |
 
-**Text extraction** (**Settings → Privacy & Data → Text Extraction**) is off by default: it sends book text and raises token costs, and most actions that would use it answer from AI knowledge without it; X-Ray, Document Summary and Document Analysis do not run without it. **Trusted providers** (a local Ollama, say) bypass all sharing controls. **Per-book overrides** in Book Settings → Privacy allow or deny highlights, annotations, the notebook and text extraction for one book; a per-book deny beats everything, trusted providers included.
+**Book text** (**Settings → Privacy & Data → Text Extraction**) raises token costs, so the question says how much would go (up to your position, the whole book, a section); most actions that would use it answer from AI knowledge without it, while X-Ray, Document Summary and Document Analysis need it. **Trusted providers** (a local Ollama, say) follow their own column of values, Allow unless you change it. **Per-book values** in Book Settings → Privacy allow or refuse book text, highlights, annotation notes, the notebook and the text around what you tap for one book; a book's Never beats everything, trusted providers included.
 
 The full model, the double-gating of book text, what each action accesses, and the design choices: [Privacy and Data](https://github.com/zeeyado/koassistant.koplugin/wiki/Privacy-and-Data).
 
@@ -188,7 +188,7 @@ Manual updates, what is safe during an update, update checking, backups, restore
 ## Getting help
 
 **Quick checks when something does not work:**
-- **An action ignores your highlights, notes or the book's text.** Most reading data is opt-in: **Settings → Privacy & Data** (highlights, annotations, notebook) and **Settings → Privacy & Data → Text Extraction** (book text). X-Ray does not run without text extraction; X-Ray (Simple) works from AI knowledge instead.
+- **An action ignores your highlights, notes or the book's text.** Each kind is asked for the first time an action wants it, and "Not for this book" sets the book's value to Never: check Book Settings → Privacy for the book and **Settings → Privacy & Data** for all books. X-Ray is refused while the book's text is Never; X-Ray (Simple) works from AI knowledge instead.
 - **"No API key found".** Add the key for the selected provider in **Settings → API Keys & Auth** or in `apikeys.lua`; a sample placeholder such as "your-key-here" counts as no key. Pasted keys are cleaned of stray spaces and line breaks on read.
 - **No response or a timeout.** Check the connection and read the error: it names the provider and model and adds one tip. Try **Settings → Advanced → Test Connection**; **Settings → Advanced → Console Debug** writes the provider's own error text to crash.log. The plugin waits up to 15 minutes for the provider to send something.
 - **Menu icons show as boxes.** KOReader ships no emoji font; **Settings → Display Settings → Emoji → Emoji Font** installs the bundled one (a restart follows), and the rows below it turn the icons off.

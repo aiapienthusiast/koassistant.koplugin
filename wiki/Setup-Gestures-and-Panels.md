@@ -10,7 +10,7 @@ The first time you open KOAssistant after installing it (its menu, or one of its
 2. **Language**: detects your KOReader UI language and asks whether to use it as your AI language. For a non-English UI it confirms the detected language (for example "Use Français?"); for English it offers to keep English or choose a different language. You can also pick from the full list of 47 supported languages. This sets your primary language for all AI responses, translations and dictionary lookups.
 3. **Emoji display test**: shows the emoji icons used throughout the plugin. If they render correctly on your device, tap **Yes, enable** to turn on all emoji features (menu icons, panel icons, data access indicators). If you see blank boxes or question marks, tap **No, skip**; after the wizard, **Settings → Display Settings → Emoji → Emoji Font** installs the bundled emoji font ([Troubleshooting](Troubleshooting#emoji-font-setup)).
 4. **Gesture setup**: offers to assign the Quick Settings and Quick Actions panels to **tap bottom-right corner** ([Automatic setup](#automatic-setup)). If that corner is already taken, in the reader or the file browser, or KOReader has no gesture settings yet, it shows a tip instead.
-5. **Getting started tips**: pointers to **Settings → Privacy & Data** (keep a sharing toggle off globally and allow it per book, or on globally and deny it for sensitive books; a per-book deny always wins) and to **Settings → Actions & Prompts → Manage Actions**.
+5. **Getting started tips**: pointers to **Settings → Privacy & Data** (each kind of data is on Ask: the first action that wants it asks, and your answer can be kept for the book; a book's Never always wins) and to **Settings → Actions & Prompts → Manage Actions**.
 
 The wizard runs once and won't appear again. **Settings → Backup & Reset → Reset Settings... → Re-run Setup Wizard** runs it again; a re-run skips the language step if you have already configured a language. A **Quick: Fresh start** reset (same menu) also brings it back the next time you open KOAssistant. Everything the wizard sets can be changed later: languages in **Settings → AI Language Settings**, emoji in **Settings → Display Settings → Emoji**, gestures as described [below](#gestures).
 
@@ -18,7 +18,7 @@ The wizard runs once and won't appear again. **Settings → Backup & Reset → R
 
 After the wizard, complete these steps for the best experience:
 
-- [ ] **Configure privacy settings:** enable data sharing for the features you want (**Settings → Privacy & Data**). See [Privacy and Data](Privacy-and-Data).
+- [ ] **Decide what you share:** every kind of data is on Ask, so you can simply answer when an action asks; **Settings → Privacy & Data** sets a kind to Allow or Never for all books. See [Privacy and Data](Privacy-and-Data).
 - [ ] **Set up gestures** (if you skipped the wizard). See [Gestures](#gestures).
 - [ ] **Explore the highlight menu:** 9 buttons are included by default: the model button, then Translate, Explain, Quick Explain, Summarize, Quick Define, Dictionary, Look up in X-Ray and Generate Image. The last two show only when the book has an X-Ray, and when an image provider is configured. Add more (ELI5, Elaborate, Connect, Fact Check, AI Wiki, Counterpoint and others) in **Settings → Actions & Prompts → Manage Actions** (hold an action, then **+ Highlight Menu**), or in **Settings → Menus & Buttons → Highlight Menu Actions**. See [Actions and Menus](Actions-and-Menus).
 - [ ] **Try Dictionary Bypass:** single-word selections go straight to the AI dictionary (**Settings → Dictionary Settings → Bypass KOReader Dictionary**). See [Bypass Modes](#bypass-modes).
@@ -55,7 +55,7 @@ Assign **KOAssistant: Quick Settings** to a gesture for one-tap access to a two-
 - **Minimal Popup:** turn the chrome-less anchored response popup on or off; hold for its mode and action list.
 - **H.Bypass and D.Bypass:** turn Highlight Bypass and Dictionary Bypass on or off; hold to pick the bypass action.
 - **Language, Translate and Dictionary:** your primary response language, translation language and dictionary language. With a book open, hold one for that book's languages.
-- **Text Extraction:** turn book text extraction on or off. It must be enabled once in **Settings → Privacy & Data → Text Extraction** first. With a book open, hold for that book's privacy settings.
+- **Book Text:** the value of the book's text for all books (Ask, Allow or Never); a tap steps it between Ask and Allow (Never goes to Ask). With a book open, the tile shows that book's own value with "(book)", and holding it opens that book's privacy settings.
 - **Chat History, Browse Notebooks and Browse Artifacts:** quick access to saved chats (all books), notebooks and cached artifacts.
 - **Groups:** the Groups list (every group's hub, settings and management).
 - **Library Chat/Action:** run library actions on books you select from your reading history.

@@ -773,52 +773,27 @@ function SetupWizard.stepPrivacy(plugin, ctx, next_step)
         next_step()
     end
 
-    -- Follow-up: document text extraction is deliberately outside every
-    -- preset (it is the gate on most artifact actions) — ask it explicitly.
-    local function askBookText(preset_label)
-        table.insert(ctx.results, T(_("Privacy: %1"), preset_label))
-        local asked = false
-        UIManager:show(ConfirmBox:new{
-            text = _("Allow document text extraction?") .. "\n\n" ..
-                _("X-Ray, Summarize, Recap and most artifact actions read the book's text and send it to your AI provider. Off, those actions stay blocked until you enable it (Settings > Privacy & Data, or per book)."),
-            ok_text = _("Allow"),
-            cancel_text = _("Keep off"),
-            ok_callback = function()
-                asked = true
-                local f = feats(plugin)
-                f.enable_book_text_extraction = true
-                saveFeats(plugin, f)
-                plugin:updateConfigFromSettings()
-                advanceOnce()
-            end,
-            cancel_callback = function()
-                if not asked then
-                    asked = true
-                    advanceOnce()
-                end
-            end,
-        })
-    end
-
+    -- The three presets of the question model (ruling 10 of 2026-10-14):
+    -- one value for every kind of data; "Allow everything" includes book text
     local function applyPreset(method, label)
         UIManager:close(dialog)
         plugin[method](plugin, nil)
-        askBookText(label)
+        table.insert(ctx.results, T(_("Privacy: %1"), label))
+        advanceOnce()
     end
 
     dialog = ButtonDialog:new{
         title = _("PRIVACY & DATA") .. "\n" ..
-            _("What may KOAssistant share with your AI provider? Everything here is off until you allow it, and per-book overrides exist for all of it.") .. "\n" ..
-            _("Tip: keep a toggle off globally and allow it per book — or on globally and deny it for sensitive books. A per-book deny always wins.") .. "\n" ..
-            _("Spoiler protection is separate and ON by default — responses respect your reading position.") .. "\n\n" ..
-            _("Minimal: nothing beyond what you type.") .. "\n" ..
-            _("Default: basic reading stats only.") .. "\n" ..
-            _("Full: highlights, annotations, notebook and library too."),
+            _("What may KOAssistant send to your AI provider? Your highlights, notes, notebook, book text, book list and reading habits each have one value: Ask, Allow or Never.") .. "\n" ..
+            _("Ask, the default, means the first action that wants a kind of data asks you, and your answer can be kept for the book. A book can also have its own values (Book Settings > Privacy); a book's Never always wins.") .. "\n" ..
+            _("Spoiler protection is separate and ON by default: responses respect your reading position."),
         buttons = {
             {
-                { text = _("Minimal"), callback = function() applyPreset("applyPrivacyPresetMinimal", _("Minimal")) end },
-                { text = _("Default"), callback = function() applyPreset("applyPrivacyPresetDefault", _("Default")) end },
-                { text = _("Full"), callback = function() applyPreset("applyPrivacyPresetFull", _("Full")) end },
+                { text = _("Ask about everything"), callback = function() applyPreset("applyPrivacyPresetDefault", _("Ask about everything")) end },
+            },
+            {
+                { text = _("Allow everything"), callback = function() applyPreset("applyPrivacyPresetFull", _("Allow everything")) end },
+                { text = _("Never send anything extra"), callback = function() applyPreset("applyPrivacyPresetMinimal", _("Never send anything extra")) end },
             },
             {
                 {

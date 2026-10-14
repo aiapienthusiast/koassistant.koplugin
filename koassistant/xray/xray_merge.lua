@@ -1796,9 +1796,8 @@ function XrayMerge.consentOk(entries, features, provider, book_file, ui)
         end
     end
     if not needs_text then return true end
-    local book
-    if book_file then book = Gates.bookOverrides(book_file, ui) end
-    return Gates.allows("book_text", { features = features, provider = provider, book = book })
+    -- The book's own value, a run's allowance on this config, trust, the switch
+    return Gates.allows("book_text", Gates.context(features, provider, { path = book_file, ui = ui }))
 end
 
 -- ============================ execution ============================

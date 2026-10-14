@@ -876,7 +876,7 @@ TestRunner:test("KEY_WEB_SEARCH and KEY_DOMAIN/KEY_RESEARCH are in SIDECAR_KEYS"
         "koassistant_book_background missing from SIDECAR_KEYS (book_background_plan.md)")
     TestRunner:assertEqual(found[BookSettings.KEY_XRAY_SPACING] == true, true,
         "koassistant_book_xray_spacing missing from SIDECAR_KEYS (spacing slice)")
-    TestRunner:assertEqual(#BookSettings.SIDECAR_KEYS, 42, "42 per-book keys expected (the read-whole size, B402, 2026-10-03; carried entries, #116 / B393, and the status block, B271, 2026-10-03; incl. 4 privacy overrides + xray promotion hold + checkpoint spacing + 9 marking & lookup overrides incl. upcoming-entities, intercept, card, card length, ahead card (B269) + xray categories + xray depth (2026-08-25) + book text language (2026-09-10) + xray type (B337c, 2026-09-29); xray highlights removed with reader engagement 2026-08-18)")
+    TestRunner:assertEqual(#BookSettings.SIDECAR_KEYS, 43, "43 per-book keys expected (the text around what you tap, B395 slice 2, 2026-10-14; the read-whole size, B402, 2026-10-03; carried entries, #116 / B393, and the status block, B271, 2026-10-03; incl. 5 privacy values + xray promotion hold + checkpoint spacing + 9 marking & lookup overrides incl. upcoming-entities, intercept, card, card length, ahead card (B269) + xray categories + xray depth (2026-08-25) + book text language (2026-09-10) + xray type (B337c, 2026-09-29); xray highlights removed with reader engagement 2026-08-18)")
 end)
 
 TestRunner:suite("resolveXrayMarking (2026-08-15: popup edits the book layer)")
@@ -1146,8 +1146,22 @@ TestRunner:test("no overrides: everything nil (follow global)", function()
     TestRunner:assertNil(out.annotations, "annotations")
     TestRunner:assertNil(out.notebook, "notebook")
     TestRunner:assertNil(out.book_text, "book_text")
+    TestRunner:assertNil(out.nearby_text, "nearby_text")
     local none = BookSettings.effectivePrivacyOverrides(nil)
     TestRunner:assertNil(none.highlights, "nil doc_settings tolerated")
+end)
+
+TestRunner:test("the text around what you tap has its own per-book value, independent of book text", function()
+    local out = BookSettings.effectivePrivacyOverrides(privDs({
+        [BookSettings.KEY_NEARBY_TEXT] = false,
+        [BookSettings.KEY_TEXT_EXTRACTION] = true,
+    }))
+    TestRunner:assertEqual(out.nearby_text, false, "nearby never")
+    TestRunner:assertEqual(out.book_text, true, "text allow")
+    TestRunner:assertEqual(BookSettings.PRIVACY_KEY_OF_KIND.nearby_text, BookSettings.KEY_NEARBY_TEXT, "the kind's key")
+    local n = 0
+    for _kind in pairs(BookSettings.PRIVACY_KEY_OF_KIND) do n = n + 1 end
+    TestRunner:assertEqual(n, 5, "five kinds a book can hold")
 end)
 
 TestRunner:test("allow annotations implies allow highlights", function()
@@ -1197,11 +1211,12 @@ TestRunner:test("privacy keys are in SIDECAR_KEYS (reset/count/registry coverage
         [BookSettings.KEY_ANNOTATIONS_SHARING] = true,
         [BookSettings.KEY_NOTEBOOK_SHARING] = true,
         [BookSettings.KEY_TEXT_EXTRACTION] = true,
+        [BookSettings.KEY_NEARBY_TEXT] = true,
     }
     for _i, key in ipairs(BookSettings.SIDECAR_KEYS) do
         want[key] = nil
     end
-    TestRunner:assertNil(next(want), "all four privacy keys registered")
+    TestRunner:assertNil(next(want), "all five privacy keys registered")
 end)
 
 TestRunner:suite("X-Ray spoiler posture (xray_ecosystem_plan.md 50(f)+(g))")

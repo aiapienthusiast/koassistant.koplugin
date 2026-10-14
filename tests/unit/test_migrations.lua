@@ -175,9 +175,33 @@ TestRunner:test("chain reports changes and stamps every post-0.20.0 guard", func
         "_session_chips_attach_v1", "_session_chips_quick_v1",
         "_web_search_effort_migrated", "_dict_bypass_default_migrated",
         "_highlight_context_migrated", "_session_chips_registry_v1",
+        "_privacy_ask_migrated",
     }) do
         TestRunner:assertEqual(f[stamp], true, stamp)
     end
+end)
+
+TestRunner:test("the Ask reset (B395): a switch that was on becomes Ask, position and per-book values stay, the notice is owed", function()
+    local f = v020Fixture()
+    f.enable_highlights_sharing = true
+    f.enable_notebook_sharing = false
+    f.enable_basic_stats = false
+    f.trusted_providers = { "ollama" }
+    Migrations.run(f)
+    TestRunner:assertEqual(f.enable_book_text_extraction, nil, "text: on becomes Ask")
+    TestRunner:assertEqual(f.enable_highlights_sharing, nil, "highlights: on becomes Ask")
+    TestRunner:assertEqual(f.enable_notebook_sharing, nil, "notebook: off reads as Ask already")
+    TestRunner:assertEqual(f.enable_basic_stats, false, "reading position keeps its own two values")
+    TestRunner:assertEqual(f.trusted_providers[1], "ollama", "the trusted list is kept")
+    TestRunner:assertEqual(f._privacy_notice_pending, true, "the notice is owed")
+    TestRunner:assertEqual(f._privacy_ask_migrated, true, "stamped")
+end)
+
+TestRunner:test("the Ask reset owes no notice when nothing was decided", function()
+    local f = { behavior_migrated = true, _tools_posture_migrated = true }
+    Migrations.run(f)
+    TestRunner:assertEqual(f._privacy_ask_migrated, true, "stamped")
+    TestRunner:assertEqual(f._privacy_notice_pending, nil, "no notice")
 end)
 
 TestRunner:test("legacy auto-X-Ray master ON -> one-way grant recorded, master OFF", function()
@@ -261,7 +285,6 @@ TestRunner:test("unrelated settings ride through untouched", function()
     local f = v020Fixture()
     Migrations.run(f)
     TestRunner:assertEqual(f.translation_language, "German")
-    TestRunner:assertEqual(f.enable_book_text_extraction, true)
     TestRunner:assertEqual(f.ui_language, "auto")
     TestRunner:assertEqual(f._language_prompt_shown, true)
 end)

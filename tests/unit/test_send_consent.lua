@@ -96,21 +96,41 @@ TestRunner:test("a notebook chat goes to a trusted provider with sharing off", f
     TestRunner:assertEqual(n, 1, "sent")
 end)
 
-TestRunner:test("a run option to an untrusted provider is refused, with a message", function()
+TestRunner:test("a run option to an untrusted provider asks first (the notebook is on Ask there), nothing sent", function()
     override = nil
     local n, msgs = notebookChat(trusted({ _run_variant = { provider = "openai", model = "gpt-5.5" } }),
         "ollama", { notebook = true })
     TestRunner:assertEqual(n, 0, "not sent")
-    TestRunner:assertEqual(#msgs, 1, "one message")
-    TestRunner:assertTrue((msgs[1].text or ""):find("Allow Notebook", 1, true), "names the setting")
+    TestRunner:assertEqual(#msgs, 1, "one dialog: the question")
+    TestRunner:assertTrue((msgs[1].title or ""):find("your notebook", 1, true), "names the notebook")
+    TestRunner:assertTrue((msgs[1].title or ""):find("openai", 1, true) or (msgs[1].title or ""):find("OpenAI", 1, true),
+        "names the provider the chat goes to")
 end)
 
-TestRunner:test("the book's deny beats a trusted provider; its allow passes an untrusted one", function()
+TestRunner:test("a global Never refuses with a door, nothing sent", function()
+    override = nil
+    local n, msgs = notebookChat({ enable_notebook_sharing = "never" }, "openai", { notebook = true })
+    TestRunner:assertEqual(n, 0, "not sent")
+    TestRunner:assertEqual(#msgs, 1, "one dialog: the refusal")
+    TestRunner:assertTrue((msgs[1].title or ""):find("Never for all books", 1, true), "names the layer")
+end)
+
+TestRunner:test("the book's Never beats a trusted provider; its Allow passes an untrusted one", function()
     override = false
-    TestRunner:assertEqual((notebookChat(trusted(), "ollama", { notebook = true })), 0, "deny")
+    local n, msgs = notebookChat(trusted(), "ollama", { notebook = true })
+    TestRunner:assertEqual(n, 0, "deny")
+    TestRunner:assertTrue((msgs[1].title or ""):find("Never for this book", 1, true), "the refusal names the book")
     override = true
     TestRunner:assertEqual((notebookChat(trusted(), "openai", { notebook = true })), 1, "allow")
     override = nil
+end)
+
+TestRunner:test("an allowance for this run on the chat's config sends to an untrusted provider", function()
+    override = nil
+    local f = {}
+    require("koassistant.request.privacy_gates").grantOnce(f, "/books/b.epub", { "notebook" })
+    TestRunner:assertEqual((notebookChat(f, "openai", { notebook = true })), 1, "sent under the once")
+    TestRunner:assertEqual((notebookChat({}, "openai", { notebook = true })), 0, "and not without it")
 end)
 
 TestRunner:test("the notebook viewer marks its chat, and the launcher passes the mark on", function()

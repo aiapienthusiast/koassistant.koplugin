@@ -3613,6 +3613,30 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
         end
     end
 
+    -- THE FUNNEL (B395 slice 2, data_access_picture.md 4.6): before anything is
+    -- read or sent, every kind this run wants that is still on Ask is asked for,
+    -- once, and a required kind on Never is a refusal with a door
+    -- (koassistant/ui/data_access.lua). Unattended runs (a background update,
+    -- a checkpoint step) and headless runs (a merge, the AI Wiki) never ask
+    -- here: their starts asked, or their standing value was checked. The
+    -- answer lands as the book's own value or as _data_once on the SOURCE
+    -- config (consumed below with the other dispatch transients), so the
+    -- re-entry finds nothing left to ask.
+    if config and config.features and not prompt.local_handler then
+        local cf = config.features
+        local skip = cf._background_request or cf._background_create or cf._ladder_build
+            or cf._data_no_question
+        cf._data_no_question = nil
+        if not skip then
+            local DataAccess = require("koassistant.ui.data_access")
+            local asked = DataAccess.askForDispatch(plugin, prompt, cf, ui, config, function()
+                handlePredefinedPrompt(prompt, highlightedText, ui, configuration, existing_history,
+                    plugin, additional_input, on_complete, book_metadata)
+            end)
+            if asked then return nil end  -- continuation via the question's answer
+        end
+    end
+
     -- Create a temporary configuration using the passed config as base
     local temp_config = createTempConfig(prompt, config)
     -- The X-Ray outcome marks describe THIS request's answer: a config copied
@@ -3623,6 +3647,10 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
     -- consume it from the SOURCE config so it can't go stale on the shared table.
     if config and config.features then
         config.features._web_search_active = nil
+        -- An allowance for this run (Allow once, B395): the copy in temp_config
+        -- is the chat's, for its replies; the source must not carry it into
+        -- the next request
+        config.features._data_once = nil
         -- Quick controls: consume the dispatch consumables AND the chip state from
         -- the SOURCE config (same staleness rule — the copies already rode into
         -- temp_config for dialog launches, where they are the chat's live state).
@@ -4594,27 +4622,21 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
     if ui and ui.document and not is_file_browser_target then
         local extraction_success, ContextExtractor = pcall(require, "koassistant.request.context_extractor")
         if extraction_success and ContextExtractor then
-            local extractor = ContextExtractor:new(ui, {
+            -- The privacy keys (the switches, the trusted column and list, the
+            -- run's allowance) ride in through the gates module's copy (B395)
+            local extractor = ContextExtractor:new(ui, require("koassistant.request.privacy_gates").copyPrivacy(config.features, {
                 -- Extraction limits
-                enable_book_text_extraction = config.features and config.features.enable_book_text_extraction,
                 max_book_text_chars = prompt and prompt.max_book_text_chars or (config.features and config.features.max_book_text_chars),
                 max_pdf_pages = config.features and config.features.max_pdf_pages,
                 -- Privacy settings
                 provider = effective_provider,
-                trusted_providers = config.features and config.features.trusted_providers,
-                enable_highlights_sharing = config.features and config.features.enable_highlights_sharing,
-                enable_annotations_sharing = config.features and config.features.enable_annotations_sharing,
-                enable_basic_stats = config.features and config.features.enable_basic_stats,
-                enable_notebook_sharing = config.features and config.features.enable_notebook_sharing,
                 -- Library scanning (session folders from library dialog override permanent config)
-                enable_library_scanning = config.features and config.features.enable_library_scanning,
-                enable_advanced_stats = config.features and config.features.enable_advanced_stats,
                 library_scan_folders = config.features and config.features.library_scan_folders,
                 _session_scan_folders = plugin and plugin._session_scan_folders,
                 -- Ladder rung 1 (create from nothing): bound {book_text} extraction at
                 -- the rung boundary instead of the reader's position (§6 slice 1)
                 _ladder_target_ratio = message_data._ladder_target,
-            })
+            }))
             logger.dbg("KOAssistant: Extractor settings - enable_book_text_extraction=",
                        config.features and config.features.enable_book_text_extraction and "true" or "false/nil")
             if extractor:isAvailable() then
@@ -4673,24 +4695,16 @@ if prune_book_text then
         -- No live document — LIVE_BOOK_FLAGS (book_text, page_text, reading_stats) will return empty
         local extraction_success, ContextExtractor = pcall(require, "koassistant.request.context_extractor")
         if extraction_success and ContextExtractor then
-            local extractor = ContextExtractor:new(nil, {
+            -- The privacy keys ride in through the gates module's copy (B395)
+            local extractor = ContextExtractor:new(nil, require("koassistant.request.privacy_gates").copyPrivacy(config.features, {
                 document_path = fb_document_path,
-                -- Text extraction (needed for cache permission checks)
-                enable_book_text_extraction = config.features and config.features.enable_book_text_extraction,
                 -- Privacy settings
                 provider = effective_provider,
-                trusted_providers = config.features and config.features.trusted_providers,
-                enable_highlights_sharing = config.features and config.features.enable_highlights_sharing,
-                enable_annotations_sharing = config.features and config.features.enable_annotations_sharing,
-                enable_basic_stats = config.features and config.features.enable_basic_stats,
-                enable_notebook_sharing = config.features and config.features.enable_notebook_sharing,
                 -- Library placeholders (the catalog and the engagement lists) were
                 -- always empty from the file browser without these (B463)
-                enable_library_scanning = config.features and config.features.enable_library_scanning,
                 library_scan_folders = config.features and config.features.library_scan_folders,
                 _session_scan_folders = config.features and config.features._session_scan_folders,
-                enable_advanced_stats = config.features and config.features.enable_advanced_stats,
-            })
+            }))
             logger.dbg("KOAssistant: Sidecar extraction for file browser:", fb_document_path)
             local extracted = extractor:extractForAction(prompt or {})
             for key, value in pairs(extracted) do
@@ -5087,14 +5101,12 @@ if prune_book_text then
                 -- If text extraction is disabled, getBookTextRange returns empty — AI updates from training knowledge
                 local extraction_success, ContextExtractor = pcall(require, "koassistant.request.context_extractor")
                 if extraction_success and ContextExtractor then
-                    local extractor = ContextExtractor:new(ui, {
-                        enable_book_text_extraction = config.features and config.features.enable_book_text_extraction,
+                    local extractor = ContextExtractor:new(ui, require("koassistant.request.privacy_gates").copyPrivacy(config.features, {
                         max_book_text_chars = prompt.max_book_text_chars or (config.features and config.features.max_book_text_chars),
                         max_pdf_pages = config.features and config.features.max_pdf_pages,
-                        -- Pass trust context so this extractor matches its siblings (audit G5 rider).
+                        -- The provider this extractor judges for, as its siblings (audit G5 rider).
                         provider = effective_provider,
-                        trusted_providers = config.features and config.features.trusted_providers,
-                    })
+                    }))
                     -- Use raw page numbers for extraction range
                     -- (flow-aware progress * total_pages gives wrong pages when hidden flows active)
                     local total_pages = ui.document.info and ui.document.info.number_of_pages or 0
@@ -5291,6 +5303,9 @@ if prune_book_text then
     -- handleResponse — one upvalue instead of nine (upvalue-cap discipline)
     local retry_args = { prompt_type_or_action, highlightedText, ui, configuration,
         existing_history, plugin, additional_input, on_complete, book_metadata }
+    -- The run's data allowance (Allow once, B395) covers its retry: the source
+    -- consumed it, the retry puts it back
+    retry_args.data_once = temp_config.features and temp_config.features._data_once
     -- The model a run option applied (B345): the unusable-X-Ray retry runs on it
     -- again (X-Ray takes a run option's model only; the bake consumed the pick)
     local applied_run_model = temp_config.features and temp_config.features._run_model
@@ -6063,6 +6078,9 @@ if prune_book_text then
                             if retry_args.run_variant and src and src.features then
                                 src.features._run_variant = retry_args.run_variant
                             end
+                            if retry_args.data_once and src and src.features then
+                                src.features._data_once = retry_args.data_once
+                            end
                             handlePredefinedPrompt(unpack(retry_args, 1, 9))
                         end,
                         cancel_text = _("Close"),
@@ -6637,6 +6655,7 @@ local function showAttachMenu(opts)
     local document_path = opts.document_path
     local chips_book_or_highlight = opts.chips_book_or_highlight
     local on_change = opts.on_change or function() end
+    local plugin = opts.plugin
 
     -- Manage list (hold, or the "manage…" row): stays open across removals,
     -- fires on_change once at close — the Toolbar-Buttons-manager pattern.
@@ -6708,25 +6727,25 @@ local function showAttachMenu(opts)
             table.insert(rows, {{
                 text = _("Notebook (this book)"),
                 callback = function()
-                    -- Same gate as use_notebook (attach_plan.md §4); trusted
-                    -- providers bypass as elsewhere; the per-book privacy
-                    -- override wins in both directions (deny beats trusted).
-                    local allowed = Attachments.notebookAllowed(feats, configuration.provider,
-                        Attachments.notebookOverrideFor(book_path, ui_instance))
-                    if not allowed then
-                        UIManager:show(InfoMessage:new{
-                            text = _("Attaching your notebook needs \"Allow Notebook\" (Settings → Privacy & Data, or this book's Privacy overrides)."),
-                        })
-                        return
+                    -- The notebook kind (attach_plan.md §4; B395 slice 2): an
+                    -- explicit pick starts the question when nothing stands,
+                    -- passes when a value stands, is refused under Never. The
+                    -- allowance lives on this dialog's config for its sends.
+                    local function stage()
+                        local entry, err = Attachments.makeNotebook(book_path)
+                        if not entry then
+                            UIManager:show(InfoMessage:new{ text = err })
+                            return
+                        end
+                        Attachments.add(entry)
+                        UIManager:close(type_dialog)
+                        on_change()
                     end
-                    local entry, err = Attachments.makeNotebook(book_path)
-                    if not entry then
-                        UIManager:show(InfoMessage:new{ text = err })
-                        return
-                    end
-                    Attachments.add(entry)
-                    UIManager:close(type_dialog)
-                    on_change()
+                    require("koassistant.ui.data_access").withAccess(plugin, nil, {
+                        features = feats, provider = configuration.provider, path = book_path, ui = ui_instance,
+                        kinds = { "notebook" }, action_name = _("Attach"),
+                        amounts = { notebook = _("your notebook for this book") },
+                    }, stage)
                 end,
             }})
         end
@@ -7532,6 +7551,13 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
         local function runActionWithSource(popup_state, is_hl)
             configuration.features = configuration.features or {}
             configuration.features._source_mode = popup_state.source
+            -- The popup's question allowed these kinds once (B395): on this
+            -- dialog's config, read by the gather and consumed at the dispatch
+            configuration.features._data_once = nil
+            if popup_state.data_once then
+                require("koassistant.request.privacy_gates").grantOnce(configuration.features,
+                    document_path, popup_state.data_once)
+            end
             if is_hl and popup_state.section_entry
                     and (popup_state.scope == "section" or popup_state.scope == "range") then
                 configuration.features._highlight_section_scope = {
@@ -8423,7 +8449,9 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
     -- Library scan state: computed here (outer scope) so both buildInputDialogButtons and hint text can use it
     -- Settings come from plugin.settings (KOReader settings system), not configuration.features
     local settings_features = plugin and plugin.settings and plugin.settings:readSetting("features") or {}
-    local library_toggle_on = require("koassistant.request.privacy_gates").allows("book_list",
+    -- The library rows are offered unless the book list is Never (B395 slice 2):
+    -- on Ask the run asks, and the Send asks before it reads the folders
+    local library_toggle_on = require("koassistant.request.privacy_gates").usable("book_list",
         { features = settings_features, provider = configuration and configuration.provider })
     local has_session_scan = plugin and plugin._session_scan_folders and #plugin._session_scan_folders > 0
     local has_permanent_folders = settings_features.library_scan_folders and #settings_features.library_scan_folders > 0
@@ -8570,7 +8598,8 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         hold_callback = explainXray,
                     }
                 end
-                local eligible, reason = BookToolRunner.sessionEligible(configuration, ui_instance)
+                -- Offered while book text is on Ask (the Send asks, B395)
+                local eligible, reason = BookToolRunner.sessionEligible(configuration, ui_instance, { offer = true })
                 local function holdPicker()
                     BookSettings.showToolsPosture({
                         plugin = plugin, ui = ui_instance, document_path = document_path,
@@ -8589,7 +8618,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         callback = function()
                             local msg
                             if reason == "consent" then
-                                msg = _("Book tools need \"Allow Text Extraction\" (Settings → Privacy & Data).")
+                                msg = _("Book tools read this book's text, which is set to Never for this book or for all books (Book Settings → Privacy, Settings → Privacy & Data).")
                             else
                                 msg = T(_("Book tools aren't available for %1.\n\nThey need a provider and model that support tool calls (Test provider shows whether yours does)."),
                                     configuration.provider or _("this provider"))
@@ -8825,10 +8854,11 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         local toc_available = ui_instance.toc and ui_instance.toc.toc
                             and #ui_instance.toc.toc > 0
                         -- The book's own value, trust, the switch: the gates module,
-                        -- as at Send. Runtime requires only (60-cap).
-                        local consent = require("koassistant.request.privacy_gates").allows("book_text",
-                            { features = feats, provider = configuration.provider,
-                              book = require("koassistant.request.privacy_gates").bookOverrides(nil, ui_instance) })
+                        -- as at Send. A row is offered unless the value is Never;
+                        -- the Send asks on Ask (B395). Runtime requires only (60-cap).
+                        local consent = require("koassistant.request.privacy_gates").usable("book_text",
+                            require("koassistant.request.privacy_gates").context(feats, configuration.provider,
+                                { path = document_path, ui = ui_instance }))
                         local progress_fmt
                         do
                             local okr, CE = pcall(require, "koassistant.request.context_extractor")
@@ -8841,7 +8871,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         local dialog
                         local function explainConsent()
                             UIManager:show(InfoMessage:new{
-                                text = _("This scope needs \"Allow Text Extraction\" (Settings → Privacy & Data). \"Current page\" works without it."),
+                                text = _("This scope needs book text, which is set to Never for this book or for all books (Book Settings → Privacy, Settings → Privacy & Data). \"Current page\" works without it."),
                             })
                         end
                         local function setPick(new_pick)
@@ -9269,6 +9299,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                     enable_emoji = enable_emoji,
                     chips_book_or_highlight = chips_book_or_highlight,
                     on_change = refreshInputDialog,
+                    plugin = plugin,
                 })
                 return {
                     text = D.attachChipLabel(enable_emoji),
@@ -9293,7 +9324,8 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
         end
 
         -- Send (freeform chat with context)
-        local send_button = {
+        local send_button
+        send_button = {
                 text = enable_emoji and (_("Send") .. " ➤") or _("Send"),
                 -- In library context, disable Send when there's nothing to chat about
                 enabled = not (configuration.features.is_library_context
@@ -9319,6 +9351,55 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                 -- Inline requires on purpose (60-upvalue cap).
                 local scope_block
                 local scope_pick = configuration.features and configuration.features._session_scope
+                -- The data question for this Send (B395 slice 2): the Scope chip's
+                -- text or current page, the book tools' lookups, an attached
+                -- notebook and the library's book list, asked once before anything
+                -- is read; the allowance lives on this dialog's config for the chat
+                -- and its replies. Inline requires only (60-upvalue cap).
+                if not configuration.features._data_send_asked then
+                    local da_kinds, da_amounts = {}, {}
+                    if scope_pick and ui_instance and ui_instance.document then
+                        if scope_pick.kind == "page" then
+                            da_kinds[#da_kinds + 1] = "nearby_text"
+                            da_amounts.nearby_text = _("the text of your current page")
+                        else
+                            da_kinds[#da_kinds + 1] = "book_text"
+                            da_amounts.book_text = _("text from this book, the scope you picked")
+                        end
+                    elseif session_book_tools and ui_instance and ui_instance.document then
+                        da_kinds[#da_kinds + 1] = "book_text"
+                        da_amounts.book_text = _("the passages the book tools look up in this book")
+                    end
+                    if require("koassistant.request.attachments").hasType("notebook") then
+                        da_kinds[#da_kinds + 1] = "notebook"
+                    end
+                    if configuration.features.is_library_context and library_toggle_on then
+                        da_kinds[#da_kinds + 1] = "book_list"
+                        da_amounts.book_list = _("your book list (titles, authors, reading status)")
+                    end
+                    if #da_kinds > 0 then
+                        local DA = require("koassistant.ui.data_access")
+                        local da_opts = {
+                            features = configuration.features, ui = ui_instance, path = document_path,
+                            kinds = da_kinds, amounts = da_amounts, action_name = _("Send"),
+                            provider = send_rv and send_rv.provider
+                                or require("koassistant.ui.dialogs").effectiveDispatchProvider(
+                                    configuration.features, nil, configuration.provider),
+                        }
+                        local da_needs = DA.needsFor(nil, da_opts)
+                        local da_plan = DA.plan(da_needs)
+                        if da_plan.refused or #da_plan.asked > 0 then
+                            da_opts.needs = da_needs
+                            DA.withAccess(plugin, nil, da_opts, function()
+                                configuration.features._data_send_asked = true
+                                configuration.features._send_run_variant = send_rv
+                                send_button.callback()
+                            end)
+                            return
+                        end
+                    end
+                end
+                configuration.features._data_send_asked = nil
                 -- Book AND highlight context (2026-08-17): the highlight facet's
                 -- "Also send" pick rides the same extraction; the chip never
                 -- renders elsewhere and fresh opens scrub the pick.
@@ -9340,17 +9421,18 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         scope_block = { label = "Text of the reader's current page:", text = text }
                     else
                         -- Judged for the provider this Send really goes to (a pending
-                        -- pick re-points it at bake time) and for the book's own value,
-                        -- by the gates module. Runtime requires only (60-cap).
+                        -- pick re-points it at bake time), for the book's own value and
+                        -- the question's allowance, by the gates module. Runtime
+                        -- requires only (60-cap).
                         local consent = require("koassistant.request.privacy_gates").allows("book_text",
-                            { features = configuration.features,
-                              provider = send_rv and send_rv.provider
-                                  or require("koassistant.ui.dialogs").effectiveDispatchProvider(
-                                      configuration.features, nil, configuration.provider),
-                              book = require("koassistant.request.privacy_gates").bookOverrides(nil, ui_instance) })
+                            require("koassistant.request.privacy_gates").context(configuration.features,
+                                send_rv and send_rv.provider
+                                    or require("koassistant.ui.dialogs").effectiveDispatchProvider(
+                                        configuration.features, nil, configuration.provider),
+                                { path = document_path, ui = ui_instance }))
                         if not consent then
                             UIManager:show(InfoMessage:new{
-                                text = _("The chosen scope needs \"Allow Text Extraction\" (Settings → Privacy & Data). Clear the Scope chip or enable extraction."),
+                                text = _("The chosen scope needs book text, which is not allowed for this book. Clear the Scope chip, or allow it in Book Settings → Privacy."),
                                 timeout = 5,
                             })
                             return
@@ -9538,7 +9620,9 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                                 { features = lib_features,
                                   provider = send_rv and send_rv.provider
                                       or require("koassistant.ui.dialogs").effectiveDispatchProvider(
-                                          configuration.features, nil, configuration.provider) }) then
+                                          configuration.features, nil, configuration.provider),
+                                  -- the question's allowance rides this dialog's config (B395)
+                                  once = require("koassistant.request.privacy_gates").onceFor(configuration.features, nil) }) then
                             scan_folders_to_use = plugin and plugin._session_scan_folders
                             if not scan_folders_to_use then
                                 if lib_features.library_scan_folders and #lib_features.library_scan_folders > 0 then
@@ -9549,7 +9633,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                             -- The dialog offered the list for its own provider; say why
                             -- this Send goes without it rather than drop it silently
                             UIManager:show(require("ui/widget/notification"):new{
-                                text = _("Your book list was left out: library scanning is off for this provider."),
+                                text = _("Your book list was left out: it is not allowed for this provider."),
                                 timeout = 3,
                             })
                         end
@@ -10455,7 +10539,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                             showLibraryFolderPopup()
                         else
                             UIManager:show(InfoMessage:new{
-                                text = _("To use library scan actions, enable Allow Library Scanning in Settings → Privacy & Data.\n\nIf you don't need these actions, you can hide this section from the gear menu."),
+                                text = _("The library scan actions are off: your book list is set to Never (Settings → Privacy & Data → Book list).\n\nIf you don't need these actions, you can hide this section from the gear menu."),
                             })
                         end
                     end,
@@ -13263,6 +13347,9 @@ executeActionForResult = function(action, highlighted_text, ui, configuration, p
     -- true/false would otherwise pose as this request's session layer.
     if configuration and configuration.features then
         configuration.features._spoiler_free_active = nil
+        -- A headless run has no moment for the data question (B395): its
+        -- start asked, or checked a standing value (XrayMerge.consentOk)
+        configuration.features._data_no_question = true
     end
     handlePredefinedPrompt(action, highlighted_text, ui, configuration, nil, plugin, nil, function(history, temp_config_or_error)
         on_result(headlessResult(history, temp_config_or_error))
@@ -13418,17 +13505,30 @@ local function launchArtifactChat(user_question, artifact_content, artifact_type
     -- Build system prompt (standard book chat)
     buildUnifiedRequestConfig(configuration, domain_context, nil, plugin)
 
-    -- A notebook is the reader's own writing: the notebook gate for the provider
+    -- A notebook is the reader's own writing: the notebook kind for the provider
     -- this chat goes to, known only after the bake (a run option can re-point
-    -- it); the book's deny beats a trusted provider (B396 a)
-    if opts and opts.notebook then
+    -- it); the book's Never beats a trusted provider (B396 a). On Ask the
+    -- question is asked here, once, and the chat runs again with its
+    -- allowance on this config (B395 slice 2); its replies re-judge it.
+    if opts and opts.notebook and not opts.notebook_asked then
+        local Gates = require("koassistant.request.privacy_gates")
         local A = require("koassistant.request.attachments")
-        if not A.notebookAllowed(configuration.features,
-                configuration.provider or configuration.default_provider,
-                A.notebookOverrideFor(document_path, ui)) then
-            UIManager:show(InfoMessage:new{
-                text = _("Chatting about your notebook needs \"Allow Notebook\" (Settings → Privacy & Data, or this book's Privacy overrides)."),
-            })
+        local nb_provider = configuration.provider or configuration.default_provider
+        -- the book's own value through the attachments' seam (the one every
+        -- notebook check uses)
+        local nb_book = { notebook = A.notebookOverrideFor(document_path, ui) }
+        local nb_state = Gates.resolve("notebook", Gates.context(configuration.features, nb_provider,
+            { path = document_path, book = nb_book }))
+        if nb_state ~= "allow" then
+            opts.notebook_asked = true
+            require("koassistant.ui.data_access").withAccess(plugin, nil, {
+                features = configuration.features, provider = nb_provider, path = document_path, ui = ui,
+                book = nb_book, kinds = { "notebook" }, action_name = _("Chat about this notebook"),
+                amounts = { notebook = _("your notebook for this book") },
+            }, function()
+                launchArtifactChat(user_question, artifact_content, artifact_type_name, ui,
+                    configuration, plugin, book_metadata, opts)
+            end)
             return
         end
     end

@@ -2913,17 +2913,20 @@ function XrayBrowser:showItemDetail(item, category_key, title, source, nav_conte
     -- Append matching highlights for searchable categories
     if not DISTRIBUTION_EXCLUDED[category_key] and self.ui then
         local config_features = (self.metadata.configuration or {}).features or {}
-        -- The highlights come from the OPEN book's live annotations, and this
-        -- detail text is sent to the provider by "Chat about this": the book's
-        -- own value, then trust, then sharing, judged by the gates module. The
-        -- override is recorded with the block so every send re-judges it (B396 d).
+        -- The highlights come from the OPEN book's live annotations. Shown on
+        -- the page whatever the privacy values say (shown on the device is
+        -- never gated); this detail text is sent by "Chat about this", so the
+        -- chat's block is built unless the value is Never: the book's own
+        -- value, then trust, then sharing (the gates module), and on Ask the
+        -- chat asks before it starts (B395 slice 2). The override is recorded
+        -- with the block so every send re-judges it (B396 d).
         local Gates = require("koassistant.request.privacy_gates")
         local book_values = Gates.overridesOf(self.ui.doc_settings)
         local hl_override = book_values and book_values.highlights
-        local highlights_allowed = Gates.allows("highlights", { features = config_features,
+        local highlights_usable = Gates.usable("highlights", { features = config_features,
             provider = config_features.provider, book = book_values })
-        item_highlights = highlights_allowed and findItemHighlights(item, self.ui) or {}
-        if #item_highlights > 0 then
+        item_highlights = findItemHighlights(item, self.ui) or {}
+        if #item_highlights > 0 and highlights_usable then
             -- The chat context keeps them inline (that is the whole point of
             -- gating them on the sharing settings); the PAGE moves them behind
             -- a button. A well-highlighted character buried its own X-Ray
@@ -4448,6 +4451,27 @@ function XrayBrowser:chatAboutItem(detail_text, entity)
             .. ". It is analysis, not text from the book itself.)"
     end
     config.features._xray_context_prefix = framing
+
+    -- The highlights block rides the chat's text: on Ask the question comes
+    -- here, before the chat opens (B395 slice 2); its allowance lives on this
+    -- chat's own config, so every send re-judges the block with it
+    if entity and entity.highlights and self.metadata.book_file then
+        local Gates = require("koassistant.request.privacy_gates")
+        local state = Gates.resolve("highlights", Gates.context(config.features,
+            config.provider, { path = self.metadata.book_file, ui = self.ui }))
+        if state ~= "allow" then
+            local self_ref = self
+            require("koassistant.ui.data_access").withAccess(self.metadata.plugin, nil, {
+                features = config.features, provider = config.provider,
+                path = self.metadata.book_file, ui = self.ui,
+                kinds = { "highlights" }, required = false, action_name = _("Chat about this"),
+                amounts = { highlights = _("your highlights that mention this entry") },
+            }, function()
+                Dialogs.showChatGPTDialog(self_ref.ui, detail_text, config, nil, self_ref.metadata.plugin)
+            end)
+            return
+        end
+    end
 
     Dialogs.showChatGPTDialog(self.ui, detail_text, config, nil, self.metadata.plugin)
 end

@@ -1,10 +1,10 @@
 # Privacy and Data
 
-KOAssistant sends data to the AI provider you choose so it can answer you. This page explains what is sent, what stays on your device until you allow it, and every control you have: the global switches and presets, per-book overrides, trusted providers, and the per-action flags of custom actions.
+KOAssistant sends data to the AI provider you choose so it can answer you. This page explains what is sent, what is asked for before it goes, and every control you have: the value of each kind of data (Ask, Allow or Never), the presets, per-book values, trusted providers, and the per-action flags of custom actions.
 
-> ⚠️ **Some features are opt-in.** To protect your privacy, personal reading data (highlights, annotations, notebook) is NOT sent to AI providers by default. You must enable sharing in **Settings → Privacy & Data** if you want features like Analyze Notes or Connect (With Notes) to work fully. Book text is off by default too (see [Text Extraction and Double-gating](#text-extraction-and-double-gating)).
+> ⚠️ **Nothing of yours leaves the device unasked.** Your highlights, notes, notebook, book text, book list and reading habits are each on **Ask** by default: the first time an action wants one of them, KOAssistant shows what it is about to send and to whom, and you answer **Allow once** or **Allow for this book**. Set a kind to **Allow** in **Settings → Privacy & Data** to skip the question, or to **Never** to refuse it everywhere.
 
-This is not privacy theater: the "threat model" is simply users including sensitive data (annotations, notes, content) by accident. You are already being permissive by using online AIs at all, this plugin encourages AI analysis of your reading material, and the available placeholders (template variables) can carry a substantial amount of sensitive data. Advanced Stats (opt-in, off by default) reads KOReader's Statistics plugin locally to derive reading engagement groups; see [Design Choices](#design-choices) for what this means and why it is opt-in. Best practice is to pick providers thoughtfully, and the very best practice is to use local or self-hosted solutions, such as Ollama (see [Local Processing](#local-processing)).
+This is not privacy theater: the "threat model" is simply users including sensitive data (annotations, notes, content) by accident. You are already being permissive by using online AIs at all, this plugin encourages AI analysis of your reading material, and the available placeholders (template variables) can carry a substantial amount of sensitive data. Reading habits (Never until you allow them) are read from KOReader's Statistics plugin locally to derive reading engagement groups; see [Design Choices](#design-choices) for what this means. Best practice is to pick providers thoughtfully, and the very best practice is to use local or self-hosted solutions, such as Ollama (see [Local Processing](#local-processing)).
 
 ## What Gets Sent
 
@@ -17,59 +17,90 @@ This is not privacy theater: the "threat model" is simply users including sensit
 
 - **Document metadata** such as title, author and identifiers (a DOI when one is detected). A highlight action leaves it out when you uncheck **Include book info** in its settings in the action manager. **Settings → Chat & Export Settings → Book Info in Chat** sets how much book context freeform chats and book-aware actions get (None, Title only, Title & author, or Title, author & position), and Book Settings can change that per book, or change or blank the title and author the AI is told (see [Book Settings and Book Hub](Book-Settings-and-Book-Hub)).
 - **Enabled system content**, like your languages, domain and behavior.
-- **Basic stats**: reading progress (percentage), chapter title, chapters read count, time since last opened, and the print page number when the book carries a page list. The data used to calculate them (the exact date you last opened the document, and so on) stays local.
-- **Per-book Background**: if you have written a standing note about a book in Book Settings (what you're reading it for, how to treat it), it is sent with requests for that book alongside behavior and domain. Most actions that leave the domain out, such as translation and dictionary lookups, leave it out too. There is no separate privacy toggle: writing it is the consent, and it stays empty otherwise. See [Prompts, Behaviors and Domains](Prompts-Behaviors-and-Domains).
+- **Reading position**: reading progress (percentage), chapter title, chapters read count, time since last opened, and the print page number when the book carries a page list. The data used to calculate them (the exact date you last opened the document, and so on) stays local. It is on by default because spoiler protection relies on it, and it is the one kind that is never asked: **Settings → Privacy & Data → Reading position** turns it on or off.
+- **The text around what you tap**: the bounded text around a selection (the context of a highlight or of a dictionary lookup), your current page (page translate, the Scope chip's "Current page") and the text around an image prompt. A few sentences or one page, never more; it has its own value (Allow by default), independent of the book's text.
+- **Per-book Background**: if you have written a standing note about a book in Book Settings (what you're reading it for, how to treat it), it is sent with requests for that book alongside behavior and domain. Most actions that leave the domain out, such as translation and dictionary lookups, leave it out too. There is no separate privacy value: writing it is the consent, and it stays empty otherwise. See [Prompts, Behaviors and Domains](Prompts-Behaviors-and-Domains).
 
-### Opt-in (off by default)
+### Asked the first time (Ask by default)
 
-- **Highlights**: your highlighted passages (with their chapter or page), separate from annotations.
-- **Annotations**: your highlighted text with the personal notes you attached.
-- **Notebook entries**: your KOAssistant notebook for the book, with the dates of its entries.
-- **Book text content**: actual text from the document (for X-Ray, Recap and others).
-- **Library catalog**: metadata of the books in your scan folders: title, author, series and reading status, with the progress percentage of books you are reading or have put on hold. Books are grouped by status and ordered by when you last read them; the dates themselves are not sent. Only sent by library actions when library scanning is enabled with folders configured.
-- **Advanced stats**: reading engagement data derived from KOReader's Statistics plugin: curated groups based on reading time and completion patterns (books read extensively, stalled reads, briefly started, recently finished). Raw statistics (session logs, pages per session, reading speed, exact timestamps) are computed locally and **never** sent; only book lists with rounded labels reach the AI (see [Design Choices](#design-choices)). Only used by library scan actions.
+- **Highlights**: your highlighted passages (with their chapter or page), separate from annotation notes.
+- **Annotation notes**: your highlighted text with the personal notes you attached. Allowing notes allows highlights; Never for highlights is Never for notes.
+- **Notebook**: your KOAssistant notebook for the book, with the dates of its entries.
+- **Book text**: actual text from the document (for X-Ray, Recap and others). See [Text Extraction and Double-gating](#text-extraction-and-double-gating).
+- **Book list**: metadata of the books in your scan folders: title, author, series and reading status, with the progress percentage of books you are reading or have put on hold. Books are grouped by status and ordered by when you last read them; the dates themselves are not sent. Only sent by library actions, and only with folders configured.
+- **Reading habits**: reading engagement data derived from KOReader's Statistics plugin: curated groups based on reading time and completion patterns (books read extensively, stalled reads, briefly started, recently finished). Raw statistics (session logs, pages per session, reading speed, exact timestamps) are computed locally and **never** sent; only book lists with rounded labels reach the AI (see [Design Choices](#design-choices)). Only used by library scan actions.
+
+## The Three Values and the Question
+
+Every kind of data has one value, for all books, in **Settings → Privacy & Data**:
+
+- **Ask** (the default): the first time an action wants this kind, a question appears before anything is read or sent.
+- **Allow**: it goes without a question.
+- **Never**: it never goes. An action that cannot work without it is refused, and an action that can simply runs without it.
+
+### The question
+
+It names the action, the provider the request goes to, and every kind of data the run wants that is still on Ask, with the amount where it is known ("text from this book, up to your position (42%)", "your highlights (12)"):
+
+- **Allow once**: this run and the replies of the chat it opens. Nothing is stored.
+- **Allow for this book**: sets the book's own value to Allow (Book Settings → Privacy), so this book is never asked again for that kind.
+- **Not for this book** (only when nothing asked is required): the run goes on without those kinds, and the book's own value becomes Never for them. Change it on the book's Privacy screen.
+- **Always allow** replaces "Allow for this book" for the two kinds no book can hold, the book list and your reading habits: it sets the value for all books.
+- **More…**: opens the book's Privacy screen (or the settings), and asks again when you come back.
+- **Cancel**: nothing is sent.
+
+A required kind (X-Ray's book text, say) on Never is a short refusal that names where the value comes from (this book, all books, or trusted providers) with one button to that screen. A request over several picked books asks once for the set; each book's own value still decides for its data, and books set to Never stay out.
+
+### Where it is asked
+
+At the moment of need, and nowhere else: when an action starts (from a menu, a gesture, the Quick Actions panel, the highlight menu, the file browser or an input dialog), on the **Run** button of an action's scope and source popup (where the spoiler reminder also sits, so the two are one dialog), when you pick a Scope chip range or turn the Tools chip on and send, when you attach your notebook or chat about it, when you chat about an X-Ray entry whose page lists your highlights, and when a library chat sends your book list. Viewing, browsing and deleting what is already on the device never ask.
+
+### Background features
+
+Automatic X-Ray and checkpoint builds have no moment to ask while you read, so they need a standing Allow: the book's own value, the value for all books, or a trusted provider. When a book with automatic building on is still on Ask, the engine asks once, in the foreground, at the moment a checkpoint would build (and the confirm that turns automatic building on carries the same line): **Allow for this book and start** writes the book's value; **Cancel** pauses automatic building for that book until you turn it on again or reopen the book. A build you start by hand (checkpoints now, one background request) asks before its own confirm, and **Allow once** there covers every checkpoint of that build, never the automatic continuation afterwards.
 
 ## Privacy Controls
 
 ### Presets
 
-**Settings → Privacy & Data** provides three quick presets:
+**Settings → Privacy & Data** provides three presets, one value for every kind of data (reading position apart):
 
 | Preset | What it does |
 |--------|--------------|
-| **Preset: Default** | Basic stats (progress, chapter info) shared for context-aware features. Personal content (highlights, annotations, notebook) stays private. Advanced stats, library scanning and text extraction off. |
-| **Preset: Minimal** | Maximum privacy. Only your question and book metadata are sent. All stats (including basic stats), library scanning, personal content and text extraction off. |
-| **Preset: Full** | All data sharing enabled for full functionality, including library scanning and advanced stats. Does not turn on text extraction (see [Why It Is Off by Default](#why-it-is-off-by-default)); it leaves that toggle as it was. |
+| **Preset: Ask about everything** | The default. Each kind is asked for the first time an action wants it; reading position is sent. |
+| **Preset: Allow everything** | Every kind goes without a question, book text included (it raises token costs). |
+| **Preset: Never send anything extra** | Nothing but your question, the selected text and the book's title and author; reading position off too. Actions that need more are refused until you allow it. |
 
-A preset changes only these global toggles. Your trusted providers, per-book overrides and scan folders stay as they are.
+A preset changes only these values. Your trusted providers, per-book values and scan folders stay as they are.
 
-### Data Sharing Toggles
+### The kinds of data
 
-The individual toggles sit under the presets in **Settings → Privacy & Data**. They govern every provider you have not marked trusted.
+The rows sit under the presets in **Settings → Privacy & Data**, each with Ask, Allow or Never. They govern every provider you have not marked trusted.
 
-- **Allow Annotation Notes** (default: off): your personal notes attached to highlights. Turning it on also turns on Allow Highlights. Actions requesting annotations degrade gracefully: when this is off but Allow Highlights is on, they receive highlights only (labeled "My highlights so far:" instead of "My annotations:"). Used by Analyze Notes, Connect (With Notes), Analyze in Context and actions with `{annotations}` placeholders.
-- **Allow Highlights** (default: off): your highlighted text passages, without notes. Used by Recap, Analyze Notes and actions with `{highlights}` placeholders. It also unlocks the local "Your highlights (N)…" list on X-Ray entity pages, which is read from the book and not sent anywhere until you chat about that entry. Grayed out while Allow Annotation Notes is on (annotations imply highlights).
-- **Allow Notebook** (default: off): the notebook entries for the book. Used by Connect (With Notes), Analyze Notes, Analyze in Context and actions with the `{notebook}` placeholder, and needed to attach your notebook in a chat or to chat about it.
-- **Allow Basic Stats** (default: on): reading progress percentage, chapter title, chapters read count, time since last opened. Used by X-Ray, Recap and other context-aware features.
-- **Allow Library Scanning** (default: off): the same toggle as in Reading & Library; see [Library Scanning Settings](#library-scanning-settings).
-- **Allow Advanced Stats** (default: off): reading engagement data derived from KOReader's Statistics plugin, shared as curated groups with library scan actions. See [Design Choices](#design-choices).
-- **Text Extraction**: a submenu; see [Text Extraction Settings](#text-extraction-settings).
-- **Tip: Per-book overrides** explains the two ways to use [Per-Book Overrides](#per-book-overrides).
+- **Annotation notes** (default: Ask): your personal notes attached to highlights. Allowing notes allows highlights too. Actions requesting notes degrade gracefully: when notes are not allowed but highlights are, they receive highlights only (labeled "My highlights so far:" instead of "My annotations:"). Used by Analyze Notes, Connect (With Notes), Analyze in Context and actions with `{annotations}` placeholders.
+- **Highlights** (default: Ask): your highlighted text passages, without notes. Never here is Never for notes too. Used by Recap, Analyze Notes and actions with `{highlights}` placeholders. X-Ray does not send them: an X-Ray entity page lists the highlights that mention the entry, matched on the device, and they go out only when you chat about that entry. Grayed out while Annotation notes are on Allow.
+- **Notebook** (default: Ask): the notebook entries for the book. Used by Connect (With Notes), Analyze Notes, Analyze in Context and actions with the `{notebook}` placeholder, and by attaching your notebook in a chat or chatting about it.
+- **Reading position** (default: on): reading progress percentage, chapter title, chapters read count, time since last opened. On or off, never asked. Used by X-Ray, Recap and other context-aware features.
+- **Book list** (default: Ask): the same value as **Book list** in Reading & Library; see [Library Scanning Settings](#library-scanning-settings).
+- **Reading habits** (default: Ask): reading engagement data derived from KOReader's Statistics plugin, shared as curated groups with library scan actions. See [Design Choices](#design-choices).
+- **Text around what you tap** (default: Allow): the bounded text around a selection, your current page and the text around an image prompt; independent of book text.
+- **Text Extraction**: a submenu holding **Book text** and the extraction limits; see [Text Extraction Settings](#text-extraction-settings).
+- **Tip: Per-book values** explains [Per-Book Values](#per-book-values).
 
 ### Library Scanning Settings
 
 In **Settings → Reading & Library**, under Library:
 
-- **Allow Library Scanning** (default: off): allows scanning your folders for book metadata. Required for the scan-based library actions (Next Read, Discover New, Analyze Library, Challenge My Taste) and the Suggest from Library book action. Find Similar and Recommend add your library to their answer when scanning is allowed, but don't need it.
-- **Permanent Scan Folders**: folders always scanned for library actions (grayed out until scanning is allowed). You can also pick folders on the fly in the input dialog.
+- **Book list** (default: Ask): the same value as in Privacy & Data. Needed by the scan-based library actions (Next Read, Discover New, Analyze Library, Challenge My Taste) and the Suggest from Library book action. Find Similar and Recommend add your library to their answer when the book list is allowed, but don't need it.
+- **Permanent Scan Folders**: folders always scanned for library actions (grayed out while the book list is Never). You can also pick folders on the fly in the input dialog.
 
-The global toggle is an absolute gate: all library scanning, including folders picked on the fly in the input dialog, requires it. The per-action "Allow library use" flag is the second gate, and a folder is the third (see [Design Choices](#design-choices)).
+A library action needs three things: the book list's value (Ask asks the first time, with **Always allow** for all books), at least one folder, permanent or picked on the fly, and the action's "Allow library use" flag (see [Design Choices](#design-choices)).
 
 ### Graceful Degradation
 
-When you disable a data type, actions adapt automatically. Section placeholders like `{highlights_section}` simply disappear from prompts, so you don't need to modify your actions. For text extraction, most actions fall back to the AI's training knowledge; see [Text Extraction and Double-gating](#text-extraction-and-double-gating). When an action asked for data it did not get, its response starts with a line such as *Response generated without: highlights (sharing disabled)*.
+When a kind of data is not allowed, actions adapt automatically. Section placeholders like `{highlights_section}` simply disappear from prompts, so you don't need to modify your actions. For book text, most actions fall back to the AI's training knowledge; see [Text Extraction and Double-gating](#text-extraction-and-double-gating). When an action asked for data it did not get, its response starts with a line such as *Response generated without: highlights (sharing disabled)*.
 
-Attaching your notebook with the Attach chip in a chat is gated the same way as the `{notebook}` placeholder: it will not attach if the underlying data isn't allowed to be shared.
+Attaching your notebook with the Attach chip in a chat follows the notebook's value like the `{notebook}` placeholder does: on Ask it asks when you pick it, and it will not attach under Never.
 
 ### Seeing What an Action Uses
 
@@ -80,68 +111,64 @@ If your device supports emoji fonts, turn on **Settings → Display Settings →
 - 📝 annotations (highlights with your notes)
 - 📓 notebook
 - 📚 library catalog
-- 📊 advanced stats (reading engagement groups)
+- 📊 reading habits (reading engagement groups)
 - 🌐 web search, always on for this action; (🌐) web search through your default, which is on (in an input dialog, through its Web chip)
 - (🔍), in an input dialog: the action may search the book with AI Book Tools (smart retrieval is available and the Tools chip is on)
 
-## Per-Book Overrides
+## Per-Book Values
 
-Every sharing toggle that concerns one book's data (highlights, annotations, notebook, text extraction) can also be set per book in **Book Settings → Privacy**. Each row (Highlights sharing, Annotations sharing, Notebook sharing, Text extraction) offers **Follow global**, **On** (allow for this book) or **Off** (deny for this book).
+Every kind that concerns one book's data (book text, highlights, annotation notes, notebook, the text around what you tap) can have its own value for one book in **Book Settings → Privacy**. Each row offers **Follow all books** (the row shows the value that applies: Allow, Ask or Never), **Allow** (sent without asking for this book) or **Never** (not sent, whatever else says). The question writes these rows too: **Allow for this book** sets Allow, **Not for this book** sets Never.
 
-- **Deny always wins**, even over [trusted providers](#trusted-providers), and it binds background features such as Automatic X-Ray too.
-- **Allow satisfies only the global gate**: per-action flags still apply (see [Double-gating for Custom Actions](#double-gating-for-custom-actions)).
-- Allowing annotations for a book implies highlights; denying highlights denies annotations too.
-- Basic stats, library scanning and advanced stats have no per-book override.
+- **A book's Never always wins**, even over [trusted providers](#trusted-providers) and an allowance given for one run, and it binds background features such as Automatic X-Ray too.
+- **A book's Allow satisfies only the global gate**: per-action flags still apply (see [Double-gating for Custom Actions](#double-gating-for-custom-actions)).
+- Allowing annotation notes for a book implies highlights; Never for highlights is Never for notes too.
+- Reading position, the book list and reading habits have no per-book value.
 
-This lets you keep sharing off globally but allow it for specific books, or keep it on and fence off a sensitive one. **How overrides work…** at the bottom of the screen restates these rules.
+This lets you keep a kind on Ask or Never for all books and allow it for specific books, or allow it everywhere and fence off a sensitive one. **How this works…** at the bottom of the screen restates these rules.
 
-A book that is not open is judged by its own overrides: an action on it from the file browser, or from a chat about that book (opened from its Book Hub, for example), reads its highlights, annotations and notebook from disk under the same gates, and checks that book's settings before it starts. A library action on several selected books applies each book's own overrides.
+A book that is not open is judged by its own values: an action on it from the file browser, or from a chat about that book (opened from its Book Hub, for example), reads its highlights, annotations and notebook from disk under the same gates, and checks that book's settings before it starts. A library action on several selected books applies each book's own values and asks once for the set.
 
-The Quick Settings panel's **Text Extraction** tile shows "(book)" when this book's override masks the global setting; tapping it changes the global setting, and holding it opens this book's Privacy screen (see [Setup, Gestures and Panels](Setup-Gestures-and-Panels)).
+The Quick Settings panel's **Book Text** tile shows the value for the open book, "(book)" when this book's own value masks the one for all books; tapping it steps the value for all books between Ask and Allow (Never goes to Ask), and holding it opens this book's Privacy screen (see [Setup, Gestures and Panels](Setup-Gestures-and-Panels)).
 
 ## Trusted Providers
 
 **Settings → Privacy & Data → Trusted Providers** lists every provider, built-in and custom. Tick the ones you fully trust (for example a local Ollama) and tap Save.
 
-A request to a trusted provider bypasses all data sharing controls AND text extraction AND the library scanning toggle: highlights, annotations, notebook, reading progress and chapter info, advanced stats, book text and the library catalog are all available without toggling individual settings.
+A trusted provider follows its own column of values, **Settings → Privacy & Data → What trusted providers may use**: one row per kind of data, Allow for all of them unless you change it, so nothing is asked for requests that go to a trusted provider. Set a kind to Ask or Never there and it applies to trusted providers only; every other provider follows the rows of Privacy & Data.
 
-- Trust replaces the global switches only. Each action still needs its own per-action flags, and a [per-book deny](#per-book-overrides) still wins.
+- Trust replaces the values for all books only. Each action still needs its own per-action flags, and a [book's Never](#per-book-values) still wins.
 - Library scanning still needs at least one folder (permanent or picked on the fly).
-- Trust also satisfies the consent check that background features (such as Automatic X-Ray and X-Ray checkpoint builds) run against: those can then extract text in the background without a per-request tap.
+- A trusted provider's Allow is a standing Allow for background features (Automatic X-Ray and X-Ray checkpoint builds): those build without a question.
 
-**Which provider counts.** Trust is judged for the provider a request actually goes to: your active provider, an action's own pinned provider, a model picked from the long-press menu of an action or of Send, or the Quick chip's preset model. Pinning an action to a different provider never inherits trust it shouldn't. When the receiving provider may not get something, it is left out of that request:
+**Which provider counts.** The value is judged for the provider a request actually goes to: your active provider, an action's own pinned provider, a model picked from the long-press menu of an action or of Send, or the Quick chip's preset model. Pinning an action to a different provider never inherits trust it shouldn't. When the receiving provider may not get something, it is left out of that request:
 
 - book passages gathered by smart retrieval, a notebook attached with the Attach chip (in a new chat, a reply, or a chat reopened from Chat History) and the book list of a library chat, each with a short notice;
 - the highlights an X-Ray entry's "Chat about this" carries.
 
-A chat about your notebook from the notebook viewer ("Chat about this notebook") does not start unless notebook sharing allows it for the provider that chat goes to: the book's own override decides first, then Allow Notebook or a trusted provider.
+A chat about your notebook from the notebook viewer ("Chat about this notebook") follows the notebook's value for the provider that chat goes to: the book's own value decides first, then the question on Ask, Allow, or a trusted provider; under Never it does not start.
 
 ## Text Extraction and Double-gating
 
-> ⚠️ **Text extraction is OFF by default.** To use features like X-Ray, Recap and context-aware highlight actions with actual book content (rather than the AI's training knowledge), you must enable it in **Settings → Privacy & Data → Text Extraction → Allow Text Extraction**.
+Text extraction sends actual book or document content to the AI, enabling features like X-Ray, Recap, Document Summary and Document Analysis, and highlight actions like Explain in Context, to analyze what you've read. **Book text is on Ask by default**: the first action that wants it asks you, with the amount it would send (up to your position, the whole book, a section, or the passages the book tools look up), and **Allow for this book** keeps your answer for the book. Without the text, most actions gracefully fall back to the AI's training knowledge: the AI is explicitly told no document text was provided and asked to use what it knows about the work (or say so honestly if it doesn't recognize it). This works reasonably for well-known titles but will be inaccurate for obscure works, and is basically unusable for research papers and articles the AI hasn't seen. **Exception:** X-Ray, Document Summary and Document Analysis require book text and are refused under Never (see [When an Action Is Blocked](#when-an-action-is-blocked)); use X-Ray (Simple) for a prose overview from AI knowledge.
 
-Text extraction sends actual book or document content to the AI, enabling features like X-Ray, Recap, Document Summary and Document Analysis, and highlight actions like Explain in Context, to analyze what you've read. Without it, most actions gracefully fall back to the AI's training knowledge: the AI is explicitly told no document text was provided and asked to use what it knows about the work (or say so honestly if it doesn't recognize it). This works reasonably for well-known titles but will be inaccurate for obscure works, and is basically unusable for research papers and articles the AI hasn't seen. **Exception:** X-Ray, Document Summary and Document Analysis require text extraction and block generation without it (see [When an Action Is Blocked](#when-an-action-is-blocked)); use X-Ray (Simple) for a prose overview from AI knowledge.
+> **Tip:** If you allow book text but don't want to send the *whole* document, you have finer-grained options: choose "Use document summary" or a specific section in an action's source-selection popup, attach a text range with the **Scope** chip on a freeform chat, or let **AI Book Tools** retrieve only the relevant passages (see [Reasoning, Web Search and Book Tools](Reasoning-Web-Search-and-Book-Tools)). KOReader's Hidden Flows also exclude front matter, appendices and the like from extraction (see [Using X-Ray](Using-X-Ray)).
 
-> **Tip:** If you enable text extraction but don't want to send the *whole* document, you have finer-grained options: choose "Use document summary" or a specific section in an action's source-selection popup, attach a text range with the **Scope** chip on a freeform chat, or let **AI Book Tools** retrieve only the relevant passages (see [Reasoning, Web Search and Book Tools](Reasoning-Web-Search-and-Book-Tools)). KOReader's Hidden Flows also exclude front matter, appendices and the like from extraction (see [Using X-Ray](Using-X-Ray)).
+### Why It Asks
 
-### Why It Is Off by Default
-
-1. **Token costs and context window** (the primary reasons, and also why no privacy preset turns it on, not even Full): extracting book text uses significantly more context than you might expect. A full book can consume 60K+ tokens per request, which adds up quickly with paid APIs, so you should opt into this cost consciously. Large contexts also significantly degrade response quality, especially for follow-up questions. That's why actions with source selection let you choose "Use document summary" instead: your queries run on a previously generated summary (~2-8K tokens) rather than the full document text.
+1. **Token costs and context window**: extracting book text uses significantly more context than you might expect. A full book can consume 60K+ tokens per request, which adds up quickly with paid APIs, so you should opt into this cost consciously; the question names the amount for that reason. Large contexts also significantly degrade response quality, especially for follow-up questions. That's why actions with source selection let you choose "Use document summary" instead: your queries run on a previously generated summary (~2-8K tokens) rather than the full document text.
 2. **Content awareness** (see [Double-gating for Custom Actions](#double-gating-for-custom-actions)): for most readers of mainstream books the text itself isn't privacy-sensitive. But if you're reading something non-standard, subversive, controversial or otherwise sensitive, be aware that the actual content is sent to cloud AI providers. This is a secondary consideration for most users, but important for some.
 
-### How to Enable
+### How to Allow It
 
-1. Go to **Settings → Privacy & Data → Text Extraction**.
-2. Enable **Allow Text Extraction** (the master toggle).
-3. Built-in actions (X-Ray, Recap, Explain in Context, Analyze in Context and the others that read text) already have the per-action flag enabled.
-
-After you have turned it on here once, the Quick Settings panel's **Text Extraction** tile toggles it directly. AI Book Tools also need it (a trusted provider satisfies it too).
+- Answer the question when an action asks: **Allow once** for that run, **Allow for this book** to keep it for the book.
+- For all books: **Settings → Privacy & Data → Text Extraction → Book text**, set to Allow (a notice explains the token cost). Built-in actions (X-Ray, Recap, Explain in Context, Analyze in Context and the others that read text) already have the per-action flag enabled.
+- The Quick Settings panel's **Book Text** tile steps the value for all books between Ask and Allow. AI Book Tools need the same value (a trusted provider satisfies it too).
 
 ### Text Extraction Settings
 
-**Settings → Privacy & Data → Text Extraction** (the row reads "Text Extraction (enabled)" or "(disabled)"). Every row below the master toggle is grayed out until text extraction is on.
+**Settings → Privacy & Data → Text Extraction** (the row reads "Text Extraction (book text: Ask)", Allow or Never). Every row below the value is grayed out while book text is Never.
 
-- **Allow Text Extraction**: the master toggle (default: off). When on, actions can extract and send book text to the AI: X-Ray, Recap, Explain in Context, Analyze in Context, AI Book Tools and actions with text placeholders (`{book_text}`, `{full_document}` and so on). Turning it on shows a notice about token costs, with a tip about using Hidden Flows to save tokens.
+- **Book text**: Ask (the default), Allow or Never. Allow lets actions extract and send book text without a question: X-Ray, Recap, Explain in Context, Analyze in Context, AI Book Tools and actions with text placeholders (`{book_text}`, `{full_document}` and so on). Setting it to Allow shows a notice about token costs, with a tip about using Hidden Flows to save tokens.
 - **Max Text Characters**: the most characters to extract (100,000 to 10,000,000; default 4,000,000, about 1M tokens). The default covers most books with Gemini's 1M-token context; lower it for smaller models. The API rejects requests that exceed the model's context window.
 - **Max Pages (PDF, DJVU, CBZ…)**: the most pages to extract from page-based formats (100 to 5,000; default 2,000).
 - **Don't warn about truncated extractions**: when unchecked (the default), a blocking warning appears before sending a request whose extracted text was cut to fit the character limit. It shows the coverage (for example "covers 0%–85% of the document") so you know how much of the document was included, and offers Cancel or Continue Anyway. This setting is the way to turn it off.
@@ -150,9 +177,9 @@ After you have turned it on here once, the Quick Settings panel's **Text Extract
 
 ### Background Features
 
-The same consent covers background runs you opt into separately: [Automatic X-Ray and X-Ray checkpoint builds](Using-X-Ray) extract text and spend tokens **without a per-request confirmation**.
+[Automatic X-Ray and X-Ray checkpoint builds](Using-X-Ray) extract text and spend tokens **without a per-request confirmation**, under a standing Allow for book text: the book's own value, Allow for all books, or a trusted provider. See [Background features](#background-features) above for how a book still on Ask is asked once.
 
-- They re-check consent when they fire, so revoking it stops them.
+- They re-check the value when they fire, so setting it to Never stops them.
 - Their size is bounded by their own guards: the progress-gap window and incremental checkpoint steps.
 - The interactive warnings don't interrupt them. A background extraction cut to fit the character limit aborts the run instead of sending partial text, and a checkpoint step that would be a large request pauses the build ("Checkpoint build paused at N of M: the next step is a large request") until you resume it. Only the first request of a build you start yourself can show the size warning, right after you confirm; accepting it covers the rest of that build.
 
@@ -167,61 +194,65 @@ Actions with a source-selection popup (Explain in Context, Analyze in Context, K
 
 ### Double-gating for Custom Actions
 
-When you create a custom action from scratch, sensitive data requires both a global privacy setting AND a per-action permission flag. This prevents accidental data leakage when you use sensitive placeholders: enabling a global setting doesn't automatically expose that data in all your custom actions. A placeholder alone never switches these flags on; you tick them in the action's settings (see [Actions and Menus](Actions-and-Menus)).
+When you create a custom action from scratch, sensitive data requires both the kind's value (Allow, or your answer to the question) AND a per-action permission flag. This prevents accidental data leakage when you use sensitive placeholders: allowing a kind doesn't automatically expose that data in all your custom actions. A placeholder alone never switches these flags on; you tick them in the action's settings (see [Actions and Menus](Actions-and-Menus)).
 
-> **For built-in actions:** you only need to enable the global setting. Built-in actions already have the appropriate per-action flags set, and a copy of a built-in action inherits its data-access flags.
+> **For built-in actions:** you only answer the question (or set the value). Built-in actions already have the appropriate per-action flags set, and a copy of a built-in action inherits its data-access flags.
 
 Which flags each data type needs (relevant when you create custom actions from scratch):
 
-| Data Type | Global Setting | Per-Action Flag |
+| Data Type | The value (Settings → Privacy & Data) | Per-Action Flag |
 |-----------|----------------|-----------------|
-| Book text | Allow Text Extraction | "Allow text extraction" checked |
-| X-Ray analysis cache | Allow Text Extraction if the cache was built with text (+ Allow Highlights if it was built with highlights) | The action's `use_xray_cache` field (no in-app checkbox), plus "Allow highlight use" if the cache was built with highlights |
-| Analyze / Summary caches | Allow Text Extraction if the cache was built with text | The action's `use_analyze_cache` or `use_summary_cache` field (no in-app checkbox; the built-in actions that offer a summary source carry `use_summary_cache`) |
-| Highlights | Allow Highlights (or Allow Annotation Notes) | "Allow highlight use" checked |
-| Annotations | Allow Annotation Notes (degrades to highlights when off but Allow Highlights is on) | "Allow annotation use (notes)" checked |
-| Notebook | Allow Notebook | "Allow notebook use" checked |
-| Library catalog | Allow Library Scanning + folders configured | "Allow library use" checked |
-| Advanced stats | Allow Advanced Stats (it rides the library catalog, so library scanning too) | "Allow advanced stats" checked (with "Allow library use") |
-| Surrounding context* | None (hard-capped at 2000 characters) | Field `use_surrounding_context` (no in-app checkbox): unset = follow the global Surrounding Context setting (the default for custom actions), `true` = always on (also set automatically when your prompt contains `{surrounding_context}`), `false` = never |
-| Per-book overrides | Book Settings → Privacy (tri-state per book; deny beats everything, trusted providers included) | Same per-action flags as above |
-| Page text* | None (single current page, exempt) | Automatic when the prompt uses a `{page_text}` placeholder |
+| Book text | Book text | "Allow text extraction" checked |
+| X-Ray analysis cache | Book text if the cache was built with text (+ Highlights if it was built with highlights) | The action's `use_xray_cache` field (no in-app checkbox), plus "Allow highlight use" if the cache was built with highlights |
+| Analyze / Summary caches | Book text if the cache was built with text | The action's `use_analyze_cache` or `use_summary_cache` field (no in-app checkbox; the built-in actions that offer a summary source carry `use_summary_cache`) |
+| Highlights | Highlights (or Annotation notes) | "Allow highlight use" checked |
+| Annotations | Annotation notes (degrades to highlights when notes are not allowed but highlights are) | "Allow annotation use (notes)" checked |
+| Notebook | Notebook | "Allow notebook use" checked |
+| Library catalog | Book list + folders configured | "Allow library use" checked |
+| Reading habits | Reading habits (they ride the library catalog, so the book list too) | "Allow advanced stats" checked (with "Allow library use") |
+| Text around what you tap* | Text around what you tap (Allow by default) | Field `use_surrounding_context` (no in-app checkbox): unset = follow the global Surrounding Context setting (the default for custom actions), `true` = always on (also set automatically when your prompt contains `{surrounding_context}`), `false` = never |
+| Per-book values | Book Settings → Privacy (per book; a book's Never beats everything, trusted providers included) | Same per-action flags as above |
+| Page text* | Text around what you tap | Automatic when the prompt uses a `{page_text}` placeholder |
 
-\* **Surrounding context** is the text around a highlight (more than you actually selected). It has no global privacy gate because it is hard-capped at 2000 characters, but it is *off by default*: it only rides along when the Surrounding Context mode (**Settings → Highlight Settings → Surrounding Context**, per book in Book Settings → Chat behavior → Highlight context, or the **Ctx** chip, which is the Scope chip of a highlight chat) is set to Sentence, Paragraph(s) or Characters rather than "None (off)". Dictionary lookups and actions with their own source selection don't use it. Per action it is a tri-state value in the action's Lua definition (not an editor checkbox): leave `use_surrounding_context` unset to follow that setting, or set it to `true` or `false` in a custom action to pin it always on or never. **Page text** is the single currently visible page and is likewise exempt from the global gate; it is included only when an action's prompt uses the `{page_text}` placeholder. The Scope chip's "Current page" pick is exempt the same way; every larger range it attaches needs text extraction.
+\* **Surrounding context** is the text around a highlight (more than you actually selected). It is hard-capped at 2000 characters and belongs to the kind **Text around what you tap**; it only rides along when the Surrounding Context mode (**Settings → Highlight Settings → Surrounding Context**, per book in Book Settings → Chat behavior → Highlight context, or the **Ctx** chip, which is the Scope chip of a highlight chat) is set to Sentence, Paragraph(s) or Characters rather than "None (off)". Dictionary lookups and actions with their own source selection don't use it. Per action it is a tri-state value in the action's Lua definition (not an editor checkbox): leave `use_surrounding_context` unset to follow that setting, or set it to `true` or `false` in a custom action to pin it always on or never. **Page text** is the single currently visible page and belongs to the same kind; it is included only when an action's prompt uses the `{page_text}` placeholder. The Scope chip's "Current page" pick is the same kind; every larger range it attaches is book text.
 
 > **Tip:** turn on **Emoji Data Access Indicators** (see [Seeing What an Action Uses](#seeing-what-an-action-uses)) to see each action's flags on its name, with no need to open its settings.
 
 ### When an Action Is Blocked
 
-Built-in actions that cannot work without a kind of data check before anything is sent, and stop with a message that names the setting to change:
+Built-in actions that cannot work without a kind of data check before anything is sent. On Ask they ask; on Never they stop with a short refusal that names where the value comes from (this book, all books, or trusted providers) and a button to that screen:
 
 | Needs | Actions |
 |-------|---------|
-| Text extraction | X-Ray, Document Summary, Document Analysis |
-| Highlight or annotation sharing | Analyze Notes, Connect (With Notes) |
-| Library scanning and a scan folder | Next Read, Discover New, Analyze Library, Challenge My Taste, Suggest from Library |
+| Book text | X-Ray, Document Summary, Document Analysis |
+| Highlights or annotation notes | Analyze Notes, Connect (With Notes) |
+| The book list and a scan folder | Next Read, Discover New, Analyze Library, Challenge My Taste, Suggest from Library |
 
-The check follows the same rules as the extraction: a trusted provider passes it, a per-book deny fails it, and for a book that isn't open it reads that book's own overrides.
+The check follows the same rules as the extraction: a trusted provider's column passes it, a book's Never fails it, and for a book that isn't open it reads that book's own values.
 
 ### Highlights, Recap and X-Ray
 
-**Recap** uses highlights, never annotations, so your personal notes never reach it. If you want it to see your highlighted passages, enable **Allow Highlights** (Allow Annotation Notes is not needed for Recap, and would share your notes with the actions that use them); with both off it analyzes the book text alone.
+**Recap** uses highlights, never annotation notes, so your personal notes never reach it. If you want it to see your highlighted passages, answer Allow when it asks, or set **Highlights** to Allow (Annotation notes are not needed for Recap, and would share your notes with the actions that use them); without them it analyzes the book text alone.
 
-**X-Ray does not read your highlights at all.** It works from book text only, and X-Ray (Simple) from AI knowledge only, so neither setting changes what they send. With Allow Highlights on, an X-Ray entity page matches your highlights locally and offers them as "Your highlights (N)…"; they go to the AI only when you tap "Chat about this", and only to a provider that may receive highlights.
+**X-Ray does not read your highlights at all.** It works from book text only, and X-Ray (Simple) from AI knowledge only, so the highlights value changes nothing they send. An X-Ray entity page matches your highlights locally and offers them as "Your highlights (N)…" whatever the value; they go to the AI only when you tap "Chat about this", which asks on Ask and refuses under Never, and only to a provider that may receive highlights.
 
 ### Cache Permission Inheritance
 
-When caches (saved artifacts) are built, they record what data was used. Actions that later reference cache placeholders inherit requirements from what the cache actually contains:
+When caches (saved artifacts) are built, they record what data was used. Actions that later reference cache placeholders inherit requirements from what the cache actually contains, and the question lists them:
 
-- Cache built **without text extraction**: no Allow Text Extraction needed (the AI used training knowledge only).
-- Cache built **with text extraction**: Allow Text Extraction needed.
-- Recap cache built **without highlights**: no Allow Highlights needed.
-- Recap cache built **with highlights**: Allow Highlights (or Allow Annotation Notes) also required.
+- Cache built **without text extraction**: no book text needed (the AI used training knowledge only).
+- Cache built **with text extraction**: book text needed.
+- Recap cache built **without highlights**: no highlights needed.
+- Recap cache built **with highlights**: highlights (or annotation notes) also required.
 - Older X-Ray caches built before X-Ray stopped reading highlights carry the same requirement until they are rebuilt.
 
-The same check runs when you update an artifact: if a permission its cache needs is now off, the update is skipped and a fresh full generation runs instead.
+The same check runs when you update an artifact: if a kind its cache needs is now Never, the update is skipped and a fresh full generation runs instead.
 
-The artifact viewer shows "Based on AI training data knowledge" or "Based on extracted document text", so you always know what a cache contains. If you change privacy settings after building a cache (for example, disable text extraction), actions may render the cache placeholder empty. To fix it, either re-enable the required permissions or regenerate the cache with your current settings. See [Troubleshooting](Troubleshooting) if text extraction isn't working.
+The artifact viewer shows "Based on AI training data knowledge" or "Based on extracted document text", so you always know what a cache contains. If you set a kind to Never after building a cache, actions may render the cache placeholder empty. To fix it, either allow the kind again or regenerate the cache with your current values. See [Troubleshooting](Troubleshooting) if text extraction isn't working.
+
+## Upgrading from an earlier version
+
+Earlier versions had on/off switches. On the first start after the upgrade, every switch becomes **Ask**, the ones that were on included, and a one-time notice says so; your per-book values (a book's On or Off) and your trusted providers are kept, since they are exactly "Allow for this book" and "Not for this book". The first action that wants a kind of data then asks, and your answer can be kept for the book.
 
 ## Local Processing
 
@@ -247,19 +278,19 @@ The **OpenAI Subscription** provider authenticates with your consumer ChatGPT ac
 
 ### Library Scanning
 
-Library scanning is opt-in. When enabled (**Settings → Reading & Library**), KOAssistant scans your configured folders for book metadata (title, author, series, reading status, progress) to power library-aware features like Next Read and reading pattern analysis (Analyze Library). Your last-read dates only order the list and are not sent. Only catalog metadata is sent, **not** book content, highlights or annotations.
+When the book list is allowed (**Settings → Reading & Library**, or your answer to the question), KOAssistant scans your configured folders for book metadata (title, author, series, reading status, progress) to power library-aware features like Next Read and reading pattern analysis (Analyze Library). Your last-read dates only order the list and are not sent. Only catalog metadata is sent, **not** book content, highlights or annotations.
 
 Library scanning is triple-gated:
 
-1. the global **Allow Library Scanning** toggle;
+1. the **Book list** value (Ask by default; the question offers **Always allow**);
 2. at least one folder, permanent or picked on the fly;
 3. the action's "Allow library use" flag.
 
-Trusted providers bypass the global toggle but still need a folder.
+Trusted providers follow their own column for the first gate but still need a folder.
 
-### Reading Engagement Data (Advanced Stats)
+### Reading Engagement Data (Reading habits)
 
-KOReader's Statistics plugin collects extensive local data (reading time, pages per session, reading speed, session history, daily patterns). With **Allow Advanced Stats** on (**Settings → Privacy & Data**, default off), KOAssistant queries this database **locally** to compute engagement groups, which library scan actions can compose through template variables (`{deep_reads_section}`, `{stalled_section}`, `{briefly_started_section}`, `{recently_finished_section}`):
+KOReader's Statistics plugin collects extensive local data (reading time, pages per session, reading speed, session history, daily patterns). When **Reading habits** are allowed (**Settings → Privacy & Data**, Ask by default), KOAssistant queries this database **locally** to compute engagement groups, which library scan actions can compose through template variables (`{deep_reads_section}`, `{stalled_section}`, `{briefly_started_section}`, `{recently_finished_section}`):
 
 | Group | Which books | What a line adds |
 |-------|-------------|------------------|
@@ -272,13 +303,13 @@ In the library list itself, a book with notable engagement gets one short label:
 
 **What reaches the AI:** only human-readable book lists, for example `"Title" by Author (47 hours)`. Raw statistics (exact timestamps, pages per session, reading speed, session logs) are used for local computation only and **never** leave the device. The AI sees categorized book lists, not behavioral data.
 
-**Why opt-in:** reading patterns over time create a surprisingly detailed personal profile. Even the curated groups reveal information about reading habits: which books were abandoned, which consumed obsessively, which ignored for months. This warrants conscious opt-in rather than a default-on toggle.
+**Why it asks:** reading patterns over time create a surprisingly detailed personal profile. Even the curated groups reveal information about reading habits: which books were abandoned, which consumed obsessively, which ignored for months. This warrants a conscious answer rather than a default-on toggle.
 
 ## Related
 
 - [Book Settings and Book Hub](Book-Settings-and-Book-Hub): the per-book Privacy, Identity and Chat behavior screens.
 - [Actions and Menus](Actions-and-Menus): the action editor's data-access checkboxes for custom actions.
-- [Template Variables](Template-Variables): every placeholder and the privacy setting it needs.
-- [Using X-Ray](Using-X-Ray): Automatic X-Ray and checkpoints, which run under your text extraction consent.
+- [Template Variables](Template-Variables): every placeholder and the kind of data it needs.
+- [Using X-Ray](Using-X-Ray): Automatic X-Ray and checkpoints, which run under a standing Allow for book text.
 - [Providers and Models](Providers-and-Models): local presets, custom providers and the OpenAI Subscription.
 - [Troubleshooting](Troubleshooting): what to check when an action finds no highlights or no text.

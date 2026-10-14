@@ -116,9 +116,9 @@ That's it: you're up and running. To check a key without opening a book, **Setti
 
 ## 6. Choose What You Share (Optional)
 
-Some features only work after you opt in. Go to **Settings → Privacy & Data** to choose what KOAssistant may send; [Privacy and Data](Privacy-and-Data) explains every option.
+Nothing of yours is sent unasked: the first time an action wants your highlights, notes, notebook, the book's text, your book list or your reading habits, KOAssistant shows what it is about to send and to whom, and you answer **Allow once** or **Allow for this book**. **Settings → Privacy & Data** holds one value per kind (Ask, Allow or Never); [Privacy and Data](Privacy-and-Data) explains every option.
 
-> **Quick option:** **Settings → Privacy & Data → Preset: Full** turns on all data sharing at once. Text extraction, which sends the book's text (X-Ray needs it, for one), is turned on separately in **Settings → Privacy & Data → Text Extraction**.
+> **Quick option:** **Settings → Privacy & Data → Preset: Allow everything** sends every kind without a question, book text included (X-Ray needs it, for one; it raises token costs). **Preset: Never send anything extra** is the other end.
 
 ## What Next
 

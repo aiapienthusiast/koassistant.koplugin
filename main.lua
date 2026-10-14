@@ -1594,6 +1594,9 @@ function AskGPT:initSettings()
       -- only UPGRADING installs (which keyed against the China platform our
       -- docs pointed at) get the preserving stamp below.
       _kimi_region_migrated = true,
+      -- The Ask reset (B395 slice 2) is for installs that had switches; a
+      -- fresh one starts at Ask and gets no notice
+      _privacy_ask_migrated = true,
     }
     if user_config_loaded then
       for k, v in pairs(config_file_defaults.features) do
@@ -8029,8 +8032,12 @@ end
 --- @return boolean: true if blocked (showed popup), false if OK to proceed
 --- Check if any declared requirements for this action are unmet.
 --- Actions declare requirements via requires = {"book_text", "highlights", ...}.
---- Each requirement checks per-action gate (flag override) then global gate (privacy setting).
---- Shows an error popup identifying which gate is the problem.
+--- Each requirement checks the per-action gate (flag override), then the
+--- privacy value: a kind on Never refuses here, naming its layer, with a door
+--- to the screen that holds the value; a kind on Ask passes, because the
+--- question is asked at the dispatch (koassistant/ui/data_access.lua, the
+--- funnel in the dialogs module's handlePredefinedPrompt), after the popups
+--- on the way. A folder requirement is checked here too.
 --- @param action table: Action definition (checks action.requires array)
 --- @return boolean: true if blocked (showed popup), false if OK to proceed
 --- @param run_provider string|nil the provider a run option's picked model sends to (B345)
@@ -8049,16 +8056,17 @@ function AskGPT:_checkRequirements(action, target_file, run_provider)
   -- pin, else the global: the same answer the extraction gate gets) and for
   -- its book: `target_file` names the action's book when it is not (or may
   -- not be) the open one (file browser, cross-book artifact regenerate),
-  -- default = the open book. A book's deny beats trust.
+  -- default = the open book. A book's Never beats trust.
   local Gates = require("koassistant.request.privacy_gates")
-  local book_priv
-  do
-    local pf = target_file or (self.ui and self.ui.document and self.ui.document.file)
-    if pf then book_priv = Gates.bookOverrides(pf, self.ui) end
+  local pf = target_file or (self.ui and self.ui.document and self.ui.document.file)
+  local gate = Gates.context(features,
+    Gates.dispatchProvider(features, action, run_provider or action.provider or features.provider),
+    { path = pf, ui = self.ui })
+  local function refuse(kind, layer)
+    require("koassistant.ui.data_access").refuse(self, { kind = kind, layer = layer,
+      action_name = action.text or action.id, path = pf, ui = self.ui, hint = action.blocked_hint })
+    return true
   end
-  book_priv = book_priv or {}
-  local gate = { features = features, book = book_priv,
-    provider = Gates.dispatchProvider(features, action, run_provider or action.provider or features.provider) }
 
   for _idx, req in ipairs(action.requires) do
     if req == "book_text" then
@@ -8069,17 +8077,8 @@ function AskGPT:_checkRequirements(action, target_file, run_provider)
         })
         return true
       end
-      -- Global gate: text extraction enabled? (trusted providers bypass;
-      -- per-book override wins in both directions)
-      local bt_allowed = Gates.allows("book_text", gate)
-      if not bt_allowed then
-        UIManager:show(InfoMessage:new{
-          text = (book_priv.book_text == false
-            and _("Text extraction is turned off for this book (Book Settings → Privacy).")
-            or _("Text extraction is required to generate this artifact.\n\nEnable it in Settings → Privacy & Data → Text Extraction.")) .. hint,
-        })
-        return true
-      end
+      local state, layer = Gates.resolve("book_text", gate)
+      if state == "never" then return refuse("book_text", layer) end
     elseif req == "library" then
       -- Per-action gate: use_library explicitly overridden to false?
       if action.use_library == false then
@@ -8088,14 +8087,8 @@ function AskGPT:_checkRequirements(action, target_file, run_provider)
         })
         return true
       end
-      -- Global gate: library scanning enabled? (trusted providers bypass)
-      -- This is an absolute gate — session folders do NOT bypass it
-      if not Gates.allows("book_list", gate) then
-        UIManager:show(InfoMessage:new{
-          text = _("Library scanning is required for this action.\n\nEnable it in Settings → Privacy & Data → Allow Library Scanning.") .. hint,
-        })
-        return true
-      end
+      local state, layer = Gates.resolve("book_list", gate)
+      if state == "never" then return refuse("book_list", layer) end
       -- Folder gate: need permanent folders or session folders
       local has_session = self._session_scan_folders and #self._session_scan_folders > 0
       if not has_session then
@@ -8115,17 +8108,8 @@ function AskGPT:_checkRequirements(action, target_file, run_provider)
         })
         return true
       end
-      -- Global gate: is any highlight-type sharing enabled? (trusted providers
-      -- bypass; per-book override wins in both directions)
-      local hl_allowed = Gates.allows("highlights", gate)
-      if not hl_allowed then
-        UIManager:show(InfoMessage:new{
-          text = (book_priv.highlights == false
-            and _("Highlights sharing is turned off for this book (Book Settings → Privacy).")
-            or _("This action requires access to your highlights or annotations.\n\nEnable sharing in Settings → Privacy & Data.")) .. hint,
-        })
-        return true
-      end
+      local state, layer = Gates.resolve("highlights", gate)
+      if state == "never" then return refuse("highlights", layer) end
     end
   end
   return false
@@ -8629,15 +8613,18 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
 
   -- Text extraction availability: the source picker must agree with the
   -- extraction gate, so the gates module judges the book's own value, then
-  -- trust for the provider the action really goes to, then the switch ("Full
-  -- text" usable when this book allows it).
+  -- trust for the provider the action really goes to, then the switch. A text
+  -- source is offered unless the value is Never (B395 slice 2): on Ask the
+  -- Run button asks the question for the chosen source.
   local features = configuration and configuration.features or {}
-  local text_extraction_enabled
+  local text_extraction_enabled, text_never_layer
   do
     local Gates = require("koassistant.request.privacy_gates")
-    text_extraction_enabled = Gates.allows("book_text", { features = features,
-      provider = Gates.dispatchProvider(features, action, action.provider or features.provider),
-      book = Gates.overridesOf(self.ui and self.ui.doc_settings) })
+    local state, layer = Gates.resolve("book_text", Gates.context(features,
+      Gates.dispatchProvider(features, action, action.provider or features.provider),
+      { ds = self.ui and self.ui.doc_settings, path = self.ui and self.ui.document and self.ui.document.file }))
+    text_extraction_enabled = state ~= "never"
+    if state == "never" then text_never_layer = layer end
   end
 
   -- Check if action requires book_text (constrains source to text extraction only)
@@ -8745,8 +8732,10 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
   local smart_eligible, smart_block_reason
   if smart_row_shown then
     -- Master switch (2026-07-11): posture "off" gates ALL tool use, incl. this row.
+    -- The row is offered while book text is on Ask (the Run button asks); the
+    -- gather itself still needs the answer (B395 slice 2)
     smart_eligible, smart_block_reason =
-        require("koassistant.tools.book_tool_runner").smartRetrievalAllowed(configuration, self.ui)
+        require("koassistant.tools.book_tool_runner").smartRetrievalAllowed(configuration, self.ui, { offer = true })
   end
 
   -- State (persists across rebuilds)
@@ -9190,7 +9179,8 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
     -- Build source radio buttons dynamically (section scope may add extra summary rows)
     local extract_text = text_extraction_enabled
         and _("Extract text")
-        or (_("Extract text") .. "  (" .. _("enable in Settings → Privacy & Data") .. ")")
+        or (_("Extract text") .. "  (" .. (text_never_layer == "book"
+            and _("set to Never for this book") or _("set to Never in Settings → Privacy & Data")) .. ")")
     local supports_summary = action.use_summary_cache == true
     local source_radio_buttons = {}
 
@@ -9247,7 +9237,7 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
         if not has_full_doc and not text_extraction_enabled then
           -- No summary available and can't generate
           table.insert(source_radio_buttons, {
-            { text = _("Use summary") .. "  (" .. _("enable text extraction first") .. ")", provider = "summary", checked = false, enabled = false },
+            { text = _("Use summary") .. "  (" .. _("needs book text, set to Never") .. ")", provider = "summary", checked = false, enabled = false },
           })
         end
       end
@@ -9266,7 +9256,7 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
         })
       else
         table.insert(source_radio_buttons, {
-          { text = _("Use summary") .. "  (" .. _("enable text extraction first") .. ")", provider = "summary", checked = false, enabled = false },
+          { text = _("Use summary") .. "  (" .. _("needs book text, set to Never") .. ")", provider = "summary", checked = false, enabled = false },
         })
       end
     end
@@ -9285,7 +9275,7 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
       local sr_text
       if not smart_eligible then
         if smart_block_reason == "consent" then
-          sr_text = sr_label .. "  (" .. _("enable in Settings → Privacy & Data") .. ")"
+          sr_text = sr_label .. "  (" .. _("book text is set to Never") .. ")"
         else
           sr_text = sr_label .. "  (" .. _("not supported by this provider") .. ")"
         end
@@ -9453,7 +9443,7 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
                   and state.section_entry.end_page > chapter.current_page
               explicit_span = covers_unread
             end
-            confirmUnreadScope(covers_unread, function()
+            local function afterConsent()
               if explicit_span then
                 -- Consenting to an EXPLICIT beyond-position span stands the
                 -- spoiler nudge down for this request (prompt and content
@@ -9464,7 +9454,8 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
                 configuration.features._spoiler_scope_consent = true
               end
               -- When summary source is selected but no summary exists yet,
-              -- generate it first (cache saves it), then continue
+              -- generate it first (cache saves it), then continue; the
+              -- question's allowance (state.data_once) covers that run too
               if state.source == "section_summary" then
                 -- Generate section summary, then switch source and continue
                 local cache_label = state.section_label:gsub(":", "-")
@@ -9473,13 +9464,54 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
                 self_ref:_generateSummaryAndContinue(function()
                   state.source = "summary"
                   continueWithAction()
-                end, scope)
+                end, scope, state.data_once)
               elseif state.source == "summary" and not getSummaryAvailable() then
-                self_ref:_generateSummaryAndContinue(continueWithAction)
+                self_ref:_generateSummaryAndContinue(continueWithAction, nil, state.data_once)
               else
                 continueWithAction()
               end
-            end)
+            end
+            -- The data question for the chosen source (B395 slice 2): asked
+            -- here, where the spoiler confirm sits, so the two are one dialog
+            -- (its note names the unread reach, and Allow covers both); the
+            -- allowance rides state.data_once into the dispatch. Inline
+            -- requires only (60-upvalue cap).
+            local DA = require("koassistant.ui.data_access")
+            local da_feats = configuration.features or {}
+            local da_amount
+            if state.scope == "full" and not is_to_position then
+              da_amount = _("the whole text of this book")
+            elseif (state.scope == "section" or state.scope == "range" or state.scope == "chapter")
+                and state.section_label then
+              da_amount = T(_("the text of \"%1\" from this book"), state.section_label)
+            elseif state.source == "smart_retrieval" then
+              da_amount = _("the passages it looks up in this book")
+            elseif reading_progress and reading_progress.formatted then
+              da_amount = T(_("text from this book, up to your position (%1)"), reading_progress.formatted)
+            else
+              da_amount = _("text from this book, up to your reading position")
+            end
+            local da_opts = {
+              features = da_feats, ui = self_ref.ui,
+              path = self_ref.ui and self_ref.ui.document and self_ref.ui.document.file,
+              provider = require("koassistant.request.privacy_gates").dispatchProvider(
+                da_feats, action, action.provider or da_feats.provider),
+              action_name = action.text or action_id,
+              source = state.source == "section_summary" and "full_text" or state.source,
+              amounts = { book_text = da_amount },
+              note = (scope_spoiler_free and covers_unread) and _("This covers parts you haven't read yet.") or nil,
+            }
+            local da_needs = DA.needsFor(action, da_opts)
+            local da_plan = DA.plan(da_needs)
+            if da_plan.refused or #da_plan.asked > 0 then
+              da_opts.needs = da_needs
+              DA.withAccess(self_ref, action, da_opts, function(granted)
+                state.data_once = granted and granted.once or nil
+                afterConsent()
+              end)
+            else
+              confirmUnreadScope(covers_unread, afterConsent)
+            end
           end,
         },
       }},
@@ -9565,7 +9597,8 @@ end
 --- Builds book config and delegates to Dialogs.generateSummaryCache.
 --- @param on_done function: Called when summary generation succeeds
 --- @param section_scope table|nil: Section scope from _buildSectionScope() for section summaries
-function AskGPT:_generateSummaryAndContinue(on_done, section_scope)
+--- @param data_once table|nil: the kinds the popup's question allowed once (B395)
+function AskGPT:_generateSummaryAndContinue(on_done, section_scope, data_once)
   self:updateConfigFromSettings()
   local config_copy = {}
   for k, v in pairs(configuration or {}) do
@@ -9576,6 +9609,12 @@ function AskGPT:_generateSummaryAndContinue(on_done, section_scope)
     config_copy.features[k] = v
   end
   config_copy.features.is_book_context = true
+  -- The popup's allowance covers the summary generated on the way (B395)
+  config_copy.features._data_once = nil
+  if data_once then
+    require("koassistant.request.privacy_gates").grantOnce(config_copy.features,
+      self.ui and self.ui.document and self.ui.document.file, data_once)
+  end
 
   -- Section scope: propagate to config for text extraction scoping and cache saving
   if section_scope then
@@ -12046,10 +12085,34 @@ function AskGPT:_xrayFollowCatchUp(_decimal, opts)
     self_ref:_fireXrayAutoCheckpoints({ notify = true, explicit = true, rebuild = rebuild })
     after()
   end
+  -- The data question of an unattended feature (ruling 20, 2026-10-14): this
+  -- confirm IS the question when the book's text is still on Ask. Start
+  -- writes "Allow for this book" (the continuation as the reader reads has no
+  -- moment to ask again); a Never refuses here, naming its layer.
+  local data_state, data_layer
+  do
+    local xa = self.action_service and self.action_service:getAction("book", "xray")
+    local feats = self.settings:readSetting("features") or {}
+    if xa then data_state, data_layer = self:_xrayBackgroundConsentState(xa, feats), nil end
+    if data_state == "never" then
+      local Gates = require("koassistant.request.privacy_gates")
+      local _s, layer = Gates.resolve("book_text", Gates.context(feats,
+        Gates.dispatchProvider(feats, xa, xa.provider or feats.provider), { ds = self.ui.doc_settings }))
+      data_layer = layer
+    end
+  end
+  if data_state == "never" then
+    require("koassistant.ui.data_access").refuse(self, { kind = "book_text", layer = data_layer,
+      action_name = _("Automatic X-Ray"), path = self.ui.document.file, ui = self.ui })
+    if opts and opts.revert then opts.revert() end
+    after()
+    return
+  end
   local n = self:_xrayEstablishmentSteps(rebuild and { rebuild = true } or nil)
   -- nil = nothing would build right now (the X-Ray is already ahead of the
-  -- reader, or a lineage automation never touches): no spend, no confirm
-  if not n or n == 0 then
+  -- reader, or a lineage automation never touches): no spend, no confirm,
+  -- unless the question itself is still owed
+  if (not n or n == 0) and data_state ~= "ask" then
     start()
     return
   end
@@ -12060,7 +12123,15 @@ function AskGPT:_xrayFollowCatchUp(_decimal, opts)
   else
     lines[#lines + 1] = _("Automatic X-Ray on: background requests build the introduction and checkpoints up to your position, plus one ahead.")
   end
-  lines[#lines + 1] = T(_("Requests needed now: %1. Each covers a bounded slice of the text."), n)
+  if n and n > 0 then
+    lines[#lines + 1] = T(_("Requests needed now: %1. Each covers a bounded slice of the text."), n)
+  end
+  if data_state == "ask" then
+    lines[#lines + 1] = T(_("Text from this book goes to %1 as you read. Start allows it for this book (Book Settings → Privacy)."),
+      self:getProviderDisplayName(require("koassistant.request.privacy_gates").dispatchProvider(
+        self.settings:readSetting("features") or {}, self.action_service:getAction("book", "xray"),
+        (self.settings:readSetting("features") or {}).provider)))
+  end
   lines[#lines + 1] = _("Start now?")
   local revert = opts and opts.revert
   local cancel_label = (opts and opts.cancel_label)
@@ -12073,8 +12144,12 @@ function AskGPT:_xrayFollowCatchUp(_decimal, opts)
   confirm = ButtonDialog:new{
     title = table.concat(lines, "\n"),
     buttons = {
-      {{ text = _("Start"), callback = function()
+      {{ text = data_state == "ask" and _("Allow for this book and start") or _("Start"), callback = function()
         UIManager:close(confirm)
+        if data_state == "ask" then
+          require("koassistant.ui.data_access").allowForBook(
+            self_ref.ui.document.file, self_ref.ui, { "book_text" })
+        end
         start()
       end }},
       {{ text = cancel_label,
@@ -12393,8 +12468,9 @@ function AskGPT:_executeSectionAction(action, action_id, entry, label, opts)
   end
 
   local exec_opts = { section_scope = scope }
-  -- A run option from the entry popup (B345)
+  -- A run option from the entry popup (B345), and the popup's data allowance (B395)
   exec_opts.run_variant = opts and opts.run_variant
+  exec_opts.data_once = opts and opts.data_once
   if opts and opts.source_mode then
     exec_opts.source_mode = opts.source_mode
   elseif action.source_selection then
@@ -13860,7 +13936,8 @@ function AskGPT:viewCachedAction(action, action_id, cached_entry, opts)
         if action.source_selection then
           self_ref2:_showUnifiedActionPopup(action, captured_action_id, {
             on_execute = function(popup_state)
-              self_ref2:_executeBookLevelActionDirect(action, captured_action_id, { source_mode = popup_state.source })
+              self_ref2:_executeBookLevelActionDirect(action, captured_action_id,
+                { source_mode = popup_state.source, data_once = popup_state.data_once })
             end,
           })
         else
@@ -14451,18 +14528,64 @@ function AskGPT:_scheduleXrayAutoFire()
   UIManager:scheduleIn(XrayAuto.SCHEDULE_DELAY_S, fire)
 end
 
---- Silent consent check shared by every unattended X-Ray fire (background update,
---- auto-create, ladder rungs): the book_text gate incl. trusted-provider bypass,
---- without _checkRequirements' UI.
+--- The book-text state for an unattended X-Ray fire (background update,
+--- auto-create, ladder rungs): the book's own value, an allowance the build's
+--- start was given (Allow once covers the whole build it planned, never the
+--- automatic continuation), trust for the provider the build really goes to,
+--- then the switch (koassistant/request/privacy_gates.lua). No UI here.
 --- @param run_provider string|nil a one-shot run option's provider (B345)
-function AskGPT:_xrayBackgroundConsentOk(action, features, run_provider)
-  if action.use_book_text == false then return false end
-  -- The book's own value, then trust for the provider the build really goes
-  -- to, then the switch: the gates module (a book's deny beats trust)
+--- @param once table|nil the kinds the build was allowed once (a list)
+--- @return string "allow" | "ask" | "never" ("never" when the action itself has text off)
+function AskGPT:_xrayBackgroundConsentState(action, features, run_provider, once)
+  if action.use_book_text == false then return "never" end
   local Gates = require("koassistant.request.privacy_gates")
-  return Gates.allows("book_text", { features = features,
-    provider = Gates.dispatchProvider(features, action, run_provider or action.provider or features.provider),
-    book = Gates.overridesOf(self.ui and self.ui.doc_settings) })
+  local ctx = Gates.context(features,
+    Gates.dispatchProvider(features, action, run_provider or action.provider or features.provider),
+    { ds = self.ui and self.ui.doc_settings })
+  if type(once) == "table" then
+    ctx.once = {}
+    for _idx, kind in ipairs(once) do ctx.once[kind] = true end
+  end
+  local state = Gates.resolve("book_text", ctx)
+  return state
+end
+
+--- Silent consent check shared by every unattended X-Ray fire: true only on a
+--- standing Allow (or the build's own allowance). The automatic engine asks
+--- once in the foreground when the answer is "ask" (ruling 20, 2026-10-14).
+function AskGPT:_xrayBackgroundConsentOk(action, features, run_provider, once)
+  return self:_xrayBackgroundConsentState(action, features, run_provider, once) == "allow"
+end
+
+--- The automatic engine's one question (ruling 20): a book with automatic
+--- building on whose text is still on Ask is asked once per session, in the
+--- foreground, at the moment a checkpoint would build. Allow for this book
+--- writes the book's value and starts the engine; Cancel pauses automatic
+--- building for this book (lifted when the book is closed, or by any explicit
+--- start). Allow once is not offered: the continuation as the reader reads has
+--- no moment to ask again.
+function AskGPT:_askXrayAutoConsent(file, action, features)
+  self._xray_auto_consent_asked = self._xray_auto_consent_asked or {}
+  if self._xray_auto_consent_asked[file] then return end
+  self._xray_auto_consent_asked[file] = true
+  local XrayAuto = require("koassistant.xray.xray_auto")
+  local Gates = require("koassistant.request.privacy_gates")
+  local self_ref = self
+  local cf = configuration and configuration.features or features
+  require("koassistant.ui.data_access").withAccess(self, action, {
+    features = cf, path = file, ui = self.ui,
+    provider = Gates.dispatchProvider(cf, action, action.provider or cf.provider),
+    action_name = _("Automatic X-Ray"), kinds = { "book_text" }, required = true,
+    standing_only = true,
+    amounts = { book_text = _("text from this book, in checkpoints as you read") },
+    note = _("Automatic X-Ray is on for this book. \"Allow for this book\" lets it build in the background; Cancel pauses it for this book."),
+    on_cancel = function()
+      XrayAuto.suppressAuto(file, "consent")
+      UIManager:show(Notification:new{ text = _("Automatic X-Ray paused for this book."), timeout = 3 })
+    end,
+  }, function()
+    self_ref:_fireXrayAutoCheckpoints({ notify = true, explicit = true })
+  end)
 end
 
 --- Round 21 — the UNIFIED CHECKPOINT ENGINE's auto fire (plan item 23): build
@@ -14505,9 +14628,26 @@ function AskGPT:_fireXrayAutoCheckpoints(opts)
   end
   local action = self.action_service and self.action_service:getAction("book", "xray")
   if not action or not action.update_prompt then return end
-  if not self:_xrayBackgroundConsentOk(action, features) then
-    logger.dbg("KOAssistant: automatic X-Ray declined: text extraction consent off")
-    return
+  do
+    local consent = self:_xrayBackgroundConsentState(action, features)
+    if consent == "ask" then
+      -- No standing value yet: the one question, in the foreground (ruling 20)
+      self:_askXrayAutoConsent(file, action, features)
+      return
+    elseif consent ~= "allow" then
+      -- Set to Never: nothing builds; said once per book and session, where
+      -- the engine would have run
+      self._xray_auto_never_noted = self._xray_auto_never_noted or {}
+      if not self._xray_auto_never_noted[file] then
+        self._xray_auto_never_noted[file] = true
+        UIManager:show(InfoMessage:new{
+          text = _("Automatic X-Ray is on for this book, but its book text is set to Never (Book Settings → Privacy). Nothing is built until that changes."),
+          timeout = 5,
+        })
+      end
+      logger.dbg("KOAssistant: automatic X-Ray declined: book text set to Never")
+      return
+    end
   end
 
   local ActionCache = require("koassistant.artifacts.action_cache")
@@ -14634,11 +14774,31 @@ function AskGPT:_fireXrayAutoUpdate(opts)
 
   -- Consent gate, mirroring _checkRequirements' book_text gate (the background path
   -- never runs that UI pre-flight): revoking text extraction after a book was opted
-  -- in must stop background fires. Trusted providers bypass, same as everywhere.
-  if not self:_xrayBackgroundConsentOk(action, features,
-      manual and opts.run_variant and opts.run_variant.provider or nil) then
-    logger.dbg("KOAssistant: background X-Ray update declined: text extraction consent off")
-    return
+  -- in must stop background fires. A manual start on Ask asks first (B395 slice
+  -- 2) and runs again with its allowance (opts.data_once).
+  do
+    local consent = self:_xrayBackgroundConsentState(action, features,
+      manual and opts.run_variant and opts.run_variant.provider or nil, opts.data_once)
+    if consent == "ask" and manual and not opts.data_asked then
+      local self_ref = self
+      local Gates = require("koassistant.request.privacy_gates")
+      local cf = configuration and configuration.features or features
+      require("koassistant.ui.data_access").withAccess(self, action, {
+        features = cf, path = file, ui = self.ui,
+        provider = Gates.dispatchProvider(cf, action,
+          (opts.run_variant and opts.run_variant.provider) or action.provider or cf.provider),
+        action_name = action.text or _("X-Ray"), kinds = { "book_text" }, required = true,
+        amounts = { book_text = _("text from this book, up to your reading position") },
+      }, function(granted)
+        opts.data_asked = true
+        opts.data_once = granted and granted.once or nil
+        self_ref:_fireXrayAutoUpdate(opts)
+      end)
+      return
+    elseif consent ~= "allow" then
+      logger.dbg("KOAssistant: background X-Ray update declined: book text not allowed")
+      return
+    end
   end
 
   self:updateConfigFromSettings()
@@ -14646,6 +14806,10 @@ function AskGPT:_fireXrayAutoUpdate(opts)
   for k, v in pairs(configuration or {}) do config_copy[k] = v end
   config_copy.features = {}
   for k, v in pairs((configuration or {}).features or {}) do config_copy.features[k] = v end
+  config_copy.features._data_once = nil
+  if opts.data_once then
+    require("koassistant.request.privacy_gates").grantOnce(config_copy.features, file, opts.data_once)
+  end
   config_copy.features.is_book_context = true
   config_copy.features._background_request = true
   config_copy.features._is_book_level_action = true
@@ -15322,6 +15486,37 @@ function AskGPT:_startXrayLadderBuild(build_opts)
     UIManager:show(InfoMessage:new{ text = _("WiFi is off."), timeout = 2 })
     return
   end
+  -- The data question for a build started by hand (B395 slice 2): asked once
+  -- here, before the build's own confirm; Allow once covers every checkpoint
+  -- the build plans (build_opts.data_once rides the build session)
+  if not (build_opts and build_opts.data_asked) then
+    local Gates = require("koassistant.request.privacy_gates")
+    local cf = configuration and configuration.features or {}
+    local run_provider = build_opts and build_opts.one_shot
+      and build_opts.run_variant and build_opts.run_variant.provider or nil
+    local DA = require("koassistant.ui.data_access")
+    local da_opts = {
+      features = cf, path = file, ui = self.ui,
+      provider = Gates.dispatchProvider(cf, action, run_provider or action.provider or cf.provider),
+      action_name = action.text or _("X-Ray"), kinds = { "book_text" }, required = true,
+      amounts = { book_text = (build_opts and build_opts.one_shot)
+        and _("text from this book, in one background request")
+        or _("text from this book, read in checkpoints") },
+    }
+    local da_needs = DA.needsFor(action, da_opts)
+    local da_plan = DA.plan(da_needs)
+    if da_plan.refused or #da_plan.asked > 0 then
+      local self_ref = self
+      da_opts.needs = da_needs
+      DA.withAccess(self, action, da_opts, function(granted)
+        local bo = build_opts or {}
+        bo.data_asked = true
+        bo.data_once = granted and granted.once or nil
+        self_ref:_startXrayLadderBuild(bo)
+      end)
+      return
+    end
+  end
 
   -- Base = whichever is further along: the highest existing rung (resume) or the
   -- live incremental X-Ray (a manual update mid-ladder can pass the rungs). No
@@ -15511,7 +15706,9 @@ function AskGPT:_startXrayLadderBuild(build_opts)
               { intro = plan_intro, rebuild = chain_rebuild, one_shot = one_shot,
                 to_position = build_opts and build_opts.to_position or nil,
                 -- a run option (B345) rides a one-shot build only; chains keep the default
-                run_variant = one_shot and build_opts and build_opts.run_variant or nil })
+                run_variant = one_shot and build_opts and build_opts.run_variant or nil,
+                -- the start's allowance (B395) covers every rung
+                data_once = build_opts and build_opts.data_once or nil })
             self_ref:_fireXrayLadderRung()
           end,
         }},
@@ -15609,11 +15806,12 @@ function AskGPT:_fireXrayLadderRung()
     return
   end
   -- Consent re-check per rung: revoking text extraction mid-build stops the chain
-  -- (same rule as the background update path)
+  -- (same rule as the background update path); the build's own allowance
+  -- (Allow once at its start) covers every rung it planned
   if not self:_xrayBackgroundConsentOk(action, features,
-      build.one_shot and build.run_variant and build.run_variant.provider or nil) then
+      build.one_shot and build.run_variant and build.run_variant.provider or nil, build.data_once) then
     XrayAuto.endLadderBuild()
-    UIManager:show(InfoMessage:new{ text = _("Checkpoint build stopped: text extraction is disabled."), timeout = 3 })
+    UIManager:show(InfoMessage:new{ text = _("Checkpoint build stopped: book text is no longer allowed for this book."), timeout = 3 })
     return
   end
   if not NetworkMgr:isWifiOn() then
@@ -15692,6 +15890,11 @@ function AskGPT:_fireXrayLadderRung()
   -- A one-shot build started from a run option (B345) runs on the picked model
   if build.one_shot and build.run_variant then
     config_copy.features._run_variant = build.run_variant
+  end
+  -- The build's allowance (Allow once at its start, B395) rides every rung
+  config_copy.features._data_once = nil
+  if build.data_once then
+    require("koassistant.request.privacy_gates").grantOnce(config_copy.features, file, build.data_once)
   end
   config_copy.features._ladder_target_ratio = target
   config_copy.features._ladder_base = base
@@ -16029,6 +16232,9 @@ end
 --- the pause outlives a book close and the notice is long gone (B362).
 function AskGPT:_xrayAutoPausedLabel(file)
   local XrayAuto = require("koassistant.xray.xray_auto")
+  if XrayAuto.autoSuppressReason(file) == "consent" then
+    return _("Resume automatic building (paused: book text not allowed yet)…")
+  end
   local stop = XrayAuto.lastLadderStop(file)
   local why = stop and XrayAuto.stopPausesAuto(stop.kind) and self:_xrayStopReasonLabel(stop.kind)
   if why then
@@ -16537,7 +16743,8 @@ function AskGPT:executeBookLevelAction(action_id, run_variant, run_label)
           self_ref:_showUnifiedActionPopup(action, action_id, {
             on_execute = function(popup_state)
               self_ref:_executeBookLevelActionDirect(action, action_id,
-              { source_mode = popup_state.source, run_variant = run_variant })
+              { source_mode = popup_state.source, run_variant = run_variant,
+                data_once = popup_state.data_once })
             end,
           })
         end,
@@ -16607,7 +16814,8 @@ function AskGPT:executeBookLevelAction(action_id, run_variant, run_label)
             self_ref:_showUnifiedActionPopup(action, action_id, {
               on_execute = function(popup_state)
                 self_ref:_executeBookLevelActionDirect(action, action_id,
-              { source_mode = popup_state.source, run_variant = run_variant })
+              { source_mode = popup_state.source, run_variant = run_variant,
+                data_once = popup_state.data_once })
               end,
             })
           end,
@@ -16627,7 +16835,8 @@ function AskGPT:executeBookLevelAction(action_id, run_variant, run_label)
         self:_showUnifiedActionPopup(action, action_id, {
           on_execute = function(popup_state)
             self_ref:_executeBookLevelActionDirect(action, action_id,
-              { source_mode = popup_state.source, run_variant = run_variant })
+              { source_mode = popup_state.source, run_variant = run_variant,
+                data_once = popup_state.data_once })
           end,
         })
       end
@@ -16650,7 +16859,8 @@ function AskGPT:executeBookLevelAction(action_id, run_variant, run_label)
     self:_showUnifiedActionPopup(action, action_id, {
       on_execute = function(popup_state)
         self_ref:_executeBookLevelActionDirect(action, action_id,
-              { source_mode = popup_state.source, run_variant = run_variant })
+              { source_mode = popup_state.source, run_variant = run_variant,
+                data_once = popup_state.data_once })
       end,
     })
     return
@@ -16680,6 +16890,14 @@ function AskGPT:_executeBookLevelActionDirect(action, action_id, opts)
     config_copy.features[k] = v
   end
   config_copy.features.is_book_context = true  -- Signal book context to getPromptContext()
+  -- An allowance for this run (Allow once, B395) is only ever the one the
+  -- popup's question handed over (opts.data_once, the kinds): a record left on
+  -- the shared table by a chat is that chat's and never rides a book-level run
+  config_copy.features._data_once = nil
+  if opts and opts.data_once then
+    require("koassistant.request.privacy_gates").grantOnce(config_copy.features,
+      self.ui and self.ui.document and self.ui.document.file, opts.data_once)
+  end
 
   -- Full-document X-Ray: propagate transient flag to config for prompt transformation in dialogs
   if opts and opts.full_document then
@@ -16798,6 +17016,8 @@ function AskGPT:executeFileBrowserAction(file, title, authors, book_props, actio
     for k, v in pairs((configuration or {}).features or {}) do
       config_copy.features[k] = v
     end
+    -- A chat's run allowance (B395) never rides a book-level run
+    config_copy.features._data_once = nil
 
     -- Signal synthetic book metadata (same as _executeBookLevelActionDirect)
     config_copy.features._is_book_level_action = true
@@ -17704,7 +17924,8 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
   -- The picker stays usable (it sets the defaults); we just annotate when N/A.
   local ModelConstraints = require("koassistant.request.model_constraints")
   local web_search_supported = ModelConstraints.supportsWebSearch(provider, model)
-  local text_extraction = features.enable_book_text_extraction == true  -- raw-gate: the tile shows the global switch it flips (default false)
+  -- The tile shows the global value it flips (Ask, Allow or Never)
+  local text_state = require("koassistant.request.privacy_gates").summary({ features = features }).book_text.state
 
   -- Get behavior display name (with source indicator)
   local custom_behaviors = features.custom_behaviors or {}
@@ -18191,23 +18412,18 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
       -- per-book Privacy screen.
       local doc_settings = has_document and self:_openBookDS() or nil
       local ov = doc_settings and doc_settings:readSetting(BookSettingsQS.KEY_TEXT_EXTRACTION)
-      local on = text_extraction
-      if ov ~= nil then on = ov end
-      local label = on and _("On") or _("Off")
+      local state = text_state
+      if ov == true then state = "allow" elseif ov == false then state = "never" end
+      local label = BookSettingsQS.privacyStateLabel(state)
       if ov ~= nil then label = label .. _(" (book)") end
-      return E("\u{1F4C4}", T(_("Text Extraction: %1"), label))
+      return E("\u{1F4C4}", T(_("Book Text: %1"), label))
     end)(),
     callback = function()
       local f = self_ref.settings:readSetting("features") or {}
-      -- First-time guard: must enable via Settings → Privacy & Data first
-      if not f._text_extraction_acknowledged then
-        local InfoMessage = require("ui/widget/infomessage")
-        UIManager:show(InfoMessage:new{
-          text = _("To enable text extraction for the first time, go to:\nSettings → Privacy & Data → Text Extraction\n\nAfter that, this toggle will work directly."),
-        })
-        return
-      end
-      f.enable_book_text_extraction = not f.enable_book_text_extraction
+      -- The tap steps the value for all books: Ask to Allow, Allow to Ask,
+      -- Never to Ask (the question is the acknowledgement; the old first-time
+      -- guard is gone, B395 slice 2)
+      f.enable_book_text_extraction = (f.enable_book_text_extraction ~= true) and true or false  -- raw-gate: the tile flips the switch it shows
       self_ref.settings:saveSetting("features", f)
       self_ref.settings:flush()
       self_ref:updateConfigFromSettings()
@@ -20523,6 +20739,9 @@ function AskGPT:_scrubContextFeatures(features)
   -- A run option (B345) is set just-in-time and consumed at dispatch; a stray
   -- dies here
   features._run_variant = nil
+  -- An allowance for one run (Allow once, B395) is the request's, consumed at
+  -- its dispatch; a stray on the shared table would let data out unasked
+  features._data_once = nil
 end
 
 function AskGPT:executeHighlightBypassAction(action, selected_text, highlight_instance)
@@ -21346,79 +21565,52 @@ function AskGPT:quickResetFreshStart()
   })
 end
 
--- Privacy preset: Default (recommended balance)
+-- The three privacy presets (ruling 10 of 2026-10-14): one value for every
+-- kind of data for all books, reading position apart (on, as it is sent or
+-- not, never asked). Per-book values and trusted providers are untouched.
+local function applyPrivacyPreset(self, value, position_on, touchmenu_instance, message)
+  local f = self.settings:readSetting("features") or {}
+  local Gates = require("koassistant.request.privacy_gates")
+  for _idx, kind in ipairs(Gates.KINDS) do
+    if kind == "position" then
+      f.enable_basic_stats = position_on
+    elseif kind == "nearby_text" then
+      f.nearby_text_sharing = value == true and "allow" or value == "never" and "never" or "ask"
+    else
+      f[Gates.GLOBAL_KEY[kind]] = value
+    end
+  end
+  self.settings:saveSetting("features", f)
+  self.settings:flush()
+  self:updateConfigFromSettings()
+  if touchmenu_instance then
+    touchmenu_instance:updateItems()
+  end
+  UIManager:show(InfoMessage:new{ text = message, timeout = 3 })
+end
+
+-- Privacy preset: Ask about everything (the default)
 function AskGPT:applyPrivacyPresetDefault(touchmenu_instance)
-  local f = self.settings:readSetting("features") or {}
-  -- Default: personal content private, basic context shared
-  f.enable_highlights_sharing = false
-  f.enable_annotations_sharing = false
-  f.enable_notebook_sharing = false
-  f.enable_basic_stats = true
-  f.enable_advanced_stats = false
-  f.enable_book_text_extraction = false
-  f.enable_library_scanning = false
-  self.settings:saveSetting("features", f)
-  self.settings:flush()
-  self:updateConfigFromSettings()
-  if touchmenu_instance then
-    touchmenu_instance:updateItems()
-  end
-  UIManager:show(InfoMessage:new{
-    text = _("Default: Personal content private, basic context shared"),
-    timeout = 3,
-  })
+  applyPrivacyPreset(self, nil, true, touchmenu_instance,
+    _("Ask about everything: each kind of data is asked for the first time an action wants it. Reading position is sent."))
 end
 
--- Privacy preset: Minimal (maximum privacy)
+-- Privacy preset: Never send anything extra
 function AskGPT:applyPrivacyPresetMinimal(touchmenu_instance)
-  local f = self.settings:readSetting("features") or {}
-  -- Disable all extended data sharing
-  f.enable_highlights_sharing = false
-  f.enable_annotations_sharing = false
-  f.enable_notebook_sharing = false
-  f.enable_basic_stats = false
-  f.enable_advanced_stats = false
-  f.enable_book_text_extraction = false
-  f.enable_library_scanning = false
-  self.settings:saveSetting("features", f)
-  self.settings:flush()
-  self:updateConfigFromSettings()
-  if touchmenu_instance then
-    touchmenu_instance:updateItems()
-  end
-  UIManager:show(InfoMessage:new{
-    text = _("Minimal: All extended sharing disabled"),
-    timeout = 3,
-  })
+  applyPrivacyPreset(self, "never", false, touchmenu_instance,
+    _("Never send anything extra: only your question, the selected text and the book's title and author go out."))
 end
 
--- Privacy preset: Full (enable all sharing except book text)
+-- Privacy preset: Allow everything, book text included
 function AskGPT:applyPrivacyPresetFull(touchmenu_instance)
-  local f = self.settings:readSetting("features") or {}
-  -- Enable all data sharing (except book text which has cost implications)
-  f.enable_highlights_sharing = true
-  f.enable_annotations_sharing = true
-  f.enable_notebook_sharing = true
-  f.enable_library_scanning = true
-  f.enable_basic_stats = true
-  f.enable_advanced_stats = true
-  -- Note: enable_book_text_extraction not touched - user must enable manually
-  self.settings:saveSetting("features", f)
-  self.settings:flush()
-  self:updateConfigFromSettings()
-  if touchmenu_instance then
-    touchmenu_instance:updateItems()
-  end
-  UIManager:show(InfoMessage:new{
-    text = _("Full: All data sharing enabled (Text extraction must be enabled separately)"),
-    timeout = 3,
-  })
+  applyPrivacyPreset(self, true, true, touchmenu_instance,
+    _("Allow everything: every kind of data goes without a question, book text included. Per-book values still apply."))
 end
 
--- The per-book override pattern, spelled out (schema privacy tip row)
+-- The per-book values, spelled out (schema privacy tip row)
 function AskGPT:showPrivacyOverridesTip()
   UIManager:show(InfoMessage:new{
-    text = _("Every sharing toggle here can be overridden per book (Book Settings → Privacy). Two patterns: keep a global toggle off and allow it for specific books, or keep it on and deny it for sensitive books. A per-book deny always wins — even over trusted providers."),
+    text = _("Every kind of data here has a value for all books, and a book can have its own (Book Settings → Privacy, or \"Allow for this book\" in the question). A book's Never always wins, even over trusted providers; its Allow sends without asking. A kind on Ask is asked the first time an action wants it."),
   })
 end
 
@@ -21539,7 +21731,7 @@ function AskGPT:showTrustedProvidersDialog()
   })
 
   self._trusted_providers_dialog = ButtonDialog:new{
-    title = _("Select providers to trust\n\nTrusted providers bypass data sharing controls."),
+    title = _("Select providers to trust\n\nA trusted provider follows its own column of values (What trusted providers may use), Allow for everything unless you change it; a book's Never still wins."),
     buttons = buttons,
   }
   UIManager:show(self._trusted_providers_dialog)
@@ -23079,6 +23271,12 @@ function AskGPT:ensureInitialized()
   -- Setup wizard: welcome → language → emoji test → gesture setup → tips
   -- Shows once for new users (v2+ storage, not yet completed)
   self:checkSetupWizard()
+
+  -- One-time notice after the upgrade that made Ask the default for every
+  -- sharing switch (B395 slice 2): before the other prompts, never on top of them
+  if require("koassistant.ui.data_access").maybeShowUpgradeNotice(self) then
+    return
+  end
 
   -- One-time language prompt for existing users who never configured languages
   local language_prompted = self:checkLanguagePrompt()

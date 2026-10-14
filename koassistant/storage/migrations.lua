@@ -440,6 +440,33 @@ function Migrations.run(features)
     logger.info("KOAssistant: Moved the image size, quality and aspect settings to Shape and Detail")
   end
 
+  -- ONE-TIME migration (B395 slice 2, rulings 2 and 21 of 2026-10-14): every
+  -- global sharing switch becomes Ask, a switch that was on included ("there
+  -- was no other option to make it work"); reading position keeps its own
+  -- two values; per-book values and the trusted list are kept (they are
+  -- exactly "Allow for this book" and "Not for this book"). An install that
+  -- had decided any switch gets the one-time notice at its first interaction
+  -- (koassistant/ui/data_access.lua maybeShowUpgradeNotice).
+  if not features._privacy_ask_migrated then
+    local decided = false
+    for _idx, key in ipairs({
+      "enable_book_text_extraction", "enable_highlights_sharing", "enable_annotations_sharing",
+      "enable_notebook_sharing", "enable_advanced_stats", "enable_library_scanning",
+    }) do
+      if features[key] ~= nil then
+        decided = true
+        features[key] = nil
+      end
+    end
+    if features.enable_basic_stats ~= nil then decided = true end
+    if decided then
+      features._privacy_notice_pending = true
+      logger.info("KOAssistant: Privacy switches reset to Ask (the question model)")
+    end
+    features._privacy_ask_migrated = true
+    needs_save = true
+  end
+
   return needs_save
 end
 
