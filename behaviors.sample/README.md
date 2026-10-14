@@ -55,7 +55,7 @@ Designed specifically for book reading and literary analysis:
 
 ## Built-in Behaviors
 
-The built-in behaviors are always available (24 files under `prompts/behaviors/`, all listed in Manage Behaviors; the Claude styles follow [Anthropic's published guidelines](https://docs.anthropic.com/en/release-notes/system-prompts)). The main ones:
+The built-in behaviors are always available (24 files under `koassistant/prompts/behaviors/`, all listed in Manage Behaviors; the Claude styles follow [Anthropic's published guidelines](https://docs.anthropic.com/en/release-notes/system-prompts)). The main ones:
 
 - **Claude Style (Mini)** (~220 tokens) - Concise guidance for e-reader conversations
 - **Claude Style (Standard)** (~420 tokens, the default) - Balanced guidance for quality responses

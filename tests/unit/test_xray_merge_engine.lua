@@ -1,5 +1,5 @@
 --[[
-Unit tests: X-Ray merge engine pure halves (koassistant_xray_merge.lua)
+Unit tests: X-Ray merge engine pure halves (koassistant/xray/xray_merge.lua)
 — xray_ecosystem_plan.md §6 slice 3. (test_xray_merge.lua covers the PARSER's
 programmatic merge; this file covers the ENGINE: prompts, unions, scope, gate.)
 
@@ -52,7 +52,7 @@ package.loaded["luasettings"] = package.loaded["luasettings"] or {
     open = function() return { readSetting = function() return nil end, close = function() end } end,
 }
 
-local XrayMerge = require("koassistant_xray_merge")
+local XrayMerge = require("koassistant.xray.xray_merge")
 local TestRunner = require("test_runner"):new()
 
 print("Running: test_xray_merge_engine")
@@ -317,7 +317,7 @@ local BASE_JSON = [[{
 }]]
 
 TestRunner:test("applyBackgroundUpdates: attaches by name or alias, never touches the description", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local data = XrayParser.parse(BASE_JSON)
     local applied, unmatched = XrayMerge.applyBackgroundUpdates(data, {
         { name = "Johnny", background = "Grew up on his father's farm.",
@@ -337,7 +337,7 @@ TestRunner:test("applyBackgroundUpdates: attaches by name or alias, never touche
 end)
 
 TestRunner:test("crossBookTransform: rewrite dropped (aliases salvaged), timeline stripped, new entity lands", function()
-    local WriteBack = require("koassistant_artifact_writeback")
+    local WriteBack = require("koassistant.xray.artifact_writeback")
     local delta = [[{
       "background_updates": [
         {"name": "John Smith", "background": "Left the farm after the fire."}
@@ -370,7 +370,7 @@ TestRunner:test("crossBookTransform: rewrite dropped (aliases salvaged), timelin
 end)
 
 TestRunner:test("re-merging the same book replaces its background instead of duplicating", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local data = XrayParser.parse(BASE_JSON)
     XrayMerge.applyBackgroundUpdates(data,
         { { name = "John Smith", background = "Old text." } }, "First Book")
@@ -385,7 +385,7 @@ TestRunner:test("re-merging the same book replaces its background instead of dup
 end)
 
 TestRunner:test("a background_updates-only delta parses (no category key needed)", function()
-    local WriteBack = require("koassistant_artifact_writeback")
+    local WriteBack = require("koassistant.xray.artifact_writeback")
     local delta = [[{"background_updates": [
       {"name": "Northern Village", "background": "Founded by settlers in the first book."}
     ]}]]
@@ -401,8 +401,8 @@ print("")
 print("  [transitive background carry (item 49)]")
 
 TestRunner:test("transitive carry: ancestor labels ride a chained merge, self-label filtered", function()
-    local WriteBack = require("koassistant_artifact_writeback")
-    local XrayParser = require("koassistant_xray_parser")
+    local WriteBack = require("koassistant.xray.artifact_writeback")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local source_parsed = XrayParser.parse([[{
       "type": "fiction",
       "characters": [
@@ -450,7 +450,7 @@ TestRunner:test("transitive carry: ancestor labels ride a chained merge, self-la
 end)
 
 TestRunner:test("transitive carry never overwrites a fresher direct merge of the same ancestor", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local base = XrayParser.parse(BASE_JSON)
     base.characters[1].background = { { source = "Vol 1", text = "Fresh direct line." } }
     local source_parsed = XrayParser.parse([[{
@@ -467,7 +467,7 @@ TestRunner:test("transitive carry never overwrites a fresher direct merge of the
 end)
 
 TestRunner:test("transitive carry matches by alias and reports the carried label", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local base = XrayParser.parse(BASE_JSON)
     local source_parsed = XrayParser.parse([[{
       "type": "fiction",
@@ -484,7 +484,7 @@ TestRunner:test("transitive carry matches by alias and reports the carried label
 end)
 
 TestRunner:test("transitive carry self-label filter is normalized (case/whitespace drift)", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local base = XrayParser.parse(BASE_JSON)
     local source_parsed = XrayParser.parse([[{
       "type": "fiction",
@@ -505,8 +505,8 @@ print("")
 print("  [dormant carry ledger (item 49 layers 1-2)]")
 
 TestRunner:test("populateDormant: unmatched source actives go dormant; matched do not; protected skipped", function()
-    local WriteBack = require("koassistant_artifact_writeback")
-    local XrayParser = require("koassistant_xray_parser")
+    local WriteBack = require("koassistant.xray.artifact_writeback")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local source_parsed = XrayParser.parse([[{
       "type": "fiction",
       "characters": [
@@ -532,8 +532,8 @@ TestRunner:test("populateDormant: unmatched source actives go dormant; matched d
 end)
 
 TestRunner:test("wake-pass: an arriving entity promotes its stub (description + carried lines, alias fold)", function()
-    local WriteBack = require("koassistant_artifact_writeback")
-    local XrayParser = require("koassistant_xray_parser")
+    local WriteBack = require("koassistant.xray.artifact_writeback")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local json = require("json")
     local base = XrayParser.parse(BASE_JSON)
     base[XrayParser.DORMANT_KEY] = {
@@ -563,8 +563,8 @@ TestRunner:test("wake-pass: an arriving entity promotes its stub (description + 
 end)
 
 TestRunner:test("model-emitted __dormant dropped (delta AND complete); base ledger survives unrelated updates", function()
-    local WriteBack = require("koassistant_artifact_writeback")
-    local XrayParser = require("koassistant_xray_parser")
+    local WriteBack = require("koassistant.xray.artifact_writeback")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local json = require("json")
     local base = XrayParser.parse(BASE_JSON)
     base[XrayParser.DORMANT_KEY] = {
@@ -588,8 +588,8 @@ TestRunner:test("model-emitted __dormant dropped (delta AND complete); base ledg
 end)
 
 TestRunner:test("transitive skip-volume: the source's own ledger rides along and wakes on match", function()
-    local WriteBack = require("koassistant_artifact_writeback")
-    local XrayParser = require("koassistant_xray_parser")
+    local WriteBack = require("koassistant.xray.artifact_writeback")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local source_parsed = XrayParser.parse([[{
       "type": "fiction",
       "characters": [
@@ -613,7 +613,7 @@ TestRunner:test("transitive skip-volume: the source's own ledger rides along and
 end)
 
 TestRunner:test("stripDormantJSON: ledger removed for prompts; no-op without one; prose safe", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local json = require("json")
     local base = XrayParser.parse(BASE_JSON)
     base[XrayParser.DORMANT_KEY] = { { name = "Sleeper", source = "Vol 0" } }
@@ -626,7 +626,7 @@ TestRunner:test("stripDormantJSON: ledger removed for prompts; no-op without one
 end)
 
 TestRunner:test("dormant-index bridge: entity index lists dormant IDENTITY HANDLES only", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local base = XrayParser.parse(BASE_JSON)
     base[XrayParser.DORMANT_KEY] = {
         { name = "Keeper of the Rock", aliases = { "the Keeper" }, category = "characters",
@@ -645,8 +645,8 @@ TestRunner:test("dormant-index bridge: entity index lists dormant IDENTITY HANDL
 end)
 
 TestRunner:test("bridge end-to-end: model lists a dormant name as alias -> wake connects the drifted names", function()
-    local WriteBack = require("koassistant_artifact_writeback")
-    local XrayParser = require("koassistant_xray_parser")
+    local WriteBack = require("koassistant.xray.artifact_writeback")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local json = require("json")
     local base = XrayParser.parse(BASE_JSON)
     base[XrayParser.DORMANT_KEY] = {
@@ -674,7 +674,7 @@ TestRunner:test("bridge end-to-end: model lists a dormant name as alias -> wake 
 end)
 
 TestRunner:test("ledger dedup: a re-merge refreshes the stub and unions carried lines", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local base = XrayParser.parse(BASE_JSON)
     base[XrayParser.DORMANT_KEY] = {
         { name = "Ines Vardo", category = "characters", description = "Old description.",
@@ -730,8 +730,8 @@ TestRunner:test("provenanceGap: exact-title identity over the ledger", function(
 end)
 
 local function withSeedStubs(preds_by_file, caches_by_file, fn)
-    local orig_groups = package.loaded["koassistant_book_groups"]
-    package.loaded["koassistant_book_groups"] = {
+    local orig_groups = package.loaded["koassistant.books.book_groups"]
+    package.loaded["koassistant.books.book_groups"] = {
         predecessorsOf = function(file)
             return preds_by_file[file] or {}, nil
         end,
@@ -739,12 +739,12 @@ local function withSeedStubs(preds_by_file, caches_by_file, fn)
             return file:match("([^/]+)%.epub$") or file
         end,
     }
-    local ActionCache = require("koassistant_action_cache")
+    local ActionCache = require("koassistant.artifacts.action_cache")
     local orig_get = ActionCache.getXrayCache
     ActionCache.getXrayCache = function(file) return caches_by_file[file] end
     local ok_run, err = pcall(fn)
     ActionCache.getXrayCache = orig_get
-    package.loaded["koassistant_book_groups"] = orig_groups
+    package.loaded["koassistant.books.book_groups"] = orig_groups
     if not ok_run then error(err, 0) end
 end
 
@@ -756,7 +756,7 @@ local SEED_FRESH_JSON = [[{
 }]]
 
 TestRunner:test("seedDormant: nearest X-Rayed predecessor seeds, its ledger rides", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local vol2_result = [[{
       "type": "fiction",
       "characters": [
@@ -792,7 +792,7 @@ TestRunner:test("seedDormant: nearest X-Rayed predecessor seeds, its ledger ride
 end)
 
 TestRunner:test("seed enrichment: a second seed is quiet and an AI merge's line is never replaced", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local base = XrayParser.parse([[{ "type": "fiction", "characters": [
         {"name": "Mira", "description": "This book's Mira."},
         {"name": "Kell", "description": "This book's Kell.",
@@ -817,7 +817,7 @@ TestRunner:test("seed enrichment: a second seed is quiet and an AI merge's line 
 end)
 
 TestRunner:test("seed enrichment: off by default (the AI merge path), family-scoped, never alias to alias", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local function base()
         return XrayParser.parse([[{ "type": "fiction",
             "characters": [{"name": "Bob Jones", "aliases": ["Bob"], "description": "This book's Bob."}],
@@ -868,7 +868,7 @@ TestRunner:test("populateDormant: another book's row of the same name keeps its 
 end)
 
 TestRunner:test("seedDormant: walks past X-Ray-less and consent-denied predecessors", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local vol1_result = [[{
       "type": "fiction",
       "characters": [{"name": "Ines Vardo", "description": "Kept the third watch."}]
@@ -890,7 +890,7 @@ TestRunner:test("seedDormant: walks past X-Ray-less and consent-denied predecess
 end)
 
 TestRunner:test("seedDormant: no group -> zero, artifact untouched", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     withSeedStubs({}, {}, function()
         local parsed = XrayParser.parse(SEED_FRESH_JSON)
         local added, src = XrayMerge.seedDormant("/b/solo.epub", parsed, {}, nil, nil)
@@ -901,7 +901,7 @@ TestRunner:test("seedDormant: no group -> zero, artifact untouched", function()
 end)
 
 TestRunner:test("seedDormant + wake: a skip-volume stub wakes on the fresh book's actives", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local vol2_result = [[{
       "type": "fiction",
       "characters": [{"name": "Kell Damsgard", "description": "The harbormaster."}],
@@ -972,7 +972,7 @@ end)
 TestRunner:test("the naming canon rides every fresh create, whatever the ask's answer (B394 slice 3)", function()
     local info = debug.getinfo(1, "S")
     local root = info.source:match("@?(.*)/tests/unit/[^/]+$") or "."
-    local f = assert(io.open(root .. "/koassistant_dialogs.lua", "r"))
+    local f = assert(io.open(root .. "/koassistant/ui/dialogs.lua", "r"))
     local src = f:read("*a")
     f:close()
     -- The ask's callback: every answer but Cancel injects, then sends
@@ -1003,7 +1003,7 @@ TestRunner:test("cross-book prompt carries the identity-matching instruction", f
 end)
 
 TestRunner:test("namingCanonBlock: identity handles only, canon categories only", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local source = XrayParser.parse([[{
       "type": "fiction",
       "characters": [
@@ -1062,7 +1062,7 @@ local MANUAL_WAKE_JSON = [[{
 }]]
 
 TestRunner:test("removeStub: positional identity, name-verified, ambiguity refused", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local data = XrayParser.parse(MANUAL_WAKE_JSON)
     local stub = XrayParser.removeStub(data, 1, "The boy")
     TestRunner:assertEqual(stub and stub.name, "The boy", "index+name match removes")
@@ -1075,7 +1075,7 @@ TestRunner:test("removeStub: positional identity, name-verified, ambiguity refus
 end)
 
 TestRunner:test("wakeStubInto: reader-asserted identity — background + aliases fold in", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local data = XrayParser.parse(MANUAL_WAKE_JSON)
     local ok2 = XrayParser.wakeStubInto(data, 1, "The boy", "characters", "Tobias Renn")
     TestRunner:assertTrue(ok2, "wake into existing entry succeeds")
@@ -1097,7 +1097,7 @@ TestRunner:test("wakeStubInto: reader-asserted identity — background + aliases
 end)
 
 TestRunner:test("promoteStub: stub becomes a visible entry in its own category", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local data = XrayParser.parse(MANUAL_WAKE_JSON)
     TestRunner:assertTrue(XrayParser.promoteStub(data, 1, "The boy"), "character promotes")
     TestRunner:assertEqual(#data.characters, 3, "new visible entry")
@@ -1133,7 +1133,7 @@ local GROUP_NAV_JSON = [[{
 }]]
 
 TestRunner:test("findByIdentity: matches by alias and across categories", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local data = XrayParser.parse(GROUP_NAV_JSON)
     local item, cat, idx = XrayParser.findByIdentity(data, { "Mira Alvsund", "the keeper" }, "characters")
     TestRunner:assertEqual(item and item.name, "Alvsund", "alias bridges the drifted name")
@@ -1153,7 +1153,7 @@ TestRunner:test("findByIdentity: matches by alias and across categories", functi
 end)
 
 TestRunner:test("findByIdentity: singleton categories never match", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local data = XrayParser.parse(GROUP_NAV_JSON)
     -- "conclusion" is a singleton (no navigable entity list) — a stray handle
     -- must not land the reader on it
@@ -1162,7 +1162,7 @@ TestRunner:test("findByIdentity: singleton categories never match", function()
 end)
 
 TestRunner:test("findDormantByIdentity: carried entity is the honest landing", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local data = XrayParser.parse(GROUP_NAV_JSON)
     local stub, idx = XrayParser.findDormantByIdentity(data, { "Toby" })
     TestRunner:assertEqual(stub and stub.name, "Tobias Renn", "matched by alias in the ledger")
@@ -1178,7 +1178,7 @@ print("")
 print("  [round 27: the carry ledger holds everything that can carry]")
 
 TestRunner:test("populateDormant: analysis carries too, only append/singleton stays out", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local base = XrayParser.parse([[{
       "type": "fiction",
       "characters": [{"name": "Sanne Damsgard", "description": "Took her father's rounds."}],
@@ -1211,7 +1211,7 @@ TestRunner:test("populateDormant: analysis carries too, only append/singleton st
 end)
 
 TestRunner:test("populateDormant: existing and transitive analysis stubs are kept, not pruned", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     -- A ledger written before the filter existed, plus a source whose OWN
     -- ledger carries theme stubs down the chain
     local base = XrayParser.parse([[{
@@ -1245,7 +1245,7 @@ TestRunner:test("populateDormant: existing and transitive analysis stubs are kep
 end)
 
 TestRunner:test("wakeDormant: a carried character never wakes a same-named term", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     -- The device case: a dormant CHARACTER "Keeper" woke into a LEXICON entry
     -- "Keeper", so a glossary term absorbed a person's history and the actual
     -- person (Mira, aliased "The Keeper") got nothing.
@@ -1267,7 +1267,7 @@ TestRunner:test("wakeDormant: a carried character never wakes a same-named term"
 end)
 
 TestRunner:test("promoteStub / demoteToStub: the round trip is lossless", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local data = XrayParser.parse([[{
       "type": "fiction",
       "characters": [{"name": "Mira", "description": "The keeper."}],
@@ -1297,7 +1297,7 @@ TestRunner:test("promoteStub / demoteToStub: the round trip is lossless", functi
 end)
 
 TestRunner:test("wakeDormant: an unmapped category is its own family (round 27)", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     -- Full inclusion puts themes in the ledger, and themes have no family
     -- entry — without the fallback they would drop to the FLAT lookup and wake
     -- onto anything sharing the name, which is the "Keeper" bug all over again
@@ -1322,7 +1322,7 @@ TestRunner:test("wakeDormant: an unmapped category is its own family (round 27)"
 end)
 
 TestRunner:test("wakeDormant: drift WITHIN a family still bridges", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local data = XrayParser.parse([[{
       "type": "academic",
       "key_concepts": [],
@@ -1364,7 +1364,7 @@ TestRunner:test("populateDormant folds one entity carried under two names; a re-
 end)
 
 TestRunner:test("unionLedger: outgoing-only stubs join the incoming ledger (F1, B278)", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local prev = XrayParser.parse([[{
       "type": "fiction",
       "characters": [{"name": "Tamsin", "description": "live"}],
@@ -1395,7 +1395,7 @@ TestRunner:test("unionLedger: outgoing-only stubs join the incoming ledger (F1, 
 end)
 
 TestRunner:test("unionLedger: a stub in both takes the outgoing version, aliases and background unioned", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local prev = XrayParser.parse([[{
       "type": "fiction",
       "characters": [{"name": "Tamsin", "description": "live"}],
@@ -1427,7 +1427,7 @@ TestRunner:test("unionLedger: a stub in both takes the outgoing version, aliases
 end)
 
 TestRunner:test("unionLedger: no outgoing ledger is a no-op; the wake-pass after it is idempotent", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local prev0 = XrayParser.parse('{"type":"fiction","characters":[{"name":"A","description":"x"}]}')
     local rung0 = XrayParser.parse('{"type":"fiction","characters":[{"name":"A","description":"y"}]}')
     local a, r = XrayMerge.unionLedger(prev0, rung0)
@@ -1457,7 +1457,7 @@ TestRunner:test("unionLedger: no outgoing ledger is a no-op; the wake-pass after
 end)
 
 TestRunner:test("carryActiveBackground: a rebuild keeps folded background", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local prev = XrayParser.parse([[{
       "type": "fiction",
       "characters": [
@@ -1494,7 +1494,7 @@ TestRunner:test("carryActiveBackground: a rebuild keeps folded background", func
 end)
 
 TestRunner:test("carryActiveBackground: a renamed entity stays carried, not lost", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local prev = XrayParser.parse([[{
       "type": "fiction",
       "characters": [{"name": "Ines", "aliases": ["the doctor"], "description": "old",
@@ -1515,7 +1515,7 @@ TestRunner:test("carryActiveBackground: a renamed entity stays carried, not lost
 end)
 
 TestRunner:test("carryActiveBackground: a re-parked row names its source and keeps a role (B394 slice 3)", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local prev = XrayParser.parse([[{
       "type": "fiction",
       "characters": [{"name": "Ines", "role": "Physician", "description": "old",
@@ -1548,7 +1548,7 @@ TestRunner:test("hasFolded: provenance-listed source counts as done, others don'
 end)
 
 TestRunner:test("populateDormant: the target's own lines never ride back in (self-filter)", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local base = XrayParser.parse([[{ "type": "fiction", "characters": [{"name": "Almark"}] }]])
     -- Vol 3's X-Ray holds a character whose background includes a line
     -- labeled/keyed with VOL 4 — the very book we are merging INTO (an
@@ -1571,7 +1571,7 @@ TestRunner:test("populateDormant: the target's own lines never ride back in (sel
 end)
 
 TestRunner:test("populateDormant: a transitive stub that IS the target stays out", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local base = XrayParser.parse([[{ "type": "fiction", "characters": [{"name": "Almark"}] }]])
     local source = XrayParser.parse([[{ "type": "fiction", "characters": [{"name": "Koruen"}] }]])
     source[XrayParser.DORMANT_KEY] = {
@@ -1587,7 +1587,7 @@ TestRunner:test("populateDormant: a transitive stub that IS the target stays out
 end)
 
 TestRunner:test("applyBackgroundUpdates: file identity rides the sanctioned channel", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local base = XrayParser.parse([[{ "type": "fiction", "characters": [{"name": "Almark"}] }]])
     XrayMerge.applyBackgroundUpdates(base,
         { { name = "Almark", background = "The lead of the earlier volume." } },
@@ -1597,7 +1597,7 @@ TestRunner:test("applyBackgroundUpdates: file identity rides the sanctioned chan
 end)
 
 TestRunner:test("ledgerByCategory: stubs file under this X-Ray's categories by family, name order (#116)", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local data = XrayParser.parse([[{ "type": "fiction",
         "characters": [{"name": "Own Hero", "description": "x"}],
         "timeline": [{"event": "Something happens", "chapter": "1"}],
@@ -1635,7 +1635,7 @@ TestRunner:test("ledgerByCategory: stubs file under this X-Ray's categories by f
 end)
 
 TestRunner:test("ledgerByCategory: a nonfiction X-Ray files people under Key Figures; no ledger is empty", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local data = XrayParser.parse([[{ "type": "nonfiction",
         "key_figures": [{"name": "Own Author", "description": "x"}] }]])
     data[XrayParser.DORMANT_KEY] = {

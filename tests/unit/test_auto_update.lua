@@ -1,5 +1,5 @@
 --[[
-Unit Tests for auto-update helper functions in koassistant_update_checker.lua
+Unit Tests for auto-update helper functions in koassistant/storage/update_checker.lua
 
 Tests the pure logic helpers using real filesystem operations in temp directories.
 Does NOT require the full update checker module (too many UI widget dependencies).
@@ -12,8 +12,8 @@ package.path = package.path .. ";./?.lua;./?/init.lua"
 require("tests.lib.mock_koreader")
 
 local lfs = require("lfs")
-local UpdateChecker = require("koassistant_update_checker")
-local Registry = require("koassistant_storage_registry")
+local UpdateChecker = require("koassistant.storage.update_checker")
+local Registry = require("koassistant.storage.storage_registry")
 
 -- Test suite
 local TestAutoUpdate = {

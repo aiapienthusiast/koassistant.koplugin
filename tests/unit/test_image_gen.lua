@@ -25,9 +25,9 @@ package.loaded["mime"] = {
     unb64 = function(s) return s end,
 }
 
-local ModelLists = require("koassistant_model_lists")
-local BaseHandler = require("koassistant_api.base")
-local ImageGenerator = require("koassistant_image_generator")
+local ModelLists = require("koassistant.request.model_lists")
+local BaseHandler = require("koassistant.api.base")
+local ImageGenerator = require("koassistant.images.image_generator")
 
 -- Test suite
 local TestRunner = {

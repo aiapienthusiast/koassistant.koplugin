@@ -14,7 +14,7 @@ local function setupPaths()
 
     package.path = table.concat({
         plugin_dir .. "/?.lua",
-        plugin_dir .. "/koassistant_api/?.lua",
+        plugin_dir .. "/koassistant/api/?.lua",
         tests_dir .. "/?.lua",
         tests_dir .. "/lib/?.lua",
         package.path,
@@ -94,8 +94,8 @@ print("  Unit Tests: Non-200 / API error handling")
 print(string.rep("=", 50))
 
 -- Load modules under test
-local StreamHandler = require("stream_handler")
-local ModelConstraints = require("model_constraints")
+local StreamHandler = require("koassistant.request.stream_handler")
+local ModelConstraints = require("koassistant.request.model_constraints")
 
 --------------------------------------------------------------------------------
 -- Test: StreamHandler.extractApiError
@@ -146,7 +146,7 @@ TestRunner:test("the machine code is what tells OpenAI's insufficient_quota from
 end)
 
 TestRunner:test("BaseHandler.formatNon200 carries the code the same way (macOS streaming path)", function()
-    local BaseHandler = require("koassistant_api.base")
+    local BaseHandler = require("koassistant.api.base")
     local body = '{"error":{"message":"Insufficient Balance","type":"unknown_error","param":null,"code":"invalid_request_error"}}'
     local line = BaseHandler.formatNon200(402, body)
     TestRunner:assertEqual(line, "HTTP 402: Insufficient Balance (invalid_request_error)", "code appended")
@@ -202,7 +202,7 @@ TestRunner:test("a burst names the provider's wait from its wording", function()
 end)
 
 TestRunner:test("a burst names the wait from the retry-after header when the wording has none", function()
-    local RL = require("koassistant_rate_limits")
+    local RL = require("koassistant.request.rate_limits")
     RL._reset()
     local real_now = RL._now
     RL._now = function() return 100 end

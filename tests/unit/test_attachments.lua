@@ -1,5 +1,5 @@
 --[[
-Unit Tests for koassistant_attachments.lua (attach_plan.md v1)
+Unit Tests for koassistant/request/attachments.lua (attach_plan.md v1)
 
 Covers the pure attachment engine behind the Attach chip:
 - budget truncation (head/tail keep, UTF-8 boundary safety, honest notes)
@@ -17,7 +17,7 @@ Run: lua tests/run_tests.lua --unit
 package.path = package.path .. ";./?.lua;./?/init.lua"
 require("tests.lib.mock_koreader")
 
-local Attachments = require("koassistant_attachments")
+local Attachments = require("koassistant.request.attachments")
 
 local T = {
     passed = 0,

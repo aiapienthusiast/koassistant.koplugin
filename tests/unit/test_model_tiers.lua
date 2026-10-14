@@ -19,7 +19,7 @@ local function setupPaths()
 
     package.path = table.concat({
         plugin_dir .. "/?.lua",
-        plugin_dir .. "/koassistant_api/?.lua",
+        plugin_dir .. "/koassistant/api/?.lua",
         tests_dir .. "/?.lua",
         tests_dir .. "/lib/?.lua",
         package.path,
@@ -48,8 +48,8 @@ function TestRunner.assert(condition, message)
     end
 end
 
-local ModelLists = require("koassistant_model_lists")
-local ModelOverrides = require("koassistant_model_overrides")
+local ModelLists = require("koassistant.request.model_lists")
+local ModelOverrides = require("koassistant.request.model_overrides")
 
 -- Hermeticity: a developer's local custom_models.lua must not leak in
 -- (mock_koreader already does this; explicit here because these tests depend on it)

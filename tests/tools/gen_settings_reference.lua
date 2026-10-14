@@ -1,4 +1,4 @@
--- Generates wiki/Settings-Reference.md from koassistant_settings_schema.lua:
+-- Generates wiki/Settings-Reference.md from koassistant/ui/settings_schema.lua:
 -- every row of the KOAssistant menu in menu order, with its help text, its
 -- default and its choices, and a link to the wiki page that explains it.
 -- The page is never edited by hand; a schema change is followed by
@@ -186,7 +186,7 @@ local function anchor(text)
 end
 
 function Gen.generate(schema)
-    schema = schema or require("koassistant_settings_schema")
+    schema = schema or require("koassistant.ui.settings_schema")
     local out = {}
     local function w(s) out[#out + 1] = s end
     w("# Settings Reference")

@@ -1,4 +1,4 @@
--- Test provider sends what a real request sends (koassistant_provider_probe.lua).
+-- Test provider sends what a real request sends (koassistant/api/provider_probe.lua).
 --
 -- The probe used to write its own OpenAI-shaped requests, so it tested requests
 -- the plugin never sends: DeepSeek's "Forced tool use" failed on every model
@@ -27,9 +27,9 @@ end
 setupPaths()
 require("mock_koreader")
 
-local ConfigHelper = require("koassistant_config_helper")
-local ModelOverrides = require("koassistant_model_overrides")
-local ProviderProbe = require("koassistant_provider_probe")
+local ConfigHelper = require("koassistant.core.config_helper")
+local ModelOverrides = require("koassistant.request.model_overrides")
+local ProviderProbe = require("koassistant.api.provider_probe")
 local json = require("json")
 local TestRunner = require("test_runner"):new()
 
@@ -53,7 +53,7 @@ local function probe(provider, model, step, opts)
         features = opts.features or {}, provider_settings = opts.provider_settings,
     })
     if opts.base_url then base.base_url = opts.base_url end
-    local handler = require("koassistant_api." .. (opts.module or provider))
+    local handler = require("koassistant.api." .. (opts.module or provider))
     local req = ProviderProbe.request(handler, base, step)
     return req, json.decode(req.payload)
 end

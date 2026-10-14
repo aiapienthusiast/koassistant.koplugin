@@ -47,6 +47,8 @@ The sample documents more feature keys (display, translation, streaming, behavio
 
 ## Other files in the plugin folder
 
+The plugin's own code lives in the `koassistant/` folder, one subfolder per area, and never needs editing. Your files sit at the root of the plugin folder, next to `main.lua`:
+
 - `apikeys.lua`: file-based API keys, an alternative to entering them in Settings ([Getting Started](Getting-Started)).
 - `custom_actions.lua`: actions defined in a file rather than in the action editor ([Actions and Menus](Actions-and-Menus)).
 - `custom_models.lua`: capabilities, reasoning profiles, parameter constraints, output caps and speed-tier placements for any model, built-in or on a custom provider, from `custom_models.lua.sample` ([Providers and Models](Providers-and-Models#custom-models)). It adds no models: those are added in the model menu.

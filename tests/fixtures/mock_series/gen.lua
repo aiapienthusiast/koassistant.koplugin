@@ -114,8 +114,8 @@ package.loaded["luasettings"] = {
     open = function() return { readSetting = function() return nil end, close = function() end } end,
 }
 
-local ActionCache = require("koassistant_action_cache")
-local XrayParser = require("koassistant_xray_parser")
+local ActionCache = require("koassistant.artifacts.action_cache")
+local XrayParser = require("koassistant.xray.xray_parser")
 
 local spec = dofile(script_dir .. "/spec.lua")
 

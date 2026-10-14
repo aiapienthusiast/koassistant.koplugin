@@ -2,7 +2,7 @@ local Device = require("device")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local NetworkMgr = require("ui/network/manager")
 local Dispatcher = require("dispatcher")
-local _ = require("koassistant_gettext")
+local _ = require("koassistant.core.gettext")
 local UIManager = require("ui/uimanager")
 local InfoMessage = require("ui/widget/infomessage")
 local Menu = require("ui/widget/menu")
@@ -14,22 +14,22 @@ local DataStorage = require("datastorage")
 local FileManager = require("apps/filemanager/filemanager")
 local lfs = require("libs/libkoreader-lfs")
 local T = require("ffi/util").template
-local logger = require("koassistant_logger")
+local logger = require("koassistant.core.logger")
 local util = require("util")
 local Screen = Device.screen
 
-local Dialogs = require("koassistant_dialogs")
+local Dialogs = require("koassistant.ui.dialogs")
 local showChatGPTDialog = Dialogs.showChatGPTDialog
 -- UpdateChecker is lazy-loaded to speed up plugin startup (defers loading ~25 UI modules)
-local SettingsSchema = require("koassistant_settings_schema")
-local SettingsManager = require("koassistant_ui.settings_manager")
-local PromptsManager = require("koassistant_ui.prompts_manager")
-local UIConstants = require("koassistant_ui.constants")
-local ActionService = require("action_service")
+local SettingsSchema = require("koassistant.ui.settings_schema")
+local SettingsManager = require("koassistant.ui.settings_manager")
+local PromptsManager = require("koassistant.ui.prompts_manager")
+local UIConstants = require("koassistant.ui.constants")
+local ActionService = require("koassistant.prompts.action_service")
 
-local ModelLists = require("koassistant_model_lists")
-local Constants = require("koassistant_constants")
-local StorageRegistry = require("koassistant_storage_registry")
+local ModelLists = require("koassistant.request.model_lists")
+local Constants = require("koassistant.core.constants")
+local StorageRegistry = require("koassistant.storage.storage_registry")
 
 -- Load the configuration directly
 local configuration = {
@@ -118,7 +118,7 @@ local KOASSISTANT_SIDECAR_FILES = StorageRegistry.sidecarFiles()
 local KOASSISTANT_INDICES = StorageRegistry.indexKeys()
 
 -- Language data (shared module)
-local Languages = require("koassistant_languages")
+local Languages = require("koassistant.core.languages")
 local REGULAR_LANGUAGES = Languages.REGULAR
 local CLASSICAL_LANGUAGES = Languages.CLASSICAL
 local COMMON_LANGUAGES = Languages.getAllIds()
@@ -150,7 +150,7 @@ local function copyFileContent(src, dest)
     return true
 end
 
-local DOIResolver = require("doi_resolver")
+local DOIResolver = require("koassistant.books.doi_resolver")
 
 --- Get raw doc_props (with identifiers) from DocSettings for a file.
 --- Raw props include the identifiers field that extendProps() filters out.
@@ -174,9 +174,9 @@ local function buildBookMetadata(title, authors, file, doc_props, document, doc_
     -- Load this book's settings when none were passed but we have a file path.
     local ds = doc_settings
     if not ds and file then
-        ds = require("koassistant_doc_settings").resolve(file)
+        ds = require("koassistant.storage.doc_settings").resolve(file)
     end
-    return require("koassistant_book_settings").applyMetadataOverride(metadata, ds)
+    return require("koassistant.books.book_settings").applyMetadataOverride(metadata, ds)
 end
 
 --- The synthetic "book context" string for book-level actions (chat-header display, the
@@ -228,7 +228,7 @@ function AskGPT:init()
   -- Open windows showing the X-Ray engine's state (build progress, an update
   -- in flight) redraw when it changes (_trackLiveWindow)
   local live_self = self
-  require("koassistant_xray_auto").on_state_change = function()
+  require("koassistant.xray.xray_auto").on_state_change = function()
     live_self:_scheduleLiveRedraw()
   end
 
@@ -257,7 +257,7 @@ function AskGPT:init()
           return
         end
         local ok, err = pcall(function()
-          local UpdateChecker = require("koassistant_update_checker")
+          local UpdateChecker = require("koassistant.storage.update_checker")
           UpdateChecker.checkForUpdates(true) -- auto = true (silent background check)
         end)
         if not ok then
@@ -346,8 +346,8 @@ function AskGPT:init()
           if not selected_text or selected_text == "" then return end
           local doc_path = self.ui and self.ui.document and self.ui.document.file
           if not doc_path then return end
-          local Notebook = require("koassistant_notebook")
-          local ChatGPTViewer = require("koassistant_chatgptviewer")
+          local Notebook = require("koassistant.chat.notebook")
+          local ChatGPTViewer = require("koassistant.ui.chatgptviewer")
           ChatGPTViewer.appendSnippetToNotebook(doc_path, selected_text, {
             page_info = Notebook.getPageInfo(self.ui),
             book_title = self.ui.doc_props
@@ -387,7 +387,7 @@ function AskGPT:init()
     -- is folded into our files before any read. A table scan when clean.
     if self.ui and self.ui.document and self.ui.doc_settings then
       local ok_m, err_m = pcall(function()
-        require("koassistant_book_store").ensureMigrated(self.ui.document.file, self.ui.doc_settings)
+        require("koassistant.storage.book_store").ensureMigrated(self.ui.document.file, self.ui.doc_settings)
       end)
       if not ok_m then logger.warn("KOAssistant: book store straggler check failed:", err_m) end
     end
@@ -403,7 +403,7 @@ function AskGPT:init()
     -- covers cases where ui.dictionary wasn't ready at init time).
     self:installDictButtonRegistration()
     -- Auto-reopen X-Ray browser after opening book from file browser
-    local XrayBrowser = require("koassistant_xray_browser")
+    local XrayBrowser = require("koassistant.xray.xray_browser")
     if XrayBrowser._pending_reopen then
       local pending = XrayBrowser._pending_reopen
       XrayBrowser._pending_reopen = nil
@@ -415,7 +415,7 @@ function AskGPT:init()
         end
         local UIManager = require("ui/uimanager")
         UIManager:scheduleIn(0.5, function()
-          local ActionCache = require("koassistant_action_cache")
+          local ActionCache = require("koassistant.artifacts.action_cache")
           local cached = ActionCache.getXrayCache(book_file)
           if cached then
             self:showCacheViewer({
@@ -429,7 +429,7 @@ function AskGPT:init()
     end
     -- Auto-reopen the Book Hub after "Open Book" on its closed-book view
     -- (same pattern as the X-Ray browser reopen above)
-    local BookPageReopen = require("koassistant_book_page")
+    local BookPageReopen = require("koassistant.books.book_page")
     if BookPageReopen._pending_reopen then
       local bp_pending = BookPageReopen._pending_reopen
       BookPageReopen._pending_reopen = nil
@@ -466,7 +466,7 @@ function AskGPT:init()
     -- including the delta cap — it serves only modest cross-session gaps, plan §8.3)
     self:_refreshXrayAutoState()
     if self._xray_auto_state and self._xray_auto_state.auto_update then
-      local XrayAuto = require("koassistant_xray_auto")
+      local XrayAuto = require("koassistant.xray.xray_auto")
       local xa_file = self.ui and self.ui.document and self.ui.document.file
       local UIManager = require("ui/uimanager")
       UIManager:scheduleIn(XrayAuto.CATCHUP_DELAY_S, function()
@@ -498,10 +498,10 @@ function AskGPT:init()
       local UIManager = require("ui/uimanager")
       UIManager:scheduleIn(2, function()
         local ok, err = pcall(function()
-          require("koassistant_action_cache").refreshIndex(heal_file)
-          require("koassistant_chat_history_manager"):refreshChatIndexEntry(heal_file, heal_ui)
-          require("koassistant_notebook").refreshIndexEntry(heal_file)
-          require("koassistant_pinned_manager").refreshIndex(heal_file)
+          require("koassistant.artifacts.action_cache").refreshIndex(heal_file)
+          require("koassistant.chat.chat_history_manager"):refreshChatIndexEntry(heal_file, heal_ui)
+          require("koassistant.chat.notebook").refreshIndexEntry(heal_file)
+          require("koassistant.artifacts.pinned_manager").refreshIndex(heal_file)
         end)
         if not ok then
           logger.warn("KOAssistant: index heal-on-open failed:", err)
@@ -594,7 +594,7 @@ function AskGPT:generateFileDialogRows(file, is_file, book_props)
   local features = self.settings:readSetting("features") or {}
 
   -- Check notebook and chat status
-  local Notebook = require("koassistant_notebook")
+  local Notebook = require("koassistant.chat.notebook")
   local has_notebook = Notebook.exists(file)
   local has_chats = self:documentHasChats(file)
 
@@ -606,7 +606,7 @@ function AskGPT:generateFileDialogRows(file, is_file, book_props)
   if not title or title == "" then
     local DocSettings = require("docsettings")
     local doc_settings = DocSettings:open(file)
-    local doc_props = require("koassistant_doc_settings").overlayCustomProps(doc_settings:readSetting("doc_props"), file)
+    local doc_props = require("koassistant.storage.doc_settings").overlayCustomProps(doc_settings:readSetting("doc_props"), file)
     title = doc_props and (doc_props.display_title or doc_props.title) or nil
   end
   if not title or title == "" then
@@ -673,7 +673,7 @@ function AskGPT:generateFileDialogRows(file, is_file, book_props)
   end
 
   -- View Artifacts (KOA) button - if any document cache exists for this file
-  local ActionCache = require("koassistant_action_cache")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   local caches = ActionCache.getAvailableArtifactsWithPinned(file)
   -- Add book metadata for file browser context (no open book)
   for _idx, cache in ipairs(caches) do
@@ -710,7 +710,7 @@ function AskGPT:generateFileDialogRows(file, is_file, book_props)
               if cache.is_image_group then
                 UIManager:close(self_ref._cache_selector)
                 if fb_menu then UIManager:close(fb_menu) end
-                local ImageBrowser = require("koassistant_image_browser")
+                local ImageBrowser = require("koassistant.images.image_browser")
                 ImageBrowser.show({ book_file = file, book_title = title })
               elseif cache.is_xray_versions_group then
                 UIManager:close(self_ref._cache_selector)
@@ -718,7 +718,7 @@ function AskGPT:generateFileDialogRows(file, is_file, book_props)
                 self_ref:_showXrayCheckpointList({ file = file,
                   book_title = title, book_author = authors })
               elseif cache.is_section_group or cache.is_wiki_group or cache.is_pinned_group then
-                local ArtifactBrowser = require("koassistant_artifact_browser")
+                local ArtifactBrowser = require("koassistant.artifacts.artifact_browser")
                 local selector = self_ref._cache_selector
                 local close_all = function()
                   UIManager:close(selector)
@@ -751,11 +751,11 @@ function AskGPT:generateFileDialogRows(file, is_file, book_props)
           }})
         end
         table.insert(btn_rows, {{
-          text = require("koassistant_book_page").entryLabel(),
+          text = require("koassistant.books.book_page").entryLabel(),
           callback = function()
             UIManager:close(self_ref._cache_selector)
             if fb_menu then UIManager:close(fb_menu) end
-            require("koassistant_book_page").show({
+            require("koassistant.books.book_page").show({
               file = file,
               plugin = self_ref,
               ui = self_ref.ui,
@@ -786,14 +786,14 @@ function AskGPT:generateFileDialogRows(file, is_file, book_props)
   -- follow-up (Menus & Buttons ▸ File browser, default true)
   if features.show_book_hub_in_file_browser ~= false then
     table.insert(buttons, {
-      text = Constants.koaLabel(require("koassistant_book_page").pageName(), "file_browser", features),
+      text = Constants.koaLabel(require("koassistant.books.book_page").pageName(), "file_browser", features),
       callback = function()
         local UIManager = require("ui/uimanager")
         local current_dialog = UIManager:getTopmostVisibleWidget()
         if current_dialog then
           UIManager:close(current_dialog)
         end
-        require("koassistant_book_page").show({
+        require("koassistant.books.book_page").show({
           file = file,
           plugin = self,
           ui = self.ui,
@@ -816,7 +816,7 @@ function AskGPT:generateFileDialogRows(file, is_file, book_props)
         if current_dialog then
           UIManager:close(current_dialog)
         end
-        local BookSettings = require("koassistant_book_settings")
+        local BookSettings = require("koassistant.books.book_settings")
         BookSettings.show({ plugin = self, ui = self.ui, document_path = file })
       end,
     })
@@ -842,7 +842,7 @@ function AskGPT:generateFileDialogRows(file, is_file, book_props)
         end,
         hold_callback = function()
           -- rows rebuild on the next long-press (separator generator, 2026-08-17)
-          require("koassistant_action_hold").show(self_ref, action_for_hold, {
+          require("koassistant.ui.action_hold").show(self_ref, action_for_hold, {
             surface = "file_browser",
             book_file = file,
             -- Run once with… (B345): close the file dialog like the tap does
@@ -1155,7 +1155,7 @@ function AskGPT:showKOAssistantDialogForFile(file, title, authors, book_props)
   local bm = configuration.features.book_metadata
   if open_here then
     local ok, progress = pcall(function()
-      return require("koassistant_context_extractor"):new(self.ui, configuration.features)
+      return require("koassistant.request.context_extractor"):new(self.ui, configuration.features)
         :getReadingProgress()
     end)
     if ok and progress then
@@ -1164,7 +1164,7 @@ function AskGPT:showKOAssistantDialogForFile(file, title, authors, book_props)
     end
   end
   if not bm.reading_progress and file then
-    local ds = require("koassistant_doc_settings").resolve(file, self.ui)
+    local ds = require("koassistant.storage.doc_settings").resolve(file, self.ui)
     local pf = ds and ds:readSetting("percent_finished")
     if pf and pf > 0 then
       bm.reading_progress = tostring(math.floor(pf * 100 + 0.5)) .. "%"
@@ -1606,11 +1606,11 @@ function AskGPT:initSettings()
   -- This runs even if features already exists (for users upgrading from older versions)
   local features = self.settings:readSetting("features")
   if features then
-    -- One-time feature migrations, extracted verbatim to koassistant_migrations.lua
+    -- One-time feature migrations, extracted verbatim to koassistant/storage/migrations.lua
     -- (pure, unit-tested: tests/unit/test_migrations.lua). Mutates `features` in
     -- place; the save below persists. The model-default refresh stays HERE — it is
     -- not one-time (re-evaluates every launch) and needs self + ModelLists.
-    local needs_save = require("koassistant_migrations").run(features)
+    local needs_save = require("koassistant.storage.migrations").run(features)
 
     -- Orphan global key from an early 2026 build, never read since (registry
     -- entry legacy_chat_storage_version; storage sweep 2026-09-03)
@@ -1652,7 +1652,7 @@ function AskGPT:initSettings()
     if not features._kimi_region_migrated then
       features._kimi_region_migrated = true
       if features.kimi_region == nil
-          and require("koassistant_api.base").getApiKey("kimi", self.settings) then
+          and require("koassistant.api.base").getApiKey("kimi", self.settings) then
         features.kimi_region = "china"
         logger.info("KOAssistant: existing kimi key stamped kimi_region=china (region-locked keys)")
       end
@@ -1706,7 +1706,7 @@ function AskGPT:initSettings()
   self.settings:flush()
 
   -- Initialize Notebook module with plugin settings reference
-  local Notebook = require("koassistant_notebook")
+  local Notebook = require("koassistant.chat.notebook")
   Notebook.init(self.settings)
 
   -- Update the configuration with settings values
@@ -1846,7 +1846,7 @@ function AskGPT:updateConfigFromSettings()
   -- an unusable pin invisible (resolution falls back to the active provider's
   -- ladder) — GUI-entered keys count via isProviderConfigured.
   do
-    local MO = require("koassistant_model_overrides")
+    local MO = require("koassistant.request.model_overrides")
     MO.setGuiTiers(features.tier_overrides)
     MO.setGlobalTierPins(features.global_tier_models)
     local self_ref = self
@@ -1870,7 +1870,7 @@ function AskGPT:updateConfigFromSettings()
     table.insert(config_parts, "temp=" .. features.default_temperature)
   end
   -- Show reasoning stance (per-model reasoning system) when not the default.
-  local stance = require("reasoning_prefs").getStance(features)
+  local stance = require("koassistant.request.reasoning_prefs").getStance(features)
   if stance ~= "default" then
     table.insert(config_parts, "reasoning_stance=" .. stance)
   end
@@ -1890,7 +1890,7 @@ function AskGPT:updateConfigFromSettings()
   -- plumbing features through constructors that never carried it. Pushed here
   -- like the tier overrides above, so it survives a restart and reaches the
   -- OTHER plugin instance, which never sees the toggle.
-  require("koassistant_ui.constants").setExpandedWindows(
+  require("koassistant.ui.constants").setExpandedWindows(
     features.chat_window_size == "expanded")
 
   -- Console Debug raises KOReader's log level so the plugin's logger.dbg
@@ -1900,7 +1900,7 @@ function AskGPT:updateConfigFromSettings()
   -- Unconditional, not transition-guarded: the sync also picks up KOReader's
   -- own verbose-logging flag, which can flip mid-session without our setting
   -- changing. Costs a require plus an assignment.
-  require("koassistant_debug_utils").syncLogLevel(features.debug and true or false)
+  require("koassistant.core.debug_utils").syncLogLevel(features.debug and true or false)
 
   -- updateConfigFromSettings() runs on every dialog open and file-dialog
   -- rebuild, so log the summary only when it actually changed (issue #104) —
@@ -1928,7 +1928,7 @@ function AskGPT:getCurrentModel()
   -- with the id the wire will carry (audit B3). The old fallback was a retired
   -- Claude id, which the Quick chip's "follow the global model" pick then put on
   -- the wire of whatever provider was active.
-  return require("model_constraints").dispatchModel({
+  return require("koassistant.request.model_constraints").dispatchModel({
     provider = self:getCurrentProvider(),
     features = { custom_providers = self:getCustomProviders() },
   })
@@ -2095,7 +2095,7 @@ end
 function AskGPT:ollamaRootUrl()
   local eps = self:getOllamaEndpoints()
   if type(eps.active) == "string" and eps.active ~= "" then return eps.active end
-  local Defaults = require("koassistant_api.defaults")
+  local Defaults = require("koassistant.api.defaults")
   local base = (Defaults.ProviderDefaults.ollama or {}).base_url or "http://localhost:11434/api/chat"
   return (base:gsub("/api/chat$", ""))
 end
@@ -2112,7 +2112,7 @@ function AskGPT:getOllamaCachedModels()
 end
 
 -- Context-window policy for ollama requests (features.ollama_num_ctx, read in
--- koassistant_api/ollama.lua). nil (the default) = send no num_ctx, so the
+-- koassistant/api/ollama.lua). nil (the default) = send no num_ctx, so the
 -- server's own Modelfile / OLLAMA_CONTEXT_LENGTH decides: the window is memory
 -- on the machine running ollama, and a request num_ctx overrides a Modelfile
 -- PARAMETER, so choosing one for the reader would overrule a deliberately tuned
@@ -2201,8 +2201,8 @@ end
 function AskGPT:showOllamaServerManager(on_change)
   local self_ref = self
   local ButtonDialog = require("ui/widget/buttondialog")
-  local ConfigHelper = require("koassistant_config_helper")
-  local Defaults = require("koassistant_api.defaults")
+  local ConfigHelper = require("koassistant.core.config_helper")
+  local Defaults = require("koassistant.api.defaults")
   local default_root =
     (((Defaults.ProviderDefaults.ollama or {}).base_url or "http://localhost:11434/api/chat")
       :gsub("/api/chat$", ""))
@@ -2424,9 +2424,9 @@ function AskGPT:fetchDerivedModelCaps(provider, model)
   -- (names are user-specific; curation is impossible). Local + fast, but only
   -- ever called behind explicit user actions (model pick, custom add, refresh).
   if provider == "ollama" then
-    local BaseHandler = require("koassistant_api.base")
+    local BaseHandler = require("koassistant.api.base")
     local json = require("json")
-    local ModelOverrides = require("koassistant_model_overrides")
+    local ModelOverrides = require("koassistant.request.model_overrides")
     local d = self:getProviderDescriptor("ollama")
     local base = d and d.base_url or ""
     local show_url = base:gsub("/api/chat$", "") .. "/api/show"
@@ -2451,9 +2451,9 @@ function AskGPT:fetchDerivedModelCaps(provider, model)
     return ModelOverrides.recordDerived(provider, model, params)
   end
   if provider ~= "openrouter" then return false end
-  local BaseHandler = require("koassistant_api.base")
+  local BaseHandler = require("koassistant.api.base")
   local json = require("json")
-  local ModelOverrides = require("koassistant_model_overrides")
+  local ModelOverrides = require("koassistant.request.model_overrides")
   local url = "https://openrouter.ai/api/v1/models/" .. model .. "/endpoints"
   local code, body = BaseHandler.fetchInSubprocess(url, { timeout = 8 })
   if tonumber(code) ~= 200 or type(body) ~= "string" or body == "" then return false end
@@ -2488,7 +2488,7 @@ function AskGPT:getProviderDescriptor(provider_id)
       default_model = cp.default_model, is_custom = true,
     }
   end
-  local Defaults = require("koassistant_api.defaults")
+  local Defaults = require("koassistant.api.defaults")
   local pd = Defaults.ProviderDefaults[provider_id]
   if not pd then return nil end
   local base_url = pd.base_url
@@ -2499,7 +2499,7 @@ function AskGPT:getProviderDescriptor(provider_id)
   else
     -- The handler's own URL hook (Z.AI, Qwen and Kimi pick the host from the
     -- Region setting), so a China or US key lists and tests on its own platform
-    local ok, handler = pcall(require, "koassistant_api." .. provider_id)
+    local ok, handler = pcall(require, "koassistant.api." .. provider_id)
     if ok and type(handler) == "table" and type(handler.customizeUrl) == "function" then
       base_url = handler:customizeUrl(base_url, { features = self.settings:readSetting("features") or {} })
     end
@@ -2537,7 +2537,7 @@ function AskGPT:fetchProviderModels(provider_id, opts)
   if not d or not d.base_url or d.base_url == "" then
     return nil, _("Provider has no base URL")
   end
-  local BaseHandler = require("koassistant_api.base")
+  local BaseHandler = require("koassistant.api.base")
   local json = require("json")
   local key = BaseHandler.getApiKey(provider_id, self.settings)
   if not (type(key) == "string" and key ~= "" and not BaseHandler.isPlaceholderKey(key)) then
@@ -2555,7 +2555,7 @@ function AskGPT:fetchProviderModels(provider_id, opts)
     list_field, name_field = "models", "name"
   elseif provider_id == "gemini" then
     if not key then return nil, _("Gemini needs an API key to list models") end
-    local ModelLists = require("koassistant_model_lists")
+    local ModelLists = require("koassistant.request.model_lists")
     models_url = ModelLists._docs.gemini.api_list .. "?key=" .. key
     list_field, name_field = "models", "name"
   elseif provider_id == "perplexity" then
@@ -2657,7 +2657,7 @@ function AskGPT:showFetchedModelsPicker(provider_id, all_ids, filter, on_change)
   local added = {}
   for _idx, m in ipairs(self:getCustomModels(provider_id)) do added[m] = true end
   -- Built-in providers: ids already in the curated array count as present too
-  for _idx, m in ipairs(require("koassistant_model_lists")[provider_id] or {}) do
+  for _idx, m in ipairs(require("koassistant.request.model_lists")[provider_id] or {}) do
     added[m] = true
   end
 
@@ -2766,7 +2766,7 @@ end
 -- 19e: micro probe battery — universal since REVISION 2 M2 (any provider whose
 -- wire is OpenAI chat-shaped; see providerSupportsTest). Five cheap requests
 -- (~16 output tokens each; the two tool steps get room to finish a call), each
--- built by the provider's own handler (koassistant_provider_probe.lua), so they
+-- built by the provider's own handler (koassistant/api/provider_probe.lua), so they
 -- take the route and shape real requests take; positive
 -- findings land in the DERIVED capability layer (user override > curated >
 -- derived) via ModelOverrides.recordDerived — never in custom_models.lua.
@@ -2792,7 +2792,7 @@ function AskGPT:testProvider(provider_id)
     -- model or, with none picked, the provider's shipped default (the user's
     -- per-provider default only reaches the wire through a provider switch,
     -- which writes it into features.model).
-    model = require("model_constraints").dispatchModel({
+    model = require("koassistant.request.model_constraints").dispatchModel({
       provider = provider_id, model = probe_features.model,
       features = { custom_providers = self:getCustomProviders() },
     }) or model
@@ -2810,12 +2810,12 @@ function AskGPT:testProvider(provider_id)
   -- One model id per request (audit B3): the key the plan allowance is recorded
   -- under comes from the SAME resolver the dispatch path reads it with, so the
   -- probe's record and the first real request provably share one memo key.
-  local key_model = require("model_constraints").dispatchModel({
+  local key_model = require("koassistant.request.model_constraints").dispatchModel({
     provider = provider_id, model = model,
     features = { custom_providers = self:getCustomProviders() },
   })
 
-  local BaseHandler = require("koassistant_api.base")
+  local BaseHandler = require("koassistant.api.base")
   local json = require("json")
   local auth
   local key = BaseHandler.getApiKey(provider_id, self.settings)
@@ -2839,9 +2839,9 @@ function AskGPT:testProvider(provider_id)
   -- configuration.lua base_url, a custom provider its own URL. So the tool
   -- steps take the Responses endpoint where book tools do (OpenAI, xAI) and
   -- switch thinking off where book tools do (DeepSeek, Kimi).
-  local ProviderProbe = require("koassistant_provider_probe")
-  local handler = require("koassistant_api." .. (provider.is_custom and "custom_openai" or provider_id))
-  local base = require("koassistant_config_helper"):mergeWithDefaults({
+  local ProviderProbe = require("koassistant.api.provider_probe")
+  local handler = require("koassistant.api." .. (provider.is_custom and "custom_openai" or provider_id))
+  local base = require("koassistant.core.config_helper"):mergeWithDefaults({
     provider = provider_id, model = model, api_key = auth and key or nil,
     features = probe_features, provider_settings = configuration.provider_settings,
   })
@@ -2856,7 +2856,7 @@ function AskGPT:testProvider(provider_id)
     -- response headers name the plan's tokens-per-minute allowance, so the
     -- first real request is already sized to fit (Groq free: 8K/min against
     -- a 32K default budget refused every request until this was learned).
-    local RL = require("koassistant_rate_limits")
+    local RL = require("koassistant.request.rate_limits")
     if RL.record(provider_id, key_model, RL.fromHeaders(resp_headers), "probe") then
       logger.dbg("KOAssistant: test probe learned per-minute allowance",
         RL.known(provider_id, key_model).limit_tokens, "for", provider_id, key_model)
@@ -2988,7 +2988,7 @@ function AskGPT:showProviderTestReport(provider, model, results, caps)
       text = _("Record capabilities for this model"),
       callback = function()
         UIManager:close(self_ref._provider_test_dialog)
-        local ModelOverrides = require("koassistant_model_overrides")
+        local ModelOverrides = require("koassistant.request.model_overrides")
         local ok = ModelOverrides.recordDerived(provider.id, model, caps)
         UIManager:show(Notification:new{
           text = ok and T(_("Capabilities recorded for %1"), model)
@@ -3084,7 +3084,7 @@ end
 -- Settings action row (Quick Answer Preset → Model override): opens the shared
 -- mode picker from koassistant_dialogs; refreshes the menu row on close.
 function AskGPT:showQuickPresetModelMode(touchmenu_instance)
-  require("koassistant_dialogs").showQuickPresetModelMode({
+  require("koassistant.ui.dialogs").showQuickPresetModelMode({
     plugin = self,
     on_close = function()
       if touchmenu_instance and touchmenu_instance.updateItems then
@@ -3097,7 +3097,7 @@ end
 -- Settings action row (Quick Answer Preset → Behavior): same shape as the
 -- model-mode row above.
 function AskGPT:showQuickPresetBehavior(touchmenu_instance)
-  require("koassistant_dialogs").showQuickPresetBehavior({
+  require("koassistant.ui.dialogs").showQuickPresetBehavior({
     plugin = self,
     on_close = function()
       if touchmenu_instance and touchmenu_instance.updateItems then
@@ -3109,7 +3109,7 @@ end
 
 -- Settings action row (Quick Answer Preset → Brevity nudge): same shape.
 function AskGPT:showQuickPresetNudge(touchmenu_instance)
-  require("koassistant_dialogs").showQuickPresetNudge({
+  require("koassistant.ui.dialogs").showQuickPresetNudge({
     plugin = self,
     on_close = function()
       if touchmenu_instance and touchmenu_instance.updateItems then
@@ -3125,11 +3125,11 @@ end
 function AskGPT:isProviderConfigured(provider_id, custom_config)
   if provider_id == "ollama" then return true end
   if provider_id == "openai_codex" then
-    return require("koassistant_openai_codex_oauth").isConfigured(self.settings)
+    return require("koassistant.api.openai_codex_oauth").isConfigured(self.settings)
   end
   local custom = custom_config or self:getCustomProvider(provider_id)
   if custom and custom.api_key_required == false then return true end
-  local BaseHandler = require("koassistant_api.base")
+  local BaseHandler = require("koassistant.api.base")
   return BaseHandler.getApiKey(provider_id, self.settings) ~= nil
 end
 
@@ -3137,9 +3137,9 @@ end
 -- key. While false (fresh install), key-filtered pickers stay disarmed and show
 -- the full list; keyless-but-usable providers like Ollama don't count toward this.
 function AskGPT:hasAnyRealApiKey()
-  if require("koassistant_openai_codex_oauth").isConfigured(self.settings) then return true end
-  local BaseHandler = require("koassistant_api.base")
-  local ModelLists = require("koassistant_model_lists")
+  if require("koassistant.api.openai_codex_oauth").isConfigured(self.settings) then return true end
+  local BaseHandler = require("koassistant.api.base")
+  local ModelLists = require("koassistant.request.model_lists")
   for _idx, provider in ipairs(ModelLists.getAllProviders()) do
     if BaseHandler.getApiKey(provider, self.settings) then return true end
   end
@@ -3314,7 +3314,7 @@ function AskGPT:getEffectiveDefaultModel(provider)
     return custom_provider.default_model or ""
   end
 
-  local Defaults = require("koassistant_api.defaults")
+  local Defaults = require("koassistant.api.defaults")
   local provider_defaults = Defaults.ProviderDefaults[provider]
 
   -- Ollama: the shipped default is just a NAME — a local server can only run
@@ -3361,7 +3361,7 @@ function AskGPT:buildProviderMenu(simplified, show_all, hub)
   -- instead of switching on tap — switching happens by PICKING A MODEL there.
   local self_ref = self
   local current = self:getCurrentProvider()
-  local ModelLists = require("koassistant_model_lists")
+  local ModelLists = require("koassistant.request.model_lists")
   local builtin_providers = ModelLists.getAllProviders()
   local custom_providers = self:getCustomProviders()
   local items = {}
@@ -3407,7 +3407,7 @@ function AskGPT:buildProviderMenu(simplified, show_all, hub)
       -- the documented safe no-op (QS rebuilds per open).
       if not self_ref:isProviderConfigured(prov_id) then
         if prov_id == "openai_codex" then
-          require("koassistant_openai_codex_oauth").showManageDialog(self_ref)
+          require("koassistant.api.openai_codex_oauth").showManageDialog(self_ref)
         else
           self_ref:showApiKeyDialog(prov_id, display_name, false,
             menuRefresher(touchmenu_instance))
@@ -3993,7 +3993,7 @@ end
 -- Helper: Build model selection sub-menu for current provider
 -- @param simplified: if true, shows only model list without management options (for quick settings)
 --- Switch the model for good: the model menu's tap, and the model button in the
---- highlight menu and the dictionary popup (#86, koassistant_model_switch.lua).
+--- highlight menu and the dictionary popup (#86, koassistant/ui/model_switch.lua).
 function AskGPT:switchModel(provider, model, provider_display_name)
   if not provider_display_name then
     local cp = self:getCustomProvider(provider)
@@ -4033,7 +4033,7 @@ function AskGPT:switchModel(provider, model, provider_display_name)
   -- either way — Cancel just leaves the key for later).
   if switching and not self:isProviderConfigured(provider) then
     if provider == "openai_codex" then
-      require("koassistant_openai_codex_oauth").showManageDialog(self)
+      require("koassistant.api.openai_codex_oauth").showManageDialog(self)
     else
       self:showApiKeyDialog(provider, provider_display_name, false)
     end
@@ -4068,7 +4068,7 @@ function AskGPT:buildModelMenu(simplified, provider_override)
   end
 
   -- Get defaults
-  local Defaults = require("koassistant_api.defaults")
+  local Defaults = require("koassistant.api.defaults")
   local provider_defaults = Defaults.ProviderDefaults[provider]
   local system_default = nil
   if is_custom_provider and custom_provider_config then
@@ -4109,7 +4109,7 @@ function AskGPT:buildModelMenu(simplified, provider_override)
       local buttons = {}
 
       -- Favorites (B345): the model spots of every long-press menu fill from them
-      local RunOptions = require("koassistant_run_options")
+      local RunOptions = require("koassistant.request.run_options")
       local is_fav = RunOptions.isFavorite(self_ref.settings:readSetting("features") or {}, provider, model)
       table.insert(buttons, {{
         text = is_fav and _("Remove from favorites")
@@ -4212,7 +4212,7 @@ function AskGPT:buildModelMenu(simplified, provider_override)
     if is_custom then
       display_name = "★ " .. display_name
     end
-    display_name = require("koassistant_run_options").favoriteMark(fav_features, provider, model)
+    display_name = require("koassistant.request.run_options").favoriteMark(fav_features, provider, model)
       .. display_name
     if model_tiers[model] then
       display_name = display_name .. " · " .. table.concat(model_tiers[model], "/")
@@ -4390,7 +4390,7 @@ function AskGPT:buildModelMenu(simplified, provider_override)
         text = _("Connect / manage subscription..."),
         keep_menu_open = true,
         callback = function()
-          require("koassistant_openai_codex_oauth").showManageDialog(self_ref)
+          require("koassistant.api.openai_codex_oauth").showManageDialog(self_ref)
         end,
       })
     elseif provider ~= "ollama"
@@ -4398,7 +4398,7 @@ function AskGPT:buildModelMenu(simplified, provider_override)
                  and custom_provider_config.api_key_required == false) then
       table.insert(items, {
         text_func = function()
-          local n = #require("koassistant_api.base").listApiKeys(provider, self_ref.settings)
+          local n = #require("koassistant.api.base").listApiKeys(provider, self_ref.settings)
           if n > 1 then
             return T(_("API keys (%1)..."), n)
           end
@@ -4406,7 +4406,7 @@ function AskGPT:buildModelMenu(simplified, provider_override)
         end,
         keep_menu_open = true, -- dialog stacks on top
         callback = function(touchmenu_instance)
-          if #require("koassistant_api.base").listApiKeys(provider, self_ref.settings) > 0 then
+          if #require("koassistant.api.base").listApiKeys(provider, self_ref.settings) > 0 then
             self_ref:showApiKeyManager(provider, provider_display_name, false,
               menuRefresher(touchmenu_instance))
           else
@@ -4676,10 +4676,10 @@ end
 -- RELATIVE — per-action model_tier hints and the ⚡ "fastest" walk resolve
 -- through them, always within the current provider. The GUI layer
 -- (features.tier_overrides) beats custom_models.lua placements, which beat the
--- curated defaults in koassistant_model_lists.lua.
+-- curated defaults in koassistant/request/model_lists.lua.
 function AskGPT:buildTierMenu(provider)
   local self_ref = self
-  local ModelOverrides = require("koassistant_model_overrides")
+  local ModelOverrides = require("koassistant.request.model_overrides")
   local tiers = { "frontier", "flagship", "standard", "fast", "ultrafast" }
   local tier_labels = {
     frontier = _("Frontier"), flagship = _("Flagship"), standard = _("Standard"),
@@ -4740,7 +4740,7 @@ function AskGPT:buildTierMenu(provider)
       pick[#pick + 1] = {
         -- ♥ = favorite; a long-press adds or removes it (B345)
         text_func = function()
-          return require("koassistant_run_options").favoriteMark(
+          return require("koassistant.request.run_options").favoriteMark(
             self_ref.settings:readSetting("features") or {}, provider, m) .. m
         end,
         checked_func = function()
@@ -4750,7 +4750,7 @@ function AskGPT:buildTierMenu(provider)
           self_ref:setTierOverride(provider, tier, m)
         end,
         hold_callback = function(touchmenu_instance)
-          require("koassistant_run_options").toggleFavorite(self_ref, provider, m)
+          require("koassistant.request.run_options").toggleFavorite(self_ref, provider, m)
           if touchmenu_instance then touchmenu_instance:updateItems() end
         end,
       }
@@ -4870,7 +4870,7 @@ function AskGPT:buildGlobalTierMenu()
             return self_ref:buildGlobalTierMenu()
           end)
         end
-        require("koassistant_dialogs").pickProviderModel({
+        require("koassistant.ui.dialogs").pickProviderModel({
           plugin = self_ref,
           current = self_ref:getGlobalTierPin(tier),
           top_row = {
@@ -5058,7 +5058,7 @@ end
 local function hasFileApiKey(provider)
   -- Shape-safe via the shared enumerator (string / array / {key, alias} entries;
   -- placeholders filtered): nil settings = file entries only.
-  return #require("koassistant_api.base").listApiKeys(provider, nil) > 0
+  return #require("koassistant.api.base").listApiKeys(provider, nil) > 0
 end
 
 -- Count of usable entries in one provider's GUI key store value (legacy string
@@ -5109,9 +5109,9 @@ function AskGPT:buildApiKeysMenu()
     local has_gui_key = not is_subscription and guiKeyCount(gui_keys[provider]) > 0
     local has_file_key = hasFileApiKey(provider)
     local key_count = not is_subscription
-      and #require("koassistant_api.base").listApiKeys(provider, self.settings) or 0
+      and #require("koassistant.api.base").listApiKeys(provider, self.settings) or 0
     local status = ""
-    if is_subscription and require("koassistant_openai_codex_oauth").isConfigured(self.settings) then
+    if is_subscription and require("koassistant.api.openai_codex_oauth").isConfigured(self.settings) then
       status = " [connected]"
     elseif key_count > 1 then
       status = " [" .. key_count .. " " .. _("keys") .. "]"
@@ -5175,8 +5175,8 @@ function AskGPT:buildApiKeysMenu()
       keep_menu_open = true,
       callback = function(touchmenu_instance)
         if prov_copy.id == "openai_codex" then
-          require("koassistant_openai_codex_oauth").showManageDialog(self_ref)
-        elseif #require("koassistant_api.base").listApiKeys(prov_copy.id, self_ref.settings) > 0 then
+          require("koassistant.api.openai_codex_oauth").showManageDialog(self_ref)
+        elseif #require("koassistant.api.base").listApiKeys(prov_copy.id, self_ref.settings) > 0 then
           -- Keys exist: the manager (list / select / add / rename / delete)
           self_ref:showApiKeyManager(prov_copy.id, prov_copy.display_name, prov_copy.api_key_optional,
             menuRefresher(touchmenu_instance))
@@ -5266,7 +5266,7 @@ function AskGPT:showApiKeyDialog(provider, display_name, key_optional, on_change
             -- (not just the ends) plus NBSP / zero-width / BOM. On Kindle the key
             -- is usually copied out of a text file opened in KOReader, and a key
             -- long enough to wrap arrives with the line break inside it.
-            local new_key = require("koassistant_api.base").sanitizeKey(raw_key)
+            local new_key = require("koassistant.api.base").sanitizeKey(raw_key)
             local removed = #(raw_key:gsub("^%s*(.-)%s*$", "%1")) - #new_key
             if new_key and new_key ~= "" then
               local f = self_ref.settings:readSetting("features") or {}
@@ -5335,7 +5335,7 @@ end
 -- GUI-then-file order.
 function AskGPT:showApiKeyManager(provider, display_name, key_optional, on_change)
   local self_ref = self
-  local Base = require("koassistant_api.base")
+  local Base = require("koassistant.api.base")
   display_name = display_name or provider:gsub("^%l", string.upper)
   local ButtonDialog = require("ui/widget/buttondialog")
 
@@ -6181,7 +6181,7 @@ end
 -- Minimal Popup action registry picker (Minimal Popup settings): multi-select
 -- over highlight actions. Membership in features.minimal_popup_actions (nil =
 -- Constants.DEFAULT_MINIMAL_POPUP_ACTIONS read-through); dispatch gate in
--- koassistant_dialogs.lua createTempConfig. Highlight-only actions listed, to
+-- koassistant/ui/dialogs.lua createTempConfig. Highlight-only actions listed, to
 -- match the dispatch gate (prompt.context == "highlight"); local_handler
 -- pseudo actions (xray_lookup, image_gen) excluded — they never enter the
 -- chat pipeline, so a minimal-popup registration would be meaningless.
@@ -6382,7 +6382,7 @@ function AskGPT:editCustomAIBehavior()
         {
           text = _("Load Full"),
           callback = function()
-            local SystemPrompts = require("prompts.system_prompts")
+            local SystemPrompts = require("koassistant.prompts.system_prompts")
             local full_text = SystemPrompts.getBehavior("full") or ""
             input_dialog:setInputText(full_text)
           end,
@@ -6408,14 +6408,14 @@ end
 
 -- Show behavior manager UI
 function AskGPT:showBehaviorManager()
-  local BehaviorManager = require("koassistant_ui.behavior_manager")
+  local BehaviorManager = require("koassistant.ui.behavior_manager")
   local manager = BehaviorManager:new(self)
   manager:show()
 end
 
 -- Show domain manager UI
 function AskGPT:showDomainManager()
-  local DomainManager = require("koassistant_ui.domain_manager")
+  local DomainManager = require("koassistant.ui.domain_manager")
   local manager = DomainManager:new(self)
   manager:show()
 end
@@ -6495,7 +6495,7 @@ function AskGPT:executeDictAction(action, word, dict_popup, non_reader_lookup, l
   -- Non-reader lookups (ChatGPT viewer, nested dictionary) have no meaningful
   -- book context to extract — the word came from AI-generated or dictionary text.
   local context = ""
-  local context_mode = require("koassistant_book_settings")
+  local context_mode = require("koassistant.books.book_settings")
     .resolveDictionaryContext(self.ui and self.ui.doc_settings, features)
   local context_chars = features.dictionary_context_chars or 100
   local extraction_mode = (context_mode == "none") and "sentence" or context_mode
@@ -6511,7 +6511,7 @@ function AskGPT:executeDictAction(action, word, dict_popup, non_reader_lookup, l
         nil,
         -- the far side is clamped while spoiler protection is on, as the input dialog does (B436)
         Dialogs.contextAfterLimit(features,
-          require("koassistant_book_settings").resolveSpoilerFree(self:_openBookDS(), features) or false)
+          require("koassistant.books.book_settings").resolveSpoilerFree(self:_openBookDS(), features) or false)
       )
       -- Pre-extract the surrounding-context window while the selection is alive
       -- (the popup close clears it; handlePredefinedPrompt trims per resolved mode)
@@ -6545,9 +6545,9 @@ function AskGPT:executeDictAction(action, word, dict_popup, non_reader_lookup, l
       -- Make sure we're using the latest configuration
       self:updateConfigFromSettings()
       -- Get effective dictionary language (per-book override folded in for the open book)
-      local SystemPrompts = require("prompts.system_prompts")
+      local SystemPrompts = require("koassistant.prompts.system_prompts")
       local dict_language = SystemPrompts.getEffectiveDictionaryLanguage(
-        require("koassistant_book_settings").applyLanguageOverride({
+        require("koassistant.books.book_settings").applyLanguageOverride({
           dictionary_language = features.dictionary_language,
           translation_language = features.translation_language,
           translation_use_primary = features.translation_use_primary,
@@ -6657,7 +6657,7 @@ function AskGPT:syncDictButtons()
     return  -- old KOReader: legacy onDictButtonsReady path handles registration
   end
 
-  local DictButtons = require("koassistant_dict_buttons")
+  local DictButtons = require("koassistant.ui.dict_buttons")
 
   -- Clear our previously-registered buttons (no removal API; nil the keys).
   -- Collect keys first, then delete — never mutate while iterating.
@@ -6685,7 +6685,7 @@ function AskGPT:syncDictButtons()
       local has_doc = (self_ref.ui and self_ref.ui.document) ~= nil
       local visible = DictButtons.shouldShow(popup, act, has_doc, function()
         local path = self_ref.ui and self_ref.ui.document and self_ref.ui.document.file
-        return path ~= nil and require("koassistant_action_cache").hasAnyXray(path)
+        return path ~= nil and require("koassistant.artifacts.action_cache").hasAnyXray(path)
       end)
       if not visible then return false end
       -- Consume the non-reader-lookup flag once, onto the popup (idempotent
@@ -6696,7 +6696,7 @@ function AskGPT:syncDictButtons()
     if act.local_handler == "model_switch" then
       -- The model button (#86): shows your model; a pick switches it for good
       -- and the button relabels in place, the popup stays open
-      local ModelSwitch = require("koassistant_model_switch")
+      local ModelSwitch = require("koassistant.ui.model_switch")
       local spec_id = spec.id
       spec.text, spec.font_bold = nil, nil
       spec.text_func = function() return ModelSwitch.label(self_ref) end
@@ -6714,7 +6714,7 @@ function AskGPT:syncDictButtons()
     -- Long press: the shared hold menu (the popup keeps its buttons; the next
     -- lookup re-syncs through the showDict wrap)
     spec.hold_callback = function(popup)
-      require("koassistant_action_hold").show(self_ref, act, {
+      require("koassistant.ui.action_hold").show(self_ref, act, {
         surface = "dictionary",
         -- Run once with… (B345): the popup (and the selection) is still open
         run = popup and function(variant)
@@ -6808,7 +6808,7 @@ function AskGPT:onDictButtonsReady(dict_popup, dict_buttons)
   local function createActionButton(action)
     if action.local_handler == "model_switch" then
       -- The model button (#86), as on the new API
-      local ModelSwitch = require("koassistant_model_switch")
+      local ModelSwitch = require("koassistant.ui.model_switch")
       return {
         id = "koassistant_model",
         text = ModelSwitch.label(self_ref),
@@ -6833,7 +6833,7 @@ function AskGPT:onDictButtonsReady(dict_popup, dict_buttons)
   for _i, action in ipairs(popup_actions) do
     table.insert(buttons, createActionButton(action))
   end
-  local plugin_rows = require("koassistant_dict_buttons").splitRows(buttons)
+  local plugin_rows = require("koassistant.ui.dict_buttons").splitRows(buttons)
 
   -- Insert all rows at position 2 (after the first row of standard buttons)
   -- Insert in reverse order so they appear in correct order
@@ -6844,14 +6844,14 @@ end
 
 -- Generated-images browser (Settings → Advanced → Image Generation)
 function AskGPT:showImageBrowser()
-  local ImageBrowser = require("koassistant_image_browser")
+  local ImageBrowser = require("koassistant.images.image_browser")
   ImageBrowser.show()
 end
 
 -- The exact prompt sent to the image API, rendered through the live builder
 -- with the current framing toggles (Settings → Advanced → Image Generation)
 function AskGPT:showImageGenPromptTemplate()
-  local ImageGenerator = require("koassistant_image_generator")
+  local ImageGenerator = require("koassistant.images.image_generator")
   local TextViewer = require("ui/widget/textviewer")
   local features = self.settings:readSetting("features") or {}
   UIManager:show(TextViewer:new{
@@ -6879,14 +6879,14 @@ function AskGPT:_sweepCrossBookSurfaces()
     end
   end
   -- Detail overlay above the X-Ray browser first, then the hosts
-  closeField("koassistant_xray_browser", "_detail_viewer")
-  closeField("koassistant_xray_browser", "menu")
-  closeField("koassistant_book_page", "_menu")
-  closeField("koassistant_group_page", "_menu")
-  closeField("koassistant_group_page", "_list_menu")
-  closeField("koassistant_artifact_browser", "current_menu")
-  closeField("koassistant_chat_history_dialog", "current_menu")
-  closeField("koassistant_notebook_manager", "current_menu")
+  closeField("koassistant.xray.xray_browser", "_detail_viewer")
+  closeField("koassistant.xray.xray_browser", "menu")
+  closeField("koassistant.books.book_page", "_menu")
+  closeField("koassistant.books.group_page", "_menu")
+  closeField("koassistant.books.group_page", "_list_menu")
+  closeField("koassistant.artifacts.artifact_browser", "current_menu")
+  closeField("koassistant.chat.chat_history_dialog", "current_menu")
+  closeField("koassistant.chat.notebook_manager", "current_menu")
   -- The stock long-press file dialog: ReaderUI closes the FileManager itself,
   -- never this separate window (the #1 dead-guard sites' stock sibling)
   if FileManager.instance and FileManager.instance.file_dialog then
@@ -6912,8 +6912,8 @@ function AskGPT:onKOAssistantChatHistory()
 end
 
 function AskGPT:onKOAssistantContinueLast()
-  local ChatHistoryManager = require("koassistant_chat_history_manager")
-  local ChatHistoryDialog = require("koassistant_chat_history_dialog")
+  local ChatHistoryManager = require("koassistant.chat.chat_history_manager")
+  local ChatHistoryDialog = require("koassistant.chat.chat_history_dialog")
 
   -- Get the most recently saved chat across all documents
   local most_recent_chat, document_path = ChatHistoryManager:getMostRecentChat()
@@ -6936,8 +6936,8 @@ function AskGPT:onKOAssistantContinueLast()
 end
 
 function AskGPT:onKOAssistantContinueLastOpened()
-  local ChatHistoryManager = require("koassistant_chat_history_manager")
-  local ChatHistoryDialog = require("koassistant_chat_history_dialog")
+  local ChatHistoryManager = require("koassistant.chat.chat_history_manager")
+  local ChatHistoryDialog = require("koassistant.chat.chat_history_dialog")
 
   -- Get the last opened chat (regardless of when it was last saved)
   local chat_history_manager = ChatHistoryManager:new()
@@ -7128,7 +7128,7 @@ function AskGPT:viewCache(parent_dialog)
     return
   end
 
-  local ActionCache = require("koassistant_action_cache")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   local file = self.ui.document.file
 
   local caches = ActionCache.getAvailableArtifactsWithPinned(file, nil, self.ui.document)
@@ -7161,7 +7161,7 @@ function AskGPT:viewCache(parent_dialog)
           UIManager:close(self_ref._cache_selector)
           if parent_dialog then UIManager:close(parent_dialog) end
           local props = self_ref.ui and self_ref.ui.doc_props
-          local ImageBrowser = require("koassistant_image_browser")
+          local ImageBrowser = require("koassistant.images.image_browser")
           ImageBrowser.show({ book_file = file,
             book_title = props and (props.display_title or props.title) })
         elseif cache.is_xray_versions_group then
@@ -7169,7 +7169,7 @@ function AskGPT:viewCache(parent_dialog)
           if parent_dialog then UIManager:close(parent_dialog) end
           self_ref:_showXrayCheckpointList()
         elseif cache.is_section_group or cache.is_wiki_group or cache.is_pinned_group then
-          local ArtifactBrowser = require("koassistant_artifact_browser")
+          local ArtifactBrowser = require("koassistant.artifacts.artifact_browser")
           local props = self_ref.ui and self_ref.ui.doc_props
           local book_title = props and (props.display_title or props.title)
           local selector = self_ref._cache_selector
@@ -7204,12 +7204,12 @@ function AskGPT:viewCache(parent_dialog)
   -- Book page round (2026-08-09): the popup stays the two-tap fast path; the
   -- page is the explore view (same artifact rows + chats/notebook/group/settings)
   table.insert(buttons, {{
-    text = require("koassistant_book_page").entryLabel(),
+    text = require("koassistant.books.book_page").entryLabel(),
     callback = function()
       UIManager:close(self_ref._cache_selector)
       if parent_dialog then UIManager:close(parent_dialog) end
       local props = self_ref.ui and self_ref.ui.doc_props
-      require("koassistant_book_page").show({
+      require("koassistant.books.book_page").show({
         file = file,
         plugin = self_ref,
         ui = self_ref.ui,
@@ -7274,13 +7274,13 @@ end
 --- @param cache_info table: { name, key, data } where data contains result, progress_decimal, model, timestamp, used_annotations, used_book_text
 --- Main-menu entry (settings schema "book_groups" action row, item 46)
 function AskGPT:showBookGroupsManager()
-  local GroupsUI = require("koassistant_book_groups_ui")
+  local GroupsUI = require("koassistant.books.book_groups_ui")
   GroupsUI.showManager({ plugin = self, ui = self.ui })
 end
 
 --- Cheap membership check — callers build "→ Group" buttons lazily from it.
 function AskGPT:_inBookGroup(file)
-  return file ~= nil and #require("koassistant_book_groups").groupsFor(file) > 0
+  return file ~= nil and #require("koassistant.books.book_groups").groupsFor(file) > 0
 end
 
 --- Book Hub entry for registry-driven surfaces (QA panel utility
@@ -7291,7 +7291,7 @@ function AskGPT:onKOAssistantBookOverview()
   local file = self.ui and self.ui.document and self.ui.document.file
   if not file then return true end
   local props = self.ui.doc_props
-  require("koassistant_book_page").show({
+  require("koassistant.books.book_page").show({
     file = file,
     plugin = self,
     ui = self.ui,
@@ -7313,8 +7313,8 @@ end
 function AskGPT:openGroupHubFor(file, opts)
   if not file then return end
   opts = opts or {}
-  local BookGroups = require("koassistant_book_groups")
-  local GroupsUI = require("koassistant_book_groups_ui")
+  local BookGroups = require("koassistant.books.book_groups")
+  local GroupsUI = require("koassistant.books.book_groups_ui")
   local list = BookGroups.groupsFor(file)
   local enable_emoji = opts.enable_emoji
   if enable_emoji == nil then
@@ -7385,10 +7385,10 @@ function AskGPT:_installGroupSeedingHooks()
   -- Nearness rank for the carried-list fold (#90, 2026-09-09): a stub's
   -- book index in its ordered group; every carried stub comes from a book
   -- before the reader's, so a higher index is the nearer book
-  require("koassistant_xray_parser").setStubRankResolver(function(stub)
+  require("koassistant.xray.xray_parser").setStubRankResolver(function(stub)
     local file = type(stub) == "table" and stub.file
     if type(file) ~= "string" or file == "" then return nil end
-    local BookGroups = require("koassistant_book_groups")
+    local BookGroups = require("koassistant.books.book_groups")
     local group = BookGroups.groupsFor(file)[1]
     if not group or not BookGroups.isOrdered(group) then return nil end
     for i, p in ipairs(group.books) do
@@ -7397,8 +7397,8 @@ function AskGPT:_installGroupSeedingHooks()
     return nil
   end)
   local self_ref = self
-  local ActionCache = require("koassistant_action_cache")
-  local BookGroups = require("koassistant_book_groups")
+  local ActionCache = require("koassistant.artifacts.action_cache")
+  local BookGroups = require("koassistant.books.book_groups")
   -- The lookup chain (S6, ref #90, maintainer 2026-09-04: "the access
   -- should cascade"): lookups look PAST a book only once it is read
   -- (Finished, or its last page reached) or its own spoiler protection is
@@ -7419,7 +7419,7 @@ function AskGPT:_installGroupSeedingHooks()
   ActionCache.setLookupChainResolver(function(file)
     local features = configuration and configuration.features
     if not features or not file then return false end
-    local SafeDocSettings = require("koassistant_doc_settings")
+    local SafeDocSettings = require("koassistant.storage.doc_settings")
     local ui = (self_ref.ui and self_ref.ui.document) and self_ref.ui or nil
     local live = ui and SafeDocSettings.samePath(ui.document.file, file)
     local key
@@ -7427,7 +7427,7 @@ function AskGPT:_installGroupSeedingHooks()
       local DocSettings = require("docsettings")
       local ok, meta = pcall(DocSettings.findSidecarFile, DocSettings, file)
       key = stampOf(ok and meta or nil) .. "|"
-        .. stampOf(require("koassistant_book_store").pathFor(file, "koassistant_book_settings.lua"))
+        .. stampOf(require("koassistant.storage.book_store").pathFor(file, "koassistant_book_settings.lua"))
         -- G1: a follow-group marker reads the groups file's value
         .. "|" .. stampOf(BookGroups.filePath())
         .. "|" .. tostring(features.spoiler_free_chat) .. "/" .. tostring(features.research_mode)
@@ -7435,7 +7435,7 @@ function AskGPT:_installGroupSeedingHooks()
       if hit and hit.key == key then return hit.clears end
     end
     local ds = SafeDocSettings.resolve(file, ui)
-    local open = require("koassistant_book_settings").resolveSpoilerPosture(ds, features,
+    local open = require("koassistant.books.book_settings").resolveSpoilerPosture(ds, features,
       { layer = "mechanical" }).protected == false
     if not open then
       local pos = self_ref:_xrayReaderPosition(file)
@@ -7451,14 +7451,14 @@ function AskGPT:_installGroupSeedingHooks()
   -- group, or a deleted group, turns that group's follow markers on the
   -- book(s) into follow-global; a book's own pick replacing a marker gets
   -- the "no longer follows" toast
-  local GroupSettings = require("koassistant_group_settings")
+  local GroupSettings = require("koassistant.books.group_settings")
   BookGroups.on_leave = function(group_id, path)
     GroupSettings.onLeave(group_id, path)
   end
   BookGroups.on_removed = function(group_id, books)
     GroupSettings.onRemoved(group_id, books)
   end
-  require("koassistant_book_store").on_marker_replaced = function(_path, key, group_id)
+  require("koassistant.storage.book_store").on_marker_replaced = function(_path, key, group_id)
     local text = GroupSettings.replacedNotice(key, group_id)  -- nil = the group is gone
     if text then
       UIManager:show(require("ui/widget/notification"):new{ text = text })
@@ -7483,9 +7483,9 @@ function AskGPT:_scheduleGroupReseed(group_id)
   self._reseed_fn = function()
     local pending = self_ref._reseed_pending or {}
     self_ref._reseed_pending = {}
-    local ActionCache = require("koassistant_action_cache")
-    local BookGroups = require("koassistant_book_groups")
-    local XrayMerge = require("koassistant_xray_merge")
+    local ActionCache = require("koassistant.artifacts.action_cache")
+    local BookGroups = require("koassistant.books.book_groups")
+    local XrayMerge = require("koassistant.xray.xray_merge")
     local ui = (self_ref.ui and self_ref.ui.document) and self_ref.ui or nil
     ActionCache.suppress_write_hook = true
     for id in pairs(pending) do
@@ -7513,12 +7513,12 @@ end
 --- Group Hub's member rows are those destinations, and openGroupHubFor is
 --- the landing every book-scoped Group button uses). `mode` stays "xray".
 function AskGPT:_showGroupMembersPopup(file, mode, opts)
-  local BookGroups = require("koassistant_book_groups")
-  local GroupsUI = require("koassistant_book_groups_ui")
+  local BookGroups = require("koassistant.books.book_groups")
+  local GroupsUI = require("koassistant.books.book_groups_ui")
   local list = BookGroups.groupsFor(file)
   if #list == 0 then return end
   local ButtonDialog = require("ui/widget/buttondialog")
-  local ActionCache = require("koassistant_action_cache")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   local self_ref = self
   local dialog
   local rows = {}
@@ -7567,7 +7567,7 @@ function AskGPT:_showGroupMembersPopup(file, mode, opts)
             if not (opts and opts.location and opts.location.item_name) then return true end
             local px = ActionCache.parsedXrayFor(captured)
             if not px then return nil end
-            local XrayParser = require("koassistant_xray_parser")
+            local XrayParser = require("koassistant.xray.xray_parser")
             local names = { opts.location.item_name }
             for _i, a in ipairs(opts.location.item_aliases or {}) do
               names[#names + 1] = a
@@ -7592,7 +7592,7 @@ function AskGPT:_showGroupMembersPopup(file, mode, opts)
             -- stranded descriptor; the book stamp guards a browser that never
             -- opens — e.g. an unparseable cache falls through to plain text)
             if opts and opts.location then
-              require("koassistant_xray_browser")._pending_navigate_to = {
+              require("koassistant.xray.xray_browser")._pending_navigate_to = {
                 category_key = opts.location.category_key,
                 item_name = opts.location.item_name,
                 item_aliases = opts.location.item_aliases,
@@ -7606,7 +7606,7 @@ function AskGPT:_showGroupMembersPopup(file, mode, opts)
               local rt = {}
               for k, v in pairs(opts.return_to) do rt[k] = v end
               rt.target = captured
-              require("koassistant_xray_browser")._pending_return_to = rt
+              require("koassistant.xray.xray_browser")._pending_return_to = rt
             end
             self_ref:showCacheViewer({ name = _("X-Ray"), key = "_xray_cache",
               data = entry, book_title = book_title, file = captured })
@@ -7621,7 +7621,7 @@ function AskGPT:_showGroupMembersPopup(file, mode, opts)
           local entry_view = (opts and opts.entry_view and opts.location
             and opts.location.item_name) and true or false
           local function openEntry(hit)
-            require("koassistant_dialogs").showPredecessorEntity{
+            require("koassistant.ui.dialogs").showPredecessorEntity{
               ui = self_ref.ui, config = configuration, plugin = self_ref,
               document_path = file, hit = hit,
               before_open = opts and opts.before_open or nil,
@@ -7735,8 +7735,8 @@ function AskGPT:_showGroupMembersPopup(file, mode, opts)
 end
 
 function AskGPT:showCacheViewer(cache_info)
-  local ChatGPTViewer = require("koassistant_chatgptviewer")
-  local ActionCache = require("koassistant_action_cache")
+  local ChatGPTViewer = require("koassistant.ui.chatgptviewer")
+  local ActionCache = require("koassistant.artifacts.action_cache")
 
   -- Get book metadata: prefer explicit (artifact browser may show a different book)
   -- Fall back to open book's merged props (includes user edits from Book Info dialog)
@@ -7818,8 +7818,8 @@ function AskGPT:showCacheViewer(cache_info)
         -- The per-book state describing the deleted lineage dies with it
         -- (coverage-ask stamp, promotion hold, automatic override — and a
         -- global auto-create is pinned off for this book, B272)
-        require("koassistant_book_settings").clearXrayLineageState(
-          require("koassistant_doc_settings").resolve(file, self.ui),
+        require("koassistant.books.book_settings").clearXrayLineageState(
+          require("koassistant.storage.doc_settings").resolve(file, self.ui),
           self.settings:readSetting("features") or {})
       elseif cache_key == "_analyze_cache" then
         ActionCache.clearAnalyzeCache(file)
@@ -7845,7 +7845,7 @@ function AskGPT:showCacheViewer(cache_info)
     -- and a hub or browser beside another open book used to rebuild that
     -- book's copy (B449)
     local same_book = self.ui and self.ui.document and self.ui.document.file
-      and require("koassistant_doc_settings").samePath(self.ui.document.file, file)
+      and require("koassistant.storage.doc_settings").samePath(self.ui.document.file, file)
     if cache_key == "_summary_cache" and same_book then
       local self_ref = self
       on_regenerate = function()
@@ -7871,15 +7871,15 @@ function AskGPT:showCacheViewer(cache_info)
   end
 
   -- For X-Ray (main or section): try structured JSON browser when data is JSON
-  local ActionCache = require("koassistant_action_cache")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   local is_section_xray = type(cache_info.key) == "string"
       and cache_info.key:sub(1, #ActionCache.SECTION_XRAY_PREFIX) == ActionCache.SECTION_XRAY_PREFIX
   if cache_info.key == "_xray_cache" or is_section_xray then
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     if XrayParser.isJSON(cache_info.data.result) then
       local parsed = XrayParser.parse(cache_info.data.result)
       if parsed then
-        local XrayBrowser = require("koassistant_xray_browser")
+        local XrayBrowser = require("koassistant.xray.xray_browser")
         local features = configuration and configuration.features or {}
         local browser_metadata = {
           title = book_title,
@@ -7984,7 +7984,7 @@ function AskGPT:showCacheViewer(cache_info)
   -- Fallback: ChatGPTViewer for legacy markdown caches or non-xray caches
   local inline_prefix = buildInlineIndicators(cache_info.data, configuration)
   local xr_delete_choice = (on_delete and cache_info.key == "_xray_cache" and file)
-      and require("koassistant_xray_rows").deleteChoice(file) or nil
+      and require("koassistant.xray.xray_rows").deleteChoice(file) or nil
   local viewer = ChatGPTViewer:new{
     title = title,
     text = inline_prefix and (inline_prefix .. cache_info.data.result) or cache_info.data.result,
@@ -8065,10 +8065,10 @@ function AskGPT:_checkRequirements(action, target_file, run_provider)
     local pf = target_file or (self.ui and self.ui.document and self.ui.document.file)
     if pf then
       local ok_r, ds = pcall(function()
-        return require("koassistant_doc_settings").resolve(pf, self.ui)
+        return require("koassistant.storage.doc_settings").resolve(pf, self.ui)
       end)
       if ok_r and ds then
-        book_priv = require("koassistant_book_settings").effectivePrivacyOverrides(ds)
+        book_priv = require("koassistant.books.book_settings").effectivePrivacyOverrides(ds)
       end
     end
   end
@@ -8165,12 +8165,12 @@ end
 --- Regenerate.
 function AskGPT:_confirmClosedBookSpoilerRun(action, file, run_fn)
   if not (action and action.source_selection and file) then return run_fn() end
-  local SafeDocSettings = require("koassistant_doc_settings")
+  local SafeDocSettings = require("koassistant.storage.doc_settings")
   if self.ui and self.ui.document
       and SafeDocSettings.samePath(self.ui.document.file, file) then
     return run_fn()  -- open book: the scope popup owns consent
   end
-  local BookSettings = require("koassistant_book_settings")
+  local BookSettings = require("koassistant.books.book_settings")
   local sp_ds = SafeDocSettings.resolve(file, self.ui)
   local sp_feats = self.settings:readSetting("features") or {}
   -- resolveSpoilerFree already stands down for research mode and books marked
@@ -8198,7 +8198,7 @@ function AskGPT:showCacheActionPopup(action, action_id, on_update, opts)
     return
   end
 
-  local ActionCache = require("koassistant_action_cache")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   local cached = ActionCache.get(file, action_id)
 
   -- X-Ray actions: always route to scope popup (handles no-cache and cached scenarios)
@@ -8340,7 +8340,7 @@ function AskGPT:showCacheActionPopup(action, action_id, on_update, opts)
   local update_text
   local cached_progress = cached.progress_decimal or 0
   if open_doc then
-    local ContextExtractor = require("koassistant_context_extractor")
+    local ContextExtractor = require("koassistant.request.context_extractor")
     local extractor = ContextExtractor:new(self.ui)
     local progress = extractor:getReadingProgress()
     if progress.decimal > cached_progress + 0.01 then
@@ -8483,11 +8483,11 @@ function AskGPT:_showAnalyzeNotesScopePopup(action, action_id, on_update, cached
   -- Get current reading progress
   local current_progress
   if not is_file_browser and self.ui and self.ui.document then
-    local ContextExtractor = require("koassistant_context_extractor")
+    local ContextExtractor = require("koassistant.request.context_extractor")
     local extractor = ContextExtractor:new(self.ui)
     current_progress = extractor:getReadingProgress()
   elseif is_file_browser then
-    local ContextExtractor = require("koassistant_context_extractor")
+    local ContextExtractor = require("koassistant.request.context_extractor")
     local sidecar = ContextExtractor.readSidecarProgress(target_file)
     if sidecar and sidecar.decimal > 0 then
       current_progress = { decimal = sidecar.decimal, formatted = sidecar.formatted }
@@ -8630,7 +8630,7 @@ end
 ---   framing; summary doesn't apply to those two.
 function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
   local action_name = action.text or action_id
-  local ActionCache = require("koassistant_action_cache")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   local self_ref = self
 
   -- Determine if scope row should be shown
@@ -8661,7 +8661,7 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
   -- agree with the extraction gate: deny beats trusted, allow satisfies the
   -- global gate ("Full text" usable when this book allows it).
   if self.ui and self.ui.doc_settings then
-    local bt_ov = require("koassistant_book_settings")
+    local bt_ov = require("koassistant.books.book_settings")
       .effectivePrivacyOverrides(self.ui.doc_settings).book_text
     if bt_ov ~= nil then text_extraction_enabled = bt_ov end
   end
@@ -8689,7 +8689,7 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
         or prompt_text:find("{incremental_book_text_section}", 1, true))
   local reading_progress
   if self.ui and self.ui.document then
-    local ContextExtractor = require("koassistant_context_extractor")
+    local ContextExtractor = require("koassistant.request.context_extractor")
     reading_progress = ContextExtractor:new(self.ui):getReadingProgress()
   end
   -- Gate: whole-doc action + open book + meaningfully mid-read
@@ -8743,12 +8743,12 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
       local info = self:_currentChapterInfo()
       if info then
         chapter.info = info
-        chapter.presets = require("koassistant_scope_resolver").chapterPresets({
+        chapter.presets = require("koassistant.request.scope_resolver").chapterPresets({
           chapter = info,
           current_page = info.current_page,
           -- Per-book > global posture; the session Spoiler chip never applies to
           -- predefined actions (buildUnifiedRequestConfig clears it for action ~= nil).
-          spoiler_free = require("koassistant_book_settings").resolveSpoilerFree(
+          spoiler_free = require("koassistant.books.book_settings").resolveSpoilerFree(
               self.ui.doc_settings, features),
         })
       end
@@ -8772,7 +8772,7 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
   if smart_row_shown then
     -- Master switch (2026-07-11): posture "off" gates ALL tool use, incl. this row.
     smart_eligible, smart_block_reason =
-        require("koassistant_book_tool_runner").smartRetrievalAllowed(configuration, self.ui)
+        require("koassistant.tools.book_tool_runner").smartRetrievalAllowed(configuration, self.ui)
   end
 
   -- State (persists across rebuilds)
@@ -8786,7 +8786,7 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
   -- implies an open book, so doc_settings is resolvable here.)
   local state = {
     scope = (read_so_far_available
-        and require("koassistant_book_settings").resolveSpoilerFree(self.ui.doc_settings, features)
+        and require("koassistant.books.book_settings").resolveSpoilerFree(self.ui.doc_settings, features)
         and "read_so_far") or "full",
     source = (requires_book_text and "full_text")
         -- Dialog launches pass session_tools (the session Tools chip); false skips the
@@ -8869,7 +8869,7 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
     -- is the popup's pre-selected default, so the plain open→Run path never
     -- touches a radio row. Cancel returns to the popup unchanged. Declared at
     -- this level because the Run button lives outside the scope-section block.
-    local scope_spoiler_free = require("koassistant_book_settings").resolveSpoilerFree(
+    local scope_spoiler_free = require("koassistant.books.book_settings").resolveSpoilerFree(
         self_ref.ui.doc_settings, features)
     local function confirmUnreadScope(covers_unread, proceed)
       if scope_spoiler_free and covers_unread then
@@ -8888,7 +8888,7 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
     -- Title: show progress for position-relevant actions (e.g. "Recap (to 55%)")
     local popup_title = action_name
     if action.use_reading_progress and self_ref.ui and self_ref.ui.document then
-      local ContextExtractor = require("koassistant_context_extractor")
+      local ContextExtractor = require("koassistant.request.context_extractor")
       local extractor = ContextExtractor:new(self_ref.ui)
       local progress = extractor:getReadingProgress()
       if progress.decimal < 1.0 then
@@ -9424,7 +9424,7 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
                 -- Check for existing full-document cache and warn before replacing
                 -- Skip for incremental actions (update_prompt) — they handle update/redo downstream
                 local aa_file = self_ref.ui and self_ref.ui.document and self_ref.ui.document.file
-                local aa_cache = require("koassistant_action_cache")
+                local aa_cache = require("koassistant.artifacts.action_cache")
                 local existing = aa_file and not action.update_prompt and aa_cache.get(aa_file, action_id)
                 if existing and existing.result then
                   local aa_action_name = action.text or action_id
@@ -9636,7 +9636,7 @@ end
 --- another replaces the registration.
 function AskGPT:_trackLiveWindow(dialog, reopen)
   self._live_window = { dialog = dialog, reopen = reopen,
-    stamp = require("koassistant_xray_auto").stateStamp() }
+    stamp = require("koassistant.xray.xray_auto").stateStamp() }
 end
 
 --- Debounced (a finished step ends its flight, writes, advances and fires the
@@ -9655,7 +9655,7 @@ function AskGPT:_scheduleLiveRedraw(delay)
       self_ref._live_window = nil
       return
     end
-    if require("koassistant_xray_auto").stateStamp() == live.stamp then return end
+    if require("koassistant.xray.xray_auto").stateStamp() == live.stamp then return end
     if not UIManager.topdown_widgets_iter then return end  -- KOReader before 2023.02
     for w in UIManager:topdown_widgets_iter() do
       if not w.toast and not w.invisible then
@@ -9687,7 +9687,7 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
   -- Get current reading progress
   local current_progress
   if self.ui and self.ui.document then
-    local ContextExtractor = require("koassistant_context_extractor")
+    local ContextExtractor = require("koassistant.request.context_extractor")
     local extractor = ContextExtractor:new(self.ui)
     current_progress = extractor:getReadingProgress()
   end
@@ -9743,7 +9743,7 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
       end,
     }})
     -- Surface in-range section X-Rays + list existing + new — grouped (P6)
-    local ActionCache = require("koassistant_action_cache")
+    local ActionCache = require("koassistant.artifacts.action_cache")
     local sx_file = (self.ui and self.ui.document and self.ui.document.file)
         or (opts and opts.file)
     local nc_sec_rows, nc_ver_rows = {}, {}
@@ -9819,7 +9819,7 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
     -- Version ladder from nothing (§6 slice 1): build the full rung set up front —
     -- reading then promotes rungs in for free, and every position has a
     -- spoiler-correct version. Flowing docs only, like the background machinery.
-    local nc_xa = require("koassistant_xray_auto")
+    local nc_xa = require("koassistant.xray.xray_auto")
     local nc_build = nc_xa.ladderBuild()
     if nc_build then
       -- Name the step's target — "no idea what the scope is" when the start
@@ -9845,7 +9845,7 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
       }})
     elseif self.ui and self.ui.document and self.ui.document.file
         and not (self.ui.document.info and self.ui.document.info.has_pages) then
-      local nc_ac = require("koassistant_action_cache")
+      local nc_ac = require("koassistant.artifacts.action_cache")
       local nc_rungs = nc_ac.getXrayLadderCount(self.ui.document.file)
       local nc_highest
       if nc_rungs > 0 then
@@ -9889,7 +9889,7 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
       -- (covers the cancelled-before-anything-built case too, where no rungs
       -- exist and there was nothing to hang a Resume row on).
       local nc_features = self.settings:readSetting("features") or {}
-      local nc_auto_on = self.ui.doc_settings and require("koassistant_book_settings")
+      local nc_auto_on = self.ui.doc_settings and require("koassistant.books.book_settings")
         .resolveXrayAuto(self.ui.doc_settings, nc_features)
       if nc_auto_on and nc_xa.isAutoSuppressed(self.ui.document.file) then
         local nc_file = self.ui.document.file
@@ -9938,7 +9938,7 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
       -- above are open-book-only, this one has no such reason)
       local pg_file = (self.ui and self.ui.document and self.ui.document.file)
         or (opts and opts.file)
-      local pg_ac = require("koassistant_action_cache")
+      local pg_ac = require("koassistant.artifacts.action_cache")
       local pg_arch = pg_file and (pg_ac.getXrayCheckpointCount(pg_file)
         + pg_ac.getXrayLadderCount(pg_file)) or 0
       if pg_arch > 0 then
@@ -9963,10 +9963,10 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
         and not (self.ui.document.info and self.ui.document.info.has_pages) then
       table.insert(buttons, {{
         text = T(_("Automatic X-Ray: %1"),
-          require("koassistant_book_settings").xrayAutoLabel(self.ui.doc_settings, nc_af)),
+          require("koassistant.books.book_settings").xrayAutoLabel(self.ui.doc_settings, nc_af)),
         callback = function()
           UIManager:close(dialog)
-          require("koassistant_book_settings").showXrayAutoPicker({
+          require("koassistant.books.book_settings").showXrayAutoPicker({
             plugin = self_ref, ui = self_ref.ui,
             on_change = function()
               self_ref:_refreshXrayAutoState()
@@ -10002,7 +10002,7 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
           callback = function()
             UIManager:close(dialog)
             -- Seam 2: book-scoped launch surface → open on the book tab
-            require("koassistant_book_settings").showSpoilerFree({
+            require("koassistant.books.book_settings").showSpoilerFree({
               plugin = self_ref, ui = self_ref.ui, target_override = "book",
               on_close = function()
                 self_ref:_showXrayScopePopup(action, action_id, on_update, cached_entry, opts)
@@ -10059,7 +10059,7 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
       view_detail = " (" .. table.concat(parts, ", ") .. ")"
     end
 
-    local ActionCache = require("koassistant_action_cache")
+    local ActionCache = require("koassistant.artifacts.action_cache")
     local sx_file = (self.ui and self.ui.document and self.ui.document.file)
         or (opts and opts.file)
     local doc = self.ui and self.ui.document
@@ -10142,19 +10142,19 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
         }})
       end
     end
-    local XrayAuto = require("koassistant_xray_auto")
+    local XrayAuto = require("koassistant.xray.xray_auto")
     local ladder_building = XrayAuto.ladderBuild()
     -- 50(f) posture + promotion hold: the state header wording below needs
     -- them; the version rows themselves come from the SHARED builder (A2 —
-    -- koassistant_xray_rows.lua, one set of gates/labels/confirms with the
+    -- koassistant/xray/xray_rows.lua, one set of gates/labels/confirms with the
     -- browser hamburger), which re-derives both for its own gating
     local xr_posture = self:_xrayPosture()
     local xr_hold = false
     if xr_posture == "full" and doc and self.ui.document.file == sx_file
         and self.ui.doc_settings then
-      xr_hold = require("koassistant_book_settings").xrayPromotionHold(self.ui.doc_settings)
+      xr_hold = require("koassistant.books.book_settings").xrayPromotionHold(self.ui.doc_settings)
     end
-    local vr = require("koassistant_xray_rows").versionRows({
+    local vr = require("koassistant.xray.xray_rows").versionRows({
       plugin = self, file = sx_file, entry = cached_entry,
       current_progress = current_progress,
       on_update = on_update,
@@ -10235,10 +10235,10 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
       local c_flowing = not (doc.info and doc.info.has_pages)
       local c_features = self.settings:readSetting("features") or {}
       local c_auto_on = c_flowing and self.ui.doc_settings
-        and require("koassistant_book_settings")
+        and require("koassistant.books.book_settings")
           .resolveXrayAuto(self.ui.doc_settings, c_features)
       local ext_goal = self.ui.doc_settings and tonumber(self:_openBookDS():readSetting(
-        require("koassistant_book_settings").KEY_XRAY_GOAL)) or nil
+        require("koassistant.books.book_settings").KEY_XRAY_GOAL)) or nil
       if c_auto_on and XrayAuto.isAutoSuppressed(sx_file) then
         table.insert(buttons, {{
           text = self:_xrayAutoPausedLabel(sx_file),
@@ -10370,14 +10370,14 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
     -- be missing or elsewhere on the other).
     local mf_rows = {}
     if sx_file then
-      mf_rows = require("koassistant_xray_rows").linkMergeRows({
+      mf_rows = require("koassistant.xray.xray_rows").linkMergeRows({
         plugin = self, file = sx_file,
         raw = cached_entry.result,
         section_count = c_sx_count,
         pre = function() UIManager:close(dialog) end,
         on_carried = function()
           -- The browser opens on the list (its pending-location hook)
-          require("koassistant_xray_browser")._pending_navigate_to =
+          require("koassistant.xray.xray_browser")._pending_navigate_to =
             { book_file = sx_file, carried_list = true }
           self_ref:viewCachedAction(action, action_id, cached_entry)
         end,
@@ -10395,11 +10395,11 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
     -- via the browser hamburger; this just stops the clutter.
     local mf_relevant = c_sx_count > 0
     if not mf_relevant and sx_file then
-      local ok_bg, BookGroups = pcall(require, "koassistant_book_groups")
+      local ok_bg, BookGroups = pcall(require, "koassistant.books.book_groups")
       mf_relevant = ok_bg and #(BookGroups.groupsFor(sx_file) or {}) > 0
     end
     if mf_relevant then
-      local XrayRows = require("koassistant_xray_rows")
+      local XrayRows = require("koassistant.xray.xray_rows")
       addGroupRow(mf_rows, XrayRows.linkMergeLabel(), XrayRows.linkMergeTitle())
     end
     -- Per-book Automatic X-Ray (§7 P1): tri-state, universal — mirrored in
@@ -10409,10 +10409,10 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
         and not (doc.info and doc.info.has_pages) then
       table.insert(buttons, {{
         text = T(_("Automatic X-Ray: %1"),
-          require("koassistant_book_settings").xrayAutoLabel(self.ui.doc_settings, af)),
+          require("koassistant.books.book_settings").xrayAutoLabel(self.ui.doc_settings, af)),
         callback = function()
           UIManager:close(dialog)
-          require("koassistant_book_settings").showXrayAutoPicker({
+          require("koassistant.books.book_settings").showXrayAutoPicker({
             plugin = self_ref, ui = self_ref.ui,
             on_change = function()
               self_ref:_refreshXrayAutoState()
@@ -10448,7 +10448,7 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
           callback = function()
             UIManager:close(dialog)
             -- Seam 2: book-scoped launch surface → open on the book tab
-            require("koassistant_book_settings").showSpoilerFree({
+            require("koassistant.books.book_settings").showSpoilerFree({
               plugin = self_ref, ui = self_ref.ui, target_override = "book",
               on_close = function()
                 self_ref:_showXrayScopePopup(action, action_id, on_update, cached_entry, opts)
@@ -10980,7 +10980,7 @@ end
 --- position-crossing promotion, never by restore — their options card differs
 --- from a ring version's, and callers labeling an entry point need to know.
 function AskGPT:_xrayVersionIsRung(cp, file)
-  local ActionCache = require("koassistant_action_cache")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   for _idx, r in ipairs(ActionCache.getXrayLadder(file)) do
     if r.timestamp == cp.timestamp
         and math.abs((tonumber(r.progress_decimal) or -1)
@@ -11008,9 +11008,9 @@ end
 --- @return number|nil base progress, boolean has_intro (live or rung),
 ---   table|nil the live per-action entry
 function AskGPT:_xrayAuthoringMode(file)
-  local ActionCache = require("koassistant_action_cache")
-  local XrayParser = require("koassistant_xray_parser")
-  local XrayAuto = require("koassistant_xray_auto")
+  local ActionCache = require("koassistant.artifacts.action_cache")
+  local XrayParser = require("koassistant.xray.xray_parser")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   local ladder = ActionCache.getXrayLadder(file)
   local base = ActionCache.highestXrayLadderProgress(ladder)
   local has_intro = false
@@ -11063,7 +11063,7 @@ end
 --- the only whole-book from-scratch path on a mid-book incremental base.
 function AskGPT:_showXrayCreationChooser(action, action_id, on_update, opts, force_rebuild)
   local ButtonDialog = require("ui/widget/buttondialog")
-  local XrayAuto = require("koassistant_xray_auto")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   local self_ref = self
   local doc = self.ui and self.ui.document
   if not doc then
@@ -11087,13 +11087,13 @@ function AskGPT:_showXrayCreationChooser(action, action_id, on_update, opts, for
     UIManager:show(fb_dialog)
     return
   end
-  local ContextExtractor = require("koassistant_context_extractor")
+  local ContextExtractor = require("koassistant.request.context_extractor")
   local progress = ContextExtractor:new(self.ui):getReadingProgress()
   local decimal = progress and tonumber(progress.decimal) or 0
   local features = self.settings:readSetting("features") or {}
   local flowing = not (doc.info and doc.info.has_pages)
   local total_pages = doc:getPageCount() or 0
-  local BookSettings = require("koassistant_book_settings")
+  local BookSettings = require("koassistant.books.book_settings")
   local auto_on = flowing and BookSettings.resolveXrayAuto(self.ui.doc_settings, features)
   -- Round 23 (item 30): dual-mode — create / extend (usable base on disk) /
   -- rebuild (foreign-lineage live, no base)
@@ -11236,7 +11236,7 @@ function AskGPT:_showXrayCreationChooser(action, action_id, on_update, opts, for
       -- confirm — a cancelled rebuild must not have touched the goal.
       if self_ref.ui and self_ref.ui.doc_settings and cr.coverage ~= "position" then
         self_ref:_openBookDS():saveSetting(
-          require("koassistant_book_settings").KEY_XRAY_GOAL,
+          require("koassistant.books.book_settings").KEY_XRAY_GOAL,
           cr.coverage == "target" and cr.target or nil)
       end
       if cr.delivery == "follow" then
@@ -11322,7 +11322,7 @@ function AskGPT:_showXrayCreationChooser(action, action_id, on_update, opts, for
     -- Foreground whole-book rebuild: one confirm, nothing touched until the
     -- new X-Ray is saved (xray_rebuild success-write defer, round 25)
     local ConfirmBox = require("ui/widget/confirmbox")
-    local ActionCache = require("koassistant_action_cache")
+    local ActionCache = require("koassistant.artifacts.action_cache")
     local limit = ActionCache.checkpointLimitFromFeatures(features)
     local confirm_text = limit ~= 0
       and _("Rebuild from scratch, replacing the current X-Ray? The current one is kept until the new one arrives, then archived under \"All versions\".")
@@ -11492,7 +11492,7 @@ function AskGPT:_showXrayCreationChooser(action, action_id, on_update, opts, for
             on_select = function(entry)
               -- A flow position, as the reader's percent and the plan's
               -- targets are: hidden pages do not count (B335)
-              local ratio = require("koassistant_context_extractor").flowFraction(
+              local ratio = require("koassistant.request.context_extractor").flowFraction(
                 self_ref.ui.document, entry.end_page or 0)
               -- Round 24: a section inside the covered range is a valid pick
               -- now — it reads ", from scratch" and rebuilds (no more bounce)
@@ -11688,12 +11688,12 @@ function AskGPT:_showXrayCreationChooser(action, action_id, on_update, opts, for
     -- the stamps, not the preference (2026-09-07: a Light / Characters-only
     -- lineage read "Standard…" / "All categories…" on a locked Extend)
     if not categories_on and base_entry then
-      local PA = require("prompts/actions")
+      local PA = require("koassistant.prompts.actions")
       cat_value = PA.normalizeXrayCategories(base_entry.xray_categories)
       depth_value = PA.normalizeXrayDepth(base_entry.xray_depth)
       status_value = PA.normalizeXrayStatus(base_entry.xray_status)
       -- The type is the X-Ray's own (its JSON names it, B337c)
-      local lineage = require("koassistant_action_cache").parsedXrayFor(self.ui.document.file)
+      local lineage = require("koassistant.artifacts.action_cache").parsedXrayFor(self.ui.document.file)
       type_value = type(lineage) == "table" and PA.normalizeXrayType(lineage.type) or nil
     end
     local ButtonTableO = require("ui/widget/buttontable")
@@ -11712,7 +11712,7 @@ function AskGPT:_showXrayCreationChooser(action, action_id, on_update, opts, for
             self_ref:_showXraySpacingPicker{
               current = sp_now,
               override = self_ref.ui and self_ref.ui.doc_settings
-                and require("koassistant_book_settings").xraySpacingOverride(
+                and require("koassistant.books.book_settings").xraySpacingOverride(
                   self_ref.ui.doc_settings) or nil,
               title = _("Checkpoint spacing for this book:"),
               count_for = function(s)
@@ -11724,7 +11724,7 @@ function AskGPT:_showXrayCreationChooser(action, action_id, on_update, opts, for
               on_pick = function(s)
                 if self_ref.ui and self_ref.ui.doc_settings then
                   self_ref:_openBookDS():saveSetting(
-                    require("koassistant_book_settings").KEY_XRAY_SPACING, s)
+                    require("koassistant.books.book_settings").KEY_XRAY_SPACING, s)
                   self_ref:_openBookDS():flush()
                   -- A sticky per-book write must never be silent — a stray
                   -- tap on "Every 50%" here is how the 2026-08-14 device
@@ -11740,7 +11740,7 @@ function AskGPT:_showXrayCreationChooser(action, action_id, on_update, opts, for
               on_reset = function()
                 if self_ref.ui and self_ref.ui.doc_settings then
                   self_ref:_openBookDS():saveSetting(
-                    require("koassistant_book_settings").KEY_XRAY_SPACING, nil)
+                    require("koassistant.books.book_settings").KEY_XRAY_SPACING, nil)
                   self_ref:_openBookDS():flush()
                   UIManager:show(Notification:new{
                     text = T(_("Checkpoint spacing for this book: recommended (every %1%)"),
@@ -11967,7 +11967,7 @@ end
 --- catch-up names its cost first).
 function AskGPT:_enableXrayFollowForBook(decimal, opts)
   if not self.ui or not self.ui.doc_settings then return end
-  local BookSettings = require("koassistant_book_settings")
+  local BookSettings = require("koassistant.books.book_settings")
   -- "on" string, NOT boolean true (round-19 bug fix): the P1 tri-state resolver
   -- honors a legacy boolean only for migrated users (_xray_auto_legacy_optin),
   -- so a boolean write here was INERT for everyone else
@@ -12000,12 +12000,12 @@ function AskGPT:_xrayEstablishmentSteps(opts)
       or not self.ui.doc_settings then return nil end
   local doc_info = self.ui.document.info
   if not doc_info or doc_info.has_pages then return nil end
-  local XrayAuto = require("koassistant_xray_auto")
-  local ActionCache = require("koassistant_action_cache")
-  local XrayParser = require("koassistant_xray_parser")
-  local BookSettings = require("koassistant_book_settings")
+  local XrayAuto = require("koassistant.xray.xray_auto")
+  local ActionCache = require("koassistant.artifacts.action_cache")
+  local XrayParser = require("koassistant.xray.xray_parser")
+  local BookSettings = require("koassistant.books.book_settings")
   local file = self.ui.document.file
-  local progress = require("koassistant_context_extractor"):new(self.ui):getReadingProgress()
+  local progress = require("koassistant.request.context_extractor"):new(self.ui):getReadingProgress()
   local decimal = progress and tonumber(progress.decimal)
   if not decimal then return nil end
   local rebuild = opts and opts.rebuild or nil
@@ -12130,7 +12130,7 @@ function AskGPT:_confirmFirstAutoBuild()
     intro = _("Automatic X-Ray is on for this book, but the X-Ray has not been built yet."),
     cancel_label = _("Cancel (turn Automatic X-Ray off)"),
     revert = function()
-      local BookSettings = require("koassistant_book_settings")
+      local BookSettings = require("koassistant.books.book_settings")
       self_ref:_openBookDS():saveSetting(BookSettings.KEY_XRAY_AUTO, "off")
       self_ref:_openBookDS():flush()
       self_ref:_refreshXrayAutoState()
@@ -12156,7 +12156,7 @@ function AskGPT:_onXrayAutoTurnedOn(prev, after)
   local o = { after = after }
   if prev ~= "on" then
     o.revert = function()
-      local BookSettings = require("koassistant_book_settings")
+      local BookSettings = require("koassistant.books.book_settings")
       self_ref:_openBookDS():saveSetting(BookSettings.KEY_XRAY_AUTO, prev)
       self_ref:_openBookDS():flush()
       self_ref:_refreshXrayAutoState()
@@ -12171,8 +12171,8 @@ end
 --- @param entry table: TOC entry { title, start_page, end_page, depth }
 function AskGPT:_showSectionXrayNameInput(action, entry, run_variant)
   local InputDialog = require("ui/widget/inputdialog")
-  local ActionCache = require("koassistant_action_cache")
-  local Actions = require("prompts/actions")
+  local ActionCache = require("koassistant.artifacts.action_cache")
+  local Actions = require("koassistant.prompts.actions")
   local self_ref = self
 
   -- Default name: full TOC title, with truncated parent for sub-chapters
@@ -12305,8 +12305,8 @@ end
 --- @param label string: Display label for the section
 --- @param cache_label string: Sanitized label for cache key
 function AskGPT:_generateSectionXray(action, entry, label, cache_label, run_variant)
-  local Actions = require("prompts/actions")
-  local ActionCache = require("koassistant_action_cache")
+  local Actions = require("koassistant.prompts.actions")
+  local ActionCache = require("koassistant.artifacts.action_cache")
 
   local scope = self:_buildSectionScope(entry, label, cache_label, ActionCache.SECTION_XRAY_PREFIX)
 
@@ -12342,7 +12342,7 @@ end
 ---     (quiz "Current chapter so far" preset + generic "From section… (to current position)")
 --- } for source_selection actions
 function AskGPT:_executeSectionAction(action, action_id, entry, label, opts)
-  local ActionCache = require("koassistant_action_cache")
+  local ActionCache = require("koassistant.artifacts.action_cache")
 
   local cache_label = label:gsub(":", "-")
   local prefix = ActionCache.getSectionPrefix(action_id)
@@ -12440,7 +12440,7 @@ end
 ---   When on_confirm is provided, calls it with the confirmed name instead of executing.
 function AskGPT:_showSectionNameInput(action, action_id, entry, opts)
   local InputDialog = require("ui/widget/inputdialog")
-  local ActionCache = require("koassistant_action_cache")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   local ButtonDialog = require("ui/widget/buttondialog")
   local self_ref = self
 
@@ -12564,7 +12564,7 @@ end
 --- @param action table The action definition
 --- @param action_id string The action ID
 function AskGPT:_showSectionList(action, action_id)
-  local ActionCache = require("koassistant_action_cache")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   local ButtonDialog = require("ui/widget/buttondialog")
 
   local file = self.ui and self.ui.document and self.ui.document.file
@@ -12651,7 +12651,7 @@ end
 --- Show a list popup of all section X-Rays for the current book.
 --- @param opts table|nil: Optional { file, book_title, book_author } for file browser context
 function AskGPT:_showSectionXrayList(opts)
-  local ActionCache = require("koassistant_action_cache")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   local ButtonDialog = require("ui/widget/buttondialog")
 
   local file = (self.ui and self.ui.document and self.ui.document.file) or (opts and opts.file)
@@ -12735,7 +12735,7 @@ end
 --- (reopen_live). The flows re-read settings and disk truth themselves.
 --- opts: { book_title, book_author, close_browser } (all optional)
 function AskGPT:_startSectionXrayMergeFlow(file, opts)
-  require("koassistant_xray_merge").startFlow({
+  require("koassistant.xray.xray_merge").startFlow({
     file = file, ui = self.ui, plugin = self, configuration = configuration,
     title = opts and opts.book_title, author = opts and opts.book_author,
     close_browser = opts and opts.close_browser,
@@ -12744,7 +12744,7 @@ function AskGPT:_startSectionXrayMergeFlow(file, opts)
 end
 
 function AskGPT:_startCrossBookXrayFlow(file, opts)
-  require("koassistant_xray_merge").startCrossBookFlow({
+  require("koassistant.xray.xray_merge").startCrossBookFlow({
     file = file, ui = self.ui, plugin = self, configuration = configuration,
     title = opts and opts.book_title, author = opts and opts.book_author,
     close_browser = opts and opts.close_browser,
@@ -12757,7 +12757,7 @@ end
 --- ("series"), or a project's other members folded into `file` ("project").
 --- @param kind string "series" | "project"
 function AskGPT:_startGroupXrayMergeFlow(kind, file, opts)
-  local XrayMerge = require("koassistant_xray_merge")
+  local XrayMerge = require("koassistant.xray.xray_merge")
   local start = kind == "project" and XrayMerge.startFanInFlow or XrayMerge.startSeriesChainFlow
   return start({
     file = file, ui = self.ui, plugin = self, configuration = configuration,
@@ -12774,7 +12774,7 @@ end
 --- @return string|nil kind
 function AskGPT:_groupXrayMergeKind(file)
   if not file then return nil end
-  local ok, BookGroups = pcall(require, "koassistant_book_groups")
+  local ok, BookGroups = pcall(require, "koassistant.books.book_groups")
   if not ok then return nil end
   local preds = BookGroups.predecessorsOf(file)
   if #preds >= 2 then return "series" end
@@ -12785,7 +12785,7 @@ function AskGPT:_groupXrayMergeKind(file)
 end
 
 function AskGPT:_startXrayDedupFlow(file, opts)
-  require("koassistant_xray_dedup").startFlow({
+  require("koassistant.xray.xray_dedup").startFlow({
     file = file, ui = self.ui, plugin = self, configuration = configuration,
     title = opts and opts.book_title, author = opts and opts.book_author,
     close_browser = opts and opts.close_browser,
@@ -12804,16 +12804,16 @@ function AskGPT:maybeOfferDedupAsk(file)
   -- its pairs, so a "Not now" between two steps spent their one offer; the
   -- build asks once when it finishes (a stopped or cancelled one leaves the
   -- pairs unasked for the next install)
-  local build = require("koassistant_xray_auto").ladderBuild()
+  local build = require("koassistant.xray.xray_auto").ladderBuild()
   if build and build.file == file then
     build.dedup_pending = true
     return
   end
   local self_ref = self
   pcall(function()
-    local ActionCache = require("koassistant_action_cache")
-    local XrayParser = require("koassistant_xray_parser")
-    local XrayDedup = require("koassistant_xray_dedup")
+    local ActionCache = require("koassistant.artifacts.action_cache")
+    local XrayParser = require("koassistant.xray.xray_parser")
+    local XrayDedup = require("koassistant.xray.xray_dedup")
     local entry = ActionCache.getXrayCache(file)
     if not (entry and entry.result) or entry.source_mode == "ai_knowledge" then return end
     local data = XrayParser.parse(entry.result)
@@ -12868,7 +12868,7 @@ end
 --- @param file string: Document file path
 --- @param opts table|nil: Context opts for re-opening list
 function AskGPT:_showSectionXrayOptions(sec, file, opts)
-  local ActionCache = require("koassistant_action_cache")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   local ButtonDialog = require("ui/widget/buttondialog")
   local self_ref = self
 
@@ -12988,7 +12988,7 @@ end
 --- refresh". A refresh-in-place is impossible there because the merge is what
 --- closed the view; reopening on fresh data is the same result.
 function AskGPT:_showLiveXray(file, opts)
-  local ActionCache = require("koassistant_action_cache")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   local fresh = ActionCache.getXrayCache(file)
   if not (fresh and fresh.result) then return end
   self:showCacheViewer({
@@ -13005,7 +13005,7 @@ end
 --- indices can shift if a background update archives a new head while the
 --- version card is open, so actions never trust a stale index.
 function AskGPT:_findXrayCheckpointIndex(file, cp)
-  local ActionCache = require("koassistant_action_cache")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   local ring = ActionCache.getXrayCheckpoints(file)
   for i, e in ipairs(ring) do
     if e.archived_at == cp.archived_at and e.timestamp == cp.timestamp then
@@ -13019,7 +13019,7 @@ end
 --- §6 slice 1). For a re-reader whose live X-Ray is ahead of their position,
 --- marks the nearest at-or-below version — the spoiler-safe view.
 function AskGPT:_showXrayCheckpointList(opts)
-  local ActionCache = require("koassistant_action_cache")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   local ButtonDialog = require("ui/widget/buttondialog")
 
   local file = (self.ui and self.ui.document and self.ui.document.file) or (opts and opts.file)
@@ -13047,7 +13047,7 @@ function AskGPT:_showXrayCheckpointList(opts)
   -- xray_ecosystem_plan.md W5). Ring and ladder compete on equal terms.
   local mark_idx, current_progress
   if self.ui and self.ui.document and self.ui.document.file == file then
-    local ContextExtractor = require("koassistant_context_extractor")
+    local ContextExtractor = require("koassistant.request.context_extractor")
     current_progress = ContextExtractor:new(self.ui):getReadingProgress()
     if current_progress then
       if live and (live.full_document
@@ -13145,7 +13145,7 @@ function AskGPT:_showXrayCheckpointList(opts)
       end,
     }})
   end
-  if #ladder > 0 and not require("koassistant_xray_auto").ladderBuild() then
+  if #ladder > 0 and not require("koassistant.xray.xray_auto").ladderBuild() then
     table.insert(buttons, {{
       text = T(_("Delete checkpoints (%1)…"), #ladder),
       callback = function()
@@ -13237,7 +13237,7 @@ function AskGPT:_showXrayCheckpointList(opts)
     local posture, p_reason = self:_xrayPosture()
     if posture == "full" then
       -- Device round 5: the hold is the reader's deliberate override — name it
-      if require("koassistant_book_settings").xrayPromotionHold(self.ui.doc_settings) then
+      if require("koassistant.books.book_settings").xrayPromotionHold(self.ui.doc_settings) then
         title = title .. "\n" .. _("X-Ray follows your reading position (your choice). Installing the newest checkpoint switches back to newest-first.")
       else
         title = title .. "\n" .. (p_reason == "research"
@@ -13269,8 +13269,8 @@ end
 --- better exists).
 function AskGPT:_showXrayLadderRungOptions(rung, opts)
   local ButtonDialog = require("ui/widget/buttondialog")
-  local ActionCache = require("koassistant_action_cache")
-  local XrayAuto = require("koassistant_xray_auto")
+  local ActionCache = require("koassistant.artifacts.action_cache")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   local self_ref = self
   local file = (self.ui and self.ui.document and self.ui.document.file) or (opts and opts.file)
   if not file then return end
@@ -13309,7 +13309,7 @@ function AskGPT:_showXrayLadderRungOptions(rung, opts)
     else
       local pos
       if self.ui and self.ui.document and self.ui.document.file == file then
-        local progress = require("koassistant_context_extractor"):new(self.ui):getReadingProgress()
+        local progress = require("koassistant.request.context_extractor"):new(self.ui):getReadingProgress()
         pos = progress and tonumber(progress.decimal) or nil
       end
       local p = tonumber(rung.progress_decimal) or 0
@@ -13424,11 +13424,11 @@ function AskGPT:_showXrayLadderRungOptions(rung, opts)
         local pos
         local del_hold = false
         if self_ref.ui and self_ref.ui.document and self_ref.ui.document.file == file then
-          local progress = require("koassistant_context_extractor"):new(self_ref.ui):getReadingProgress()
+          local progress = require("koassistant.request.context_extractor"):new(self_ref.ui):getReadingProgress()
           pos = progress and tonumber(progress.decimal) or nil
           del_posture = self_ref:_xrayPosture()
           if del_posture == "full" then
-            del_hold = require("koassistant_book_settings").xrayPromotionHold(self_ref.ui.doc_settings)
+            del_hold = require("koassistant.books.book_settings").xrayPromotionHold(self_ref.ui.doc_settings)
           end
         end
         local remaining = {}
@@ -13531,9 +13531,9 @@ end
 --- (move semantics: the current version takes its ring slot — a restore
 --- round-trip never grows the ring), delete.
 function AskGPT:_showXrayCheckpointOptions(cp, opts)
-  local ActionCache = require("koassistant_action_cache")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   local ButtonDialog = require("ui/widget/buttondialog")
-  local XrayAuto = require("koassistant_xray_auto")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   local self_ref = self
 
   local file = (self.ui and self.ui.document and self.ui.document.file) or (opts and opts.file)
@@ -13721,7 +13721,7 @@ function AskGPT:viewCachedAction(action, action_id, cached_entry, opts)
 
   -- Interactive quiz: parse cached JSON and open quiz viewer
   if action.interactive_quiz and cached_entry and cached_entry.result then
-    local QuizParser = require("koassistant_quiz_parser")
+    local QuizParser = require("koassistant.quiz.quiz_parser")
     local parsed = QuizParser.parse(cached_entry.result)
     if parsed and parsed.questions and #parsed.questions > 0 then
       local quiz_book_title = (opts and opts.book_title) or (self.ui and self.ui.doc_props and (self.ui.doc_props.display_title or self.ui.doc_props.title)) or ""
@@ -13731,7 +13731,7 @@ function AskGPT:viewCachedAction(action, action_id, cached_entry, opts)
       local cache_key = (opts and opts.section_key) or action_id
 
       local function openQuizViewer(saved_state)
-        local QuizViewer = require("koassistant_quiz_viewer")
+        local QuizViewer = require("koassistant.quiz.quiz_viewer")
         local viewer_opts = {
           quiz_data = parsed,
           opts = {
@@ -13742,14 +13742,14 @@ function AskGPT:viewCachedAction(action, action_id, cached_entry, opts)
             plugin = self,
             document_path = file,
             on_save_notebook = file and function(text)
-              local Notebook = require("koassistant_notebook")
+              local Notebook = require("koassistant.chat.notebook")
               local notebook_path = Notebook.getPath(file)
               if notebook_path then
                 Notebook.append(notebook_path, "\n---\n\n" .. text .. "\n")
               end
             end,
             on_save_state = file and function(state)
-              local ActionCache = require("koassistant_action_cache")
+              local ActionCache = require("koassistant.artifacts.action_cache")
               ActionCache.updateField(file, cache_key, "quiz_state", state)
             end,
           },
@@ -13796,7 +13796,7 @@ function AskGPT:viewCachedAction(action, action_id, cached_entry, opts)
   end
 
   -- Generic viewer for per-action caches (e.g., Recap)
-  local ChatGPTViewer = require("koassistant_chatgptviewer")
+  local ChatGPTViewer = require("koassistant.ui.chatgptviewer")
   local action_name = action.text or action_id
 
   -- Build title (same pattern as showCacheViewer)
@@ -13852,7 +13852,7 @@ function AskGPT:viewCachedAction(action, action_id, cached_entry, opts)
   local on_delete
   local file = (opts and opts.file) or (self.ui and self.ui.document and self.ui.document.file)
   if file then
-    local ActionCache = require("koassistant_action_cache")
+    local ActionCache = require("koassistant.artifacts.action_cache")
     local delete_key = (opts and opts.section_key) or action_id
     local delete_name = (opts and opts.section_label) and title or action_name
     on_delete = function()
@@ -13878,7 +13878,7 @@ function AskGPT:viewCachedAction(action, action_id, cached_entry, opts)
     -- the OPEN book and overwrite ITS cache (injection_gating_audit). A different
     -- book falls through to the closed-book branch, which honours `file`.
     if self.ui and self.ui.document
-        and require("koassistant_doc_settings").samePath(self.ui.document.file, file) then
+        and require("koassistant.storage.doc_settings").samePath(self.ui.document.file, file) then
       -- Open book: regenerate via direct execution (bypass cache popup)
       on_regenerate = function()
         if self_ref2:_checkRequirements(action) then return end
@@ -13895,7 +13895,7 @@ function AskGPT:viewCachedAction(action, action_id, cached_entry, opts)
       end
       -- Determine label based on action type and progress
       if action.use_reading_progress then
-        local ContextExtractor = require("koassistant_context_extractor")
+        local ContextExtractor = require("koassistant.request.context_extractor")
         local extractor = ContextExtractor:new(self.ui)
         local progress = extractor:getReadingProgress()
         local cached_progress = cached_entry.progress_decimal or 0
@@ -13909,7 +13909,7 @@ function AskGPT:viewCachedAction(action, action_id, cached_entry, opts)
       end
     elseif file then
       -- Closed book: regenerate via direct execution (bypass cache popup)
-      local Actions = require("prompts/actions")
+      local Actions = require("koassistant.prompts.actions")
       if not Actions.requiresOpenBook(action) then
         on_regenerate = function()
           if self_ref2:_checkRequirements(action, file) then return end
@@ -14088,7 +14088,7 @@ function AskGPT:_ensureQuizChapters(features)
   if self._quiz_chapter_indices and self._quiz_setting == setting then return end
   self._quiz_setting = setting
 
-  local QuizChapters = require("koassistant_quiz_chapters")
+  local QuizChapters = require("koassistant.quiz.quiz_chapters")
   local toc = self.ui.toc.toc
   if setting == "toc_filter" or setting == "all" then
     -- "All TOC headings": every entry, honoring KOReader's per-depth tick-ignore filter.
@@ -14148,7 +14148,7 @@ function AskGPT:_currentChapterInfo()
   local indices = self._quiz_chapter_indices
   if not indices or #indices == 0 then return nil end
   local current_page = (self.ui.view and self.ui.view.state and self.ui.view.state.page) or 1
-  local QuizChapters = require("koassistant_quiz_chapters")
+  local QuizChapters = require("koassistant.quiz.quiz_chapters")
   local idx = QuizChapters.currentChapter(self.ui.toc.toc, indices, current_page)
   if not idx then return nil end
   local start_page, end_page = self:_chapterContentRange(idx)
@@ -14171,7 +14171,7 @@ function AskGPT:_chapterReadingTime(start_page, end_page)
   local id_book = stats.id_curr_book
   if type(id_book) ~= "number" or id_book <= 0 then return nil end
   if stats.insertDB then pcall(function() stats:insertDB() end) end
-  return require("koassistant_stats_reader").getReadingTimeInRange(id_book, start_page, end_page)
+  return require("koassistant.books.stats_reader").getReadingTimeInRange(id_book, start_page, end_page)
 end
 
 --- Chapter transition detection for automatic chapter quizzes.
@@ -14187,7 +14187,7 @@ function AskGPT:onPageUpdate(pageno)
   -- Ambient X-Ray marks (slice 2): scanning INSIDE the dispatch lets the
   -- marks ride the page's own repaint — no extra e-ink refresh. Nil state
   -- short-circuits when marking is off.
-  require("koassistant_xray_marks").onPageTurn(self, pageno)
+  require("koassistant.xray.xray_marks").onPageTurn(self, pageno)
 end
 
 function AskGPT:_quizOnPageUpdate(pageno)
@@ -14218,7 +14218,7 @@ function AskGPT:_quizOnPageUpdate(pageno)
   local indices = self._quiz_chapter_indices
   if not indices or #indices == 0 then return end
 
-  local QuizChapters = require("koassistant_quiz_chapters")
+  local QuizChapters = require("koassistant.quiz.quiz_chapters")
   local cur_idx = QuizChapters.currentChapter(toc.toc, indices, pageno)
 
   if cur_idx and cur_idx ~= self._quiz_cur_idx then
@@ -14259,7 +14259,7 @@ function AskGPT:_refreshXrayAutoState()
   local features = self.settings:readSetting("features") or {}
   local state = { prev_page = prev and prev.prev_page }
   -- §7 P1 tri-state: per-book "on" (bundles create) / "off" / follow-global
-  local auto_on, create_allowed = require("koassistant_book_settings")
+  local auto_on, create_allowed = require("koassistant.books.book_settings")
       .resolveXrayAuto(self.ui.doc_settings, features)
   state.auto_update = self.ui.doc_settings ~= nil and auto_on
   if state.auto_update then
@@ -14267,9 +14267,9 @@ function AskGPT:_refreshXrayAutoState()
     -- Round 21 (unified engine, plan item 23): the per-page question is the
     -- ONE-AHEAD INVARIANT, not a progress-delta window — state carries what
     -- that check needs (live/rung coverage, goal, lineage), zero-disk per turn.
-    local XrayAuto = require("koassistant_xray_auto")
-    local ActionCache = require("koassistant_action_cache")
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayAuto = require("koassistant.xray.xray_auto")
+    local ActionCache = require("koassistant.artifacts.action_cache")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local entry = ActionCache.get(file, "xray")
     state.create_allowed = create_allowed
     -- Round 22 (D1): a live INTRO is not "built" — an intro-only book (build
@@ -14288,7 +14288,7 @@ function AskGPT:_refreshXrayAutoState()
     local dials = XrayAuto.dialsFromFeatures(features)
     state.cooldown_s = dials.cooldown_s
     state.goal = tonumber(self:_openBookDS():readSetting(
-      require("koassistant_book_settings").KEY_XRAY_GOAL)) or nil
+      require("koassistant.books.book_settings").KEY_XRAY_GOAL)) or nil
     -- Console visibility while testing: log per-turn gate declines when debug is on
     state.debug = features.debug and true or nil
   end
@@ -14298,7 +14298,7 @@ function AskGPT:_refreshXrayAutoState()
   -- stat; ladder books additionally pay one parse per refresh to hold the rung
   -- progress list (numbers only — never the results).
   do
-    local ActionCache = require("koassistant_action_cache")
+    local ActionCache = require("koassistant.artifacts.action_cache")
     state.ladder_count = ActionCache.getXrayLadderCount(file)
     if state.ladder_count > 0 then
       local rungs = {}
@@ -14349,7 +14349,7 @@ function AskGPT:_xrayAutoOnPageUpdate(pageno)
   -- The position the installs and fires read (B335: page / total ran ahead
   -- of it in a book with hidden flows, so every turn scheduled a fire that
   -- then declined)
-  local pos = require("koassistant_context_extractor").flowFraction(self.ui.document, pageno)
+  local pos = require("koassistant.request.context_extractor").flowFraction(self.ui.document, pageno)
 
   -- Ladder promotion pre-filter (§6 slice 1, decision 11: unconditional — no
   -- opt-in, no consent, no rate limit; the fire is a local file swap). Pure
@@ -14361,11 +14361,11 @@ function AskGPT:_xrayAutoOnPageUpdate(pageno)
   -- moot; under TRACK a posture-promoted live AHEAD of the reader additionally
   -- triggers the revert (the fire demotes back to the position rung).
   if state.rung_progress and state.live_progress and not self._xray_ladder_promo_pending then
-    local XrayAuto = require("koassistant_xray_auto")
+    local XrayAuto = require("koassistant.xray.xray_auto")
     -- chainBusy, not ladderBuild: a build parked for the network (onSuspend)
     -- must not stop built checkpoints installing as the reader passes them
     if not XrayAuto.chainBusy() and not XrayAuto.isInFlight() then
-      local PfBookSettings = require("koassistant_book_settings")
+      local PfBookSettings = require("koassistant.books.book_settings")
       local posture = PfBookSettings.resolveXrayPosture(
         self.ui.doc_settings, self.settings:readSetting("features") or {})
       -- Device round 5: the promotion hold routes a FULL-posture book through
@@ -14405,7 +14405,7 @@ function AskGPT:_xrayAutoOnPageUpdate(pageno)
   if state.auto_update ~= true or state.lineage_blocked then return end
   if state.never_built and state.create_allowed ~= true then return end
   -- Never contend with an active chain: it is already building this grid
-  if require("koassistant_xray_auto").ladderBuild() then return end
+  if require("koassistant.xray.xray_auto").ladderBuild() then return end
   if self._xray_auto_pending then
     -- Log once per pending window — this runs per page-turn tick and flooded
     -- the log at ~25 lines/second on the 2026-08-14 device round
@@ -14415,7 +14415,7 @@ function AskGPT:_xrayAutoOnPageUpdate(pageno)
     end
     return
   end
-  local XrayAuto = require("koassistant_xray_auto")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   local goal_bound = state.goal or 1.0
   if pos >= goal_bound - 0.01 then return end
   -- BUILD_LAG: the next build waits until the newest checkpoint has installed
@@ -14461,7 +14461,7 @@ end
 --- Defer the fire off the page-turn tick. The rate limit is stamped at SCHEDULE
 --- time — several page turns can pass the gates inside the deferral window.
 function AskGPT:_scheduleXrayAutoFire()
-  local XrayAuto = require("koassistant_xray_auto")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   if self._xray_auto_pending or XrayAuto.isInFlight() then return end
   XrayAuto.markScheduled(os.time())
   local self_ref = self
@@ -14482,7 +14482,7 @@ function AskGPT:_xrayBackgroundConsentOk(action, features, run_provider)
   if action.use_book_text == false then return false end
   -- Per-book privacy override wins in both directions (deny beats trusted)
   if self.ui and self.ui.doc_settings then
-    local ov = require("koassistant_book_settings")
+    local ov = require("koassistant.books.book_settings")
       .effectivePrivacyOverrides(self.ui.doc_settings).book_text
     if ov ~= nil then return ov end
   end
@@ -14506,7 +14506,7 @@ end
 --- by an explicit enable (skip the posture re-check — the key may have just
 --- been written).
 function AskGPT:_fireXrayAutoCheckpoints(opts)
-  local XrayAuto = require("koassistant_xray_auto")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   if XrayAuto.ladderBuild() or XrayAuto.isInFlight() then return end
   if not self.ui or not self.ui.document or not self.ui.document.file
       or not self.ui.doc_settings then return end
@@ -14522,7 +14522,7 @@ function AskGPT:_fireXrayAutoCheckpoints(opts)
     return
   end
   local features = self.settings:readSetting("features") or {}
-  local BookSettings = require("koassistant_book_settings")
+  local BookSettings = require("koassistant.books.book_settings")
   local auto_on, create_allowed = BookSettings.resolveXrayAuto(self.ui.doc_settings, features)
   if not auto_on and not (opts and opts.explicit) then return end
   if _G.KOAssistantStreaming then return end
@@ -14539,9 +14539,9 @@ function AskGPT:_fireXrayAutoCheckpoints(opts)
     return
   end
 
-  local ActionCache = require("koassistant_action_cache")
-  local XrayParser = require("koassistant_xray_parser")
-  local ContextExtractor = require("koassistant_context_extractor")
+  local ActionCache = require("koassistant.artifacts.action_cache")
+  local XrayParser = require("koassistant.xray.xray_parser")
+  local ContextExtractor = require("koassistant.request.context_extractor")
   local progress = ContextExtractor:new(self.ui):getReadingProgress()
   local decimal = progress and tonumber(progress.decimal)
   if not decimal then return end
@@ -14620,7 +14620,7 @@ function AskGPT:_fireXrayAutoUpdate(opts)
   local manual = (opts and opts.manual) or false
   -- Round 21: any unattended call belongs to the unified engine
   if not manual then return self:_fireXrayAutoCheckpoints(opts) end
-  local XrayAuto = require("koassistant_xray_auto")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   -- A close/book-switch inside the deferral window must not execute against a dead
   -- instance (readerui broadcasts CloseDocument then nils the document)
   if not self.ui or not self.ui.document or not self.ui.document.file then return end
@@ -14635,8 +14635,8 @@ function AskGPT:_fireXrayAutoUpdate(opts)
   local doc_info = self.ui.document.info
   if not doc_info or doc_info.has_pages then return end
 
-  local ActionCache = require("koassistant_action_cache")
-  local XrayParser = require("koassistant_xray_parser")
+  local ActionCache = require("koassistant.artifacts.action_cache")
+  local XrayParser = require("koassistant.xray.xray_parser")
   local fire_entry = ActionCache.get(file, "xray")
   local eligible, cached_progress =
     XrayAuto.eligibilityFromEntry(fire_entry, XrayParser.isJSON)
@@ -14646,7 +14646,7 @@ function AskGPT:_fireXrayAutoUpdate(opts)
   end
 
   -- Authoritative (flow-aware) progress for the delta floor
-  local ContextExtractor = require("koassistant_context_extractor")
+  local ContextExtractor = require("koassistant.request.context_extractor")
   local progress = ContextExtractor:new(self.ui):getReadingProgress()
   local decimal = progress and tonumber(progress.decimal)
   if not decimal then return end
@@ -14738,7 +14738,7 @@ function AskGPT:_fireXrayAutoUpdate(opts)
         -- recorded in the classifier's words, so the popup names it too
         local not_saved = result and meta_or_err.config._not_saved
         local cut = not_saved and type(result) == "string" and result:find(
-          require("koassistant_api.response_parser").TRUNCATION_NOTICE, 1, true)
+          require("koassistant.api.response_parser").TRUNCATION_NOTICE, 1, true)
         local msg = (cut and "answer cut off at the length limit")
           or (not_saved and (type(not_saved) == "string" and not_saved
             or _("the answer could not be used as an X-Ray")))
@@ -14778,7 +14778,7 @@ end
 --- without a position anyway).
 function AskGPT:_xrayPosture()
   if not (self.ui and self.ui.doc_settings) then return "track", "global" end
-  return require("koassistant_book_settings").resolveXrayPosture(
+  return require("koassistant.books.book_settings").resolveXrayPosture(
     self.ui.doc_settings, self.settings:readSetting("features") or {})
 end
 
@@ -14794,7 +14794,7 @@ function AskGPT:_scheduleXrayLadderPromotion()
     self_ref:_fireXrayLadderPromotion({ capped = true })
   end
   self._xray_ladder_promo_pending = fire
-  UIManager:scheduleIn(require("koassistant_xray_auto").SCHEDULE_DELAY_S, fire)
+  UIManager:scheduleIn(require("koassistant.xray.xray_auto").SCHEDULE_DELAY_S, fire)
 end
 
 --- The deferred promotion. Disk truth re-derived here (ladder + live cache +
@@ -14812,12 +14812,12 @@ end
 --- @return boolean promoted
 function AskGPT:_fireXrayLadderPromotion(opts)
   if not self.ui or not self.ui.document or not self.ui.document.file then return false end
-  local XrayAuto = require("koassistant_xray_auto")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   -- A parked build (chainBusy false) is between rungs with nothing in flight,
   -- like the mid_build call
   if (XrayAuto.chainBusy() and not (opts and opts.mid_build)) or XrayAuto.isInFlight() then return false end
   local file = self.ui.document.file
-  local ActionCache = require("koassistant_action_cache")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   local ladder = ActionCache.getXrayLadder(file)
   if #ladder == 0 then return false end
   local live = ActionCache.getXrayCache(file)
@@ -14828,7 +14828,7 @@ function AskGPT:_fireXrayLadderPromotion(opts)
     self:_refreshXrayAutoState()
     return false
   end
-  local ContextExtractor = require("koassistant_context_extractor")
+  local ContextExtractor = require("koassistant.request.context_extractor")
   local progress = ContextExtractor:new(self.ui):getReadingProgress()
   local decimal = progress and tonumber(progress.decimal)
   if not decimal then return false end
@@ -14841,7 +14841,7 @@ function AskGPT:_fireXrayLadderPromotion(opts)
   -- Device round 5: the promotion hold pins FULL-posture books back to
   -- position-following (a deliberate below-newest install said "by position")
   local hold = posture == "full"
-    and require("koassistant_book_settings").xrayPromotionHold(self.ui.doc_settings)
+    and require("koassistant.books.book_settings").xrayPromotionHold(self.ui.doc_settings)
   -- B282 (2026-09-06): the swing guard applies only when the reader SKIPPED a
   -- built rung. Crossing the very next rung is reading whatever the spacing;
   -- the dial compares reader vs installed coverage, and on a spacing above
@@ -14939,8 +14939,8 @@ end
 --- and build cadence are untouched — this only changes which rung promotion
 --- picks. Persisted on the book's sidecar so it survives restarts.
 function AskGPT:_setXrayPromotionHold(file, on)
-  local BookSettings = require("koassistant_book_settings")
-  local ds = require("koassistant_doc_settings").resolve(file, self.ui)
+  local BookSettings = require("koassistant.books.book_settings")
+  local ds = require("koassistant.storage.doc_settings").resolve(file, self.ui)
   if not ds then return false end
   local prev = ds:readSetting(BookSettings.KEY_XRAY_PROMOTION)
   local changed
@@ -14964,8 +14964,8 @@ end
 --- delete offer was too aggressive (maintainer); the delete row lives in the
 --- versions list.
 function AskGPT:_switchToCompleteXrayRung(opts)
-  local XrayAuto = require("koassistant_xray_auto")
-  local ActionCache = require("koassistant_action_cache")
+  local XrayAuto = require("koassistant.xray.xray_auto")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   local ButtonDialog = require("ui/widget/buttondialog")
   if XrayAuto.ladderBuild() or XrayAuto.isInFlight() then
     UIManager:show(InfoMessage:new{ text = _("An X-Ray task is already running."), timeout = 2 })
@@ -15047,8 +15047,8 @@ end
 --- hold — without it the next page turn would reinstall the newest rung,
 --- undoing the deliberate choice the reader just made.
 function AskGPT:_switchBackToPositionRung(opts)
-  local XrayAuto = require("koassistant_xray_auto")
-  local ActionCache = require("koassistant_action_cache")
+  local XrayAuto = require("koassistant.xray.xray_auto")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   if XrayAuto.ladderBuild() or XrayAuto.isInFlight() then
     UIManager:show(InfoMessage:new{ text = _("An X-Ray task is already running."), timeout = 2 })
     return
@@ -15064,7 +15064,7 @@ function AskGPT:_switchBackToPositionRung(opts)
   if live and live.result and live.source_mode == "ai_knowledge" then
     return
   end
-  local ContextExtractor = require("koassistant_context_extractor")
+  local ContextExtractor = require("koassistant.request.context_extractor")
   local progress = ContextExtractor:new(self.ui):getReadingProgress()
   local decimal = progress and tonumber(progress.decimal)
   if not decimal then return end
@@ -15113,8 +15113,8 @@ end
 --- auto-reverts — item 40; under FULL posture with the hold pinned,
 --- installing the newest rung releases the hold like the card does).
 function AskGPT:_installAheadXrayRung(opts)
-  local XrayAuto = require("koassistant_xray_auto")
-  local ActionCache = require("koassistant_action_cache")
+  local XrayAuto = require("koassistant.xray.xray_auto")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   if XrayAuto.ladderBuild() or XrayAuto.isInFlight() then
     UIManager:show(InfoMessage:new{ text = _("An X-Ray task is already running."), timeout = 2 })
     return
@@ -15124,7 +15124,7 @@ function AskGPT:_installAheadXrayRung(opts)
   local live = ActionCache.getXrayCache(file)
   if live and live.result and live.source_mode == "ai_knowledge" then return end
   local live_dec = live and tonumber(live.progress_decimal) or 0
-  local ContextExtractor = require("koassistant_context_extractor")
+  local ContextExtractor = require("koassistant.request.context_extractor")
   local progress = ContextExtractor:new(self.ui):getReadingProgress()
   local decimal = progress and tonumber(progress.decimal)
   if not decimal then return end
@@ -15191,10 +15191,10 @@ function AskGPT:_ladderChapterBoundaries()
   if not toc or #toc == 0 or not doc then return nil end
   local total = doc:getPageCount()
   if not total or total <= 0 then return nil end
-  local QuizChapters = require("koassistant_quiz_chapters")
+  local QuizChapters = require("koassistant.quiz.quiz_chapters")
   local level = QuizChapters.autoLevel(toc, total, 5)
   local indices = QuizChapters.chapterIndices(toc, level)
-  local ContextExtractor = require("koassistant_context_extractor")
+  local ContextExtractor = require("koassistant.request.context_extractor")
   local hidden = doc.hasHiddenFlows and doc:hasHiddenFlows()
   local out = {}
   for k = 1, #indices - 1 do
@@ -15224,9 +15224,9 @@ end
 --- built rungs keep their spans whatever the new value.
 --- @return number spacing ratio
 function AskGPT:_xrayLadderSpacing()
-  local XrayAuto = require("koassistant_xray_auto")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   local override = self.ui and self.ui.doc_settings
-    and require("koassistant_book_settings").xraySpacingOverride(self.ui.doc_settings)
+    and require("koassistant.books.book_settings").xraySpacingOverride(self.ui.doc_settings)
   if override then return override end
   return XrayAuto.ladderSpacingFor(
     self.ui and self.ui.document and self.ui.document:getPageCount())
@@ -15249,7 +15249,7 @@ end
 ---   on_pick(spacing), on_reset()|nil, on_back() }
 function AskGPT:_showXraySpacingPicker(opts)
   local ButtonDialog = require("ui/widget/buttondialog")
-  local XrayAuto = require("koassistant_xray_auto")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   local recommended = XrayAuto.ladderSpacingFor(
     self.ui and self.ui.document and self.ui.document:getPageCount())
   -- Half-percent resolution so 2.5% survives the dedupe rounding
@@ -15325,9 +15325,9 @@ end
 --- Entry point for the ladder build/resume (X-Ray popup rows). Explicit user
 --- action: pre-flight UI gating + a cost dialog, then the silent chain.
 function AskGPT:_startXrayLadderBuild(build_opts)
-  local XrayAuto = require("koassistant_xray_auto")
-  local ActionCache = require("koassistant_action_cache")
-  local XrayParser = require("koassistant_xray_parser")
+  local XrayAuto = require("koassistant.xray.xray_auto")
+  local ActionCache = require("koassistant.artifacts.action_cache")
+  local XrayParser = require("koassistant.xray.xray_parser")
   if XrayAuto.ladderBuild() or XrayAuto.isInFlight() then
     UIManager:show(InfoMessage:new{ text = _("An X-Ray task is already running."), timeout = 2 })
     return
@@ -15438,7 +15438,7 @@ function AskGPT:_startXrayLadderBuild(build_opts)
   -- Round 19: a from-nothing build seeds its first checkpoint AT the reading
   -- position, so the reader gets a promotable (openable) X-Ray from the very
   -- first finished rung instead of waiting to cross the first spacing boundary
-  local seed_prog = require("koassistant_context_extractor"):new(self.ui):getReadingProgress()
+  local seed_prog = require("koassistant.request.context_extractor"):new(self.ui):getReadingProgress()
   local seed_position = seed_prog and tonumber(seed_prog.decimal) or nil
   local self_ref = self
   local function planFor(spacing)
@@ -15572,7 +15572,7 @@ end
 --- @param boundaries table|nil chapter boundaries (nil = no snapping)
 --- @return table rungs, table labels (sparse parallel), number|nil seed
 function AskGPT:_planXrayGrid(base_progress, spacing, goal, seed_position, boundaries, force_seed)
-  local XrayAuto = require("koassistant_xray_auto")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   local rungs, seed = XrayAuto.planBuildRungs(base_progress or 0, spacing, goal, seed_position, force_seed)
   local rung_labels = {}
   local snap_bounds = boundaries
@@ -15610,7 +15610,7 @@ end
 --- the completion callback. Same authority rule as _fireXrayAutoUpdate — disk
 --- truth per rung, config COPY per rung.
 function AskGPT:_fireXrayLadderRung()
-  local XrayAuto = require("koassistant_xray_auto")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   local build = XrayAuto.ladderBuild()
   if not build then return end
   -- Slept mid-build (onSuspend): only the network hook resumes the chain; a
@@ -15651,8 +15651,8 @@ function AskGPT:_fireXrayLadderRung()
     return
   end
 
-  local ActionCache = require("koassistant_action_cache")
-  local XrayParser = require("koassistant_xray_parser")
+  local ActionCache = require("koassistant.artifacts.action_cache")
+  local XrayParser = require("koassistant.xray.xray_parser")
   local ladder = ActionCache.getXrayLadder(file)
   -- Before its swap, a rebuild's intro runs even with an X-Ray on disk: the
   -- live X-Ray and any intro rung there are the old lineage's, which it replaces (B361)
@@ -15834,7 +15834,7 @@ function AskGPT:_fireXrayLadderRung()
         -- device log showed when a rung was rejected as invalid JSON.
         -- B362: a cut-off answer is never saved; its notice rides the reply
         local cut = type(result) == "string" and result:find(
-          require("koassistant_api.response_parser").TRUNCATION_NOTICE, 1, true)
+          require("koassistant.api.response_parser").TRUNCATION_NOTICE, 1, true)
         local err_text = (nothing_built and "nothing to build from")
             or (cut and "answer cut off at the length limit")
             or (type(meta_or_err) == "string" and meta_or_err)
@@ -15884,7 +15884,7 @@ function AskGPT:_fireXrayLadderRung()
         -- XrayAuto.RETRY_MAX_WAIT_S means no retry (nil).
         local retry_in = transient and not cur.cancel_requested
           and XrayAuto.nextRetryWait(cur.retried or 0, XrayAuto.retryDelayFor(err_text,
-            config_copy.provider, require("model_constraints").dispatchModel(config_copy)))
+            config_copy.provider, require("koassistant.request.model_constraints").dispatchModel(config_copy)))
           or nil
         if retry_in then
           cur.retried = (cur.retried or 0) + 1
@@ -16017,7 +16017,7 @@ function AskGPT:_showXrayLadderStop(file, text)
   -- B389: Resume re-plans the build that stopped (its goal, a pre-swap
   -- rebuild still a rebuild), and is not offered when that plan cannot get
   -- past the stop (nothing to build from, no book text)
-  local XrayAuto = require("koassistant_xray_auto")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   local resume = XrayAuto.resumeOpts(XrayAuto.lastLadderStop(file))
   local row = {{ text = _("Close"), callback = function() UIManager:close(dialog) end }}
   if resume then
@@ -16042,12 +16042,12 @@ end
 --- same failure each time. Only while automatic building is on for the book:
 --- otherwise nothing re-plans the step, and the popup's manual Resume row stays.
 function AskGPT:_pauseXrayAutoAfterStop(file, kind)
-  local XrayAuto = require("koassistant_xray_auto")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   if not XrayAuto.stopPausesAuto(kind) then return end
   if not (self.ui and self.ui.document and self.ui.document.file == file
       and self.ui.doc_settings) then return end
   local features = self.settings:readSetting("features") or {}
-  if not require("koassistant_book_settings").resolveXrayAuto(self.ui.doc_settings, features) then
+  if not require("koassistant.books.book_settings").resolveXrayAuto(self.ui.doc_settings, features) then
     return
   end
   XrayAuto.suppressAuto(file, "stopped")
@@ -16057,7 +16057,7 @@ end
 --- The popup's row out of a pause: after such a stop it names the stop, since
 --- the pause outlives a book close and the notice is long gone (B362).
 function AskGPT:_xrayAutoPausedLabel(file)
-  local XrayAuto = require("koassistant_xray_auto")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   local stop = XrayAuto.lastLadderStop(file)
   local why = stop and XrayAuto.stopPausesAuto(stop.kind) and self:_xrayStopReasonLabel(stop.kind)
   if why then
@@ -16101,7 +16101,7 @@ end
 --- Stop the chain (popup row). An in-flight rung is killed; completed rungs stay
 --- (resume re-plans from the highest one).
 function AskGPT:_cancelXrayLadderBuild()
-  local XrayAuto = require("koassistant_xray_auto")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   -- Item 45: a pending transient-failure retry dies with the build
   if self._xray_ladder_retry then
     UIManager:unschedule(self._xray_ladder_retry)
@@ -16154,7 +16154,7 @@ function AskGPT:onSuspend()
     UIManager:unschedule(self._xray_reconnect_fire)
     self._xray_reconnect_fire = nil
   end
-  local XrayAuto = require("koassistant_xray_auto")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   local build = XrayAuto.ladderBuild()
   local was_in_flight = XrayAuto.isInFlight()
   local killed = XrayAuto.cancelForSleep()
@@ -16185,7 +16185,7 @@ end
 function AskGPT:onNetworkConnected()
   local file = self.ui and self.ui.document and self.ui.document.file
   if not file then return end
-  local XrayAuto = require("koassistant_xray_auto")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   local build = XrayAuto.ladderBuild()
   if not ((build and build.awaiting_network and build.file == file)
       or self._xray_update_after_sleep == file) then return end
@@ -16218,7 +16218,7 @@ end
 --- Kill anything pending or in flight when the book closes. (The completion guard
 --- makes a straggler write impossible regardless; this just stops wasted work.)
 function AskGPT:onCloseDocument()
-  require("koassistant_xray_marks").teardown(self)
+  require("koassistant.xray.xray_marks").teardown(self)
   if self._xray_auto_pending then
     UIManager:unschedule(self._xray_auto_pending)
     self._xray_auto_pending = nil
@@ -16231,7 +16231,7 @@ function AskGPT:onCloseDocument()
     UIManager:unschedule(self._xray_ladder_promo_pending)
     self._xray_ladder_promo_pending = nil
   end
-  local XrayAuto = require("koassistant_xray_auto")
+  local XrayAuto = require("koassistant.xray.xray_auto")
   local closing_build = XrayAuto.ladderBuild()
   if closing_build then
     -- Completed rungs stay on disk; the popup offers Resume next open.
@@ -16268,7 +16268,7 @@ function AskGPT:_offerChapterQuiz(chapter_index)
   -- Resolve the substance gates (per-book > global > schema default 5 pages / 3 min) via the one
   -- shared resolver, so the active defaults can't drift from the schema. 0 = no minimum.
   local features = self.settings:readSetting("features") or {}
-  local quiz = require("koassistant_book_settings").resolveQuiz(self.ui and self.ui.doc_settings, features)
+  local quiz = require("koassistant.books.book_settings").resolveQuiz(self.ui and self.ui.doc_settings, features)
 
   -- Minimum chapter length gate (#68): skip the auto-quiz for very short chapters, measured over
   -- the chapter's actual content range (= the quiz scope).
@@ -16286,7 +16286,7 @@ function AskGPT:_offerChapterQuiz(chapter_index)
   -- Skip if a quiz already exists for this chapter (check section cache)
   local file = self.ui and self.ui.document and self.ui.document.file
   if file then
-    local ActionCache = require("koassistant_action_cache")
+    local ActionCache = require("koassistant.artifacts.action_cache")
     local prefix = ActionCache.SECTION_PREFIXES.quiz
     if prefix then
       local cache_label = (chapter_title ~= "" and chapter_title or T(_("Chapter %1"), chapter_index)):gsub(":", "-")
@@ -16329,7 +16329,7 @@ function AskGPT:_offerChapterQuiz(chapter_index)
         {
           text = _("Not for this book"),
           callback = function()
-            require("koassistant_book_settings").setQuizField(
+            require("koassistant.books.book_settings").setQuizField(
               self_ref.ui and self_ref.ui.doc_settings, "enabled", false)
             UIManager:show(InfoMessage:new{
               text = _("Chapter quizzes turned off for this book.\nRe-enable in Book Settings → Quiz settings."),
@@ -16345,7 +16345,7 @@ function AskGPT:_offerChapterQuiz(chapter_index)
             -- the only path back to the quiz was the NEXT chapter trigger).
             -- Suppressed when the reader just used the screen to turn chapter
             -- quizzes off — globally or for this book.
-            require("koassistant_book_settings").showQuizConfig({
+            require("koassistant.books.book_settings").showQuizConfig({
               plugin = self_ref, ui = self_ref.ui,
               on_close = function()
                 local feats = self_ref.settings:readSetting("features") or {}
@@ -16446,7 +16446,7 @@ function AskGPT:executeBookLevelAction(action_id, run_variant, run_label)
 
   -- Cache actions with source_selection: View/Sections/New popup (or direct to unified popup)
   if action.use_response_caching and action.source_selection then
-    local ActionCache = require("koassistant_action_cache")
+    local ActionCache = require("koassistant.artifacts.action_cache")
     local file = self.ui and self.ui.document and self.ui.document.file
     local cached = file and ActionCache.get(file, action_id)
     -- Fallback: check document-level cache (migration from pre-per-action cache)
@@ -16524,7 +16524,7 @@ function AskGPT:executeBookLevelAction(action_id, run_variant, run_label)
         local cached_progress = cached.progress_decimal or 0
         local update_text
         if self.ui and self.ui.document then
-          local ContextExtractor = require("koassistant_context_extractor")
+          local ContextExtractor = require("koassistant.request.context_extractor")
           local extractor = ContextExtractor:new(self.ui)
           local progress = extractor:getReadingProgress()
           if progress.decimal > cached_progress + 0.01 then
@@ -17105,8 +17105,8 @@ end
 --- Rebuilds itself on each change so labels and marks stay fresh.
 function AskGPT:showReasoningQuickPopup(on_close_callback, provider_arg, model_arg, target_arg)
   local ButtonDialog = require("ui/widget/buttondialog")
-  local ModelConstraints = require("model_constraints")
-  local ReasoningPrefs = require("reasoning_prefs")
+  local ModelConstraints = require("koassistant.request.model_constraints")
+  local ReasoningPrefs = require("koassistant.request.reasoning_prefs")
   local self_ref = self
 
   local features = self.settings:readSetting("features") or {}
@@ -17240,7 +17240,7 @@ end
 --- / on_clear() persist the choice. effective_label is the resolved fallback shown on
 --- the "Inherit" row (what you get with NO override at this level).
 function AskGPT:_reasoningControlRows(profile, get_pref, effective_label, on_set, on_clear)
-  local ReasoningPrefs = require("reasoning_prefs")
+  local ReasoningPrefs = require("koassistant.request.reasoning_prefs")
   local rows = {}
   if profile.axis == "none" then
     rows[#rows + 1] = { info = true, text = (profile.default_state == "on")
@@ -17301,7 +17301,7 @@ end
 
 -- Short summary of a stored reasoning pref ({state,effort,budget} or nil).
 local function reasoningPrefSummary(pref)
-  local ReasoningPrefs = require("reasoning_prefs")
+  local ReasoningPrefs = require("koassistant.request.reasoning_prefs")
   if pref == nil then return _("Follow global") end
   if pref.state == "default" then return _("Model default") end
   if pref.state == "off" then return _("Off") end
@@ -17315,8 +17315,8 @@ end
 -- Excludes providers whose only reasoning models always reason with no control
 -- (e.g. Mistral Magistral) and providers with no reasoning at all.
 local function reasoningCapableProviders()
-  local ModelConstraints = require("model_constraints")
-  local ModelLists = require("koassistant_model_lists")
+  local ModelConstraints = require("koassistant.request.model_constraints")
+  local ModelLists = require("koassistant.request.model_lists")
   local out = {}
   for _idx, p in ipairs(ModelLists.getAllProviders()) do
     local profiles = ModelConstraints.reasoning_profiles[p]
@@ -17338,9 +17338,9 @@ end
 --- (Defined after reasoningCapableProviders — local function ordering matters.)
 function AskGPT:showReasoningModelBrowser(on_close_callback, show_all)
   local ButtonDialog = require("ui/widget/buttondialog")
-  local ModelConstraints = require("model_constraints")
-  local ReasoningPrefs = require("reasoning_prefs")
-  local ModelLists = require("koassistant_model_lists")
+  local ModelConstraints = require("koassistant.request.model_constraints")
+  local ReasoningPrefs = require("koassistant.request.reasoning_prefs")
+  local ModelLists = require("koassistant.request.model_lists")
   local self_ref = self
 
   local function closeBrowser()
@@ -17417,8 +17417,8 @@ end
 --- model. Uses the shared _reasoningControlRows; checked_func keeps the radio marks
 --- live as the user taps.
 function AskGPT:buildReasoningTargetMenu(provider, model)
-  local ModelConstraints = require("model_constraints")
-  local ReasoningPrefs = require("reasoning_prefs")
+  local ModelConstraints = require("koassistant.request.model_constraints")
+  local ReasoningPrefs = require("koassistant.request.reasoning_prefs")
   local self_ref = self
 
   local profile = ModelConstraints.getReasoningProfile(provider, model)
@@ -17487,9 +17487,9 @@ end
 --- Models with no controllable reasoning (axis "none" — always-on or no reasoning)
 --- are omitted, since there is nothing to set for them.
 function AskGPT:buildReasoningModelListMenu(provider)
-  local ModelConstraints = require("model_constraints")
-  local ReasoningPrefs = require("reasoning_prefs")
-  local ModelLists = require("koassistant_model_lists")
+  local ModelConstraints = require("koassistant.request.model_constraints")
+  local ReasoningPrefs = require("koassistant.request.reasoning_prefs")
+  local ModelLists = require("koassistant.request.model_lists")
   local self_ref = self
   local items = {}
   for _idx, model in ipairs(ModelLists[provider] or {}) do
@@ -17521,7 +17521,7 @@ end
 --- Build behavior variant menu (for Quick Settings panel)
 --- Loads all behaviors from all sources (builtin, folder, UI-created)
 function AskGPT:buildBehaviorMenu()
-  local SystemPrompts = require("prompts/system_prompts")
+  local SystemPrompts = require("koassistant.prompts.system_prompts")
   local self_ref = self
 
   local features = self.settings:readSetting("features") or {}
@@ -17710,9 +17710,9 @@ end
 --- @param on_close_callback function: Optional callback called when user closes the dialog
 function AskGPT:onKOAssistantAISettings(on_close_callback)
   local SpinWidget = require("ui/widget/spinwidget")
-  local DomainLoader = require("domain_loader")
-  local SystemPrompts = require("prompts/system_prompts")
-  local ReasoningPrefs = require("reasoning_prefs")
+  local DomainLoader = require("koassistant.prompts.domain_loader")
+  local SystemPrompts = require("koassistant.prompts.system_prompts")
+  local ReasoningPrefs = require("koassistant.request.reasoning_prefs")
   local self_ref = self
 
   -- Helper to reopen this dialog after sub-dialog closes (immediate, no delay)
@@ -17731,7 +17731,7 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
   local reasoning_chip = ReasoningPrefs.summaryLabel(features, provider, model)
   -- Whether the *currently active* provider/model can actually use web search.
   -- The picker stays usable (it sets the defaults); we just annotate when N/A.
-  local ModelConstraints = require("model_constraints")
+  local ModelConstraints = require("koassistant.request.model_constraints")
   local web_search_supported = ModelConstraints.supportsWebSearch(provider, model)
   local text_extraction = features.enable_book_text_extraction == true  -- Default false
 
@@ -17745,7 +17745,7 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
   -- no-domain override for this book — nil id with layer "book")
   local qs_ds = self.ui and self.ui.document and self:_openBookDS() or nil
   local eff_domain_id, domain_layer =
-      require("koassistant_book_settings").resolveDomain(qs_ds, features)
+      require("koassistant.books.book_settings").resolveDomain(qs_ds, features)
   local domain_display = _("None")
   if domain_layer == "book" and not eff_domain_id then
     domain_display = _("None") .. _(" (book)")
@@ -17764,7 +17764,7 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
   -- Domain chip): book override > global via the shared resolver; emoji mode
   -- swaps the chip's 🏛️ for 🔬, text mode appends "(research)" (this row has
   -- the width the toolbar chip lacks).
-  local research_on = require("koassistant_book_settings").resolveResearch(qs_ds, features)
+  local research_on = require("koassistant.books.book_settings").resolveResearch(qs_ds, features)
 
   -- Get primary language display (use native script)
   local primary_lang_id = self:getEffectivePrimaryLanguage()
@@ -17868,7 +17868,7 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
     hold_callback = has_document and function()
       opening_subdialog = true
       UIManager:close(dialog)
-      require("koassistant_book_settings").showDomainResearch({
+      require("koassistant.books.book_settings").showDomainResearch({
         plugin = self_ref, ui = self_ref.ui, target_override = "book",
         on_close = reopenQuickSettings,
       })
@@ -17889,7 +17889,7 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
       -- Binary-global rule since the 2026-08-12 tools collapse (web-search
       -- model): tap toggles the GLOBAL default, hold opens the scope-aware
       -- picker. "(book)" marks a per-book override masking the global.
-      local BookSettings = require("koassistant_book_settings")
+      local BookSettings = require("koassistant.books.book_settings")
       local doc_settings = has_document and self:_openBookDS() or nil
       local label = BookSettings.resolveBookTools(doc_settings, features)
         and _("On") or _("Off")
@@ -17903,8 +17903,8 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
       -- membership half of BookToolRunner.shouldUse; for local/custom models
       -- the capability side comes from derived caps or custom_models.lua
       -- grants, so a model reads N/A until it has been derived/granted).
-      local ToolWire = require("koassistant_api.tool_wire")
-      local ModelConstraintsQS = require("model_constraints")
+      local ToolWire = require("koassistant.api.tool_wire")
+      local ModelConstraintsQS = require("koassistant.request.model_constraints")
       if not (ModelConstraintsQS.supportsCapability(provider, model, "tools")
               and ToolWire.hasAdapter(provider)) then
         base = base .. " · " .. T(_("N/A for %1"), model)
@@ -17912,7 +17912,7 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
       return E("\u{1F50D}", base)
     end)(),
     callback = function()
-      local BookSettings = require("koassistant_book_settings")
+      local BookSettings = require("koassistant.books.book_settings")
       local f = self_ref.settings:readSetting("features") or {}
       f.enable_book_tools = not BookSettings.resolveBookTools(nil, f)
       f.tools_posture = nil
@@ -17935,7 +17935,7 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
       -- Binary-global rule (seam 2): tap toggles the GLOBAL default in place,
       -- hold opens the scope-aware picker. Label shows the EFFECTIVE state,
       -- "(book)" when an override masks it.
-      local BookSettings = require("koassistant_book_settings")
+      local BookSettings = require("koassistant.books.book_settings")
       local doc_settings = has_document and self:_openBookDS() or nil
       local label = BookSettings.resolveQuickAnswerDefault(doc_settings, features)
         and _("On") or _("Off")
@@ -17957,11 +17957,11 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
     hold_callback = function()
       opening_subdialog = true
       UIManager:close(dialog)
-      require("koassistant_book_settings").showQuickAnswerDefault({
+      require("koassistant.books.book_settings").showQuickAnswerDefault({
         plugin = self_ref,
         ui = has_document and self_ref.ui or nil,
         preset_settings = function(chain_close)
-          require("koassistant_dialogs").showQuickPresetEditor({
+          require("koassistant.ui.dialogs").showQuickPresetEditor({
             plugin = self_ref, on_close = chain_close,
           })
         end,
@@ -17977,7 +17977,7 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
       -- Unlike web/tools/quick, THREE book layers can mask the global here —
       -- per-book override, research mode, Finished status — so name whichever
       -- applies (§5 label-never-gray), else the tap looks dead.
-      local BookSettings = require("koassistant_book_settings")
+      local BookSettings = require("koassistant.books.book_settings")
       local doc_settings = has_document and self:_openBookDS() or nil
       local posture = BookSettings.resolveSpoilerPosture(doc_settings, features)
       local label = posture.protected and _("On") or _("Off")
@@ -17991,7 +17991,7 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
       return E("\u{1F6E1}\u{FE0F}", T(_("Spoiler Protection: %1"), label))
     end)(),
     callback = function()
-      local BookSettings = require("koassistant_book_settings")
+      local BookSettings = require("koassistant.books.book_settings")
       local f = self_ref.settings:readSetting("features") or {}
       -- default-true key: nil/true → explicit false (off), false → true (on)
       f.spoiler_free_chat = (f.spoiler_free_chat == false)
@@ -18026,7 +18026,7 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
     hold_callback = function()
       opening_subdialog = true
       UIManager:close(dialog)
-      require("koassistant_book_settings").showSpoilerFree({
+      require("koassistant.books.book_settings").showSpoilerFree({
         plugin = self_ref,
         ui = has_document and self_ref.ui or nil,
         on_close = reopenQuickSettings,
@@ -18072,7 +18072,7 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
       -- Binary-global rule (seam 2): tap toggles the GLOBAL default in place, hold
       -- opens the scope-aware picker (with the search-depth dial). Label shows the
       -- EFFECTIVE state for the open book, "(book)" when a per-book override masks it.
-      local BookSettings = require("koassistant_book_settings")
+      local BookSettings = require("koassistant.books.book_settings")
       local doc_settings = has_document and self:_openBookDS() or nil
       local label = BookSettings.resolveWebSearch(doc_settings, features,
         self:getCurrentProvider()) and _("On") or _("Off")
@@ -18106,7 +18106,7 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
     hold_callback = function()
       opening_subdialog = true
       UIManager:close(dialog)
-      require("koassistant_book_settings").showWebSearch({
+      require("koassistant.books.book_settings").showWebSearch({
         plugin = self_ref,
         ui = has_document and self_ref.ui or nil,
         on_close = reopenQuickSettings,
@@ -18127,12 +18127,12 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
   local holdLanguageConfig = has_document and function()
     opening_subdialog = true
     UIManager:close(dialog)
-    require("koassistant_book_settings").showLanguageConfig({
+    require("koassistant.books.book_settings").showLanguageConfig({
       plugin = self_ref, ui = self_ref.ui,
       on_close = reopenQuickSettings,
     })
   end or nil
-  local BookSettingsQS = require("koassistant_book_settings")
+  local BookSettingsQS = require("koassistant.books.book_settings")
 
   local resp_ov = bookLangOverride(BookSettingsQS.KEY_RESPONSE_LANG)
   button_defs["language"] = {
@@ -18257,7 +18257,7 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
     hold_callback = has_document and function()
       opening_subdialog = true
       UIManager:close(dialog)
-      require("koassistant_book_settings").showPrivacyConfig({
+      require("koassistant.books.book_settings").showPrivacyConfig({
         plugin = self_ref, ui = self_ref.ui,
         on_close = reopenQuickSettings,
       })
@@ -18487,7 +18487,7 @@ function AskGPT:onKOAssistantQuickActions()
           self_ref:executeBookLevelAction(action_id)
         end,
         hold_callback = function()
-          require("koassistant_action_hold").show(self_ref, action, {
+          require("koassistant.ui.action_hold").show(self_ref, action, {
             surface = "quick_actions",
             on_change = function()
               UIManager:close(dialog)
@@ -18506,7 +18506,7 @@ function AskGPT:onKOAssistantQuickActions()
 
   -- 2. Utility items (configurable via Settings → Quick Actions Settings → Panel Utilities)
   -- Order driven by stored qa_utilities_order (user-sortable)
-  local ActionCache = require("koassistant_action_cache")
+  local ActionCache = require("koassistant.artifacts.action_cache")
   local file = self.ui.document.file
 
   -- Emoji support for QA utilities
@@ -18643,10 +18643,10 @@ end
 function AskGPT:testProviderConnection()
   local InfoMessage = require("ui/widget/infomessage")
   local UIManager = require("ui/uimanager")
-  local GptQuery = require("koassistant_gpt_query")
+  local GptQuery = require("koassistant.request.gpt_query")
   local queryChatGPT = GptQuery.query
   local isStreamingInProgress = GptQuery.isStreamingInProgress
-  local MessageHistory = require("koassistant_message_history")
+  local MessageHistory = require("koassistant.request.message_history")
 
   UIManager:show(InfoMessage:new{
     text = _("Testing connection..."),
@@ -18706,7 +18706,7 @@ function AskGPT:clearActionCache()
   local InfoMessage = require("ui/widget/infomessage")
   local UIManager = require("ui/uimanager")
   local ButtonDialog = require("ui/widget/buttondialog")
-  local ActionCache = require("koassistant_action_cache")
+  local ActionCache = require("koassistant.artifacts.action_cache")
 
   -- Check if we're in reader mode with an open book
   local ui = self.ui
@@ -18797,7 +18797,7 @@ end
 --- Book Settings — per-book settings (domain, research, AI title/author). Quick Actions
 --- panel utility; reader-only (a book is open).
 function AskGPT:onKOAssistantBookSettings()
-  local BookSettings = require("koassistant_book_settings")
+  local BookSettings = require("koassistant.books.book_settings")
   BookSettings.show({ plugin = self, ui = self.ui })
   return true
 end
@@ -18808,7 +18808,7 @@ end
 --- @param on_close_callback function|nil: Called after popup closes (e.g., reopen quick settings)
 --- @param target_override string|nil: "book" | "global" — forces the editing layer
 function AskGPT:showDomainPopup(on_close_callback, target_override)
-  local BookSettings = require("koassistant_book_settings")
+  local BookSettings = require("koassistant.books.book_settings")
   BookSettings.showDomainResearch({
     plugin = self,
     ui = self.ui,
@@ -18819,7 +18819,7 @@ end
 
 --- AI Book Tools posture picker (QS chip entry; tools_ux_plan.md §3)
 function AskGPT:showToolsPosturePopup(on_close_callback, target_override)
-  local BookSettings = require("koassistant_book_settings")
+  local BookSettings = require("koassistant.books.book_settings")
   BookSettings.showToolsPosture({
     plugin = self,
     ui = self.ui,
@@ -18924,7 +18924,7 @@ function AskGPT:onKOAssistantNotebook()
   end
 
   local file_path = reader_ui.document.file
-  local Notebook = require("koassistant_notebook")
+  local Notebook = require("koassistant.chat.notebook")
 
   if not Notebook.exists(file_path) then
     -- No notebook — go straight to create prompt (opens editor after creation)
@@ -18963,7 +18963,7 @@ end
 
 --- Browse all notebooks gesture handler
 function AskGPT:onKOAssistantBrowseNotebooks()
-  local NotebookManager = require("koassistant_notebook_manager")
+  local NotebookManager = require("koassistant.chat.notebook_manager")
   local features = self.settings:readSetting("features") or {}
   NotebookManager:showNotebookBrowser({ enable_emoji = features.enable_emoji_icons == true })
   return true
@@ -18976,7 +18976,7 @@ end
 
 --- Browse notebooks (settings menu callback)
 function AskGPT:showNotebookBrowser()
-  local NotebookManager = require("koassistant_notebook_manager")
+  local NotebookManager = require("koassistant.chat.notebook_manager")
   local features = self.settings:readSetting("features") or {}
   NotebookManager:showNotebookBrowser({ enable_emoji = features.enable_emoji_icons == true })
 end
@@ -18989,7 +18989,7 @@ end
 
 --- Browse artifacts (settings menu callback)
 function AskGPT:showArtifactBrowser()
-  local ArtifactBrowser = require("koassistant_artifact_browser")
+  local ArtifactBrowser = require("koassistant.artifacts.artifact_browser")
   local features = self.settings:readSetting("features") or {}
   ArtifactBrowser:showArtifactBrowser({ enable_emoji = features.enable_emoji_icons == true })
 end
@@ -19019,7 +19019,7 @@ end
 --- groups as launch surface). Reading order kept; missing files skipped.
 --- Saved chats get stamped with the group via the _group_launch transient.
 function AskGPT:openLibraryDialogForGroup(group_id)
-  local BookGroups = require("koassistant_book_groups")
+  local BookGroups = require("koassistant.books.book_groups")
   local group = BookGroups.byId(group_id)
   if not group then return end
   local books_info = BookGroups.booksInfoFor(group, self.ui)
@@ -19033,7 +19033,7 @@ function AskGPT:openLibraryDialogForGroup(group_id)
   configuration.features = configuration.features or {}
   self:_scrubContextFeatures(configuration.features)
   configuration.features.is_library_context = true
-  -- Same shapes mergeBooks (koassistant_dialogs.lua) writes, so the dialog's
+  -- Same shapes mergeBooks (koassistant/ui/dialogs.lua) writes, so the dialog's
   -- selected-books editor and Add Books menu work on this list seamlessly
   local books_list = {}
   for i, book in ipairs(books_info) do
@@ -19058,7 +19058,7 @@ end
 
 --- Legacy: open BookPicker for manual book selection (called from Add Books menu)
 function AskGPT:showLibraryPicker()
-  local BookPicker = require("koassistant_book_picker")
+  local BookPicker = require("koassistant.ui.book_picker")
   local self_ref = self
   BookPicker:show({
     on_confirm = function(selected_files)
@@ -19082,7 +19082,7 @@ function AskGPT:translateCurrentPage()
     return
   end
 
-  local ContextExtractor = require("koassistant_context_extractor")
+  local ContextExtractor = require("koassistant.request.context_extractor")
   local extractor = ContextExtractor:new(self.ui, configuration.features or {})
   local page_result = extractor:getVisiblePageText()
   local page_text = page_result.text
@@ -19096,7 +19096,7 @@ function AskGPT:translateCurrentPage()
   end
 
   -- Get translate action
-  local Actions = require("prompts/actions")
+  local Actions = require("koassistant.prompts.actions")
   local translate_action = Actions.special and Actions.special.translate
   if not translate_action then
     UIManager:show(InfoMessage:new{
@@ -19480,12 +19480,12 @@ function AskGPT:registerHighlightMenuActions()
         -- recent picks; a pick switches the model for good and the button
         -- relabels in place (the list stacks on the menu, so the menu and the
         -- selection stay open). Hold: remove it, other placements
-        local ModelSwitch = require("koassistant_model_switch")
+        local ModelSwitch = require("koassistant.ui.model_switch")
         return {
           id = "koa_model",
           text = ModelSwitch.label(self),
           hold_callback = function()
-            require("koassistant_action_hold").show(self, action, { surface = "highlight" })
+            require("koassistant.ui.action_hold").show(self, action, { surface = "highlight" })
           end,
           callback = function()
             ModelSwitch.show(self, function()
@@ -19504,7 +19504,7 @@ function AskGPT:registerHighlightMenuActions()
         -- Check if highlight module has the getSelectedWordContext method
         -- Note: Method is on self.ui.highlight, not reader_highlight_instance
         if self.ui.highlight and self.ui.highlight.getSelectedWordContext then
-          local context_mode = require("koassistant_book_settings")
+          local context_mode = require("koassistant.books.book_settings")
             .resolveDictionaryContext(self.ui and self.ui.doc_settings, cur_features)
           -- Skip context extraction if mode is "none"
           if context_mode ~= "none" then
@@ -19517,7 +19517,7 @@ function AskGPT:registerHighlightMenuActions()
               nil,
               -- the far side is clamped while spoiler protection is on (B436)
               Dialogs.contextAfterLimit(cur_features,
-                require("koassistant_book_settings").resolveSpoilerFree(self:_openBookDS(), cur_features) or false)
+                require("koassistant.books.book_settings").resolveSpoilerFree(self:_openBookDS(), cur_features) or false)
             )
           end
         end
@@ -19563,7 +19563,7 @@ function AskGPT:registerHighlightMenuActions()
         hold_callback = function()
           -- The menu stays open (the selection lives in it); a removed row leaves
           -- on the next open
-          require("koassistant_action_hold").show(self, action, {
+          require("koassistant.ui.action_hold").show(self, action, {
             surface = "highlight",
             run = Device:hasClipboard() and runSlot or nil,
           })
@@ -19595,7 +19595,7 @@ function AskGPT:syncDictionaryBypass()
   local intercept_on = features.xray_selection_intercept ~= false
   if not intercept_on and self.ui and self.ui.doc_settings then
     intercept_on = self:_openBookDS():readSetting(
-      require("koassistant_book_settings").KEY_XRAY_INTERCEPT) == true
+      require("koassistant.books.book_settings").KEY_XRAY_INTERCEPT) == true
   end
 
   -- Check if we have access to the reader's dictionary module
@@ -19630,7 +19630,7 @@ function AskGPT:syncDictionaryBypass()
       -- actually intercepting. Round 5: the gate resolves per call
       -- (book > global) — install-time capture would strand book overrides.
       do
-        local ActionCache = require("koassistant_action_cache")
+        local ActionCache = require("koassistant.artifacts.action_cache")
         local i_file = dict_self._koassistant_lookup_book
           or (self_ref.ui and self_ref.ui.document and self_ref.ui.document.file)
         -- Memoized route index (slice 2): a stat per tap instead of the old
@@ -19704,7 +19704,7 @@ function AskGPT:syncDictionaryBypass()
 
       -- Also check special actions if not found
       if not bypass_action then
-        local Actions = require("prompts/actions")
+        local Actions = require("koassistant.prompts.actions")
         if Actions.special and Actions.special[action_id] then
           bypass_action = Actions.special[action_id]
         end
@@ -19721,7 +19721,7 @@ function AskGPT:syncDictionaryBypass()
 
       -- Check cache requirements before executing
       if bypass_action.requires_xray_cache then
-        local ActionCache = require("koassistant_action_cache")
+        local ActionCache = require("koassistant.artifacts.action_cache")
         -- Chat-viewer lookups carry their own book (may differ from the open
         -- one). Read WITHOUT consuming — the fall-through paths below hand the
         -- flags to the normal dictionary-popup chain, which consumes them.
@@ -19770,7 +19770,7 @@ function AskGPT:syncDictionaryBypass()
       -- Once cleared, getSelectedWordContext() will return nil.
       -- Always extract regardless of mode, so compact view toggle can enable context later.
       local context = ""
-      local context_mode = require("koassistant_book_settings")
+      local context_mode = require("koassistant.books.book_settings")
         .resolveDictionaryContext(self_ref.ui and self_ref.ui.doc_settings, features)
       local context_chars = features.dictionary_context_chars or 100
       -- Use "sentence" as extraction mode when setting is "none" (for toggle availability)
@@ -19786,7 +19786,7 @@ function AskGPT:syncDictionaryBypass()
           nil,
           -- the far side is clamped while spoiler protection is on (B436)
           Dialogs.contextAfterLimit(features,
-            require("koassistant_book_settings").resolveSpoilerFree(self_ref:_openBookDS(), features) or false)
+            require("koassistant.books.book_settings").resolveSpoilerFree(self_ref:_openBookDS(), features) or false)
         )
         -- Pre-extract the surrounding-context window while the selection is alive
         -- (highlight:clear() below kills it; handlePredefinedPrompt trims per mode).
@@ -19836,9 +19836,9 @@ function AskGPT:syncDictionaryBypass()
           -- Make sure we're using the latest configuration
           self_ref:updateConfigFromSettings()
           -- Get effective dictionary language (per-book override folded in for the open book)
-          local SystemPrompts = require("prompts.system_prompts")
+          local SystemPrompts = require("koassistant.prompts.system_prompts")
           local dict_language = SystemPrompts.getEffectiveDictionaryLanguage(
-            require("koassistant_book_settings").applyLanguageOverride({
+            require("koassistant.books.book_settings").applyLanguageOverride({
               dictionary_language = features.dictionary_language,
               translation_language = features.translation_language,
               translation_use_primary = features.translation_use_primary,
@@ -20033,9 +20033,9 @@ function AskGPT:syncHighlightBypass()
       -- ASCII punctuation; entity handles are short — skip the parse cost
       -- for long selections outright
       -- (CJK stops included since #90's device round: "name。" is a handle)
-      local sel = require("koassistant_xray_parser").trimEdgePunctuation(hl_self.selected_text.text)
+      local sel = require("koassistant.xray.xray_parser").trimEdgePunctuation(hl_self.selected_text.text)
       if #sel > 2 and #sel <= 120 then
-        local ActionCache = require("koassistant_action_cache")
+        local ActionCache = require("koassistant.artifacts.action_cache")
         local i_file = self_ref.ui and self_ref.ui.document and self_ref.ui.document.file
         -- Memoized route index (slice 2): a stat per release instead of the
         -- old full cache parse
@@ -20072,14 +20072,14 @@ function AskGPT:syncHighlightBypass()
       local action = self_ref.action_service:getAction("highlight", action_id)
       -- Also check special actions (translate, dictionary)
       if not action then
-        local Actions = require("prompts/actions")
+        local Actions = require("koassistant.prompts.actions")
         action = Actions.special and Actions.special[action_id]
       end
 
       if action and hl_self.selected_text and hl_self.selected_text.text then
         -- Check cache requirements before executing
         if action.requires_xray_cache then
-          local ActionCache = require("koassistant_action_cache")
+          local ActionCache = require("koassistant.artifacts.action_cache")
           local file = self_ref.ui and self_ref.ui.document and self_ref.ui.document.file
           if not file or not ActionCache.hasAnyXray(file) then
             logger.dbg("KOAssistant: Highlight bypass - action requires X-Ray cache, falling through to menu")
@@ -20140,8 +20140,8 @@ end
 --- matchAnyXrayExact include_ahead flag and the card resolver.
 function AskGPT:_xrayAheadEnabled(file)
   local features = self.settings:readSetting("features") or {}
-  local ds = file and require("koassistant_doc_settings").resolve(file, self.ui) or nil
-  return require("koassistant_book_settings").resolveXrayMarking(ds, features).ahead
+  local ds = file and require("koassistant.storage.doc_settings").resolve(file, self.ui) or nil
+  return require("koassistant.books.book_settings").resolveXrayMarking(ds, features).ahead
 end
 
 --- Reading position (0..1) for the ahead peek's rung pick (B269): the open
@@ -20149,14 +20149,14 @@ end
 function AskGPT:_xrayReaderPosition(file)
   if self.ui and self.ui.document and (not file or self.ui.document.file == file) then
     local ok, prog = pcall(function()
-      return require("koassistant_context_extractor"):new(self.ui):getReadingProgress()
+      return require("koassistant.request.context_extractor"):new(self.ui):getReadingProgress()
     end)
     if ok and type(prog) == "table" and type(prog.decimal) == "number" then
       return prog.decimal
     end
   end
   if file then
-    local sidecar = require("koassistant_context_extractor").readSidecarProgress(file)
+    local sidecar = require("koassistant.request.context_extractor").readSidecarProgress(file)
     if sidecar and type(sidecar.decimal) == "number" then return sidecar.decimal end
   end
   return nil
@@ -20167,23 +20167,23 @@ end
 --- call; the install-time gates only decide whether the wrappers exist.
 function AskGPT:_xrayInterceptEnabled(file)
   local features = self.settings:readSetting("features") or {}
-  local ds = file and require("koassistant_doc_settings").resolve(file, self.ui) or nil
-  return require("koassistant_book_settings").resolveXrayMarking(ds, features).intercept
+  local ds = file and require("koassistant.storage.doc_settings").resolve(file, self.ui) or nil
+  return require("koassistant.books.book_settings").resolveXrayMarking(ds, features).intercept
 end
 
 --- Effective exact-hit landing for a book (round 5, per book):
 --- "footnote" | "popup" | "full" — book override > the global landing+style pair.
 function AskGPT:_xrayCardMode(file)
   local features = self.settings:readSetting("features") or {}
-  local ds = file and require("koassistant_doc_settings").resolve(file, self.ui) or nil
-  return require("koassistant_book_settings").resolveXrayMarking(ds, features).card
+  local ds = file and require("koassistant.storage.doc_settings").resolve(file, self.ui) or nil
+  return require("koassistant.books.book_settings").resolveXrayMarking(ds, features).card
 end
 
 function AskGPT:openXrayCard(query, opts)
   local features = self.settings:readSetting("features") or {}
   local file = (opts and opts.document_path)
     or (self.ui and self.ui.document and self.ui.document.file)
-  local XrayCard = require("koassistant_xray_card")
+  local XrayCard = require("koassistant.xray.xray_card")
   local ok, hit = pcall(XrayCard.resolve, file, query,
     { include_ahead = self:_xrayAheadEnabled(file),
       position = self:_xrayReaderPosition(file) })
@@ -20236,7 +20236,7 @@ function AskGPT:openXrayCard(query, opts)
     end
     local f2 = self_ref.settings:readSetting("features") or {}
     local ds = self_ref:_openBookDS()
-    local protected = ds and require("koassistant_book_settings")
+    local protected = ds and require("koassistant.books.book_settings")
       .resolveSpoilerPosture(ds, f2).protected
     if protected then
       local ConfirmBox = require("ui/widget/confirmbox")
@@ -20252,8 +20252,8 @@ function AskGPT:openXrayCard(query, opts)
   end
   -- Round 5: landing + style resolve per book (book three-way > global pair).
   -- B269: the card-content dials ride the same resolver.
-  local ds_m = file and require("koassistant_doc_settings").resolve(file, self.ui) or nil
-  local marking = require("koassistant_book_settings").resolveXrayMarking(ds_m, features)
+  local ds_m = file and require("koassistant.storage.doc_settings").resolve(file, self.ui) or nil
+  local marking = require("koassistant.books.book_settings").resolveXrayMarking(ds_m, features)
   local card_mode = marking.card
   if card_mode == "full" then
     -- Full-entry landing (round 16): an AHEAD-ONLY entity still needs the
@@ -20274,7 +20274,7 @@ function AskGPT:openXrayCard(query, opts)
 end
 
 function AskGPT:syncXrayMarks()
-  require("koassistant_xray_marks").sync(self)
+  require("koassistant.xray.xray_marks").sync(self)
   -- d2 tap layer (slice 2 round 2): marked words are LINKS — a plain tap on
   -- a mark opens the entity. ReaderHighlight's tap zone sees every tap
   -- EXCEPT link taps (stock zone comment: links keep priority), so real
@@ -20288,7 +20288,7 @@ function AskGPT:syncXrayMarks()
     highlight.onTap = function(hl_self, arg, ges)
       local name, box
       if ges then
-        name, box = require("koassistant_xray_marks").tapTarget(self_ref, ges)
+        name, box = require("koassistant.xray.xray_marks").tapTarget(self_ref, ges)
       end
       if name then
         logger.dbg("KOAssistant: X-Ray mark tap - opening card for tapped text: " .. name)
@@ -20347,10 +20347,10 @@ end
 function AskGPT:_showXrayMarkingQuickSettings(opts)
   local self_ref = self
   local features = self.settings:readSetting("features") or {}
-  local BookSettings = require("koassistant_book_settings")
+  local BookSettings = require("koassistant.books.book_settings")
   local ds
   if opts and opts.file then
-    ds = require("koassistant_doc_settings").resolve(opts.file, self.ui)
+    ds = require("koassistant.storage.doc_settings").resolve(opts.file, self.ui)
   elseif self.ui and self.ui.doc_settings then
     ds = self:_openBookDS()
   end
@@ -20477,11 +20477,11 @@ function AskGPT:_showXrayMarkingQuickSettings(opts)
   local title = _("Marking & lookup")
   local file = (opts and opts.file) or (self.ui and self.ui.document and self.ui.document.file)
   if file then
-    local ActionCache = require("koassistant_action_cache")
+    local ActionCache = require("koassistant.artifacts.action_cache")
     local sources = {}
     local live = ActionCache.getXrayCache(file)
     if live and live.result and live.source_mode ~= "ai_knowledge"
-        and require("koassistant_xray_parser").isJSON(live.result) then
+        and require("koassistant.xray.xray_parser").isJSON(live.result) then
       table.insert(sources, _("this book's X-Ray"))
     end
     local n_sections = ActionCache.getSectionXrayCount(file)
@@ -20674,7 +20674,7 @@ function AskGPT:buildHighlightBypassActionMenu()
   end
 
   -- Also add special actions (translate, dictionary) if not already included
-  local Actions = require("prompts/actions")
+  local Actions = require("koassistant.prompts.actions")
   local action_ids = {}
   for _i, item in ipairs(all_actions) do
     action_ids[item.action.id] = true
@@ -20731,7 +20731,7 @@ function AskGPT:buildDictionaryBypassActionMenu()
   end
 
   -- Also add special actions (translate, dictionary) if not already included
-  local Actions = require("prompts/actions")
+  local Actions = require("koassistant.prompts.actions")
   local action_ids = {}
   for _i, item in ipairs(all_actions) do
     action_ids[item.action.id] = true
@@ -20856,7 +20856,7 @@ end
 
 function AskGPT:showChatHistory(opts)
   -- Load the chat history manager
-  local ChatHistoryManager = require("koassistant_chat_history_manager")
+  local ChatHistoryManager = require("koassistant.chat.chat_history_manager")
   local chat_history_manager = ChatHistoryManager:new()
   
   -- Get the current document path if a document is open. opts.all_books skips
@@ -20870,7 +20870,7 @@ function AskGPT:showChatHistory(opts)
   end
   
   -- Show the chat history browser
-  local ChatHistoryDialog = require("koassistant_chat_history_dialog")
+  local ChatHistoryDialog = require("koassistant.chat.chat_history_dialog")
   ChatHistoryDialog:showChatHistoryBrowser(
       self.ui, 
       document_path,
@@ -20881,13 +20881,13 @@ end
 
 function AskGPT:checkForUpdates()
   NetworkMgr:runWhenConnected(function()
-    local UpdateChecker = require("koassistant_update_checker")
+    local UpdateChecker = require("koassistant.storage.update_checker")
     UpdateChecker.checkForUpdates(false) -- auto = false (manual check with UI feedback)
   end)
 end
 
 function AskGPT:showAbout()
-  local UpdateChecker = require("koassistant_update_checker")
+  local UpdateChecker = require("koassistant.storage.update_checker")
   local version = UpdateChecker.getCurrentVersion() or _("Unknown")
   UIManager:show(InfoMessage:new{
     text = T(_([[KOAssistant %1
@@ -21034,7 +21034,7 @@ end
 
 -- Clear all chat history
 function AskGPT:clearAllChatHistory()
-  local ChatHistoryManager = require("koassistant_chat_history_manager")
+  local ChatHistoryManager = require("koassistant.chat.chat_history_manager")
   local chat_manager = ChatHistoryManager:new()
   local total_deleted, docs_deleted = chat_manager:deleteAllChats()
 
@@ -21256,27 +21256,27 @@ function AskGPT:rerunSetupWizard()
   self:showSetupWizard()
 end
 
--- Setup Wizard v2 dev entry (koassistant_setup_wizard.lua) — INERT for
+-- Setup Wizard v2 dev entry (koassistant/ui/setup_wizard.lua) — INERT for
 -- users until the release flip: the only route here is the debug-gated
 -- Settings > Advanced row. At release, checkSetupWizard/rerunSetupWizard
 -- switch to the new module and this row retires.
 -- Settings ▸ X-Ray ▸ "Categories for New X-Rays": the global default every
 -- book without its own pick follows (presets v0.21; schema action row).
 function AskGPT:showXrayDefaultCategoriesPicker()
-  local BookSettings = require("koassistant_book_settings")
+  local BookSettings = require("koassistant.books.book_settings")
   BookSettings.showXrayCategoriesPicker({ target = "global", plugin = self })
 end
 
 -- Settings ▸ X-Ray ▸ "Depth of New X-Rays": the global depth rung (depth axis
 -- 2026-08-25; the shared two-layer picker opened on its Global tab).
 function AskGPT:showXrayDefaultDepthPicker()
-  local BookSettings = require("koassistant_book_settings")
+  local BookSettings = require("koassistant.books.book_settings")
   BookSettings.showXrayDepthPicker({ plugin = self, ui = self.ui, target_override = "global" })
 end
 
 --- Global default type for new X-Rays (B337c); settings menu row
 function AskGPT:showXrayDefaultTypePicker()
-  local BookSettings = require("koassistant_book_settings")
+  local BookSettings = require("koassistant.books.book_settings")
   BookSettings.showXrayTypePicker({ plugin = self, ui = self.ui, target_override = "global",
     no_rebuild_offer = true })
 end
@@ -21284,19 +21284,19 @@ end
 --- Global preset for new X-Rays (B383): sets the three global dials below
 --- it in one tap; settings menu row
 function AskGPT:showXrayDefaultPresetPicker()
-  local BookSettings = require("koassistant_book_settings")
+  local BookSettings = require("koassistant.books.book_settings")
   BookSettings.showXrayPresetPicker({ plugin = self, ui = self.ui, target_override = "global" })
 end
 
 --- Global default for where carried entries are listed (#116, B393);
 --- settings menu row
 function AskGPT:showXrayDefaultCarriedPicker()
-  local BookSettings = require("koassistant_book_settings")
+  local BookSettings = require("koassistant.books.book_settings")
   BookSettings.showXrayCarriedPicker({ plugin = self, ui = self.ui, target_override = "global" })
 end
 
 function AskGPT:showSetupWizardDev()
-  require("koassistant_setup_wizard").showDevMenu(self)
+  require("koassistant.ui.setup_wizard").showDevMenu(self)
 end
 
 -- Quick reset: Settings only
@@ -21457,7 +21457,7 @@ function AskGPT:showTrustedProvidersDialog()
   local all_providers = {}
 
   -- Built-in providers
-  local Defaults = require("koassistant_api/defaults")
+  local Defaults = require("koassistant.api.defaults")
   for provider_id, _info in pairs(Defaults.ProviderDefaults) do
     table.insert(all_providers, {
       id = provider_id,
@@ -21827,7 +21827,7 @@ function AskGPT:_validateActionOverrides(overrides)
 
   local valid_overrides = {}
   local warnings = {}
-  local Actions = require("prompts.actions")
+  local Actions = require("koassistant.prompts.actions")
 
   for action_id, override_config in pairs(overrides) do
     -- Check if the base action still exists
@@ -21850,12 +21850,12 @@ function AskGPT:validateAllIndexes()
   local InfoMessage = require("ui/widget/infomessage")
 
   -- Validate chat index (also checks count mismatches via existing function)
-  local ChatHistoryManager = require("koassistant_chat_history_manager")
+  local ChatHistoryManager = require("koassistant.chat.chat_history_manager")
   local chat_manager = ChatHistoryManager:new{}
   chat_manager:validateChatIndex()
 
   -- Prune stale entries from all indexes (shared with the index rebuilder)
-  local IndexRebuilder = require("koassistant_index_rebuilder")
+  local IndexRebuilder = require("koassistant.artifacts.index_rebuilder")
   local total_pruned = IndexRebuilder.pruneAllIndexes()
 
   if total_pruned > 0 then
@@ -21875,7 +21875,7 @@ end
 -- their index entries, then prune stale ones. Never wipes an index.
 -- @param opts table|nil { quiet = true } for the throttled startup auto-run
 function AskGPT:rebuildAllIndexes(opts)
-  local IndexRebuilder = require("koassistant_index_rebuilder")
+  local IndexRebuilder = require("koassistant.artifacts.index_rebuilder")
   local features = self.settings:readSetting("features") or {}
 
   if opts and opts.quiet then
@@ -22023,7 +22023,7 @@ end
 
 -- Show create backup dialog
 function AskGPT:showCreateBackupDialog()
-  local BackupManager = require("koassistant_backup_manager")
+  local BackupManager = require("koassistant.storage.backup_manager")
   local backup_manager = BackupManager:new()
 
   -- Go straight to options dialog with default states
@@ -22224,7 +22224,7 @@ end
 
 -- Show restore backup dialog
 function AskGPT:showRestoreBackupDialog()
-  local BackupManager = require("koassistant_backup_manager")
+  local BackupManager = require("koassistant.storage.backup_manager")
   local backup_manager = BackupManager:new()
 
   -- List available backups
@@ -22609,7 +22609,7 @@ end
 
 -- Show backup list dialog
 function AskGPT:showBackupListDialog()
-  local BackupManager = require("koassistant_backup_manager")
+  local BackupManager = require("koassistant.storage.backup_manager")
   local backup_manager = BackupManager:new()
 
   -- Clean up old restore points first
@@ -22781,7 +22781,7 @@ function AskGPT:_openBookDS()
   local ds = self.ui and self.ui.doc_settings
   if not ds then return nil end
   local file = self.ui.document and self.ui.document.file
-  return require("koassistant_book_store").wrap(ds, file)
+  return require("koassistant.storage.book_store").wrap(ds, file)
 end
 
 --- Track 37 one-shot: move chats + per-book keys out of metadata.lua into the
@@ -22794,7 +22794,7 @@ end
 function AskGPT:_runBookStoreMigration()
   local version = G_reader_settings:readSetting("chat_storage_version", 1)
   if version ~= 2 then return end
-  local BookStore = require("koassistant_book_store")
+  local BookStore = require("koassistant.storage.book_store")
   if BookStore._bulk_ran then return end
   BookStore._bulk_ran = true
   local features = self.settings:readSetting("features") or {}
@@ -22837,7 +22837,7 @@ function AskGPT:checkChatMigrationStatus()
 
   if version < 2 then
     -- Check if we have any actual old chats to migrate (not just empty directory)
-    local ChatHistoryManager = require("koassistant_chat_history_manager")
+    local ChatHistoryManager = require("koassistant.chat.chat_history_manager")
 
     if ChatHistoryManager:hasV1Chats() then
       logger.info("Chat storage needs migration from v1 to v2")
@@ -22876,7 +22876,7 @@ end
 
 -- Migrate chats from hash directories to DocSettings
 function AskGPT:migrateChatsToDocSettings()
-  local ChatHistoryManager = require("koassistant_chat_history_manager")
+  local ChatHistoryManager = require("koassistant.chat.chat_history_manager")
   local DocSettings = require("docsettings")
 
   -- Set migration lock
@@ -22960,7 +22960,7 @@ function AskGPT:migrateChatsToDocSettings()
           -- Read existing chats from the book's chats file (if any) and add
           -- the v1 chats (keyed by ID). Track 37: v1 imports straight into the
           -- sidecar chats file, never through metadata.lua.
-          local BookStore = require("koassistant_book_store")
+          local BookStore = require("koassistant.storage.book_store")
           local existing_chats = BookStore.readChats(doc_path)
           for _idx, chat in ipairs(chats) do
             existing_chats[chat.id] = chat
@@ -22970,7 +22970,7 @@ function AskGPT:migrateChatsToDocSettings()
           if not ok_w then error(err_w or "chats write failed") end
 
           -- Update chat index (title/author from KOReader's DocSettings)
-          local doc_settings = require("koassistant_doc_settings").resolve(doc_path)
+          local doc_settings = require("koassistant.storage.doc_settings").resolve(doc_path)
           ChatHistoryManager:updateChatIndex(doc_path, "save", nil, existing_chats,
             { doc_props = doc_settings:readSetting("doc_props"), has_props = true })
 
@@ -23217,7 +23217,7 @@ end
 -- Friendly name for a gesture slot: our candidate labels, else the raw id
 -- prettified (bindings made through KOReader's own gesture manager).
 function AskGPT:_gestureSlotLabel(slot)
-  local SetupWizard = require("koassistant_setup_wizard")
+  local SetupWizard = require("koassistant.ui.setup_wizard")
   for _idx, cand in ipairs(SetupWizard.GESTURE_CANDIDATES) do
     if cand.id == slot then return cand.label end
   end
@@ -23325,7 +23325,7 @@ function AskGPT:showShortcutSlotPicker(act)
     } })
   end
 
-  local SetupWizard = require("koassistant_setup_wizard")
+  local SetupWizard = require("koassistant.ui.setup_wizard")
   local sections = {}
   if act.reader then table.insert(sections, { key = "gesture_reader", header = _("— Reader —") }) end
   if act.fm then table.insert(sections, { key = "gesture_fm", header = _("— File browser —") }) end
@@ -23773,7 +23773,7 @@ function AskGPT:patchTextSelectionHandlers()
   local TextViewer = require("ui/widget/textviewer")
   local DictQuickLookup = require("ui/widget/dictquicklookup")
   local ReaderUI = require("apps/reader/readerui")
-  local ChatGPTViewer = require("koassistant_chatgptviewer")
+  local ChatGPTViewer = require("koassistant.ui.chatgptviewer")
 
   -- Only patch once
   if TextViewer._koassistant_patched then return end
@@ -24009,7 +24009,7 @@ function AskGPT:patchDocSettingsForChatIndex()
     DocSettings._original_updateLocation(old_path, new_path, copy)
 
     -- Per-book store cache (Track 37): the files just moved/copied/died
-    local BookStore = require("koassistant_book_store")
+    local BookStore = require("koassistant.storage.book_store")
     BookStore.invalidate(old_path)
     if new_path then BookStore.invalidate(new_path) end
 
@@ -24044,12 +24044,12 @@ function AskGPT:patchDocSettingsForChatIndex()
     -- Generated-images index maps filenames → book_file values (a plain file
     -- in the images dir, not a G_reader_settings index): move rewrites the
     -- association, delete drops it (images are kept, global-only), copy no-ops
-    local ImageGenerator = require("koassistant_image_generator")
+    local ImageGenerator = require("koassistant.images.image_generator")
     ImageGenerator.updateIndexForMove(old_path, new_path, copy)
 
     -- Book groups (item 46): move re-keys memberships; copy never joins a
     -- group; delete keeps the entry (missing-file policy — manual remove only)
-    require("koassistant_book_groups").updateForMove(old_path, new_path, copy)
+    require("koassistant.books.book_groups").updateForMove(old_path, new_path, copy)
   end
 
   DocSettings._koassistant_patched = true
@@ -24067,7 +24067,7 @@ function AskGPT:updateNotebookIndex(document_path, operation)
   if operation == "remove" then
     index[document_path] = nil
   else
-    local Notebook = require("koassistant_notebook")
+    local Notebook = require("koassistant.chat.notebook")
     local stats = Notebook.getStats(document_path)
     if stats then
       index[document_path] = stats
@@ -24101,7 +24101,7 @@ function AskGPT:offerNotebookMigration(old_location, new_location)
 
   -- If index is empty but old location is a vault dir, try scanning for files
   if count == 0 and old_location ~= "sidecar" then
-    local Notebook = require("koassistant_notebook")
+    local Notebook = require("koassistant.chat.notebook")
     local old_base_dir
     if old_location == "central" then
       old_base_dir = DataStorage:getDataDir() .. "/koassistant_notebooks"
@@ -24142,7 +24142,7 @@ function AskGPT:offerNotebookMigration(old_location, new_location)
       self_ref:updateConfigFromSettings()
 
       -- Run migration
-      local Notebook = require("koassistant_notebook")
+      local Notebook = require("koassistant.chat.notebook")
       local moved, failed = Notebook.migrateAll(old_location, new_location, features)
 
       if failed > 0 then
@@ -24168,7 +24168,7 @@ end
 function AskGPT:onInvalidateMetadataCache(file)
   if type(file) ~= "string" or not self:documentHasChats(file) then return end
   local ok, err = pcall(function()
-    require("koassistant_chat_history_manager"):refreshChatIndexEntry(file, self.ui)
+    require("koassistant.chat.chat_history_manager"):refreshChatIndexEntry(file, self.ui)
   end)
   if not ok then
     logger.warn("KOAssistant: chat index refresh after metadata edit failed:", err)
@@ -24188,8 +24188,8 @@ end
 --- @param nav_context table|nil Navigation context passthrough (book page passes
 ---   close_on_up so level-up returns to the page underneath, not the documents list)
 function AskGPT:showChatHistoryForFile(file_path, nav_context)
-  local ChatHistoryDialog = require("koassistant_chat_history_dialog")
-  local ChatHistoryManager = require("koassistant_chat_history_manager")
+  local ChatHistoryDialog = require("koassistant.chat.chat_history_dialog")
+  local ChatHistoryManager = require("koassistant.chat.chat_history_manager")
 
   local chat_history_manager = ChatHistoryManager:new()
   if nav_context then
@@ -24208,7 +24208,7 @@ end
 --- @param file_path string The document file path
 --- @param edit_mode boolean|nil If true, open in TextEditor (edit mode); otherwise open in reader (view mode)
 function AskGPT:openNotebookForFile(file_path, edit_mode)
-  local Notebook = require("koassistant_notebook")
+  local Notebook = require("koassistant.chat.notebook")
   local notebook_path = Notebook.getPath(file_path)
 
   if not notebook_path then
@@ -24270,8 +24270,8 @@ end
 --- @param notebook_path string Full path to the notebook file
 --- @param document_path string The original document file path (for edit callback)
 function AskGPT:openNotebookInChatViewer(notebook_path, document_path)
-  local ChatGPTViewer = require("koassistant_chatgptviewer")
-  local Notebook = require("koassistant_notebook")
+  local ChatGPTViewer = require("koassistant.ui.chatgptviewer")
+  local Notebook = require("koassistant.chat.notebook")
   local PathChooser = require("ui/widget/pathchooser")
 
   local content = Notebook.read(document_path)
@@ -24357,7 +24357,7 @@ function AskGPT:openNotebookInChatViewer(notebook_path, document_path)
     book_title = props and (props.display_title or props.title)
     book_author = props and props.authors
   else
-    local props = require("koassistant_doc_settings").overlayCustomProps(getRawDocProps(document_path), document_path)
+    local props = require("koassistant.storage.doc_settings").overlayCustomProps(getRawDocProps(document_path), document_path)
     book_title = props and (props.display_title or props.title)
     book_author = props and props.authors
   end

@@ -274,7 +274,7 @@ You can override the system default model of any provider with your preferred ch
 
 ### Current default models
 
-The first model in each provider's list is its default. These tables are generated from the plugin's model lists (`koassistant_model_lists.lua`) when the page is published, so they match the code. "Also listed" is the rest of the built-in list in the menu's order; the routers list a few ids, and **Fetch models from provider...** lists the whole catalog.
+The first model in each provider's list is its default. These tables are generated from the plugin's model lists (`koassistant/request/model_lists.lua`) when the page is published, so they match the code. "Also listed" is the rest of the built-in list in the menu's order; the routers list a few ids, and **Fetch models from provider...** lists the whole catalog.
 
 <!-- generated: defaults -->
 | Provider | Default | Also listed |

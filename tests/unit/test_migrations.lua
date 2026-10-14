@@ -1,4 +1,4 @@
--- Unit tests for koassistant_migrations.lua — the one-time settings upgrade chain
+-- Unit tests for koassistant/storage/migrations.lua — the one-time settings upgrade chain
 -- (extracted verbatim from AskGPT:initSettings, 2026-08-10; release_prep_v0.21 C0).
 --
 -- The chain had ZERO coverage while guarding every user's upgrade path. These are
@@ -22,7 +22,7 @@ local function setupPaths()
 
     package.path = table.concat({
         plugin_dir .. "/?.lua",
-        plugin_dir .. "/koassistant_api/?.lua",
+        plugin_dir .. "/koassistant/api/?.lua",
         tests_dir .. "/?.lua",
         tests_dir .. "/lib/?.lua",
         package.path,
@@ -35,8 +35,8 @@ setupPaths()
 
 require("mock_koreader")
 
-local Migrations = require("koassistant_migrations")
-local Constants = require("koassistant_constants")
+local Migrations = require("koassistant.storage.migrations")
+local Constants = require("koassistant.core.constants")
 
 local TestRunner = {
     passed = 0,

@@ -1,5 +1,5 @@
 --[[
-Unit tests: Book groups store (koassistant_book_groups.lua) — item 46, #90.
+Unit tests: Book groups store (koassistant/books/book_groups.lua) — item 46, #90.
 
 CRUD, manual ordering, first-group neighbor rule, move re-keying policy
 (move re-keys / copy never joins / delete keeps), and the merge picker's
@@ -36,8 +36,8 @@ package.loaded["docsettings"] = package.loaded["docsettings"] or {
     open = function() return { readSetting = function() end, close = function() end } end,
 }
 
-package.loaded["koassistant_book_groups"] = nil
-local BookGroups = require("koassistant_book_groups")
+package.loaded["koassistant.books.book_groups"] = nil
+local BookGroups = require("koassistant.books.book_groups")
 
 -- Functional in-memory store (the real one is LuaSettings over a settings-dir file)
 local mem = {}
@@ -465,9 +465,9 @@ TestRunner:test("group settings: get/set/clear, settingsOf copy, no on_change; l
 end)
 
 TestRunner:test("follow-group helpers: a marker of a group that no longer exists reads as follow-global", function()
-    local BookSettings = require("koassistant_book_settings")
-    local BookStore = require("koassistant_book_store")
-    local GroupSettings = require("koassistant_group_settings")
+    local BookSettings = require("koassistant.books.book_settings")
+    local BookStore = require("koassistant.storage.book_store")
+    local GroupSettings = require("koassistant.books.group_settings")
     local g = BookGroups.create("Series")
     local key = "koassistant_book_research_mode"
     local function fakeDS(marker) return { readRaw = function(_, k) if k == key then return marker end end } end
@@ -490,7 +490,7 @@ TestRunner:test("shortName: UTF-8 safe cap with an ellipsis", function()
 end)
 
 TestRunner:test("the hub's files row adds one tapped book, and still takes a folder (B405)", function()
-    local GroupsUI = require("koassistant_book_groups_ui")
+    local GroupsUI = require("koassistant.books.book_groups_ui")
     local saved = {}
     for _i, name in ipairs({ "ui/widget/pathchooser", "libs/libkoreader-lfs", "document/documentregistry" }) do
         saved[name] = package.loaded[name]
@@ -544,8 +544,8 @@ TestRunner:test("the hub's files row adds one tapped book, and still takes a fol
 end)
 
 TestRunner:test("a hub add row's picker stays on that row's source (B407)", function()
-    local GroupsUI = require("koassistant_book_groups_ui")
-    local BookPicker = require("koassistant_book_picker")
+    local GroupsUI = require("koassistant.books.book_groups_ui")
+    local BookPicker = require("koassistant.ui.book_picker")
     local names = { "ui/widget/pathchooser", "libs/libkoreader-lfs", "document/documentregistry",
         "ui/widget/buttondialog" }
     local saved = {}

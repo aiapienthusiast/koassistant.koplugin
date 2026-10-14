@@ -38,7 +38,7 @@ If you prefer to update by hand, or are updating from a version without the upda
 
 1. Download `koassistant.koplugin.zip` from the [latest release](https://github.com/zeeyado/koassistant.koplugin/releases) → Assets.
 2. Connect the device over USB, or use a file manager on Android.
-3. Extract the zip directly over the existing `koassistant.koplugin` folder in the plugins folder (Kobo `/mnt/onboard/.adds/koreader/plugins/`, Kindle `/mnt/us/koreader/plugins/`, Android `/sdcard/koreader/plugins/`, macOS `~/Library/Application Support/koreader/plugins/`, Linux `~/.config/koreader/plugins/`). When asked about existing files, choose Replace, Overwrite or Merge.
+3. Extract the zip directly over the existing `koassistant.koplugin` folder in the plugins folder (Kobo `/mnt/onboard/.adds/koreader/plugins/`, Kindle `/mnt/us/koreader/plugins/`, Android `/sdcard/koreader/plugins/`, macOS `~/Library/Application Support/koreader/plugins/`, Linux `~/.config/koreader/plugins/`). When asked about existing files, choose Replace, Overwrite or Merge. Merge keeps files from older versions beside the new ones; they do no harm, but deleting the old folder first, after copying out your own files (the ones an update preserves, listed above), leaves only the current ones.
 4. Eject the device and restart KOReader.
 
 On some file managers "extract here" into the plugins folder merges into the existing folder on its own; on others you drag the extracted folder over the existing one and confirm the overwrite.

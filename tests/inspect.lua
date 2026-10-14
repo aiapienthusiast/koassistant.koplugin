@@ -43,8 +43,8 @@ require("mock_koreader")
 local TestConfig = require("test_config")
 local RequestInspector = require("request_inspector")
 local TerminalFormatter = require("terminal_formatter")
-local MessageBuilder = require("message_builder")
-local Constants = require("koassistant_constants")
+local MessageBuilder = require("koassistant.request.message_builder")
+local Constants = require("koassistant.core.constants")
 local ConstraintUtils = require("tests.lib.constraint_utils")
 
 -- Load sample context fixture for testing book-level actions (X-Ray, Recap, etc.)
@@ -402,7 +402,7 @@ end
 
 -- Load and merge API keys from both sources (matches plugin behavior)
 -- Priority: GUI-entered keys (from settings) > apikeys.lua file
--- Same behavior as koassistant_gpt_query.lua:getApiKey()
+-- Same behavior as koassistant/request/gpt_query.lua:getApiKey()
 local function loadMergedApiKeys()
     -- Start with apikeys.lua (fallback)
     local api_keys = {}
@@ -467,7 +467,7 @@ local function inspectProvider(provider, options)
         print("")
         print("Supported providers: " .. table.concat(RequestInspector:getAllProviders(), ", "))
         print("")
-        print(c.dim .. "To add support, implement buildRequestBody() in koassistant_api/" .. provider .. ".lua" .. c.reset)
+        print(c.dim .. "To add support, implement buildRequestBody() in koassistant/api/" .. provider .. ".lua" .. c.reset)
         print("")
         return false
     end
@@ -752,8 +752,8 @@ local function startWebServer(options)
 
     -- GET /api/providers - List all providers with models
     server:route("GET", "/api/providers", function(headers, body)
-        local Defaults = require("koassistant_api.defaults")
-        local ModelLists = require("koassistant_model_lists")
+        local Defaults = require("koassistant.api.defaults")
+        local ModelLists = require("koassistant.request.model_lists")
 
         local providers_data = {}
         for _, provider in ipairs(TestConfig.getAllProviders()) do
@@ -797,7 +797,7 @@ local function startWebServer(options)
 
     -- GET /api/domains - List available domains (uses actual DomainLoader from plugin)
     server:route("GET", "/api/domains", function(headers, body)
-        local DomainLoader = require("domain_loader")
+        local DomainLoader = require("koassistant.prompts.domain_loader")
 
         -- Load custom_domains from settings if available
         local custom_domains = {}
@@ -835,7 +835,7 @@ local function startWebServer(options)
 
     -- GET /api/behaviors - List available behaviors (uses actual SystemPrompts from plugin)
     server:route("GET", "/api/behaviors", function(headers, body)
-        local SystemPrompts = require("prompts.system_prompts")
+        local SystemPrompts = require("koassistant.prompts.system_prompts")
 
         -- Load custom_behaviors from settings if available
         local custom_behaviors = {}
@@ -937,8 +937,8 @@ local function startWebServer(options)
 
     -- GET /api/actions - List all built-in and custom actions
     server:route("GET", "/api/actions", function(headers, body)
-        local Actions = require("prompts.actions")
-        local Templates = require("prompts.templates")
+        local Actions = require("koassistant.prompts.actions")
+        local Templates = require("koassistant.prompts.templates")
 
         local actions_data = {
             highlight = {},
@@ -1166,7 +1166,7 @@ local function startWebServer(options)
 
         -- Resolve translation language using plugin code (handles __PRIMARY__ sentinel)
         if request_data.translation_language or action.id == "translate" then
-            local SystemPrompts = require("prompts.system_prompts")
+            local SystemPrompts = require("koassistant.prompts.system_prompts")
             context_data.translation_language = SystemPrompts.getEffectiveTranslationLanguage({
                 translation_language = request_data.translation_language,
                 translation_use_primary = request_data.translation_use_primary,
@@ -1181,7 +1181,7 @@ local function startWebServer(options)
         -- Load templates getter for template resolution
         local templates_getter = nil
         pcall(function()
-            local Templates = require("prompts/templates")
+            local Templates = require("koassistant.prompts.templates")
             templates_getter = function(name) return Templates.get(name) end
         end)
 
@@ -1394,7 +1394,7 @@ local function startWebServer(options)
 
         -- Resolve translation language using plugin code (handles __PRIMARY__ sentinel)
         if request_data.translation_language or action.id == "translate" then
-            local SystemPrompts = require("prompts.system_prompts")
+            local SystemPrompts = require("koassistant.prompts.system_prompts")
             context_data.translation_language = SystemPrompts.getEffectiveTranslationLanguage({
                 translation_language = request_data.translation_language,
                 translation_use_primary = request_data.translation_use_primary,
@@ -1408,7 +1408,7 @@ local function startWebServer(options)
 
         local templates_getter = nil
         pcall(function()
-            local Templates = require("prompts/templates")
+            local Templates = require("koassistant.prompts.templates")
             templates_getter = function(name) return Templates.get(name) end
         end)
 
@@ -1540,7 +1540,7 @@ local function startWebServer(options)
             if decode_ok then
                 raw_response = decoded
                 -- Try to extract text based on provider
-                local ResponseParser = require("koassistant_api.response_parser")
+                local ResponseParser = require("koassistant.api.response_parser")
                 local parse_ok, success, parsed = pcall(function()
                     return ResponseParser:parseResponse(decoded, provider)
                 end)
@@ -1674,7 +1674,7 @@ local function startWebServer(options)
 
         -- Resolve translation language using plugin code
         if request_data.translation_language or action.id == "translate" then
-            local SystemPrompts = require("prompts.system_prompts")
+            local SystemPrompts = require("koassistant.prompts.system_prompts")
             context_data.translation_language = SystemPrompts.getEffectiveTranslationLanguage({
                 translation_language = request_data.translation_language,
                 translation_use_primary = request_data.translation_use_primary,
@@ -1689,7 +1689,7 @@ local function startWebServer(options)
         -- Load templates getter for template resolution
         local templates_getter = nil
         pcall(function()
-            local Templates = require("prompts/templates")
+            local Templates = require("koassistant.prompts.templates")
             templates_getter = function(name) return Templates.get(name) end
         end)
 

@@ -6,7 +6,7 @@
 --     .md (the live wiki has no files) or [[wikilinks]]; every link resolves
 --     to a page and a heading; images are absolute URLs
 --   - every "Settings → A → B" path in the pages and the README is a path of
---     the KOAssistant menu as koassistant_settings_schema.lua defines it, so a
+--     the KOAssistant menu as koassistant/ui/settings_schema.lua defines it, so a
 --     menu reorganization lists every sentence it made stale
 --   - README.md stays under its size ceiling
 --   - wiki/Settings-Reference.md equals tests/tools/gen_settings_reference.lua's
@@ -230,7 +230,7 @@ print("\n  [the wiki: menu paths]")
 -- The KOAssistant menu as a tree of labels. A header is transparent (its rows
 -- are its siblings); a row with a computed label (text_func) matches any text;
 -- a row's choices count as its children so a path may end in a value.
-local Schema = require("koassistant_settings_schema")
+local Schema = require("koassistant.ui.settings_schema")
 local Gen = dofile(tests_dir .. "/tools/gen_settings_reference.lua")
 local function norm(label)
     return (tostring(label):gsub("%.%.%.$", ""):gsub("…$", ""):gsub("^%s+", ""):gsub("%s+$", ""))
@@ -397,8 +397,8 @@ end
 
 TestRunner:test("every 'Settings → …' path in the plugin's user-facing strings is a path of the KOAssistant menu", function()
     local problems = {}
-    for _idx, dir in ipairs({ "", "koassistant_api/", "koassistant_ui/", "prompts/" }) do
-        local h = io.popen('ls "' .. plugin_dir .. '/' .. dir .. '"*.lua 2>/dev/null')
+    for _idx, cmd in ipairs({ 'ls "' .. plugin_dir .. '"/*.lua', 'find "' .. plugin_dir .. '/koassistant" -name "*.lua" | sort' }) do
+        local h = io.popen(cmd .. ' 2>/dev/null')
         if h then
             for path in h:lines() do
                 local rel = path:sub(#plugin_dir + 2)
@@ -476,14 +476,14 @@ TestRunner:test("the release-notes draft's wiki tags name pages that exist", fun
 end)
 
 TestRunner:test("the release zip leaves wiki/ out", function()
-    local function has(rel) return (read(rel) or ""):find("--exclude='wiki'", 1, true) ~= nil end
-    TestRunner:assertTrue(has(".github/workflows/release.yml"), "release.yml")
-    TestRunner:assertTrue(has("scripts/build_release_zip.sh"), "build_release_zip.sh")
+    -- release.yml builds the zip with the script, so the script's list is the one list
+    TestRunner:assertTrue((read("scripts/build_release_zip.sh") or ""):find("--exclude='wiki'", 1, true) ~= nil, "build_release_zip.sh")
+    TestRunner:assertTrue((read(".github/workflows/release.yml") or ""):find("scripts/build_release_zip.sh", 1, true) ~= nil, "release.yml runs it")
 end)
 
 print("\n  [the provider tables]")
 
-local ModelLists = require("koassistant_model_lists")
+local ModelLists = require("koassistant.request.model_lists")
 local GenP = dofile(tests_dir .. "/tools/gen_provider_tables.lua")
 
 TestRunner:test("the Providers page's generated tables are the generator's output", function()

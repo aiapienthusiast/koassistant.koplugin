@@ -14,7 +14,7 @@ local function setupPaths()
     local plugin_dir = tests_dir:match("(.+)/[^/]+$") or "."
     package.path = table.concat({
         plugin_dir .. "/?.lua",
-        plugin_dir .. "/koassistant_api/?.lua",
+        plugin_dir .. "/koassistant/api/?.lua",
         tests_dir .. "/?.lua",
         tests_dir .. "/lib/?.lua",
         package.path,
@@ -50,7 +50,7 @@ local function restoreMocks()
     package.loaded["libs/libkoreader-lfs"] = _saved.lfs
     package.loaded["docsettings"] = _saved.docsettings
     package.loaded["luasettings"] = _saved.luasettings
-    package.loaded["koassistant_backup_manager"] = nil  -- we mutated its path fields
+    package.loaded["koassistant.storage.backup_manager"] = nil  -- we mutated its path fields
 end
 
 local has_lfs, real_lfs = pcall(require, "lfs")
@@ -150,7 +150,7 @@ if not has_lfs then
     return true
 end
 
-local BackupManager = require("koassistant_backup_manager")
+local BackupManager = require("koassistant.storage.backup_manager")
 
 -- Point every storage root at the temp dir BEFORE :new() (new() ensures dirs).
 local function freshManager()

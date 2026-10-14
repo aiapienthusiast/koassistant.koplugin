@@ -35,8 +35,8 @@ local DOC_PATH = TMP_ROOT .. "/book.epub"
 os.execute(string.format("mkdir -p %q", SIDECAR_DIR))
 
 -- Module cache reset BEFORE installing mocks (matters when run via run_tests.lua)
-package.loaded["koassistant_action_cache"] = nil
-package.loaded["koassistant_gettext"] = nil
+package.loaded["koassistant.artifacts.action_cache"] = nil
+package.loaded["koassistant.core.gettext"] = nil
 package.loaded["docsettings"] = nil
 package.loaded["util"] = nil
 package.loaded["luasettings"] = nil
@@ -66,7 +66,7 @@ package.loaded["luasettings"] = {
     open = function() return { readSetting = function() return nil end, close = function() end } end,
 }
 
-local ActionCache = require("koassistant_action_cache")
+local ActionCache = require("koassistant.artifacts.action_cache")
 local TestRunner = require("test_runner"):new()
 
 print("Running: test_action_cache_parity")

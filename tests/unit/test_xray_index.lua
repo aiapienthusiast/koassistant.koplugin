@@ -1,6 +1,6 @@
--- Unit tests for the one text matcher (koassistant_xray_parser.lua), the
--- per-book name index (koassistant_xray_index.lua) and the page-local marks
--- (koassistant_xray_marks.lua) against a mock crengine document.
+-- Unit tests for the one text matcher (koassistant/xray/xray_parser.lua), the
+-- per-book name index (koassistant/xray/xray_index.lua) and the page-local marks
+-- (koassistant/xray/xray_marks.lua) against a mock crengine document.
 -- docs/xray_marks_freeze_plan.md round 4.
 
 local function setupPaths()
@@ -23,7 +23,7 @@ os.execute('mkdir -p "' .. SIDECAR .. '"')
 package.loaded["docsettings"] = {
     getSidecarDir = function() return SIDECAR end,
 }
-package.loaded["koassistant_storage_registry"] = {
+package.loaded["koassistant.storage.storage_registry"] = {
     migrateSidecarFile = function() return false end,
 }
 -- Earlier files in the one-process suite leave their own device mocks
@@ -38,9 +38,9 @@ local UIManager = require("ui/uimanager")
 UIManager.unschedule = UIManager.unschedule or function() end
 UIManager.setDirty = UIManager.setDirty or function() end
 
-local XrayParser = require("koassistant_xray_parser")
-local XrayIndex = require("koassistant_xray_index")
-local XrayMarks = require("koassistant_xray_marks")
+local XrayParser = require("koassistant.xray.xray_parser")
+local XrayIndex = require("koassistant.xray.xray_index")
+local XrayMarks = require("koassistant.xray.xray_marks")
 
 local TestRunner = { passed = 0, failed = 0 }
 function TestRunner:suite(name) print(string.format("\n  [%s]", name)) end
@@ -198,7 +198,7 @@ local function newMockDoc(paragraphs, page_starts)
     return doc
 end
 
-package.loaded["koassistant_context_extractor"] = {
+package.loaded["koassistant.request.context_extractor"] = {
     documentEndXPointer = function(document) return document:endXPointer() end,
 }
 

@@ -1,7 +1,7 @@
 --[[
-Unit tests: X-Ray entity dedup (koassistant_xray_dedup.lua) + never-merge
-storage (koassistant_action_cache.lua reserved key) + the section-merge
-prompts' never-pairs injection (koassistant_xray_merge.lua) —
+Unit tests: X-Ray entity dedup (koassistant/xray/xray_dedup.lua) + never-merge
+storage (koassistant/artifacts/action_cache.lua reserved key) + the section-merge
+prompts' never-pairs injection (koassistant/xray/xray_merge.lua) —
 xray_ecosystem_plan.md §6 slice 4.
 
 Scan heuristics, merge application, sidecar absorb, AI-merge prompt sentinel
@@ -36,10 +36,10 @@ setupPaths()
 local TMP_ROOT = "/tmp/koassistant_xray_dedup_test_" .. tostring(os.time()) .. "_" .. tostring(math.random(10000))
 local SIDECAR_DIR = TMP_ROOT .. "/book.sdr"
 os.execute(string.format("mkdir -p %q", SIDECAR_DIR))
-package.loaded["koassistant_action_cache"] = nil
-package.loaded["koassistant_xray_dedup"] = nil
-package.loaded["koassistant_xray_merge"] = nil
-package.loaded["koassistant_gettext"] = nil
+package.loaded["koassistant.artifacts.action_cache"] = nil
+package.loaded["koassistant.xray.xray_dedup"] = nil
+package.loaded["koassistant.xray.xray_merge"] = nil
+package.loaded["koassistant.core.gettext"] = nil
 package.loaded["docsettings"] = nil
 package.loaded["util"] = nil
 package.loaded["luasettings"] = nil
@@ -65,9 +65,9 @@ package.loaded["luasettings"] = {
     open = function() return { readSetting = function() return nil end, close = function() end } end,
 }
 
-local XrayDedup = require("koassistant_xray_dedup")
-local XrayMerge = require("koassistant_xray_merge")
-local ActionCache = require("koassistant_action_cache")
+local XrayDedup = require("koassistant.xray.xray_dedup")
+local XrayMerge = require("koassistant.xray.xray_merge")
+local ActionCache = require("koassistant.artifacts.action_cache")
 local TestRunner = require("test_runner"):new()
 local DOC_PATH = TMP_ROOT .. "/book.epub"
 
@@ -477,7 +477,7 @@ TestRunner:test("keepBothText: both, one, neither", function()
 end)
 
 TestRunner:test("applyMergeToRungs: folds rungs holding both, leaves single-name rungs, keeps identity", function()
-    local XrayParser = require("koassistant_xray_parser")
+    local XrayParser = require("koassistant.xray.xray_parser")
     local rungs = {
         { timestamp = 111, progress_decimal = 0.5,
           result = '{"characters":[{"name":"Mara Cole","description":"early"},{"name":"Mara Ellison","description":"older text","aliases":["Elli"]}]}' },

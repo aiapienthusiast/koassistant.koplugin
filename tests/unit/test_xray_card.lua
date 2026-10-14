@@ -1,4 +1,4 @@
--- Unit tests for koassistant_xray_card.lua pure helpers (firstSentence /
+-- Unit tests for koassistant/xray/xray_card.lua pure helpers (firstSentence /
 -- sentenceEnd: the entity card's identification line).
 
 local function setupPaths()
@@ -14,7 +14,7 @@ end
 setupPaths()
 require("mock_koreader")
 
-local XrayCard = require("koassistant_xray_card")
+local XrayCard = require("koassistant.xray.xray_card")
 
 local TestRunner = { passed = 0, failed = 0 }
 function TestRunner:suite(name) print(string.format("\n  [%s]", name)) end
@@ -127,7 +127,7 @@ TestRunner:suite("resolve — carried tier ordering (S1, ref #90)")
 local TMP_ROOT = "/tmp/koassistant_xray_card_test_" .. tostring(os.time()) .. "_" .. tostring(math.random(10000))
 local SIDECAR_DIR = TMP_ROOT .. "/book.sdr"
 os.execute(string.format("mkdir -p %q", SIDECAR_DIR))
-package.loaded["koassistant_action_cache"] = nil
+package.loaded["koassistant.artifacts.action_cache"] = nil
 package.loaded["docsettings"] = nil
 package.loaded["util"] = nil
 package.loaded["luasettings"] = nil
@@ -151,7 +151,7 @@ package.loaded["util"] = {
 package.loaded["luasettings"] = {
     open = function() return { readSetting = function() return nil end, close = function() end } end,
 }
-local ActionCache = require("koassistant_action_cache")
+local ActionCache = require("koassistant.artifacts.action_cache")
 local DOC = TMP_ROOT .. "/book.epub"
 
 local LIVE_JSON = '{"characters":[{"name":"Tamsin Vael","description":"Keeps the light. Stubborn."}],'

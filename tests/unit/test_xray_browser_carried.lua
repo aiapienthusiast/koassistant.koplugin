@@ -21,7 +21,7 @@ local function setupPaths()
     local plugin_dir = tests_dir:match("(.+)/[^/]+$") or "."
     package.path = table.concat({
         plugin_dir .. "/?.lua",
-        plugin_dir .. "/koassistant_api/?.lua",
+        plugin_dir .. "/koassistant/api/?.lua",
         tests_dir .. "/?.lua",
         tests_dir .. "/lib/?.lua",
         package.path,
@@ -79,13 +79,13 @@ stub("ui/size", { padding = { default = 0, large = 0, fullscreen = 0 }, margin =
 -- The group the open book is in, and the dial's value, set per test
 local group_kind = "series"
 local GROUP_BOOKS = { "/b/vol1.epub", "/b/vol2.epub", "/b/vol3.epub" }
-stub("koassistant_book_groups", {
+stub("koassistant.books.book_groups", {
     KIND_SERIES = "series", KIND_PROJECT = "project", KIND_PLAIN = "plain",
     groupsFor = function() return { { id = "g1", name = "The Saga", kind = group_kind, books = GROUP_BOOKS } } end,
     kindOf = function(g) return g.kind end,
 })
 local dial
-local SDS = require("koassistant_doc_settings")
+local SDS = require("koassistant.storage.doc_settings")
 local saved_resolve = SDS.resolve
 SDS.resolve = function()
     return { readSetting = function(_self, key)
@@ -108,7 +108,7 @@ package.loaded["docsettings"] = package.loaded["docsettings"] or {
     getSidecarDir = function(_self, _doc_path, _force) return "/tmp" end,
     isHashLocationEnabled = function() return false end,
 }
-local ActionCache = require("koassistant_action_cache")
+local ActionCache = require("koassistant.artifacts.action_cache")
 local saved_artifacts = ActionCache.getAvailableArtifactsWithPinned
 ActionCache.getAvailableArtifactsWithPinned = function() return {} end
 -- The book's never-merge list, in memory: the carried list reads it each time
@@ -118,10 +118,10 @@ local saved_get_never, saved_add_never = ActionCache.getNeverMergePairs, ActionC
 ActionCache.getNeverMergePairs = function() return never_pairs end
 ActionCache.addNeverMergePair = function(_file, a, b) never_pairs[#never_pairs + 1] = { a, b } return true end
 
-local had_browser = package.loaded["koassistant_xray_browser"]
-package.loaded["koassistant_xray_browser"] = nil
-local XrayBrowser = require("koassistant_xray_browser")
-local XrayParser = require("koassistant_xray_parser")
+local had_browser = package.loaded["koassistant.xray.xray_browser"]
+package.loaded["koassistant.xray.xray_browser"] = nil
+local XrayBrowser = require("koassistant.xray.xray_browser")
+local XrayParser = require("koassistant.xray.xray_parser")
 
 -- ------------------------------------------------------------------ fixture
 local function xray()
@@ -705,7 +705,7 @@ SDS.resolve = saved_resolve
 ActionCache.getAvailableArtifactsWithPinned = saved_artifacts
 ActionCache.getNeverMergePairs, ActionCache.addNeverMergePair = saved_get_never, saved_add_never
 rawset(util, "splitToChars", saved_split)
-package.loaded["koassistant_xray_browser"] = had_browser
+package.loaded["koassistant.xray.xray_browser"] = had_browser
 for i = #saved, 1, -1 do package.loaded[saved[i].name] = saved[i].value end
 
 return TestRunner:summary()

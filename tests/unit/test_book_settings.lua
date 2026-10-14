@@ -1,4 +1,4 @@
--- Unit tests for koassistant_book_settings.lua
+-- Unit tests for koassistant/books/book_settings.lua
 -- Tests the pure per-book AI title/author override helpers (no UI, no API).
 
 local function setupPaths()
@@ -21,8 +21,8 @@ require("mock_koreader")
 -- Stub UI widgets the module requires at load time (not exercised by these tests)
 package.loaded["ui/widget/buttondialog"] = package.loaded["ui/widget/buttondialog"] or {}
 
-local BookSettings = require("koassistant_book_settings")
-local MessageBuilder = require("message_builder")
+local BookSettings = require("koassistant.books.book_settings")
+local MessageBuilder = require("koassistant.request.message_builder")
 
 -- Simple test framework (matches the other unit tests)
 local TestRunner = { passed = 0, failed = 0 }
@@ -424,7 +424,7 @@ end)
 -- Per-book translation/dictionary language overrides
 TestRunner:suite("applyLanguageOverride")
 
-local SystemPrompts = require("prompts.system_prompts")
+local SystemPrompts = require("koassistant.prompts.system_prompts")
 local KTL = BookSettings.KEY_TRANSLATION_LANG
 local KDL = BookSettings.KEY_DICTIONARY_LANG
 
@@ -548,7 +548,7 @@ end)
 -- This is the path the quiz-instruction builder runs in handlePredefinedPrompt.
 TestRunner:suite("quiz override reaches the emitted instructions")
 
-local QuizPrompt = require("koassistant_quiz_prompt")
+local QuizPrompt = require("koassistant.quiz.quiz_prompt")
 
 TestRunner:test("defaults (no override): 8 questions, medium, all three types", function()
     local instr = QuizPrompt.build(BookSettings.resolveQuiz(makeDocSettings({}), {}))
@@ -671,7 +671,7 @@ end)
 
 TestRunner:suite("getReadingTimeInRange fail-open")
 
-local StatsReader = require("koassistant_stats_reader")
+local StatsReader = require("koassistant.books.stats_reader")
 TestRunner:test("non-number args → nil", function()
     TestRunner:assertNil(StatsReader.getReadingTimeInRange("x", 1, 5))
     TestRunner:assertNil(StatsReader.getReadingTimeInRange(1, nil, 5))
@@ -1113,7 +1113,7 @@ end)
 
 TestRunner:test("getBackground: caps over-long text in characters, not bytes (B441)", function()
     local MAX = BookSettings.BACKGROUND_MAX_CHARS
-    local SR = require("koassistant_scope_resolver")
+    local SR = require("koassistant.request.scope_resolver")
     local out = BookSettings.getBackground(bgDs(string.rep("a", MAX + 500)))
     TestRunner:assertEqual(#out, MAX, "capped to the max")
     -- a non-Latin note keeps MAX characters (it used to be cut by bytes, about half as early)
@@ -1510,9 +1510,9 @@ TestRunner:test("the key is a per-book key and a group key", function()
     for _i, key in ipairs(BookSettings.SIDECAR_KEYS) do have[key] = true end
     TestRunner:assertEqual(have["koassistant_book_xray_carried"], true, "in SIDECAR_KEYS (reset, count, registry)")
     local group_keys = {}
-    for _i, key in ipairs(require("koassistant_group_settings").keys()) do group_keys[key] = true end
+    for _i, key in ipairs(require("koassistant.books.group_settings").keys()) do group_keys[key] = true end
     TestRunner:assertEqual(group_keys[BookSettings.KEY_XRAY_CARRIED], true, "a group can set it (the #116 ask)")
-    TestRunner:assertEqual(require("koassistant_group_settings").keyLabel(BookSettings.KEY_XRAY_CARRIED),
+    TestRunner:assertEqual(require("koassistant.books.group_settings").keyLabel(BookSettings.KEY_XRAY_CARRIED),
         "Carried entries", "named in confirms and toasts")
 end)
 
@@ -1532,7 +1532,7 @@ TestRunner:test("on by default; off and on at either layer; a book's on beats a 
     TestRunner:assertEqual(BookSettings.xrayTrackLabel("people", "off"), "Characters only, no status block", "label")
     TestRunner:assertEqual(BookSettings.xrayTrackLabel("people", nil), "Characters only", "label, status on")
     local group_keys = {}
-    for _i, key in ipairs(require("koassistant_group_settings").keys()) do group_keys[key] = true end
+    for _i, key in ipairs(require("koassistant.books.group_settings").keys()) do group_keys[key] = true end
     TestRunner:assertEqual(group_keys[BookSettings.KEY_XRAY_STATUS], true, "a group can set it")
     TestRunner:assertEqual(group_keys[BookSettings.KEY_XRAY_SPACING], true, "and the checkpoint spacing (B394 slice 5)")
     TestRunner:assertEqual(BookSettings.xraySpacingLabel(0.05), "every 5%", "spacing label")
@@ -1798,9 +1798,9 @@ TestRunner:test("the Tools picker's size row opens the size picker on the same t
     local plugin = presetPlugin({ tool_whole_text = "small" })
     local BD = package.loaded["ui/widget/buttondialog"]
     local orig_new, captured = BD.new, nil
-    local orig_ds_mod = package.loaded["koassistant_doc_settings"]
+    local orig_ds_mod = package.loaded["koassistant.storage.doc_settings"]
     BD.new = function(_self, o) captured = o; return o end
-    package.loaded["koassistant_doc_settings"] = { resolve = function() return ds end }
+    package.loaded["koassistant.storage.doc_settings"] = { resolve = function() return ds end }
     local ok, err = pcall(function()
         BookSettings.showToolsPosture({ plugin = plugin, target_override = "book" })
         TestRunner:assertEqual(tapRow(captured, "Read short texts whole:"),
@@ -1824,7 +1824,7 @@ TestRunner:test("the Tools picker's size row opens the size picker on the same t
             "Medium is stored as true, the settings row's own value")
     end)
     BD.new = orig_new
-    package.loaded["koassistant_doc_settings"] = orig_ds_mod
+    package.loaded["koassistant.storage.doc_settings"] = orig_ds_mod
     if not ok then error(err, 0) end
 end)
 

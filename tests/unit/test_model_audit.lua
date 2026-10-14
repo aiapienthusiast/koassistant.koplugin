@@ -14,7 +14,7 @@ local function setupPaths()
 
     package.path = table.concat({
         plugin_dir .. "/?.lua",
-        plugin_dir .. "/koassistant_api/?.lua",
+        plugin_dir .. "/koassistant/api/?.lua",
         tests_dir .. "/?.lua",
         tests_dir .. "/lib/?.lua",
         package.path,
@@ -262,7 +262,7 @@ TestRunner:check("reasoning_gated drafted (efforts accepted, default OFF)",
 TestRunner:check("max_completion_tokens note points at openai.lua",
     otext:find("openai.lua", 1, true) ~= nil)
 TestRunner:check("model_lists reminder present",
-    otext:find("koassistant_model_lists.lua", 1, true) ~= nil)
+    otext:find("koassistant/request/model_lists.lua", 1, true) ~= nil)
 
 --==========================================================================
 TestRunner:suite("draftStanzas: binary axis (deepseek-shaped)")
@@ -349,7 +349,7 @@ TestRunner:check("nil fetched tolerated (no-adapter providers)",
     ModelAudit.watchStatus("x", wcurated, nil) == "watching")
 TestRunner:check("every WATCH entry names an UNCURATED id (else the reminder is stale)",
     (function()
-        local ModelLists = require("koassistant_model_lists")
+        local ModelLists = require("koassistant.request.model_lists")
         for provider, entries in pairs(ModelAudit.WATCH) do
             local cset = {}
             for _i, id in ipairs(ModelLists[provider] or {}) do cset[id] = true end

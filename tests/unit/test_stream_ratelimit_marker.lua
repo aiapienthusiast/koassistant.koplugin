@@ -1,9 +1,9 @@
 -- The streaming consumer must learn the plan's per-minute allowance from the
 -- pipe marker the forked fetch child writes -- on BOTH transports.
 --
--- koassistant_api/base.lua writes RateLimits.PROTOCOL_MARKER BEFORE the body on
+-- koassistant/api/base.lua writes RateLimits.PROTOCOL_MARKER BEFORE the body on
 -- the macOS raw-SSL path and AFTER the body on the http.request path that every
--- device uses. stream_handler.lua's line loop returns out of the whole poll
+-- device uses. koassistant/request/stream_handler.lua's line loop returns out of the whole poll
 -- callback at "data: [DONE]" (and at the SSE/NDJSON error branches), so on the
 -- device transport the marker lands in partial_data and the session memo stays
 -- empty -- the #106 protection never arms before the first refusal.
@@ -25,7 +25,7 @@ local function setupPaths()
     local plugin_dir = tests_dir:match("(.+)/[^/]+$") or "."
     package.path = table.concat({
         plugin_dir .. "/?.lua",
-        plugin_dir .. "/koassistant_api/?.lua",
+        plugin_dir .. "/koassistant/api/?.lua",
         tests_dir .. "/?.lua",
         tests_dir .. "/lib/?.lua",
         package.path,
@@ -56,7 +56,7 @@ function TestRunner:assertTrue(v, msg) if not v then error(msg or "expected trut
 -- ------------------------------------------------------------------
 local SAVED_KEYS = {
     "ffi", "ffi/util", "ui/uimanager", "device",
-    "ui/widget/inputtext", "ui/widget/inputdialog", "stream_handler",
+    "ui/widget/inputtext", "ui/widget/inputdialog", "koassistant.request.stream_handler",
 }
 local saved = {}
 for _idx, k in ipairs(SAVED_KEYS) do saved[k] = package.loaded[k] end
@@ -172,9 +172,9 @@ function InputDialogStub:new(o)
 end
 package.loaded["ui/widget/inputdialog"] = InputDialogStub
 
-package.loaded["stream_handler"] = nil
-local StreamHandler = require("stream_handler")
-local RL = require("koassistant_rate_limits")
+package.loaded["koassistant.request.stream_handler"] = nil
+local StreamHandler = require("koassistant.request.stream_handler")
+local RL = require("koassistant.request.rate_limits")
 
 -- ------------------------------------------------------------------
 -- Fixtures. The marker line is produced by the module that writes it on the
@@ -431,7 +431,7 @@ end)
 
 -- ------------------------------------------------------------------
 RL._reset()
-package.loaded["stream_handler"] = nil
+package.loaded["koassistant.request.stream_handler"] = nil
 for _idx, k in ipairs(SAVED_KEYS) do package.loaded[k] = saved[k] end
 
 print(string.format("\n  test_stream_ratelimit_marker: %d passed, %d failed",

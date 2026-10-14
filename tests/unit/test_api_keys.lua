@@ -14,7 +14,7 @@ local function setupPaths()
 
     package.path = table.concat({
         plugin_dir .. "/?.lua",
-        plugin_dir .. "/koassistant_api/?.lua",
+        plugin_dir .. "/koassistant/api/?.lua",
         tests_dir .. "/?.lua",
         tests_dir .. "/lib/?.lua",
         package.path,
@@ -35,7 +35,7 @@ function TestRunner.assert(condition, message)
     end
 end
 
-local Base = require("koassistant_api.base")
+local Base = require("koassistant.api.base")
 
 -- Control the apikeys.lua the module under test sees. package.loaded is the seam:
 -- listApiKeys does require("apikeys") per call, so preloading a table serves it.

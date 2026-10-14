@@ -1,5 +1,5 @@
 -- Unit tests for the surrounding-context feature (surrounding_context_plan.md):
---   * koassistant_scope_resolver.lua — pure trims (paragraph window, modes, caps)
+--   * koassistant/request/scope_resolver.lua — pure trims (paragraph window, modes, caps)
 --   * Actions.effectiveSurroundingContextMode — per-action tri-state matrix
 --   * MessageBuilder — placeholder-in-place vs ambient-append, never both
 
@@ -21,10 +21,10 @@ setupPaths()
 
 require("mock_koreader")
 
-local ScopeResolver = require("koassistant_scope_resolver")
-local Actions = require("prompts.actions")
-local MessageBuilder = require("message_builder")
-local Templates = require("prompts.templates")
+local ScopeResolver = require("koassistant.request.scope_resolver")
+local Actions = require("koassistant.prompts.actions")
+local MessageBuilder = require("koassistant.request.message_builder")
+local Templates = require("koassistant.prompts.templates")
 
 -- Simple test framework (matches the other unit tests)
 local TestRunner = { passed = 0, failed = 0 }

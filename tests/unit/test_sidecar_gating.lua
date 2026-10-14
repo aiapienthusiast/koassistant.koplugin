@@ -16,8 +16,8 @@ Run: lua tests/run_tests.lua --unit
 package.path = package.path .. ";./?.lua;./?/init.lua"
 require("tests.lib.mock_koreader")
 
-local ContextExtractor = require("koassistant_context_extractor")
-local Actions = require("prompts.actions")
+local ContextExtractor = require("koassistant.request.context_extractor")
+local Actions = require("koassistant.prompts.actions")
 
 -- Test suite
 local TestRunner = {
@@ -91,8 +91,8 @@ package.loaded["docsettings"] = {
 
 -- Mock Notebook for sidecar reads
 local mock_notebook_content = ""
-local original_notebook = package.loaded["koassistant_notebook"]
-package.loaded["koassistant_notebook"] = {
+local original_notebook = package.loaded["koassistant.chat.notebook"]
+package.loaded["koassistant.chat.notebook"] = {
     read = function(path)
         if path then return mock_notebook_content end
         return ""
@@ -101,8 +101,8 @@ package.loaded["koassistant_notebook"] = {
 
 -- Mock ActionCache for cache tests
 local mock_cache_data = {}
-local original_action_cache = package.loaded["koassistant_action_cache"]
-package.loaded["koassistant_action_cache"] = {
+local original_action_cache = package.loaded["koassistant.artifacts.action_cache"]
+package.loaded["koassistant.artifacts.action_cache"] = {
     getXrayCache = function(path)
         return mock_cache_data.xray
     end,
@@ -1853,10 +1853,10 @@ local function runAll()
         package.loaded["docsettings"] = original_docsettings
     end
     if original_notebook then
-        package.loaded["koassistant_notebook"] = original_notebook
+        package.loaded["koassistant.chat.notebook"] = original_notebook
     end
     if original_action_cache then
-        package.loaded["koassistant_action_cache"] = original_action_cache
+        package.loaded["koassistant.artifacts.action_cache"] = original_action_cache
     end
 
     return TestRunner.failed == 0

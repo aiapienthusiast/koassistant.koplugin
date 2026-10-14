@@ -1,4 +1,4 @@
--- Run options (koassistant_run_options.lua, B345, docs/run_options_plan.md): the
+-- Run options (koassistant/request/run_options.lua, B345, docs/run_options_plan.md): the
 -- hold menu's "Run once with:" buttons per action and state, the dispatch-scoped
 -- model stash (B295: a model written for one action never rides into the next),
 -- the trust gate's mirror of the run option, and the saved-chat capture.
@@ -13,7 +13,7 @@ local function setupPaths()
     local plugin_dir = tests_dir:match("(.+)/[^/]+$") or "."
     package.path = table.concat({
         plugin_dir .. "/?.lua",
-        plugin_dir .. "/koassistant_api/?.lua",
+        plugin_dir .. "/koassistant/api/?.lua",
         tests_dir .. "/?.lua",
         tests_dir .. "/lib/?.lua",
         package.path,
@@ -21,7 +21,7 @@ local function setupPaths()
 end
 setupPaths()
 require("mock_koreader")
-local RunOptions = require("koassistant_run_options")
+local RunOptions = require("koassistant.request.run_options")
 local TestRunner = require("test_runner"):new()
 
 local TIERS = { fast = "claude-haiku-4-5" }
@@ -253,7 +253,7 @@ local function fakePlugin(features)
 end
 
 TestRunner:test("stateFor: live state for an unpinned prose action yields tier buttons on the active provider", function()
-    local ModelLists = require("koassistant_model_lists")
+    local ModelLists = require("koassistant.request.model_lists")
     local fast = ModelLists.resolveTierModel("anthropic", "fast")
     TestRunner:assertTrue(fast ~= nil, "anthropic has a fast tier")
     local plugin = fakePlugin({ provider = "anthropic", model = ModelLists.anthropic[1] })
@@ -374,7 +374,7 @@ end)
 
 -- ---------------------------------------------------------------- trust gate + saved state
 
-local Dialogs = require("koassistant_dialogs")
+local Dialogs = require("koassistant.ui.dialogs")
 
 TestRunner:test("trust gate: a run option's picked model beats the action's pin", function()
     local p = Dialogs.effectiveDispatchProvider(
@@ -476,7 +476,7 @@ end)
 -- ---------------------------------------------------------------- attachments
 
 TestRunner:test("attachments: a notebook reaches only a provider allowed to have it", function()
-    local A = require("koassistant_attachments")
+    local A = require("koassistant.request.attachments")
     local saved = A.notebookOverrideFor
     local override = nil
     A.notebookOverrideFor = function() return override end
@@ -497,7 +497,7 @@ TestRunner:test("attachments: a notebook reaches only a provider allowed to have
 end)
 
 TestRunner:test("saved chat state keeps a run option's model and reasoning; a chat pick wins", function()
-    local CHM = require("koassistant_chat_history_manager")
+    local CHM = require("koassistant.chat.chat_history_manager")
     local cs = CHM.captureControlState({ features = {
         _run_model = { provider = "openai", model = "gpt-5.5" }, _run_reasoning = "off" } })
     TestRunner:assertEqual(cs.model.provider, "openai", "model")

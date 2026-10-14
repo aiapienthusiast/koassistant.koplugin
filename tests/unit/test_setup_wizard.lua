@@ -1,4 +1,4 @@
--- Unit tests for koassistant_setup_wizard.lua pure helpers (2026-08-11).
+-- Unit tests for koassistant/ui/setup_wizard.lua pure helpers (2026-08-11).
 --
 -- The wizard's UI steps are device-tested; these pin the decision logic the
 -- steps stand on: the font install dir rule (maintainer 2026-08-11: the user
@@ -18,7 +18,7 @@ local function setupPaths()
 
     package.path = table.concat({
         plugin_dir .. "/?.lua",
-        plugin_dir .. "/koassistant_api/?.lua",
+        plugin_dir .. "/koassistant/api/?.lua",
         tests_dir .. "/?.lua",
         tests_dir .. "/lib/?.lua",
         package.path,
@@ -31,7 +31,7 @@ setupPaths()
 
 require("mock_koreader")
 
-local SetupWizard = require("koassistant_setup_wizard")
+local SetupWizard = require("koassistant.ui.setup_wizard")
 
 local TestRunner = {
     passed = 0,

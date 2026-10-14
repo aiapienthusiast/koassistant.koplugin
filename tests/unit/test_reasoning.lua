@@ -15,7 +15,7 @@ local function setupPaths()
 
     package.path = table.concat({
         plugin_dir .. "/?.lua",
-        plugin_dir .. "/koassistant_api/?.lua",
+        plugin_dir .. "/koassistant/api/?.lua",
         tests_dir .. "/?.lua",
         tests_dir .. "/lib/?.lua",
         package.path,
@@ -96,9 +96,9 @@ function TestRunner:summary()
 end
 
 -- Load modules
-local ModelConstraints = require("model_constraints")
+local ModelConstraints = require("koassistant.request.model_constraints")
 local ResponseParser = require("response_parser")
-local _ = require("koassistant_gettext")
+local _ = require("koassistant.core.gettext")
 
 print("")
 print(string.rep("=", 50))
@@ -1149,7 +1149,7 @@ TestRunner:test("action override still beats the sentinel", function()
 end)
 
 TestRunner:test("summaryLabel for sentinel says Model default", function()
-    local ReasoningPrefs = require("reasoning_prefs")
+    local ReasoningPrefs = require("koassistant.request.reasoning_prefs")
     local f = { reasoning_prefs = { stance = "maximum", models = {
         ["deepseek/deepseek-v4-pro"] = { state = "default" },
     } } }
@@ -1218,7 +1218,7 @@ end)
 
 TestRunner:suite("ReasoningPrefs store")
 
-local ReasoningPrefs = require("reasoning_prefs")
+local ReasoningPrefs = require("koassistant.request.reasoning_prefs")
 
 TestRunner:test("modelKey composes provider/model", function()
     TestRunner:assertEqual(ReasoningPrefs.modelKey("anthropic", "claude-opus-4-8"),
@@ -1276,7 +1276,7 @@ end)
 TestRunner:suite("B4: quiz reasoning disabled on adaptive-default-ON models")
 
 TestRunner:test("quiz action reasoning_config='off' emits thinking disabled on sonnet-5", function()
-    local Actions = require("prompts.actions")
+    local Actions = require("koassistant.prompts.actions")
     local quiz = Actions.getById("quiz")
     TestRunner:assertNotNil(quiz, "quiz action exists")
     TestRunner:assertEqual(quiz.reasoning_config, "off", "quiz pins reasoning off")

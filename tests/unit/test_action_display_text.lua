@@ -14,7 +14,7 @@ end
 setupPaths()
 require("mock_koreader")
 
-local ActionService = require("action_service")
+local ActionService = require("koassistant.prompts.action_service")
 local DT = ActionService.getActionDisplayText
 
 local TestRunner = { passed = 0, failed = 0 }

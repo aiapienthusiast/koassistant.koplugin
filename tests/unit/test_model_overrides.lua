@@ -1,6 +1,6 @@
 -- Unit tests for the capability resolution layer (agenda item 19):
 -- user overrides (custom_models.lua) + derived provider metadata + family-prefix
--- fallbacks, resolved behind the model_constraints.lua chokepoints.
+-- fallbacks, resolved behind the koassistant/request/model_constraints.lua chokepoints.
 -- No API calls.
 --
 -- Run: lua tests/run_tests.lua --unit
@@ -15,7 +15,7 @@ local function setupPaths()
 
     package.path = table.concat({
         plugin_dir .. "/?.lua",
-        plugin_dir .. "/koassistant_api/?.lua",
+        plugin_dir .. "/koassistant/api/?.lua",
         tests_dir .. "/?.lua",
         tests_dir .. "/lib/?.lua",
         package.path,
@@ -51,8 +51,8 @@ function TestRunner:check(name, condition, detail)
     end
 end
 
-local ModelOverrides = require("koassistant_model_overrides")
-local ModelConstraints = require("model_constraints")
+local ModelOverrides = require("koassistant.request.model_overrides")
+local ModelConstraints = require("koassistant.request.model_constraints")
 
 local function resetLayers()
     ModelOverrides._setUserForTests(false)     -- loaded, empty (avoid disk reads)

@@ -1,4 +1,4 @@
--- Unit tests for message_builder.lua (audit quick win, the deep one):
+-- Unit tests for koassistant/request/message_builder.lua (audit quick win, the deep one):
 -- ALL placeholders resolve here, and the file carries the plugin's oldest
 -- fixed gotcha (2026-02-07 replace_placeholder infinite loop) with no
 -- regression coverage until now.
@@ -21,8 +21,8 @@ package.loaded["logger"] = {
     dbg = function() end, err = function() end,
 }
 
-local MessageBuilder = require("message_builder")
-local Templates = require("prompts/templates")
+local MessageBuilder = require("koassistant.request.message_builder")
+local Templates = require("koassistant.prompts.templates")
 
 local TestRunner = { passed = 0, failed = 0 }
 function TestRunner:test(name, fn)

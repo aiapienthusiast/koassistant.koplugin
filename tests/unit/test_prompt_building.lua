@@ -29,8 +29,8 @@ setupPaths()
 
 require("mock_koreader")
 
-local MessageBuilder = require("message_builder")
-local ContextExtractor = require("koassistant_context_extractor")
+local MessageBuilder = require("koassistant.request.message_builder")
+local ContextExtractor = require("koassistant.request.context_extractor")
 
 -- Test suite
 local TestRunner = {
@@ -879,8 +879,8 @@ local function runGatingTests()
         scan = function() return { books = {}, by_status = {}, by_folder = {}, stats = { total = 3 } } end,
         format = function() return '3 books:\n- "Dune" by Frank Herbert' end,
     }
-    local saved_library_scanner = package.loaded["koassistant_library_scanner"]
-    package.loaded["koassistant_library_scanner"] = mock_library_scanner
+    local saved_library_scanner = package.loaded["koassistant.books.library_scanner"]
+    package.loaded["koassistant.books.library_scanner"] = mock_library_scanner
 
     TestRunner:test("library blocked when enable_library_scanning=false (default)", function()
         local extractor = createMockExtractor({})  -- nil = default disabled (opt-in)
@@ -982,7 +982,7 @@ local function runGatingTests()
             scan = function() return { books = {}, by_status = {}, by_folder = {}, stats = { total = 0 } } end,
             format = function() return "" end,
         }
-        package.loaded["koassistant_library_scanner"] = empty_scanner
+        package.loaded["koassistant.books.library_scanner"] = empty_scanner
         local extractor = createMockExtractor({
             enable_library_scanning = true,
             library_scan_folders = { "/test/books" },
@@ -994,7 +994,7 @@ local function runGatingTests()
             if msg:find("library (no books found)", 1, true) then found = true end
         end
         TestRunner:assert(found, "should contain 'library (no books found)'")
-        package.loaded["koassistant_library_scanner"] = mock_library_scanner  -- restore
+        package.loaded["koassistant.books.library_scanner"] = mock_library_scanner  -- restore
     end)
 
     -- =========================================================================
@@ -1041,7 +1041,7 @@ local function runGatingTests()
     end)
 
     -- Restore original module state
-    package.loaded["koassistant_library_scanner"] = saved_library_scanner
+    package.loaded["koassistant.books.library_scanner"] = saved_library_scanner
 
     -- =========================================================================
     -- Annotations Degradation (annotations → highlights fallback)
@@ -2389,14 +2389,14 @@ local function runSubstituteVariablesTests()
 
     -- Nudges
     TestRunner:test("substituteVariables: {conciseness_nudge} substituted", function()
-        local Templates = require("prompts.templates")
+        local Templates = require("koassistant.prompts.templates")
         local result = MessageBuilder.substituteVariables("Be brief. {conciseness_nudge}", {})
         TestRunner:assertNotContains(result, "{conciseness_nudge}")
         TestRunner:assertContains(result, Templates.CONCISENESS_NUDGE)
     end)
 
     TestRunner:test("substituteVariables: {hallucination_nudge} substituted", function()
-        local Templates = require("prompts.templates")
+        local Templates = require("koassistant.prompts.templates")
         local result = MessageBuilder.substituteVariables("Answer. {hallucination_nudge}", {})
         TestRunner:assertNotContains(result, "{hallucination_nudge}")
         TestRunner:assertContains(result, Templates.HALLUCINATION_NUDGE)

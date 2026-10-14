@@ -1,5 +1,5 @@
 -- Generates the code-derived tables of wiki/Providers-and-Models.md from
--- koassistant_model_lists.lua (B434): every curated provider's default and
+-- koassistant/request/model_lists.lua (B434): every curated provider's default and
 -- built-in list, the community hosts' built-in lists, and the tier picks. The
 -- page keeps each table between "<!-- generated: name -->" and
 -- "<!-- /generated: name -->" markers; this script rewrites those blocks in
@@ -63,7 +63,7 @@ local function name(id)
 end
 
 function Gen.generate(ML)
-    ML = ML or require("koassistant_model_lists")
+    ML = ML or require("koassistant.request.model_lists")
     local blocks = {}
 
     local rows = { "| Provider | Default | Also listed |", "|----------|---------|-------------|" }

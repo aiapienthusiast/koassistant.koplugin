@@ -16,7 +16,7 @@ end
 setupPaths()
 require("mock_koreader")
 
-local QPF = require("koassistant_dialogs").quickPresetForces
+local QPF = require("koassistant.ui.dialogs").quickPresetForces
 
 local TestRunner = { passed = 0, failed = 0 }
 function TestRunner:test(name, fn)

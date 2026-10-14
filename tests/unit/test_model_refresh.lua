@@ -27,7 +27,7 @@ end
 setupPaths()
 
 local TestRunner = require("test_runner"):new()
-local ModelLists = require("koassistant_model_lists")
+local ModelLists = require("koassistant.request.model_lists")
 
 local GEMINI_KNOWN = { "gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash" }
 local GEMINI_SHIPPED = { "gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash" }

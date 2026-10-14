@@ -20,7 +20,7 @@ local function setupPaths()
     local plugin_dir = tests_dir:match("(.+)/[^/]+$") or "."
     package.path = table.concat({
         plugin_dir .. "/?.lua",
-        plugin_dir .. "/koassistant_api/?.lua",
+        plugin_dir .. "/koassistant/api/?.lua",
         tests_dir .. "/?.lua",
         tests_dir .. "/lib/?.lua",
         package.path,
@@ -29,8 +29,8 @@ local function setupPaths()
 end
 local plugin_dir = setupPaths()
 require("mock_koreader")
-local Dialogs = require("koassistant_dialogs")
-local A = require("koassistant_attachments")
+local Dialogs = require("koassistant.ui.dialogs")
+local A = require("koassistant.request.attachments")
 local TestRunner = require("test_runner"):new()
 
 local function source(rel)
@@ -39,9 +39,9 @@ local function source(rel)
     f:close()
     return s
 end
-local dialogs_src = source("koassistant_dialogs.lua")
-local history_src = source("koassistant_chat_history_dialog.lua")
-local browser_src = source("koassistant_xray_browser.lua")
+local dialogs_src = source("koassistant/ui/dialogs.lua")
+local history_src = source("koassistant/chat/chat_history_dialog.lua")
+local browser_src = source("koassistant/xray/xray_browser.lua")
 
 -- Stubs this file installs, restored at the end (one Lua process runs every file).
 -- Taken from launchArtifactChat's own upvalues: earlier files in the suite swap
@@ -57,8 +57,8 @@ local function upvalue(fn, name)
     end
 end
 local UIManager = upvalue(Dialogs.launchArtifactChat, "UIManager") or require("ui/uimanager")
-local BTR = upvalue(Dialogs.launchArtifactChat, "BookToolRunner") or require("koassistant_book_tool_runner")
-local SDS = upvalue(Dialogs.launchArtifactChat, "SafeDocSettings") or require("koassistant_doc_settings")
+local BTR = upvalue(Dialogs.launchArtifactChat, "BookToolRunner") or require("koassistant.tools.book_tool_runner")
+local SDS = upvalue(Dialogs.launchArtifactChat, "SafeDocSettings") or require("koassistant.storage.doc_settings")
 local saved = {
     show = UIManager.show, queryWith = BTR.queryWith, resolve = SDS.resolve,
     override = A.notebookOverrideFor, getList = A.getList,
@@ -158,8 +158,8 @@ print("\n  [(b) a reply in a resumed chat]")
 
 TestRunner:test("every attachment message passes the send-time check", function()
     local offenders = {}
-    for _idx, rel in ipairs({ "koassistant_dialogs.lua", "koassistant_chat_history_dialog.lua",
-            "koassistant_chatgptviewer.lua", "main.lua", "koassistant_attachments.lua" }) do
+    for _idx, rel in ipairs({ "koassistant/ui/dialogs.lua", "koassistant/chat/chat_history_dialog.lua",
+            "koassistant/ui/chatgptviewer.lua", "main.lua", "koassistant/request/attachments.lua" }) do
         local n = 0
         for line in source(rel):gmatch("[^\n]*") do
             n = n + 1
@@ -261,8 +261,8 @@ for _idx, name in ipairs({ "ui/event", "ui/widget/menu", "ui/widget/textviewer" 
         package.loaded[name] = C
     end
 end
-local had_browser = package.loaded["koassistant_xray_browser"]
-local XrayBrowser = require("koassistant_xray_browser")
+local had_browser = package.loaded["koassistant.xray.xray_browser"]
+local XrayBrowser = require("koassistant.xray.xray_browser")
 
 local function chatAbout(features, entity)
     local captured
@@ -290,7 +290,7 @@ end)
 
 TestRunner:test("the freeform Send judges the block for its own provider", function()
     local expr = dialogs_src:match(
-        "if xray_context_prefix then\n%s*sel_text = (require%(\"koassistant_attachments\"%)%.xrayChatTextFor%(.-%))\n%s*end\n%s*table%.insert%(parts, '\"' %.%. sel_text")
+        "if xray_context_prefix then\n%s*sel_text = (require%(\"koassistant.request.attachments\"%)%.xrayChatTextFor%(.-%))\n%s*end\n%s*table%.insert%(parts, '\"' %.%. sel_text")
     TestRunner:assertTrue(expr, "the Send's selected-text expression")
     local text_for = assert(load("local highlighted_text, configuration, send_rv = ...; return " .. expr,
         "freeform Send"))
@@ -306,7 +306,7 @@ end)
 
 TestRunner:test("an action from the X-Ray chat judges the block for the action's provider", function()
     local p_eff = dialogs_src:find("local effective_provider = effectiveDispatchProvider(", 1, true)
-    local p_cut = dialogs_src:find("if xray_prefix then\n        message_data.highlighted_text = require(\"koassistant_attachments\").xrayChatTextFor(\n            message_data.highlighted_text, config.features, effective_provider)", 1, true)
+    local p_cut = dialogs_src:find("if xray_prefix then\n        message_data.highlighted_text = require(\"koassistant.request.attachments\").xrayChatTextFor(\n            message_data.highlighted_text, config.features, effective_provider)", 1, true)
     local p_build = dialogs_src:find("buildConsolidatedMessage(prompt, context, message_data", 1, true)
     TestRunner:assertTrue(p_eff and p_cut and p_build, "all three")
     TestRunner:assertTrue(p_eff < p_cut and p_cut < p_build, "after the dispatch provider, before the message")
@@ -320,7 +320,7 @@ SDS.resolve = saved.resolve
 A.notebookOverrideFor = saved.override
 A.getList = saved.getList
 Dialogs.showChatGPTDialog = saved.showChatGPTDialog
-package.loaded["koassistant_xray_browser"] = had_browser
+package.loaded["koassistant.xray.xray_browser"] = had_browser
 for _idx, name in ipairs(stubbed) do package.loaded[name] = nil end
 
 return TestRunner:summary()

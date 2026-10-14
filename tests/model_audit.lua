@@ -10,8 +10,8 @@
 --      output-token ceiling, tools acceptance, forced tool_choice (the runner's
 --      gather/final modes - the Z.AI wave-1.5 failure class a bare tools probe
 --      cannot see), and an SSE streaming smoke test.
---   3. DRAFT - emit copy-pasteable stanzas for model_constraints.lua plus
---      reminders for koassistant_model_lists.lua. NEVER auto-applied - a
+--   3. DRAFT - emit copy-pasteable stanzas for koassistant/request/model_constraints.lua plus
+--      reminders for koassistant/request/model_lists.lua. NEVER auto-applied - a
 --      human reviews the diff and places tiers by hand.
 --
 -- Usage:
@@ -82,10 +82,10 @@ local HAS_NETWORK = pcall(require, "ssl.https")
 require("mock_koreader")
 
 local JSON_OK, json = pcall(require, "json")
-local ModelLists = require("koassistant_model_lists")
-local ModelConstraints = require("model_constraints")
-local RateLimits = require("koassistant_rate_limits")
-local Defaults = require("koassistant_api.defaults")
+local ModelLists = require("koassistant.request.model_lists")
+local ModelConstraints = require("koassistant.request.model_constraints")
+local RateLimits = require("koassistant.request.rate_limits")
+local Defaults = require("koassistant.api.defaults")
 local TestConfig = require("test_config")
 
 local ModelAudit = {}
@@ -1234,7 +1234,7 @@ local function runDiscovery(provider, api_key, verbose)
             C.off)
     end
     if #diff.new > 0 then
-        printf("  %sNEW%s (not in koassistant_model_lists.lua):", C.green, C.off)
+        printf("  %sNEW%s (not in koassistant/request/model_lists.lua):", C.green, C.off)
         for _i, id in ipairs(diff.new) do
             printf("    + %-40s %sprobe: lua tests/model_audit.lua --probe %s %s%s",
                 id, C.dim, provider, id, C.off)
@@ -1368,7 +1368,7 @@ end
 -- The runner's real declarations (gather set incl. the empty-properties
 -- `done` tool — the field-found Gemini rejection class), probe-safe copy.
 local function realToolSpecs()
-    local ok, Runner = pcall(require, "koassistant_book_tool_runner")
+    local ok, Runner = pcall(require, "koassistant.tools.book_tool_runner")
     if not ok or type(Runner) ~= "table" then return nil end
     local specs = Runner.gather_declarations or Runner.function_declarations
     if type(specs) ~= "table" then return nil end
@@ -1438,7 +1438,7 @@ end
 -- Neutral tool-call parse via the plugin's OWN response transformers; falls
 -- back to the shared "openai" transformer for providers without one.
 local function parseToolCalls(decoded, provider)
-    local ResponseParser = require("koassistant_api.response_parser")
+    local ResponseParser = require("koassistant.api.response_parser")
     local ok, content = ResponseParser:parseResponse(decoded, provider)
     if not ok or type(content) ~= "table" or not content._tool_calls then
         if provider ~= "openai" then
@@ -1455,7 +1455,7 @@ end
 -- code: round-2 failure classes — gemini thought_signature, deepseek
 -- reasoning_content, orphaned call ids — live in the adapter's exact output).
 local function appendReplayTurn(adapter_key, messages, parsed)
-    local ToolWire = require("koassistant_api.tool_wire")
+    local ToolWire = require("koassistant.api.tool_wire")
     local adapter = ToolWire.adapters[adapter_key]
     if not adapter then return false end
     local executed = {}
@@ -2249,7 +2249,7 @@ local function probeGemini(model, api_key, verbose)
         else
             local messages = { { role = "user",
                 parts = { { text = TOOL_REPLAY_PROMPT } } } }
-            local ToolWire = require("koassistant_api.tool_wire")
+            local ToolWire = require("koassistant.api.tool_wire")
             local executed = {}
             for _i, call in ipairs(parsed.calls or {}) do
                 table.insert(executed, { call = call,
@@ -2382,7 +2382,7 @@ function ModelAudit.draftStanzas(facts, current)
     local provider, model = facts.provider, facts.model
     local profile = current.profile or {}
 
-    add("%s-- DRAFT for model_constraints.lua (REVIEW - never auto-applied) ------------%s",
+    add("%s-- DRAFT for koassistant/request/model_constraints.lua (REVIEW - never auto-applied) ------------%s",
         C.bold, C.off)
 
     -- Perplexity: presets carry no profile; a direct model's facts are the
@@ -2585,13 +2585,13 @@ function ModelAudit.draftStanzas(facts, current)
         add('    ["%s"] = %d,', model, facts.ceiling)
     end
 
-    -- Wire notes that live outside model_constraints.lua
+    -- Wire notes that live outside koassistant/request/model_constraints.lua
     if facts.needs_max_completion_tokens then
-        add("%s-- NOTE: needs max_completion_tokens - check the prefix rule in koassistant_api/openai.lua%s",
+        add("%s-- NOTE: needs max_completion_tokens - check the prefix rule in koassistant/api/openai.lua%s",
             C.yellow, C.off)
     end
 
-    add("%s-- koassistant_model_lists.lua (HUMAN decisions) ---------------------------%s",
+    add("%s-- koassistant/request/model_lists.lua (HUMAN decisions) ---------------------------%s",
         C.bold, C.off)
     add('--   %s array: add "%s" (position matters - first entry = provider default)', provider, model)
     add("--   _tiers: place by price/positioning (frontier/flagship/standard/fast/ultrafast)")
@@ -2660,8 +2660,8 @@ local function probeOllama(model, _verbose)
     printf("  %sserver: %s (override with KOA_OLLAMA_URL); local inference - legs can take a while%s",
         C.dim, root, C.off)
 
-    local OllamaHandler = require("koassistant_api.ollama")
-    local ResponseParser = require("koassistant_api.response_parser")
+    local OllamaHandler = require("koassistant.api.ollama")
+    local ResponseParser = require("koassistant.api.response_parser")
     local function handlerBody(history, config)
         config = config or {}
         config.model = model
@@ -2852,7 +2852,7 @@ end
 
 local function perplexityBuilt(model, api_key, opts)
     opts = opts or {}
-    local Handler = require("koassistant_api.perplexity")
+    local Handler = require("koassistant.api.perplexity")
     return Handler:buildRequestBody(
         opts.history or { { role = "user", content = opts.prompt or PROBE_PROMPT } },
         { model = model, api_key = api_key, enable_web_search = opts.web ~= false,
@@ -3204,7 +3204,7 @@ function ModelAudit.minimalBuilt(provider, model, api_key)
     ModelConstraints.applyReasoningParams(provider, api_params,
         ModelConstraints.resolveReasoning(provider, model, { global_stance = "minimal" }))
     if next(api_params) == nil then return nil end
-    local ok, Handler = pcall(require, "koassistant_api." .. provider)
+    local ok, Handler = pcall(require, "koassistant.api." .. provider)
     if not ok or type(Handler) ~= "table" or type(Handler.buildRequestBody) ~= "function" then
         return nil
     end
@@ -3455,7 +3455,7 @@ end
 --- The largest max_tokens a built-in action pins (scanned: a new pin is
 --- covered without editing this file).
 function ModelAudit.largestActionPin()
-    local Actions = require("prompts.actions")
+    local Actions = require("koassistant.prompts.actions")
     local best = 0
     for _idx, ctx in ipairs({ "highlight", "book", "library", "general", "special" }) do
         for _id, a in pairs(type(Actions[ctx]) == "table" and Actions[ctx] or {}) do
@@ -3464,7 +3464,7 @@ function ModelAudit.largestActionPin()
             if n and n > best then best = n end
         end
     end
-    local mok, Merge = pcall(require, "koassistant_xray_merge")
+    local mok, Merge = pcall(require, "koassistant.xray.xray_merge")
     local m = mok and type(Merge) == "table" and type(Merge.API_PARAMS) == "table"
         and tonumber(Merge.API_PARAMS.max_tokens)
     if m and m > best then best = m end
@@ -3502,7 +3502,7 @@ local function runPins(providers, apikeys, verbose)
     banner(string.format("ACTION PINS: max_tokens %d to every listed model with no recorded ceiling", pin))
     local counts = { ok = 0, heals = 0, drift = 0, stale = 0, inconclusive = 0, error = 0, skipped = 0 }
     local stanzas = {}
-    local Base = require("koassistant_api.base")
+    local Base = require("koassistant.api.base")
     for _i, p in ipairs(providers) do
         local todo = {}
         for _j, m in ipairs(type(ModelLists[p]) == "table" and ModelLists[p] or {}) do
@@ -3511,7 +3511,7 @@ local function runPins(providers, apikeys, verbose)
             end
         end
         local key = keyFor(apikeys, p)
-        local hok, Handler = pcall(require, "koassistant_api." .. p)
+        local hok, Handler = pcall(require, "koassistant.api." .. p)
         if #todo == 0 then
             if verbose then printf("  %s%s: every model has a ceiling%s", C.dim, p, C.off) end
         elseif not TestConfig.isValidApiKey(key) then
@@ -3566,7 +3566,7 @@ local function runPins(providers, apikeys, verbose)
         counts.ok, counts.heals, counts.drift, counts.stale, counts.inconclusive, counts.error,
         counts.skipped, C.off)
     if #stanzas > 0 then
-        printf("\n  %sCeilings the refusals stated (review, then add to model_constraints.lua so the first request lands):%s",
+        printf("\n  %sCeilings the refusals stated (review, then add to koassistant/request/model_constraints.lua so the first request lands):%s",
             C.bold, C.off)
         for _idx, s in ipairs(stanzas) do print("  " .. s:gsub("\n", "\n  ")) end
     end
@@ -3635,11 +3635,11 @@ local KEY_LABEL = { ok = "OK", key = "KEY", credits = "CREDITS", plan = "PLAN", 
 
 local function runKeys(providers, apikeys, verbose)
     banner("KEYS: one request per keyed provider, on its default model")
-    local Base = require("koassistant_api.base")
+    local Base = require("koassistant.api.base")
     local counts = { ok = 0, key = 0, credits = 0, plan = 0, rate = 0, model = 0, error = 0 }
     for _i, p in ipairs(providers) do
         local key, model = keyFor(apikeys, p), ModelAudit.defaultModel(p)
-        local hok, Handler = pcall(require, "koassistant_api." .. p)
+        local hok, Handler = pcall(require, "koassistant.api." .. p)
         local verdict, note
         if not TestConfig.isValidApiKey(key) then
             note = "no API key"

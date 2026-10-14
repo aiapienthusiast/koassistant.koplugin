@@ -38,8 +38,8 @@ _G.G_reader_settings = _G.G_reader_settings or {
     flush = function() end,
 }
 local TestRunner = require("test_runner"):new()
-local Actions = require("prompts.actions")
-local ActionCache = require("koassistant_action_cache")
+local Actions = require("koassistant.prompts.actions")
+local ActionCache = require("koassistant.artifacts.action_cache")
 
 -- the key an action's whole-document result is cached under
 local function cacheKey(action)
