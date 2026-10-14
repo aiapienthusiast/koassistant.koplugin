@@ -25,10 +25,11 @@ Public API:
   ImageGenerator.effectiveProvider(features, main_provider, settings)
       → provider|nil, reason — the button-visibility / dispatch gate.
   ImageGenerator.buildPrompt / buildRequest / parseResponse / errorMessage /
-      imageExtension — pure: the framed prompt, the request as sent, the
-      answer read, the refusal worded, the file type from the bytes
-      (unit-tested; tests/inspect.lua --image and the audit's image probe
-      build and read with them).
+      imageExtension — pure: the framed prompt, the request as sent (Shape
+      and Detail turned into each model's own parameters, with
+      pictureFacts / shapeRatio), the answer read, the refusal worded, the
+      file type from the bytes (unit-tested; tests/inspect.lua --image and
+      the audit's image probe build and read with them).
   ImageGenerator.getImagesDir()
   Index API (book associations): readIndex, recordImage, removeIndexEntries,
   booksWithImages, updateIndexForMove, getIndexFilename.
@@ -623,24 +624,120 @@ function ImageGenerator.allowedFrame(opts, features, provider)
     return opts
 end
 
+-- ---------------------------------------------------------------------------
+-- Shape and Detail (image round S2): one pair of settings for every provider,
+-- turned here into what each model takes (the providers' docs and probes,
+-- 2026-10-14)
+-- ---------------------------------------------------------------------------
+
+-- The aspect ratios a model takes; a shape goes out as the nearest of them
+-- (xAI's grok-imagine-image took 3:4 and 4:3 in a probe, 2026-10-14)
+local XAI_V1_RATIOS = { "1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16" }
+local XAI_V2_RATIOS = { "1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16", "2:1", "1:2",
+    "19.5:9", "9:19.5", "20:9", "9:20", "21:9", "5:2" }
+local GEMINI_RATIOS = { "1:1", "5:4", "4:5", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16", "21:9" }
+-- The three sizes every gpt-image model takes, with their ratios
+local OPENAI_SIZES = { { "1024x1024", 1 }, { "1536x1024", 3 / 2 }, { "1024x1536", 2 / 3 } }
+
+local SHAPES = { fit = true, portrait = true, landscape = true, square = true, auto = true }
+local DETAILS = { draft = true, standard = true, best = true }
+
+local function ratioValue(spec)
+    local w, h = spec:match("^([%d%.]+):([%d%.]+)$")
+    return tonumber(w) / tonumber(h)
+end
+
+-- The entry of `list` nearest to `ratio`, compared on a log scale so a
+-- portrait and a landscape miss weigh alike; value_of reads an entry's ratio
+local function nearest(list, ratio, value_of)
+    local best, best_d
+    for _idx, entry in ipairs(list) do
+        local d = math.abs(math.log(value_of(entry) / ratio))
+        if not best_d or d < best_d - 1e-9 then best, best_d = entry, d end
+    end
+    return best
+end
+
+--- What an image model takes for Shape and Detail: `ratios` (its aspect
+--- ratios; OpenAI takes sizes instead), `custom_size` (any width and height in
+--- steps of 16: OpenAI's 2.5 models), `best_quality` (the quality Best sends to
+--- OpenAI), `detail` (false where the model has one quality and size: xAI's
+--- grok-imagine-image, Gemini's Flash Lite). Pure; the Detail row asks it too.
+function ImageGenerator.pictureFacts(provider, model)
+    model = type(model) == "string" and model or ""
+    if provider == "openai" then
+        local v25 = model:find("^gpt%-image%-2%.5") ~= nil
+        return { custom_size = v25, best_quality = v25 and "xhigh" or "high", detail = true }
+    elseif provider == "xai" then
+        -- 2.0 and its point releases; a dated id (grok-imagine-image-2026-…) is 1.0
+        if model:find("^grok%-imagine%-image%-%d+%.%d") then
+            return { ratios = XAI_V2_RATIOS, detail = true }
+        end
+        return { ratios = XAI_V1_RATIOS, detail = false }
+    elseif provider == "gemini" then
+        return { ratios = GEMINI_RATIOS, detail = model:find("flash%-lite") == nil }
+    end
+    return { detail = false }
+end
+
+--- The proportions a Shape asks for, width over height; nil = the model
+--- chooses. Fit my screen is the screen as the reader holds it, 3:4 (an
+--- e-reader held upright) when no screen is known.
+function ImageGenerator.shapeRatio(shape, screen)
+    if shape == "auto" then return nil end
+    if shape == "portrait" then return 2 / 3 end
+    if shape == "landscape" then return 3 / 2 end
+    if shape == "square" then return 1 end
+    local w = screen and tonumber(screen.w)
+    local h = screen and tonumber(screen.h)
+    if w and h and w > 0 and h > 0 then return w / h end
+    return 3 / 4
+end
+
+-- OpenAI's size: Fit my screen on a model that takes any size is the
+-- screen's own proportions (the long edge 1536, the short one in steps of 16,
+-- the ratio held within 1:3 to 3:1: 1152x1536 on a 3:4 screen); every other
+-- shape and model gets the nearest of the three common sizes
+local function openaiSize(ratio, shape, custom)
+    if custom and shape == "fit" then
+        ratio = math.max(1 / 3, math.min(3, ratio))
+        local short = math.floor(1536 * math.min(ratio, 1 / ratio) / 16 + 0.5) * 16
+        if ratio < 1 then return string.format("%dx1536", short) end
+        return string.format("1536x%d", short)
+    end
+    return nearest(OPENAI_SIZES, ratio, function(e) return e[2] end)[1]
+end
+
 --- The request one image costs (B064): the URL, the authentication header's
---- name and the body, exactly as sent. Pure; tests/inspect.lua --image and the
---- audit's image probe build with it too.
+--- name and the body, exactly as sent. Shape and Detail come from features
+--- (image_gen_shape, default Fit my screen; image_gen_detail, default Draft);
+--- `screen` = { w, h } is the screen Fit my screen fits. Pure;
+--- tests/inspect.lua --image and the audit's image probe build with it too.
 --- @return table|nil { url, key_header, body } (nil for a provider with no image endpoint)
-function ImageGenerator.buildRequest(provider, model, prompt, features)
+function ImageGenerator.buildRequest(provider, model, prompt, features, screen)
     features = features or {}
     local endpoint = IMAGE_ENDPOINTS[provider]
     if not endpoint then return nil end
+    local shape = SHAPES[features.image_gen_shape] and features.image_gen_shape or "fit"
+    local detail = DETAILS[features.image_gen_detail] and features.image_gen_detail or "draft"
+    local ratio = ImageGenerator.shapeRatio(shape, screen)
+    local facts = ImageGenerator.pictureFacts(provider, model)
     if endpoint.is_gemini then
         -- generateContent with image output; model in the path. The Gemini
         -- Content Filter setting applies here as it does to chat (a book
         -- passage is refused by Google's default filter more often)
+        local image_config = {}
+        if ratio then image_config.aspectRatio = nearest(facts.ratios, ratio, ratioValue) end
+        if facts.detail then image_config.imageSize = (detail == "best") and "2K" or "1K" end
         return {
             url = endpoint.url .. "/" .. model .. ":generateContent",
             key_header = endpoint.key_header,
             body = {
                 contents = { { role = "user", parts = { { text = prompt } } } },
-                generationConfig = { responseModalities = { "IMAGE", "TEXT" } },
+                generationConfig = {
+                    responseModalities = { "IMAGE", "TEXT" },
+                    imageConfig = next(image_config) and image_config or nil,
+                },
                 safetySettings = require("koassistant.api.gemini").safetySettings(features),
             },
         }
@@ -651,16 +748,20 @@ function ImageGenerator.buildRequest(provider, model, prompt, features)
     -- size/quality/style but honors response_format.
     local body = { model = model, prompt = prompt, n = 1 }
     if provider == "openai" then
-        -- "default"/nil = omit the param and let the API decide
-        local size = str(features.image_gen_size)
-        if size and size ~= "default" then body.size = size end
-        local quality = str(features.image_gen_quality)
-        if quality and quality ~= "default" then body.quality = quality end
+        if ratio then body.size = openaiSize(ratio, shape, facts.custom_size) end
+        body.quality = (detail == "best") and facts.best_quality
+            or (detail == "standard") and "medium" or "low"
+        -- JPEG: faster to make (OpenAI) and to show, and a fraction of the
+        -- PNG's size on the device; a grayscale screen gains nothing from PNG
+        body.output_format = "jpeg"
     else
         body.response_format = "b64_json"
         if provider == "xai" then
-            local aspect = str(features.image_gen_aspect)
-            if aspect and aspect ~= "default" then body.aspect_ratio = aspect end
+            if ratio then body.aspect_ratio = nearest(facts.ratios, ratio, ratioValue) end
+            if facts.detail then
+                body.quality = (detail == "draft") and "low" or "medium"
+                body.resolution = (detail == "best") and "2k" or "1k"
+            end
         end
     end
     return { url = endpoint.url, key_header = endpoint.key_header, body = body }
@@ -809,8 +910,11 @@ function ImageGenerator._generateImpl(word, config_table, settings, book_info, o
     local final_prompt = ImageGenerator.buildPrompt(description, opts, features)
 
     -- The request as the provider takes it (OpenAI-style images API, or
-    -- Gemini's generateContent with image output)
-    local request = ImageGenerator.buildRequest(provider, resolved_model, final_prompt, features)
+    -- Gemini's generateContent with image output); Fit my screen fits the
+    -- screen as it is held now
+    local Screen = require("device").screen
+    local request = ImageGenerator.buildRequest(provider, resolved_model, final_prompt, features,
+        { w = Screen:getWidth(), h = Screen:getHeight() })
     local request_body_str = BaseHandler.encodeBody(request.body)
 
     -- Progress window: the tool-status dialog (setText handle + Stop button)

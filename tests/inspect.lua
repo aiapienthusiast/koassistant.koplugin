@@ -566,7 +566,8 @@ local function inspectImage(provider, options)
         after_limit = "sentence",
     }, features)
     local model = ModelLists.resolveImageModel(provider, options.model)
-    local request = ImageGenerator.buildRequest(provider, model, prompt, features)
+    -- The defaults (Fit my screen, Draft), fitted to a 3:4 e-reader screen
+    local request = ImageGenerator.buildRequest(provider, model, prompt, features, { w = 1264, h = 1680 })
     print("POST " .. request.url)
     print("Auth header: " .. request.key_header)
     print(require("json").encode(request.body))

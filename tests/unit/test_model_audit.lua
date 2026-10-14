@@ -949,6 +949,15 @@ TestRunner:check("image diff: new ids, a dated snapshot of a listed one is not n
 TestRunner:check("image diff: retired and skipped ids still listed are reported apart",
     d.retired_listed[1] == "old-image" and d.skipped[1] == "gpt-image-1")
 
+-- The probe's pixel size (S2): PNG's IHDR, a JPEG's frame marker after an APP0
+local png = "\137PNG\r\n\26\n\0\0\0\13IHDR\0\0\4\128\0\0\6\0rest"
+local pw, ph = ModelAudit.imageDimensions(png)
+TestRunner:check("image size: PNG", pw == 1152 and ph == 1536)
+local jpg = "\255\216" .. "\255\224\0\16JFIF\0\1\1\0\0\1\0\1\0\0" .. "\255\192\0\17\8\4\128\3\96\3"
+local jw, jh = ModelAudit.imageDimensions(jpg)
+TestRunner:check("image size: JPEG (width 864, height 1152)", jw == 864 and jh == 1152)
+TestRunner:check("image size: anything else is unread", ModelAudit.imageDimensions("GIF89a") == nil)
+
 -- Summary
 print(string.format("\n%d passed, %d failed", TestRunner.passed, TestRunner.failed))
 return TestRunner.failed == 0

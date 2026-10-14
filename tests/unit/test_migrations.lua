@@ -389,4 +389,38 @@ TestRunner:test("translate_to never clobbers an existing translation_language", 
     TestRunner:assertEqual(f.translate_to, nil)
 end)
 
+--------------------------------------------------------------------------------
+TestRunner:suite("Image Shape and Detail (image round S2)")
+
+TestRunner:test("OpenAI's size and quality become Shape and Detail while OpenAI draws", function()
+    local f = { image_gen_provider = "openai", image_gen_size = "1536x1024", image_gen_quality = "high" }
+    TestRunner:assertTrue(Migrations.run(f))
+    TestRunner:assertEqual(f.image_gen_shape, "landscape")
+    TestRunner:assertEqual(f.image_gen_detail, "best")
+    TestRunner:assertEqual(f.image_gen_size, nil)
+    TestRunner:assertEqual(f.image_gen_quality, nil)
+end)
+
+TestRunner:test("the drawing provider's row first; OpenAI's quality stays OpenAI's", function()
+    local f = { provider = "xai", image_gen_size = "1024x1024", image_gen_aspect = "9:16",
+                image_gen_quality = "high" }
+    Migrations.run(f)
+    TestRunner:assertEqual(f.image_gen_shape, "portrait", "xAI draws: its aspect ratio wins")
+    TestRunner:assertEqual(f.image_gen_detail, nil, "no other provider starts drawing at Best")
+    TestRunner:assertEqual(f.image_gen_aspect, nil)
+    TestRunner:assertEqual(f.image_gen_quality, nil)
+end)
+
+TestRunner:test("Default takes the new defaults; a Shape already set is kept", function()
+    local f = { provider = "openai", image_gen_size = "default", image_gen_quality = "default" }
+    Migrations.run(f)
+    TestRunner:assertEqual(f.image_gen_shape, nil, "nil = Fit my screen")
+    TestRunner:assertEqual(f.image_gen_detail, nil, "nil = Draft")
+    TestRunner:assertEqual(f.image_gen_size, nil)
+    f = { image_gen_shape = "square", image_gen_aspect = "16:9" }
+    Migrations.run(f)
+    TestRunner:assertEqual(f.image_gen_shape, "square")
+    TestRunner:assertEqual(Migrations.run(f), false, "the old keys are gone: nothing runs again")
+end)
+
 return TestRunner:summary()

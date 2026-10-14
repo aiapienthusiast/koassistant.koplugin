@@ -17,9 +17,9 @@ Three providers offer image generation, each with its own models (the first is t
 
 | Provider | Models | Notes |
 |---|---|---|
-| **OpenAI** | `gpt-image-2.5-flare` (default: fast, about 11 s at low quality), `gpt-image-2.5-sunburst` (finest detail, slower), `gpt-image-2`, `gpt-image-1-mini` | size (1024x1024, landscape, portrait) and quality (low / medium / high) settings |
-| **xAI (Grok)** | `grok-imagine-image` (default: fast, about 7 s, the cheapest), `grok-imagine-image-2.0` (better pictures, about twice the price) | an aspect ratio setting (1:1, 16:9, 9:16, 3:2, 2:3) |
-| **Gemini** | `gemini-nano-banana-2.1` (default: Nano Banana 2.1, Google's everyday image model), `gemini-3.1-flash-lite-image` (the fastest and cheapest, a few seconds), `gemini-3-pro-image` (Nano Banana Pro: finest detail, slower) | no size or quality settings; requests follow **Settings → Advanced → Provider Settings → Gemini Content Filter**, as chat does |
+| **OpenAI** | `gpt-image-2.5-flare` (default: fast, about 11 s at Draft), `gpt-image-2.5-sunburst` (finest detail, slower), `gpt-image-2`, `gpt-image-1-mini` | the 2.5 models draw your screen's exact proportions under Fit my screen (1152x1536 on most e-readers), the others the nearest of 1024x1024, 1536x1024 and 1024x1536; Detail sets the quality |
+| **xAI (Grok)** | `grok-imagine-image` (default: fast, about 7 s, the cheapest), `grok-imagine-image-2.0` (better pictures, about twice the price) | Detail applies to `grok-imagine-image-2.0` only |
+| **Gemini** | `gemini-nano-banana-2.1` (default: Nano Banana 2.1, Google's everyday image model), `gemini-3.1-flash-lite-image` (the fastest and cheapest, a few seconds), `gemini-3-pro-image` (Nano Banana Pro: finest detail, slower) | Flash Lite draws at one size, so Detail does not apply to it; requests follow **Settings → Advanced → Provider Settings → Gemini Content Filter**, as chat does |
 
 A model you picked that has left this list keeps working (`gpt-image-1.5`, `gpt-image-1`, `chatgpt-image-latest`, `gemini-3.1-flash-image`). xAI retires `grok-imagine-image-quality` on November 2, 2026, so a pick of it goes out as `grok-imagine-image-2.0`, the model xAI answers it with.
 
@@ -31,17 +31,17 @@ Image generation has its own provider and model, independent of your chat provid
 
 - **Provider**: Follow main provider (the default: your current chat provider, when it can generate images) or OpenAI, xAI (Grok) or Gemini. An explicit pick works whatever chat provider is active, with that provider's own key.
 - **OpenAI model**, **xAI model**, **Gemini model**: a model per provider, each defaulting to Default (the provider's first, recommended model).
-- **OpenAI size** and **OpenAI quality**: dimensions and quality tier, OpenAI only.
-- **Aspect ratio**: xAI only.
+- **Shape**, for every provider: **Fit my screen** (the default: your screen's proportions as you hold it, so the picture fills an e-reader's page), **Portrait**, **Landscape**, **Square**, or **Let the model choose** (the provider decides, and often draws a square or a wide picture). Each model gets the nearest proportions it can draw.
+- **Detail**, for every provider: **Draft** (the default: the fastest and cheapest), **Standard** or **Best** (the slowest and costs the most). It sets OpenAI's quality (low, medium, high; xhigh on the 2.5 models), the quality and size of `grok-imagine-image-2.0` (low quality at Draft, medium above it, and twice the size at Best) and Gemini's size (2K at Best, 1K otherwise). It is grayed out while the model in use has a single setting: `grok-imagine-image` and Gemini Flash Lite.
 - **Include book title/author in prompt** and **Include surrounding text in prompt** (both on by default): whether the prompt is framed with the book's title and author and a short slice of the surrounding text, so illustrations match the work's setting and era. A framed prompt also tells the model to put no text, titles or captions in the image. Turn both off for a prompt that is just your selection. The frame follows the same rules as chat: the title and author go only as far as **Settings → Chat & Export Settings → Book Info in Chat** (or the book's own value in Book Settings) allows, so None sends neither and Title only sends the title; and the text after your selection is cut the way chat's context is, by **Settings → Highlight Settings → Context Direction** and, while [spoiler protection](Spoiler-Protection) is on, **Context Under Spoiler Protection**.
 - **Prompt template…**: the exact prompt the image API will receive, with your framing switches applied.
 - **Generated images…**: opens the gallery.
 
-A provider's model, size, quality and aspect ratio rows can be changed while that provider makes the images: the one **Provider** names, or your chat provider under Follow main provider. The other providers' rows are grayed out, and the values they hold apply when that provider is used. A size, quality or aspect ratio left at Default is left out of the request, so the provider decides.
+A provider's model row can be changed while that provider makes the images: the one **Provider** names, or your chat provider under Follow main provider. The other providers' model rows are grayed out, and the models they hold apply when that provider is used. Shape and Detail apply to whichever provider makes the images.
 
 ## Where images are stored
 
-Generated images are kept, not temporary, in `koassistant_images` under KOReader's data folder (for example `~/.config/koreader/koassistant_images` on a Linux desktop). Each file is named with its creation date and time plus the start of the selected text, so the folder is self-describing, and carries the type the provider sent: `.png` from OpenAI, `.jpg` from Gemini and xAI. They are your data: preserved across plugin updates, and no reset or uninstall removes them. They are not part of KOAssistant backups; copy the folder yourself when moving to another device ([Backups and Updates](Backups-and-Updates)).
+Generated images are kept, not temporary, in `koassistant_images` under KOReader's data folder (for example `~/.config/koreader/koassistant_images` on a Linux desktop). Each file is named with its creation date and time plus the start of the selected text, so the folder is self-describing, and carries the type of its contents: `.jpg` for new images (KOAssistant asks OpenAI for JPEG, a fraction of a PNG's size and quicker to open, and Gemini and xAI send JPEG), `.png` for images made by earlier versions. They are your data: preserved across plugin updates, and no reset or uninstall removes them. They are not part of KOAssistant backups; copy the folder yourself when moving to another device ([Backups and Updates](Backups-and-Updates)).
 
 ## The gallery
 

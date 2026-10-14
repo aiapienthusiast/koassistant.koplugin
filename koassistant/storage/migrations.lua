@@ -410,6 +410,36 @@ function Migrations.run(features)
     needs_save = true
   end
 
+  -- ONE-TIME migration (image round S2, 2026-10-14): OpenAI's size and quality
+  -- rows and xAI's aspect ratio row became Shape and Detail, one pair for every
+  -- image provider. A picked shape keeps its meaning (the drawing provider's
+  -- row first when both were picked); OpenAI's quality becomes the Detail only
+  -- while OpenAI draws, so no other provider starts drawing dearer pictures.
+  -- Default, which left it to the provider, takes the new defaults (Fit my
+  -- screen, Draft). The old keys go, so this runs once and needs no stamp.
+  if features.image_gen_size ~= nil or features.image_gen_quality ~= nil
+      or features.image_gen_aspect ~= nil then
+    local shapes = {
+      ["1024x1024"] = "square", ["1536x1024"] = "landscape", ["1024x1536"] = "portrait",
+      ["1:1"] = "square", ["16:9"] = "landscape", ["3:2"] = "landscape",
+      ["9:16"] = "portrait", ["2:3"] = "portrait",
+    }
+    local details = { low = "draft", medium = "standard", high = "best" }
+    local pick = features.image_gen_provider
+    local draws = (pick ~= nil and pick ~= "auto") and pick or features.provider
+    local first, second = features.image_gen_size, features.image_gen_aspect
+    if draws == "xai" then first, second = second, first end
+    if features.image_gen_shape == nil then
+      features.image_gen_shape = shapes[first] or shapes[second]
+    end
+    if features.image_gen_detail == nil and draws == "openai" then
+      features.image_gen_detail = details[features.image_gen_quality]
+    end
+    features.image_gen_size, features.image_gen_quality, features.image_gen_aspect = nil, nil, nil
+    needs_save = true
+    logger.info("KOAssistant: Moved the image size, quality and aspect settings to Shape and Detail")
+  end
+
   return needs_save
 end
 

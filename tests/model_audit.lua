@@ -36,7 +36,10 @@
 --   lua tests/model_audit.lua --images [providers]     # the image lists (_image_models) against
 --                                                      # what openai, xai and gemini list (free)
 --   lua tests/model_audit.lua --image-probe <provider> <model>   # ONE image through the plugin's
---                                                      # own builder and reader (costs cents)
+--                                                      # own builder and reader (costs cents) at
+--                                                      # the defaults (Fit my screen on a 3:4
+--                                                      # screen, Draft) or --shape S / --detail D;
+--                                                      # prints the picture's real pixel size
 --   Every mode that sends requests ends with SPEND: the tokens each reply reported,
 --   per provider, and an estimate at OpenRouter's list prices (its public catalog,
 --   free). Discovery also lists where a NEW direct id is served but not curated
@@ -3839,24 +3842,68 @@ end
 local IMAGE_PROBE_PASSAGE = "The lighthouse stood on the black rocks at the edge of the bay, its lamp dark, "
     .. "while gulls wheeled over the grey water."
 
--- One image through the plugin's own builder and reader, at the cheapest
--- setting the provider takes (OpenAI quality low). Saves it under TMPDIR.
-local function runImageProbe(provider, model, api_key)
+--- An image's width and height from its header (PNG's IHDR, a JPEG's frame
+--- marker); nil for anything else. Pure: the probe says what the provider
+--- really drew, whatever shape was asked.
+function ModelAudit.imageDimensions(bytes)
+    if type(bytes) ~= "string" then return nil end
+    if bytes:sub(1, 8) == "\137PNG\r\n\26\n" and #bytes >= 24 then
+        local function u32(i)
+            local a, b, c, d = bytes:byte(i, i + 3)
+            return ((a * 256 + b) * 256 + c) * 256 + d
+        end
+        return u32(17), u32(21)
+    end
+    if bytes:sub(1, 2) ~= "\255\216" then return nil end
+    local i = 3
+    while i + 8 <= #bytes do
+        if bytes:byte(i) ~= 0xFF then return nil end
+        local marker = bytes:byte(i + 1)
+        if marker == 0xFF then
+            i = i + 1 -- a fill byte
+        else
+            -- SOF0 to SOF15 carry the size; C4, C8 and CC are other markers
+            if marker >= 0xC0 and marker <= 0xCF and marker ~= 0xC4 and marker ~= 0xC8 and marker ~= 0xCC then
+                return bytes:byte(i + 7) * 256 + bytes:byte(i + 8), bytes:byte(i + 5) * 256 + bytes:byte(i + 6)
+            end
+            i = i + 2 + bytes:byte(i + 2) * 256 + bytes:byte(i + 3)
+        end
+    end
+    return nil
+end
+
+-- The screen Fit my screen fits in the probe: a 3:4 e-reader held upright
+local PROBE_SCREEN = { w = 1264, h = 1680 }
+
+-- One image through the plugin's own builder and reader, at the plugin's
+-- defaults (Fit my screen, Draft) or the shape and detail given. Saves it
+-- under TMPDIR.
+local function runImageProbe(provider, model, api_key, shape, detail)
     banner("IMAGE PROBE " .. provider .. " / " .. model)
     if not TestConfig.isValidApiKey(api_key) then
         printf("  %sno API key for %s in apikeys.lua%s", C.red, provider, C.off)
         return false
     end
     local ImageGenerator = require("koassistant.images.image_generator")
-    local features = {}
-    if provider == "openai" then features.image_gen_quality = "low" end
+    local features = { image_gen_shape = shape, image_gen_detail = detail }
     local prompt = ImageGenerator.buildPrompt(IMAGE_PROBE_PASSAGE, {
         book_metadata = { title = "The Lighthouse Keeper", author = "A. Writer" } }, features)
-    local request = ImageGenerator.buildRequest(provider, model, prompt, features)
+    local request = ImageGenerator.buildRequest(provider, model, prompt, features, PROBE_SCREEN)
     if not request then
         printf("  %s%s has no image endpoint in image_generator.lua%s", C.red, provider, C.off)
         return false
     end
+    -- What Shape and Detail became for this model
+    local b, sent = request.body, {}
+    local ic = type(b.generationConfig) == "table" and b.generationConfig.imageConfig or {}
+    for _i, k in ipairs({ "size", "quality", "output_format", "aspect_ratio", "resolution" }) do
+        if b[k] then table.insert(sent, k .. " " .. tostring(b[k])) end
+    end
+    for _i, k in ipairs({ "aspectRatio", "imageSize" }) do
+        if ic[k] then table.insert(sent, k .. " " .. tostring(ic[k])) end
+    end
+    printf("  sent (%s, %s): %s", shape or "fit", detail or "draft",
+        #sent > 0 and table.concat(sent, ", ") or "no shape or detail parameters")
     local headers = { [request.key_header] = request.key_header == "Authorization"
         and ("Bearer " .. api_key) or api_key }
     RUN.provider, RUN.model = provider, model
@@ -3882,8 +3929,9 @@ local function runImageProbe(provider, model, api_key)
         .. "koassistant_image_probe_" .. provider .. "_" .. model:gsub("[^%w%.%-]", "_") .. "." .. ext
     local f = io.open(path, "wb")
     if f then f:write(result.bytes); f:close() end
-    printf("  %sOK%s in %.1f s: %s, %d KB -> %s", C.green, C.off, secs, ext,
-        math.floor(#result.bytes / 1024 + 0.5), path)
+    local w, h = ModelAudit.imageDimensions(result.bytes)
+    printf("  %sOK%s in %.1f s: %s %s, %d KB -> %s", C.green, C.off, secs, ext,
+        w and (w .. "x" .. h) or "(size unread)", math.floor(#result.bytes / 1024 + 0.5), path)
     if type(decoded) == "table" then
         if type(decoded.usage) == "table" and tonumber(decoded.usage.cost_in_usd_ticks) then
             printf("  cost: $%.4f (xAI's own figure)", tonumber(decoded.usage.cost_in_usd_ticks) / 1e10)
@@ -3983,6 +4031,7 @@ local function main()
     -- arg parsing
     local providers, verbose = {}, false
     local mode, probe_provider, probe_model = "discover", nil, nil
+    local image_shape, image_detail
     local recheck_ceilings = false
     local i = 1
     while i <= #arg do
@@ -3990,7 +4039,8 @@ local function main()
         if a == "--help" or a == "-h" then
             print("Usage: lua tests/model_audit.lua [providers...] [--probe <provider> <model>] " ..
                   "[--probe-new] [--recheck [--ceilings]] [--pins] [--keys] [--images] " ..
-                  "[--image-probe <provider> <model>] [--verbose]")
+                  "[--image-probe <provider> <model> [--shape fit|portrait|landscape|square|auto] " ..
+                  "[--detail draft|standard|best]] [--verbose]")
             os.exit(0)
         elseif a == "--verbose" or a == "-v" then
             verbose = true
@@ -4022,6 +4072,13 @@ local function main()
                 print("--image-probe needs <provider> <model>")
                 os.exit(1)
             end
+        elseif a == "--shape" or a == "--detail" then
+            if not arg[i + 1] then
+                printf("%s needs a value (see --help)", a)
+                os.exit(1)
+            end
+            if a == "--shape" then image_shape = arg[i + 1] else image_detail = arg[i + 1] end
+            i = i + 1
         elseif a:match("^%-") then
             printf("unknown option: %s (see --help)", a)
             os.exit(1)
@@ -4058,7 +4115,8 @@ local function main()
     end
 
     if mode == "image-probe" then
-        finish(runImageProbe(probe_provider, probe_model, keyFor(apikeys, probe_provider)) and 0 or 1)
+        finish(runImageProbe(probe_provider, probe_model, keyFor(apikeys, probe_provider),
+            image_shape, image_detail) and 0 or 1)
     end
 
     if mode == "keys" then

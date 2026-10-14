@@ -47,27 +47,30 @@ local function optionText(options, value)
     return tostring(value)
 end
 
-local IMAGE_SIZE_OPTIONS = {
-    { value = "default", text = _("Default") },
-    { value = "1024x1024", text = "1024x1024" },
-    { value = "1536x1024", text = _("1536x1024 (landscape)") },
-    { value = "1024x1536", text = _("1024x1536 (portrait)") },
+-- Whether the Detail row means anything for the model making the images: a
+-- model with one quality and size (xAI's grok-imagine-image, Gemini's Flash
+-- Lite) grays it
+local function imageDetailApplies(plugin)
+    local provider = imageRowsProvider(plugin)
+    if not ModelLists.getImageModels(provider) then return true end
+    local f = plugin.settings:readSetting("features") or {}
+    local model = ModelLists.resolveImageModel(provider, f["image_gen_model_" .. provider])
+    return require("koassistant.images.image_generator").pictureFacts(provider, model).detail
+end
+
+-- Shape and Detail: one pair for every image provider (image round S2)
+local IMAGE_SHAPE_OPTIONS = {
+    { value = "fit", text = _("Fit my screen") },
+    { value = "portrait", text = _("Portrait") },
+    { value = "landscape", text = _("Landscape") },
+    { value = "square", text = _("Square") },
+    { value = "auto", text = _("Let the model choose") },
 }
 
-local IMAGE_QUALITY_OPTIONS = {
-    { value = "default", text = _("Default") },
-    { value = "low", text = _("Low") },
-    { value = "medium", text = _("Medium") },
-    { value = "high", text = _("High") },
-}
-
-local IMAGE_ASPECT_OPTIONS = {
-    { value = "default", text = _("Default") },
-    { value = "1:1", text = "1:1" },
-    { value = "16:9", text = "16:9" },
-    { value = "9:16", text = "9:16" },
-    { value = "3:2", text = "3:2" },
-    { value = "2:3", text = "2:3" },
+local IMAGE_DETAIL_OPTIONS = {
+    { value = "draft", text = _("Draft") },
+    { value = "standard", text = _("Standard") },
+    { value = "best", text = _("Best") },
 }
 
 -- Helper: Build model list string from capabilities
@@ -3080,43 +3083,29 @@ local SettingsSchema = {
                             separator = true,
                         },
                         {
-                            id = "image_gen_size",
+                            id = "image_gen_shape",
                             type = "radio",
                             text_func = function(plugin)
                                 local f = plugin.settings:readSetting("features") or {}
-                                return T(_("OpenAI size: %1"), optionText(IMAGE_SIZE_OPTIONS, f.image_gen_size))
+                                return T(_("Shape: %1"), optionText(IMAGE_SHAPE_OPTIONS, f.image_gen_shape or "fit"))
                             end,
-                            help_text = _("Image dimensions (OpenAI only). Default lets the API decide."),
-                            path = "features.image_gen_size",
-                            default = "default",
-                            options = IMAGE_SIZE_OPTIONS,
-                            enabled_func = function(plugin) return imageRowsProvider(plugin) == "openai" end,
+                            help_text = _("The picture's proportions, for every image provider.\n\nFit my screen matches your screen as you hold it, so the picture fills an e-reader's page. Portrait, Landscape and Square are fixed. Let the model choose leaves it to the provider, which often draws a square or a wide picture.\n\nEach model gets the nearest proportions it can draw; OpenAI's 2.5 models draw your screen's own."),
+                            path = "features.image_gen_shape",
+                            default = "fit",
+                            options = IMAGE_SHAPE_OPTIONS,
                         },
                         {
-                            id = "image_gen_quality",
+                            id = "image_gen_detail",
                             type = "radio",
                             text_func = function(plugin)
                                 local f = plugin.settings:readSetting("features") or {}
-                                return T(_("OpenAI quality: %1"), optionText(IMAGE_QUALITY_OPTIONS, f.image_gen_quality))
+                                return T(_("Detail: %1"), optionText(IMAGE_DETAIL_OPTIONS, f.image_gen_detail or "draft"))
                             end,
-                            help_text = _("Higher quality is slower and costs more (OpenAI only)."),
-                            path = "features.image_gen_quality",
-                            default = "default",
-                            options = IMAGE_QUALITY_OPTIONS,
-                            enabled_func = function(plugin) return imageRowsProvider(plugin) == "openai" end,
-                        },
-                        {
-                            id = "image_gen_aspect",
-                            type = "radio",
-                            text_func = function(plugin)
-                                local f = plugin.settings:readSetting("features") or {}
-                                return T(_("Aspect ratio: %1"), optionText(IMAGE_ASPECT_OPTIONS, f.image_gen_aspect))
-                            end,
-                            help_text = _("Output aspect ratio (xAI only). Default lets the API decide."),
-                            path = "features.image_gen_aspect",
-                            default = "default",
-                            options = IMAGE_ASPECT_OPTIONS,
-                            enabled_func = function(plugin) return imageRowsProvider(plugin) == "xai" end,
+                            help_text = _("How much detail a picture gets, for every image provider. Draft is the fastest and cheapest; Best is the slowest and costs the most.\n\nOpenAI: quality low, medium or high (xhigh on the 2.5 models). xAI: grok-imagine-image-2.0 draws at low or medium quality, and Best at 2k. Gemini: Best draws at 2K, Draft and Standard at 1K.\n\nGrayed out while the model in use has a single setting (grok-imagine-image, Gemini Flash Lite)."),
+                            path = "features.image_gen_detail",
+                            default = "draft",
+                            options = IMAGE_DETAIL_OPTIONS,
+                            enabled_func = function(plugin) return imageDetailApplies(plugin) end,
                             separator = true,
                         },
                         -- Prompt framing (2026-08-13): what surrounds the raw
