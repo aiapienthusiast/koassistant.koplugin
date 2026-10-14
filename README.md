@@ -1,6 +1,7 @@
 # KOAssistant
 
 [![GitHub Release](https://img.shields.io/github/v/release/zeeyado/koassistant.koplugin)](https://github.com/zeeyado/koassistant.koplugin/releases/latest)
+[![Wiki](https://img.shields.io/badge/docs-wiki-blue)](https://github.com/zeeyado/koassistant.koplugin/wiki)
 [![License: GPL-3.0](https://img.shields.io/github/license/zeeyado/koassistant.koplugin)](LICENSE)
 [![AI-translated](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fhosted.weblate.org%2Fapi%2Fprojects%2Fkoassistant%2Fstatistics%2F&query=%24.fuzzy_percent&suffix=%25&label=AI-translated&color=8ab4f8&cacheSeconds=3600)](https://hosted.weblate.org/engage/koassistant/)
 [![Human-reviewed](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fhosted.weblate.org%2Fapi%2Fprojects%2Fkoassistant%2Fstatistics%2F&query=%24.translated_percent&suffix=%25&label=human-reviewed&color=brightgreen&cacheSeconds=3600)](https://hosted.weblate.org/engage/koassistant/)
@@ -215,7 +216,7 @@ The [Wiki](https://github.com/zeeyado/koassistant.koplugin/wiki) holds the refer
 
 ## Contributing
 
-Contributions welcome: bug reports and feature ideas in [Issues](https://github.com/zeeyado/koassistant.koplugin/issues), questions and setups in [Discussions](https://github.com/zeeyado/koassistant.koplugin/discussions), pull requests for code and for the documentation (the wiki pages are the `wiki/` folder of this repository), and translations of the plugin's UI on [Weblate](https://hosted.weblate.org/engage/koassistant/).
+Contributions welcome: bug reports and feature ideas in [Issues](https://github.com/zeeyado/koassistant.koplugin/issues), questions and setups in [Discussions](https://github.com/zeeyado/koassistant.koplugin/discussions), pull requests for code and for the documentation (the wiki pages are the `wiki/` folder of this repository: open a page's file there, press the pencil icon, and GitHub prepares the pull request), and translations of the plugin's UI on [Weblate](https://hosted.weblate.org/engage/koassistant/).
 
 **Translations.** The UI is available in 26 languages, all pre-translated by AI and marked "needs editing" on Weblate; human review is very welcome, and a new language is one issue or Weblate request away. If you prefer the original UI, **Settings → Display Settings → Plugin UI Language** switches to English.
 

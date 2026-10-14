@@ -15,10 +15,10 @@ Code changes are welcome as pull requests. The plugin is Lua on the KOReader plu
 
 ## Editing this wiki
 
-The pages you are reading are the `wiki/` folder of the [repository](https://github.com/zeeyado/koassistant.koplugin), one Markdown file per page, published to the GitHub wiki with every release. GitHub's own wiki editor is not the route: the published pages are replaced from `wiki/` at each release. To fix or extend a page:
+The pages you are reading are the `wiki/` folder of the [repository](https://github.com/zeeyado/koassistant.koplugin), one Markdown file per page, published to the GitHub wiki with every release. The wiki itself cannot be edited: a change goes through the repository, where it is reviewed like code. To fix or extend a page:
 
-1. Edit the page's file under `wiki/` on a fork of the repository, or open an issue quoting the sentence that is wrong.
-2. Open a pull request. It is reviewed like a code change and lands on the next release's wiki.
+1. Open the page's file under [`wiki/`](https://github.com/zeeyado/koassistant.koplugin/tree/main/wiki) on GitHub and press the pencil icon. GitHub forks the repository and prepares the pull request for you; no git knowledge needed. If that is more than you want to do, open an issue quoting the sentence that is wrong.
+2. Submit the pull request. It is reviewed like a code change and lands on the live wiki with the next release.
 
 Three rules keep the pages navigable (the test suite checks them): links between pages are written `[text](Page-Name)` or `[text](Page-Name#section-anchor)`, never with `.md`; images are absolute URLs; menu paths are written in full, from the top of the KOAssistant menu (`Settings → Reading & Library → X-Ray`, never a shorthand that skips a level), and KOReader's own menus as "KOReader's gear menu → …". Each topic has one owner page, listed in the sidebar; another page that touches it links there instead of repeating it.
 
