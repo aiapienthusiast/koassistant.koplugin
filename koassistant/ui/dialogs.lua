@@ -10352,43 +10352,6 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
             local open_doc = has_open_book and ui_instance.document or nil
             local caches = ActionCache.getAvailableArtifactsWithPinned(artifact_file, nil, open_doc)
 
-            local function openArtifact(cache, on_select)
-                if cache.is_section_xray_group then
-                    local ArtifactBrowser = require("koassistant.artifacts.artifact_browser")
-                    local AskGPT = plugin
-                    ArtifactBrowser:_showSectionXrayGroupPopup(
-                        cache.data, artifact_file,
-                        book_metadata and book_metadata.title, AskGPT,
-                        cache._excluded_section_key, on_select)
-                elseif cache.is_section_group then
-                    local ArtifactBrowser = require("koassistant.artifacts.artifact_browser")
-                    ArtifactBrowser:_showSectionGroupPopup(
-                        cache.data, artifact_file,
-                        book_metadata and book_metadata.title, plugin,
-                        cache.section_type, cache._excluded_section_key, on_select)
-                elseif cache.is_wiki_group then
-                    local ArtifactBrowser = require("koassistant.artifacts.artifact_browser")
-                    ArtifactBrowser:_showWikiGroupPopup(cache.data, artifact_file, plugin,
-                        book_metadata and book_metadata.title, on_select)
-                elseif cache.is_pinned_group then
-                    local ArtifactBrowser = require("koassistant.artifacts.artifact_browser")
-                    ArtifactBrowser:_showPinnedGroupPopup(cache.data, artifact_file,
-                        book_metadata and book_metadata.title, on_select)
-                elseif cache.is_image_group then
-                    local ImageBrowser = require("koassistant.images.image_browser")
-                    ImageBrowser.show({ book_file = artifact_file,
-                        book_title = book_metadata and book_metadata.title })
-                elseif cache.is_xray_versions_group then
-                    plugin:_showXrayCheckpointList({ file = artifact_file,
-                        book_title = book_metadata and book_metadata.title })
-                elseif cache.is_per_action then
-                    plugin:viewCachedAction({ text = cache.name }, cache.key, cache.data,
-                        { file = artifact_file, book_title = book_metadata and book_metadata.title })
-                else
-                    plugin:showCacheViewer(cache)
-                end
-            end
-
             local function formatDisplayText(cache)
                 if cache.is_pinned_group or cache.is_section_group or cache.is_wiki_group
                     or cache.is_image_group or cache.is_xray_versions_group then
@@ -10409,19 +10372,22 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                             table.insert(btn_rows, {{
                                 text = formatDisplayText(cache),
                                 callback = function()
-                                    if cache.is_section_group or cache.is_wiki_group or cache.is_pinned_group then
-                                        local selector = plugin._cache_selector
-                                        openArtifact(cache, function()
+                                    -- The shared opener (B490) with this dialog's
+                                    -- book: the bare row took the open book's file
+                                    -- and title (B493). The popup and this dialog
+                                    -- close when an artifact opens (a group's popup
+                                    -- stacks until a pick)
+                                    local selector = plugin._cache_selector
+                                    require("koassistant.artifacts.artifact_browser").openRow(cache, {
+                                        plugin = plugin, file = artifact_file,
+                                        title = book_metadata and book_metadata.title,
+                                        author = book_metadata and book_metadata.author,
+                                        before_open = function()
                                             UIManager:close(selector)
                                             UIManager:close(input_dialog)
                                             if plugin then plugin.current_input_dialog = nil end
-                                        end)
-                                    else
-                                        UIManager:close(plugin._cache_selector)
-                                        UIManager:close(input_dialog)
-                                        if plugin then plugin.current_input_dialog = nil end
-                                        openArtifact(cache)
-                                    end
+                                        end,
+                                    })
                                 end,
                             }})
                         end
