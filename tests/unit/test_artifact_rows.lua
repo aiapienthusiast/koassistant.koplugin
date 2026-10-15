@@ -43,7 +43,9 @@ stubModule("docsettings", {
             if key == "doc_props" then return { title = "Title of " .. path:match("([^/]+)$") } end
         end }
     end,
-    getSidecarDir = function(_self, path) return path .. ".sdr" end,
+    -- each storage location its own folder, so the sidecar migration a cache
+    -- read tries never finds the current file at an "alternate" place
+    getSidecarDir = function(_self, path, loc) return path .. (loc and ("." .. loc) or "") .. ".sdr" end,
     isHashLocationEnabled = function() return false end,
 })
 -- The widgets the browser shows: kept as tables, and UIManager records the
@@ -137,6 +139,10 @@ local pins = {
         { id = "p2", name = "Pin two", result = "r", timestamp = 35 } },
 }
 local IMAGE_BOOKS = { [BOOK_A] = { count = 4, modified = 20 } }
+
+-- The real getters, for the parse count at the end
+local real_getters = { get = ActionCache.get, getSections = ActionCache.getSections,
+    getSectionXrays = ActionCache.getSectionXrays, getWikiEntries = ActionCache.getWikiEntries }
 
 stubField(ActionCache, "get", function(path, key)
     local book = caches[path]
@@ -731,6 +737,23 @@ TestRunner:test("the versions list and the version actions resolve the named boo
         TestRunner:assertTrue(body:find("local file = (opts and opts.file) or (self.ui", 1, true) ~= nil,
             fn .. " resolves the named book first")
     end
+end)
+
+-- ---------------------------------------------------------------------------
+-- B491: a listing parses the book's cache once (it parsed it 23 times: once
+-- per saved kind, per section kind and for the wiki entries). Last in the
+-- file: it puts the real getters back over the fixture's.
+-- ---------------------------------------------------------------------------
+
+print("\n  [one parse per listing]")
+
+TestRunner:test("a listing parses the book's cache once", function()
+    local parses = 0
+    -- loadCache asks for the path once per parse; nil = an empty cache
+    stubField(ActionCache, "getPath", function() parses = parses + 1 return nil end)
+    for name, fn in pairs(real_getters) do stubField(ActionCache, name, fn) end
+    ActionCache.getAvailableArtifactsWithPinned(BOOK_A, nil, nil, { image_books = {} })
+    TestRunner:assertEqual(parses, 1, "one parse per listing")
 end)
 
 -- ---------------------------------------------------------------------------

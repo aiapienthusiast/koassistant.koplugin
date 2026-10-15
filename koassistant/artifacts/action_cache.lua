@@ -403,9 +403,10 @@ end
 --- Get cached entry for an action
 --- @param document_path string The document file path
 --- @param action_id string The action ID (e.g., "xray", "recap")
+--- @param loaded table|nil the book's cache already loaded (a listing parses it once, B491)
 --- @return table|nil entry The cached entry, or nil if not found
-function ActionCache.get(document_path, action_id)
-    local cache = loadCache(document_path)
+function ActionCache.get(document_path, action_id, loaded)
+    local cache = loaded or loadCache(document_path)
     local entry = cache[action_id]
     if entry and entry.version == CACHE_VERSION then
         return entry
@@ -650,10 +651,14 @@ ActionCache.PER_ACTION_ARTIFACTS = PER_ACTION_ARTIFACTS
 --- @return table Array of { name, type_name, key, data, is_per_action } entries
 function ActionCache.getAvailableArtifacts(document_path, exclude_key, doc)
     if not document_path then return {} end
+    -- ONE parse of the book's cache for the whole listing (B491: it was 23,
+    -- about 0.4 s on an e-reader for a large cache, on every file-browser
+    -- long-press and View Artifacts popup)
+    local loaded = loadCache(document_path)
     local available = {}
     for _idx, key in ipairs(ARTIFACT_KEYS) do
         if key ~= exclude_key then
-            local entry = ActionCache.get(document_path, key)
+            local entry = ActionCache.get(document_path, key, loaded)
             if entry and entry.result then
                 table.insert(available, {
                     name = ARTIFACT_NAMES[key] or key,
@@ -699,7 +704,7 @@ function ActionCache.getAvailableArtifacts(document_path, exclude_key, doc)
     end
     -- Add section X-Ray entries as a group (no position-based promotion here;
     -- surfacing is done in the action popups themselves)
-    local sections = ActionCache.getSectionXrays(document_path)
+    local sections = ActionCache.getSectionXrays(document_path, loaded)
     if #sections > 0 then
         local count = #sections
         if exclude_key then
@@ -727,7 +732,7 @@ function ActionCache.getAvailableArtifacts(document_path, exclude_key, doc)
     for _idx, sec_type in ipairs(ActionCache.SECTION_GROUP_ORDER) do
         local prefix = ActionCache.SECTION_PREFIXES[sec_type]
         if prefix then
-            local type_sections = ActionCache.getSections(document_path, prefix)
+            local type_sections = ActionCache.getSections(document_path, prefix, loaded)
             if #type_sections > 0 then
                 local type_count = #type_sections
                 if exclude_key then
@@ -753,7 +758,7 @@ function ActionCache.getAvailableArtifacts(document_path, exclude_key, doc)
         end
     end
     -- Add wiki entries group if any exist
-    local wikis = ActionCache.getWikiEntries(document_path)
+    local wikis = ActionCache.getWikiEntries(document_path, loaded)
     if #wikis > 0 then
         table.insert(available, {
             name = string.format(_("AI Wiki Entries (%d)"), #wikis),
@@ -1046,10 +1051,11 @@ end
 
 --- Get all wiki entries for a document, sorted alphabetically by item name.
 --- @param document_path string The document file path
+--- @param loaded table|nil the book's cache already loaded (a listing parses it once, B491)
 --- @return table Array of { key, label, category_key, item_name, data }
-function ActionCache.getWikiEntries(document_path)
+function ActionCache.getWikiEntries(document_path, loaded)
     if not document_path then return {} end
-    local cache = loadCache(document_path)
+    local cache = loaded or loadCache(document_path)
     local entries = {}
     local prefix = ActionCache.WIKI_PREFIX
     local prefix_len = #prefix
@@ -2290,10 +2296,11 @@ end
 --- Get all sections for a given prefix, sorted by start page.
 --- @param document_path string The document file path
 --- @param prefix string The section prefix (e.g., ActionCache.SECTION_XRAY_PREFIX)
+--- @param loaded table|nil the book's cache already loaded (a listing parses it once, B491)
 --- @return table Array of { key, label, data } sorted by scope_start_page
-function ActionCache.getSections(document_path, prefix)
+function ActionCache.getSections(document_path, prefix, loaded)
     if not document_path or not prefix then return {} end
-    local cache = loadCache(document_path)
+    local cache = loaded or loadCache(document_path)
     local sections = {}
     local prefix_len = #prefix
     for key, entry in pairs(cache) do
@@ -2422,8 +2429,8 @@ end
 --- Get all section X-Rays for a document, sorted by start page.
 --- @param document_path string The document file path
 --- @return table Array of { key, label, data } sorted by scope_start_page
-function ActionCache.getSectionXrays(document_path)
-    return ActionCache.getSections(document_path, ActionCache.SECTION_XRAY_PREFIX)
+function ActionCache.getSectionXrays(document_path, loaded)
+    return ActionCache.getSections(document_path, ActionCache.SECTION_XRAY_PREFIX, loaded)
 end
 
 --- Get count of section X-Rays for a document.
