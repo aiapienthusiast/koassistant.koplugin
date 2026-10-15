@@ -10174,8 +10174,8 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
       -- (round 25 — archives are never strandable, whatever the document type;
       -- round 26 — nor whether the book happens to be open: the ladder rows
       -- above are open-book-only, this one has no such reason)
-      local pg_file = (self.ui and self.ui.document and self.ui.document.file)
-        or (opts and opts.file)
+      local pg_file = (opts and opts.file)
+        or (self.ui and self.ui.document and self.ui.document.file)
       local pg_ac = require("koassistant.artifacts.action_cache")
       local pg_arch = pg_file and (pg_ac.getXrayCheckpointCount(pg_file)
         + pg_ac.getXrayLadderCount(pg_file)) or 0
@@ -12929,7 +12929,8 @@ function AskGPT:_showSectionXrayList(opts)
   local ActionCache = require("koassistant.artifacts.action_cache")
   local ButtonDialog = require("ui/widget/buttondialog")
 
-  local file = (self.ui and self.ui.document and self.ui.document.file) or (opts and opts.file)
+  -- The book the caller names, the open book only when none is named (B492)
+  local file = (opts and opts.file) or (self.ui and self.ui.document and self.ui.document.file)
   if not file then return end
 
   local sections = ActionCache.getSectionXrays(file)
@@ -12938,8 +12939,10 @@ function AskGPT:_showSectionXrayList(opts)
     return
   end
 
-  -- Reconvert XPointers to current pages if book is open (font-size independence)
+  -- Reconvert XPointers to current pages if book is open (font-size independence);
+  -- another book keeps the ranges stored with its sections
   local doc = self.ui and self.ui.document
+  if doc and doc.file ~= file then doc = nil end
 
   local self_ref = self
   local section_dialog
@@ -13297,7 +13300,8 @@ function AskGPT:_showXrayCheckpointList(opts)
   local ActionCache = require("koassistant.artifacts.action_cache")
   local ButtonDialog = require("ui/widget/buttondialog")
 
-  local file = (self.ui and self.ui.document and self.ui.document.file) or (opts and opts.file)
+  -- The book the caller names, the open book only when none is named (B492)
+  local file = (opts and opts.file) or (self.ui and self.ui.document and self.ui.document.file)
   if not file then return end
 
   local ring = ActionCache.getXrayCheckpoints(file)
@@ -13547,7 +13551,8 @@ function AskGPT:_showXrayLadderRungOptions(rung, opts)
   local ActionCache = require("koassistant.artifacts.action_cache")
   local XrayAuto = require("koassistant.xray.xray_auto")
   local self_ref = self
-  local file = (self.ui and self.ui.document and self.ui.document.file) or (opts and opts.file)
+  -- The book the caller names, the open book only when none is named (B492)
+  local file = (opts and opts.file) or (self.ui and self.ui.document and self.ui.document.file)
   if not file then return end
   local label = self:_xrayCheckpointLabel(rung)
   local card
@@ -13811,7 +13816,8 @@ function AskGPT:_showXrayCheckpointOptions(cp, opts)
   local XrayAuto = require("koassistant.xray.xray_auto")
   local self_ref = self
 
-  local file = (self.ui and self.ui.document and self.ui.document.file) or (opts and opts.file)
+  -- The book the caller names, the open book only when none is named (B492)
+  local file = (opts and opts.file) or (self.ui and self.ui.document and self.ui.document.file)
   if not file then return end
   local label = self:_xrayCheckpointLabel(cp)
 
@@ -15332,7 +15338,8 @@ function AskGPT:_switchToCompleteXrayRung(opts)
     UIManager:show(InfoMessage:new{ text = _("An X-Ray task is already running."), timeout = 2 })
     return
   end
-  local file = (self.ui and self.ui.document and self.ui.document.file) or (opts and opts.file)
+  -- The book the caller names, the open book only when none is named (B492)
+  local file = (opts and opts.file) or (self.ui and self.ui.document and self.ui.document.file)
   if not file then return end
   local live = ActionCache.getXrayCache(file)
   if live and live.result and (live.full_document or live.source_mode == "ai_knowledge") then
@@ -15414,7 +15421,8 @@ function AskGPT:_switchBackToPositionRung(opts)
     UIManager:show(InfoMessage:new{ text = _("An X-Ray task is already running."), timeout = 2 })
     return
   end
-  local file = (self.ui and self.ui.document and self.ui.document.file) or (opts and opts.file)
+  -- The book the caller names, the open book only when none is named (B492)
+  local file = (opts and opts.file) or (self.ui and self.ui.document and self.ui.document.file)
   if not file or not self.ui or not self.ui.document or self.ui.document.file ~= file then return end
   local live = ActionCache.getXrayCache(file)
   -- ai_knowledge lineages never mix with rungs; a COMPLETE live is allowed
@@ -15480,7 +15488,8 @@ function AskGPT:_installAheadXrayRung(opts)
     UIManager:show(InfoMessage:new{ text = _("An X-Ray task is already running."), timeout = 2 })
     return
   end
-  local file = (self.ui and self.ui.document and self.ui.document.file) or (opts and opts.file)
+  -- The book the caller names, the open book only when none is named (B492)
+  local file = (opts and opts.file) or (self.ui and self.ui.document and self.ui.document.file)
   if not file or not self.ui or not self.ui.document or self.ui.document.file ~= file then return end
   local live = ActionCache.getXrayCache(file)
   if live and live.result and live.source_mode == "ai_knowledge" then return end

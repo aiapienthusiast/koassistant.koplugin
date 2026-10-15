@@ -521,6 +521,31 @@ TestRunner:test("the dialog lists every kind; a kind opens its list, images the 
 end)
 
 -- ---------------------------------------------------------------------------
+-- The X-Ray versions list and its actions act on the book they are opened
+-- for (B492): a row for another book passes that book, and these resolve the
+-- named book first, the open book only when none is named
+-- ---------------------------------------------------------------------------
+
+print("\n  [the versions list's book]")
+
+TestRunner:test("the versions list and the version actions resolve the named book first", function()
+    local f = assert(io.open(plugin_dir .. "/main.lua", "r"))
+    local src = f:read("*a")
+    f:close()
+    TestRunner:assertTrue(not src:find("self.ui.document.file) or (opts and opts.file)", 1, true),
+        "no function takes the open book before the book it is given")
+    for _idx, fn in ipairs({ "_showXrayCheckpointList", "_showXrayLadderRungOptions",
+            "_showXrayCheckpointOptions", "_switchToCompleteXrayRung", "_switchBackToPositionRung",
+            "_installAheadXrayRung", "_showSectionXrayList" }) do
+        local from = src:find("function AskGPT:" .. fn .. "(", 1, true)
+        TestRunner:assertTrue(from ~= nil, fn .. " is found")
+        local body = src:sub(from, from + 1200)
+        TestRunner:assertTrue(body:find("local file = (opts and opts.file) or (self.ui", 1, true) ~= nil,
+            fn .. " resolves the named book first")
+    end
+end)
+
+-- ---------------------------------------------------------------------------
 
 for i = #saved_fields, 1, -1 do
     local s = saved_fields[i]
