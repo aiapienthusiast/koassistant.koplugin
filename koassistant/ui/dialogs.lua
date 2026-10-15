@@ -6573,10 +6573,6 @@ if prune_book_text then
     return runPreSendWarnings()
 end
 
---- Format artifact metadata for popup display (e.g., "X-Ray (100%, today)")
---- Shared meta (A4 parity with the Book Hub rows): percent always when tracked
---- @param cache table Artifact cache entry with name, data.progress_decimal, data.timestamp
---- @return string Formatted display text
 -- Smart-retrieval pre-flight (D3 — tools_ux_plan.md §4), shared by the popup dispatch
 -- (explicit source choice on the input-dialog path) and direct entry points (silent
 -- default — maintainer 2026-07-11): runs the gather phase, stashes the bundle + source

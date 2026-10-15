@@ -22,6 +22,10 @@ local function setupPaths()
 end
 local plugin_dir = setupPaths()
 require("mock_koreader")
+-- The plugin modules loaded before this file; the ones it loads (and which
+-- hold its stubs) are dropped at the end so no later file inherits them
+local loaded_before = {}
+for name in pairs(package.loaded) do loaded_before[name] = true end
 
 -- Module stubs this file installs; the previous values come back at the end
 local saved_loaded = {}
@@ -283,12 +287,13 @@ print("\n  [the opener]")
 
 local events = {}
 local function record(s) events[#events + 1] = s end
-local last_on_select
+local last_on_select, last_popup_author, last_viewer_info
 local plugin = {
     viewCachedAction = function(_self, _action, key, _data, opts)
         record("viewCachedAction " .. key .. " " .. tostring(opts and opts.file))
     end,
     showCacheViewer = function(_self, info)
+        last_viewer_info = info
         record("showCacheViewer " .. info.key .. " " .. tostring(info.file) .. " " .. tostring(info.book_title))
     end,
     _showXrayCheckpointList = function(_self, opts)
@@ -308,8 +313,13 @@ for _idx, popup in ipairs({ "_showSectionXrayGroupPopup", "_showSectionGroupPopu
             if type(v) == "function" then on_select = v; break end
         end
         last_on_select = on_select
-        local last = select(select("#", ...), ...)
-        record("popup " .. name .. (type(last) == "table" and last.select_mode and " select" or ""))
+        local selecting = false
+        for i = 1, select("#", ...) do
+            local v = select(i, ...)
+            if type(v) == "table" and v.select_mode then selecting = true end
+        end
+        last_popup_author = select(select("#", ...), ...)
+        record("popup " .. name .. (selecting and " select" or ""))
     end)
 end
 stubModule("koassistant.images.image_browser", {
@@ -656,6 +666,73 @@ TestRunner:test("the X-Ray browser opens its other artifacts through the opener"
     TestRunner:assertEqual(table.concat(closed, ","), "DIALOG", "a pick closes the Other Artifacts popup")
 end)
 
+TestRunner:test("the section X-Rays' AI merge row closes the surface only once the merge starts", function()
+    local merged
+    local merger = setmetatable({ _startSectionXrayMergeFlow = function(_self, path, opts)
+        merged = { path = path, opts = opts }
+    end }, { __index = plugin })
+    local closed_surface = 0
+    last_shown = nil
+    real_section_xray_popup(ArtifactBrowser, sections[BOOK_A][ActionCache.SECTION_XRAY_PREFIX],
+        BOOK_A, "Book A", merger, nil, function() closed_surface = closed_surface + 1 end, nil, "Someone")
+    local tapped = false
+    for _idx, row in ipairs(last_shown.buttons) do
+        if row[1].text == "AI merge section X-Rays…" then row[1].callback(); tapped = true end
+    end
+    TestRunner:assertTrue(tapped, "the merge row is there")
+    TestRunner:assertEqual(closed_surface, 0, "nothing under the popup closes before the flow starts")
+    TestRunner:assertTrue(merged ~= nil and merged.path == BOOK_A and merged.opts.book_author == "Someone",
+        "the flow gets the book")
+    merged.opts.close_browser()
+    TestRunner:assertEqual(closed_surface, 1, "the flow closes the surface when it starts (T11)")
+end)
+
+TestRunner:test("the book's author reaches the group popups and their viewers", function()
+    local rows = byKey(rowsOf(BOOK_A))
+    events, last_popup_author = {}, nil
+    ArtifactBrowser.openRow(rows._summary_sections, { plugin = plugin, file = BOOK_A, title = "Book A",
+        author = "Someone" })
+    TestRunner:assertEqual(last_popup_author, "Someone", "the popup gets the author")
+    last_viewer_info = nil
+    last_shown = nil
+    real_section_popup(ArtifactBrowser, sections[BOOK_A][ActionCache.SECTION_PREFIXES.summary],
+        BOOK_A, "Book A", plugin, "summary", nil, nil, nil, "Someone")
+    last_shown.buttons[1][1].callback()
+    TestRunner:assertTrue(last_viewer_info ~= nil and last_viewer_info.book_author == "Someone",
+        "a pick's viewer carries it")
+end)
+
+TestRunner:test("the open book's own props fill a title or author a surface did not pass", function()
+    local rows = byKey(rowsOf(BOOK_A))
+    local reader = setmetatable({ ui = { document = { file = BOOK_A },
+        doc_props = { display_title = "Shown Title", authors = "Author A" } } }, { __index = plugin })
+    last_viewer_info = nil
+    ArtifactBrowser.openRow(rows._summary_cache, { plugin = reader, file = BOOK_A, title = "Book A" })
+    TestRunner:assertEqual(last_viewer_info.book_title .. " / " .. tostring(last_viewer_info.book_author),
+        "Book A / Author A", "a given title stays, the author comes from the open book")
+    ArtifactBrowser.openRow(rows._summary_cache, { plugin = reader, file = BOOK_A })
+    TestRunner:assertEqual(last_viewer_info.book_title, "Shown Title", "no title given: the open book's")
+    last_viewer_info = nil
+    ArtifactBrowser.openRow(rows._summary_cache, { plugin = reader, file = BOOK_B, title = "Book B" })
+    TestRunner:assertTrue(last_viewer_info.book_author == nil, "another book's author is not the open book's")
+end)
+
+TestRunner:test("pins outside any book, opened from Browse by type, go back to its list", function()
+    stubField(PinnedManager, "getGeneralPinned", function()
+        return { { id = "g1", name = "A general pin", result = "r", timestamp = 5 } }
+    end)
+    local kinds = ArtifactBrowser.typeKinds({}, { general = { count = 1, modified = 5 } })
+    last_shown = nil
+    ArtifactBrowser:_showTypeList(kinds[1], plugin, {})
+    local type_list = last_shown
+    type_list.item_table[1].callback()
+    local pinned_list = last_shown
+    TestRunner:assertTrue(pinned_list ~= type_list and pinned_list.title == "General (Pinned)",
+        "the general pins open")
+    pinned_list.onReturn()
+    TestRunner:assertTrue(last_shown == pinned_list, "back rebuilds no browser over the type list")
+end)
+
 -- ---------------------------------------------------------------------------
 -- One source of truth: the group flags are the aggregation's contract with
 -- the artifact browser (openRow, rowMeta, rowLabel, typeKinds, the selector's
@@ -726,7 +803,9 @@ TestRunner:test("the versions list and the version actions resolve the named boo
     local f = assert(io.open(plugin_dir .. "/main.lua", "r"))
     local src = f:read("*a")
     f:close()
-    TestRunner:assertTrue(not src:find("self.ui.document.file) or (opts and opts.file)", 1, true),
+    -- whitespace folded, so a resolution split over two lines is caught too
+    local flat = src:gsub("%s+", " ")
+    TestRunner:assertTrue(not flat:find("self.ui.document.file) or (opts and opts.file)", 1, true),
         "no function takes the open book before the book it is given")
     for _idx, fn in ipairs({ "_showXrayCheckpointList", "_showXrayLadderRungOptions",
             "_showXrayCheckpointOptions", "_switchToCompleteXrayRung", "_switchBackToPositionRung",
@@ -765,6 +844,9 @@ end
 for name, saved in pairs(saved_loaded) do package.loaded[name] = saved.value end
 package.loaded["koassistant.artifacts.artifact_browser"] = saved_browser
 package.loaded["koassistant.xray.xray_browser"] = saved_xray_browser
+for name in pairs(package.loaded) do
+    if not loaded_before[name] and name:match("^koassistant%.") then package.loaded[name] = nil end
+end
 _G.G_reader_settings = saved_settings
 
 TestRunner:summary()

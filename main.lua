@@ -8078,8 +8078,12 @@ function AskGPT:showCacheViewer(cache_info)
           local scope_end = cache_info.data.scope_end_page
           local scope_summary = cache_info.data.scope_page_summary
           -- Reconvert XPointers to current pages if book is open (font-size independence)
-          -- Only reconvert when start_xpointer exists (confirms XPointers were stored at generation)
+          -- Only reconvert when start_xpointer exists (confirms XPointers were stored at generation);
+          -- another book keeps the range stored with its section
           local doc = self.ui and self.ui.document
+          if doc and not require("koassistant.storage.doc_settings").samePath(doc.file, file) then
+            doc = nil
+          end
           if doc and doc.getPageFromXPointer then
             local start_xp = cache_info.data.scope_start_xpointer
             local end_xp = cache_info.data.scope_end_xpointer
@@ -9908,12 +9912,15 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
     }})
     -- Surface in-range section X-Rays + list existing + new — grouped (P6)
     local ActionCache = require("koassistant.artifacts.action_cache")
-    local sx_file = (self.ui and self.ui.document and self.ui.document.file)
-        or (opts and opts.file)
+    -- The book the popup is for (B492; showCacheActionPopup's rule, B387),
+    -- and the open document only when it is that book
+    local sx_file = (opts and opts.file)
+        or (self.ui and self.ui.document and self.ui.document.file)
     local nc_sec_rows, nc_ver_rows = {}, {}
     local nc_sx_count = 0
     if sx_file then
       local doc = self.ui and self.ui.document
+      if doc and doc.file ~= sx_file then doc = nil end
       if doc then
         local in_range = ActionCache.findMatchingSections(sx_file, doc)
         for _idx, sec in ipairs(in_range) do
@@ -10224,9 +10231,12 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
     end
 
     local ActionCache = require("koassistant.artifacts.action_cache")
-    local sx_file = (self.ui and self.ui.document and self.ui.document.file)
-        or (opts and opts.file)
+    -- The book the popup is for (B492; showCacheActionPopup's rule, B387),
+    -- and the open document only when it is that book
+    local sx_file = (opts and opts.file)
+        or (self.ui and self.ui.document and self.ui.document.file)
     local doc = self.ui and self.ui.document
+    if doc and doc.file ~= sx_file then doc = nil end
     local cp_ring = sx_file and ActionCache.getXrayCheckpoints(sx_file) or {}
     -- Version ladder (§6 slice 1): rungs join the ring everywhere versions are
     -- surfaced (nearest-version pick, count, browse list)

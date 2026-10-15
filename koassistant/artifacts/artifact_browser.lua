@@ -176,6 +176,14 @@ end
 ---       is attached instead of opened, and the group popups pick
 function ArtifactBrowser.openRow(row, ctx)
     local plugin, file = ctx.plugin, ctx.file
+    -- The open book's own props fill what a surface did not pass: a viewer
+    -- given a title no longer falls back to them for the author
+    local title, author = ctx.title, ctx.author
+    local props = openDocFor(plugin, file) and plugin.ui.doc_props
+    if props then
+        title = title or props.display_title or props.title
+        author = author or props.authors
+    end
     local function before(dest)
         if ctx.before_open then ctx.before_open(dest) end
     end
@@ -195,38 +203,38 @@ function ArtifactBrowser.openRow(row, ctx)
     if row.is_image_group then
         before("gallery")
         require("koassistant.images.image_browser").show({
-            book_file = file, book_title = ctx.title })
+            book_file = file, book_title = title })
     elseif row.is_xray_versions_group then
         before("versions")
         plugin:_showXrayCheckpointList({ file = file,
-            book_title = ctx.title, book_author = ctx.author,
+            book_title = title, book_author = author,
             close_browser = ctx.close_browser })
     elseif row.is_section_xray_group then
         -- A pick opens that section's full-screen X-Ray browser
-        ArtifactBrowser:_showSectionXrayGroupPopup(row.data, file, ctx.title, plugin,
-            row._excluded_section_key, picked("xray"), ctx.opts)
+        ArtifactBrowser:_showSectionXrayGroupPopup(row.data, file, title, plugin,
+            row._excluded_section_key, picked("xray"), ctx.opts, author)
     elseif row.is_section_group then
-        ArtifactBrowser:_showSectionGroupPopup(row.data, file, ctx.title, plugin,
-            row.section_type, row._excluded_section_key, picked("viewer"), ctx.opts)
+        ArtifactBrowser:_showSectionGroupPopup(row.data, file, title, plugin,
+            row.section_type, row._excluded_section_key, picked("viewer"), ctx.opts, author)
     elseif row.is_wiki_group then
-        ArtifactBrowser:_showWikiGroupPopup(row.data, file, plugin, ctx.title,
-            picked("viewer"), ctx.opts)
+        ArtifactBrowser:_showWikiGroupPopup(row.data, file, plugin, title,
+            picked("viewer"), ctx.opts, author)
     elseif row.is_pinned_group then
-        ArtifactBrowser:_showPinnedGroupPopup(row.data, file, ctx.title,
-            picked("viewer"), ctx.opts)
+        ArtifactBrowser:_showPinnedGroupPopup(row.data, file, title,
+            picked("viewer"), ctx.opts, author)
     elseif ctx.opts and ctx.opts.select_mode then
         -- Attach: the shared build-first tail (a refusal keeps the picker open)
         local entry, err = require("koassistant.request.attachments").makeArtifact(
-            row.name, row.key, row.data, ctx.title)
+            row.name, row.key, row.data, title)
         finishLeafSelect(ArtifactBrowser, ctx.opts, entry, err, nil, picked("viewer"))
     elseif row.is_per_action then
         before("viewer")
         plugin:viewCachedAction({ text = row.name }, row.key, row.data,
-            { file = file, book_title = ctx.title, book_author = ctx.author })
+            { file = file, book_title = title, book_author = author })
     else
         before(opensXrayBrowser(row) and "xray" or "viewer")
         plugin:showCacheViewer({ name = row.name, key = row.key, data = row.data,
-            file = file, book_title = ctx.title, book_author = ctx.author })
+            file = file, book_title = title, book_author = author })
     end
 end
 
@@ -837,6 +845,12 @@ function ArtifactBrowser:_showTypeList(kind, AskGPT, opts)
         return (a.modified or 0) > (b.modified or 0)
     end)
     local self_ref = self
+    -- The pins outside any book open a pinned list whose back arrow returns
+    -- here (the browser's own rows rebuild the browser instead)
+    local pinned_opts = { return_to_list = true }
+    for k, v in pairs(opts or {}) do
+        if pinned_opts[k] == nil then pinned_opts[k] = v end
+    end
     local menu_items = {}
     for _idx, item in ipairs(kind.items) do
         local captured = item
@@ -852,13 +866,13 @@ function ArtifactBrowser:_showTypeList(kind, AskGPT, opts)
             text = _("General (Pinned)")
             callback = function()
                 self_ref:showPinnedList(PinnedManager.getGeneralPinned(), _("General (Pinned)"),
-                    PinnedManager.GENERAL_KEY, opts)
+                    PinnedManager.GENERAL_KEY, pinned_opts)
             end
         elseif captured.pinned == "library" then
             text = _("Library (Pinned)")
             callback = function()
                 self_ref:showPinnedList(PinnedManager.getLibraryPinned(), _("Library (Pinned)"),
-                    PinnedManager.LIBRARY_KEY, opts)
+                    PinnedManager.LIBRARY_KEY, pinned_opts)
             end
         else
             text = captured.title
@@ -973,6 +987,8 @@ function ArtifactBrowser:showPinnedList(entries, title, context_path, opts)
                 UIManager:close(self_ref.current_pinned_menu)
                 self_ref.current_pinned_menu = nil
             end
+            -- Opened from Browse by type: back is that list, still underneath
+            if opts and opts.return_to_list then return end
             UIManager:nextTick(function()
                 self_ref:showArtifactBrowser(opts)
             end)
@@ -1215,7 +1231,9 @@ end
 --- @param AskGPT table Plugin instance for opening viewers
 --- @param excluded_key string|nil Section key to exclude from listing
 --- @param on_select function|nil Called when an item is selected (to close parent popups)
-function ArtifactBrowser:_showSectionXrayGroupPopup(sections, doc_path, doc_title, AskGPT, excluded_key, on_select, opts)
+--- @param opts table|nil the artifact browser's opts (select mode)
+--- @param doc_author string|nil Document author (the viewers and the chat carry it)
+function ArtifactBrowser:_showSectionXrayGroupPopup(sections, doc_path, doc_title, AskGPT, excluded_key, on_select, opts, doc_author)
     local self_ref = self
     local buttons = {}
     for _idx, sec in ipairs(sections) do
@@ -1248,7 +1266,7 @@ function ArtifactBrowser:_showSectionXrayGroupPopup(sections, doc_path, doc_titl
                     if on_select then on_select() end
                     AskGPT:showCacheViewer({
                         name = label, key = captured.key, data = captured.data,
-                        book_title = doc_title, file = doc_path })
+                        book_title = doc_title, book_author = doc_author, file = doc_path })
                 end,
             }})
         end
@@ -1272,8 +1290,11 @@ function ArtifactBrowser:_showSectionXrayGroupPopup(sections, doc_path, doc_titl
                 if self_ref._section_group_dialog then
                     UIManager:close(self_ref._section_group_dialog)
                 end
-                if on_select then on_select() end
-                AskGPT:_startSectionXrayMergeFlow(doc_path, { book_title = doc_title })
+                -- The surface under the popup closes only once the merge
+                -- really starts (the flow's T11 rule, as the X-Ray browser's
+                -- own merge row): a refusal leaves it in place
+                AskGPT:_startSectionXrayMergeFlow(doc_path, { book_title = doc_title,
+                    book_author = doc_author, close_browser = on_select })
             end,
         }})
     end
@@ -1293,7 +1314,9 @@ end
 --- @param section_type string Section type key (e.g., "summary", "recap")
 --- @param excluded_key string|nil Key to exclude
 --- @param on_select function|nil Called when an item is selected (to close parent popups)
-function ArtifactBrowser:_showSectionGroupPopup(sections, doc_path, doc_title, AskGPT, section_type, excluded_key, on_select, opts)
+--- @param opts table|nil the artifact browser's opts (select mode)
+--- @param doc_author string|nil Document author (the viewers and the chat carry it)
+function ArtifactBrowser:_showSectionGroupPopup(sections, doc_path, doc_title, AskGPT, section_type, excluded_key, on_select, opts, doc_author)
     local self_ref = self
     local buttons = {}
     local type_label = ActionCache.SECTION_TYPE_LABELS[section_type] or section_type
@@ -1332,13 +1355,13 @@ function ArtifactBrowser:_showSectionGroupPopup(sections, doc_path, doc_title, A
                     local action_stub = AskGPT.action_service and AskGPT.action_service:getAction("book", action_id)
                     if action_stub and action_stub.interactive_quiz then
                         AskGPT:viewCachedAction(action_stub, action_id, captured.data, {
-                            file = doc_path, book_title = doc_title,
+                            file = doc_path, book_title = doc_title, book_author = doc_author,
                             section_label = label, section_key = captured.key })
                     else
                         AskGPT:showCacheViewer({
                             name = T(_("Section %1: %2"), type_label, label),
                             key = captured.key, data = captured.data,
-                            book_title = doc_title, file = doc_path })
+                            book_title = doc_title, book_author = doc_author, file = doc_path })
                     end
                 end,
             }})
@@ -1368,7 +1391,9 @@ end
 --- @param AskGPT table|nil Plugin instance for artifact cross-navigation
 --- @param doc_title string|nil Document title
 --- @param on_select function|nil Called when an item is selected (to close parent popups)
-function ArtifactBrowser:_showWikiGroupPopup(wiki_entries, doc_path, AskGPT, doc_title, on_select, opts)
+--- @param opts table|nil the artifact browser's opts (select mode)
+--- @param doc_author string|nil Document author (the viewer and the chat carry it)
+function ArtifactBrowser:_showWikiGroupPopup(wiki_entries, doc_path, AskGPT, doc_title, on_select, opts, doc_author)
     local ChatGPTViewer = require("koassistant.ui.chatgptviewer")
     local self_ref = self
 
@@ -1417,8 +1442,9 @@ function ArtifactBrowser:_showWikiGroupPopup(wiki_entries, doc_path, AskGPT, doc
                     _artifact_key = captured.key,
                     _book_open = (AskGPT and AskGPT.ui and AskGPT.ui.document ~= nil),
                     _artifact_book_title = doc_title,
+                    _artifact_book_author = doc_author,
                     on_launch_chat = AskGPT and AskGPT._buildLaunchChatCallback
-                        and AskGPT:_buildLaunchChatCallback(doc_path, doc_title, nil, captured.data.result, _("AI Wiki")) or nil,
+                        and AskGPT:_buildLaunchChatCallback(doc_path, doc_title, doc_author, captured.data.result, _("AI Wiki")) or nil,
                 }
                 UIManager:show(viewer)
             end,
@@ -1445,7 +1471,9 @@ end
 --- @param doc_path string Document file path
 --- @param doc_title string Document title
 --- @param on_select function|nil Called when an item is selected (to close parent popups)
-function ArtifactBrowser:_showPinnedGroupPopup(pinned_entries, doc_path, doc_title, on_select, opts)
+--- @param opts table|nil the artifact browser's opts (select mode)
+--- @param doc_author string|nil Document author (the viewer and the chat carry it)
+function ArtifactBrowser:_showPinnedGroupPopup(pinned_entries, doc_path, doc_title, on_select, opts, doc_author)
     local ChatGPTViewer = require("koassistant.ui.chatgptviewer")
     local AskGPT = self:getAskGPTInstance()
     local self_ref = self
@@ -1516,8 +1544,9 @@ function ArtifactBrowser:_showPinnedGroupPopup(pinned_entries, doc_path, doc_tit
                     _artifact_key = "pinned:" .. (captured.id or ""),
                     _book_open = (AskGPT and AskGPT.ui and AskGPT.ui.document ~= nil),
                     _artifact_book_title = doc_title,
+                    _artifact_book_author = doc_author,
                     on_launch_chat = AskGPT and AskGPT._buildLaunchChatCallback
-                        and AskGPT:_buildLaunchChatCallback(doc_path, doc_title, nil, captured.result, captured.action_text or _("Pinned")) or nil,
+                        and AskGPT:_buildLaunchChatCallback(doc_path, doc_title, doc_author, captured.result, captured.action_text or _("Pinned")) or nil,
                 }
                 UIManager:show(viewer)
             end,
