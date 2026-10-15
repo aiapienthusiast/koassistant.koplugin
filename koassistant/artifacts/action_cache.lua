@@ -641,10 +641,13 @@ ActionCache.PER_ACTION_ARTIFACTS = PER_ACTION_ARTIFACTS
 
 --- Get available artifacts for a document file.
 --- Central source of truth for discovering cached artifacts.
+--- Every row carries type_name = its kind's name without a count (a group
+--- row's name carries one); a list that groups rows by kind (Browse by type)
+--- groups by key and names the kind by type_name.
 --- @param document_path string The document file path
 --- @param exclude_key string|nil Optional artifact key to exclude (e.g. "_xray_cache" when viewing X-Ray)
 --- @param doc table|nil Document object — when provided, section X-Rays covering the current page are promoted to top-level entries
---- @return table Array of { name, key, data, is_per_action } entries
+--- @return table Array of { name, type_name, key, data, is_per_action } entries
 function ActionCache.getAvailableArtifacts(document_path, exclude_key, doc)
     if not document_path then return {} end
     local available = {}
@@ -654,6 +657,7 @@ function ActionCache.getAvailableArtifacts(document_path, exclude_key, doc)
             if entry and entry.result then
                 table.insert(available, {
                     name = ARTIFACT_NAMES[key] or key,
+                    type_name = ARTIFACT_NAMES[key] or key,
                     key = key,
                     data = entry,
                     is_per_action = PER_ACTION_ARTIFACTS[key] or false,
@@ -686,6 +690,7 @@ function ActionCache.getAvailableArtifacts(document_path, exclude_key, doc)
             table.insert(available, xray_idx and (xray_idx + 1) or 1, {
                 name = xray_idx and T(_("Previous X-Ray Versions (%1)"), cp_count)
                     or T(_("Archived X-Ray Versions (%1)"), cp_count),
+                type_name = xray_idx and _("Previous X-Ray Versions") or _("Archived X-Ray Versions"),
                 key = "_xray_versions",
                 is_xray_versions_group = true,
                 is_orphan = not xray_idx or nil,
@@ -708,6 +713,7 @@ function ActionCache.getAvailableArtifacts(document_path, exclude_key, doc)
         if count > 0 then
             table.insert(available, {
                 name = string.format(_("View Section X-Rays (%d)"), count),
+                type_name = ActionCache.SECTION_KIND_NAMES.xray,
                 key = "_xray_sections",
                 data = sections,
                 is_section_xray_group = true,
@@ -735,6 +741,7 @@ function ActionCache.getAvailableArtifacts(document_path, exclude_key, doc)
                 if type_count > 0 then
                     table.insert(available, {
                         name = string.format("%s (%d)", ActionCache.SECTION_GROUP_NAMES[sec_type] or sec_type, type_count),
+                        type_name = ActionCache.SECTION_KIND_NAMES[sec_type] or sec_type,
                         key = "_" .. sec_type .. "_sections",
                         data = type_sections,
                         is_section_group = true,
@@ -750,6 +757,7 @@ function ActionCache.getAvailableArtifacts(document_path, exclude_key, doc)
     if #wikis > 0 then
         table.insert(available, {
             name = string.format(_("AI Wiki Entries (%d)"), #wikis),
+            type_name = _("AI Wiki Entries"),
             key = "_wiki_entries",
             data = wikis,
             is_wiki_group = true,
@@ -764,8 +772,10 @@ end
 --- @param document_path string The document file path
 --- @param exclude_key string|nil Optional artifact key to exclude
 --- @param doc table|nil Document object — passed through to getAvailableArtifacts for section promotion
+--- @param opts table|nil { image_books = ImageGenerator.booksWithImages() } read once by a caller
+---   that walks many books (each call otherwise reads the images index again)
 --- @return table Array of entries (cached + pinned)
-function ActionCache.getAvailableArtifactsWithPinned(document_path, exclude_key, doc)
+function ActionCache.getAvailableArtifactsWithPinned(document_path, exclude_key, doc, opts)
     local artifacts = ActionCache.getAvailableArtifacts(document_path, exclude_key, doc)
     if not document_path then return artifacts end
 
@@ -776,6 +786,7 @@ function ActionCache.getAvailableArtifactsWithPinned(document_path, exclude_key,
     if #pinned > 0 then
         table.insert(artifacts, {
             name = string.format(_("Pinned Artifacts (%d)"), #pinned),
+            type_name = _("Pinned Artifacts"),
             key = "_pinned_artifacts",
             data = pinned,
             is_pinned_group = true,
@@ -785,17 +796,20 @@ function ActionCache.getAvailableArtifactsWithPinned(document_path, exclude_key,
     -- Generated images for this book: every "View Artifacts" surface consumes
     -- this aggregation, so the row appears everywhere. Callers handle
     -- is_image_group by opening the gallery filtered (no data payload).
-    local img_ok, ImageGenerator = pcall(require, "koassistant.images.image_generator")
-    if img_ok and ImageGenerator then
-        local img_info = ImageGenerator.booksWithImages()[document_path]
-        if img_info and img_info.count > 0 then
-            table.insert(artifacts, {
-                name = T(_("Generated Images (%1)"), img_info.count),
-                key = "_generated_images",
-                is_image_group = true,
-                image_count = img_info.count,
-            })
-        end
+    local image_books = opts and opts.image_books
+    if not image_books then
+        local img_ok, ImageGenerator = pcall(require, "koassistant.images.image_generator")
+        image_books = img_ok and ImageGenerator and ImageGenerator.booksWithImages() or {}
+    end
+    local img_info = image_books[document_path]
+    if img_info and img_info.count > 0 then
+        table.insert(artifacts, {
+            name = T(_("Generated Images (%1)"), img_info.count),
+            type_name = _("Generated Images"),
+            key = "_generated_images",
+            is_image_group = true,
+            image_count = img_info.count,
+        })
     end
 
     return artifacts
@@ -950,6 +964,20 @@ ActionCache.SECTION_GROUP_NAMES = {
     quiz = _("View Section Quizzes"),
     extract_insights = _("View Section Key Insights"),
     reading_guide = _("View Section Reading Guides"),
+}
+
+-- The section kinds' names without a count: the type_name of the section
+-- group rows (Browse by type names a kind by it)
+ActionCache.SECTION_KIND_NAMES = {
+    xray = _("Section X-Rays"),
+    summary = _("Section Summaries"),
+    analyze = _("Section Analyses"),
+    key_arguments = _("Section Key Arguments"),
+    counterarguments = _("Section Counterarguments"),
+    discussion_questions = _("Section Discussion Questions"),
+    quiz = _("Section Quizzes"),
+    extract_insights = _("Section Key Insights"),
+    reading_guide = _("Section Reading Guides"),
 }
 
 -- Singular type labels for individual section viewer titles

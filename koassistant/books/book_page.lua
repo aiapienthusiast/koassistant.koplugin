@@ -65,69 +65,18 @@ local function artifactEmoji(cache)
     return "📦"
 end
 
---- True when this row opens the full-screen X-Ray browser (showCacheViewer's
---- own routing condition) — the one destination the page must NOT sit behind
-local function opensXrayBrowser(cache)
-    local ActionCache = require("koassistant.artifacts.action_cache")
-    local is_xray_key = cache.key == ActionCache.XRAY_CACHE_KEY
-        or (type(cache.key) == "string"
-            and cache.key:sub(1, #ActionCache.SECTION_XRAY_PREFIX) == ActionCache.SECTION_XRAY_PREFIX)
-    return is_xray_key and cache.data and cache.data.result
-        and require("koassistant.xray.xray_parser").isJSON(cache.data.result)
-end
-
---- One artifact row's destination — the same surface the View Artifacts popup
---- opens for that row (main.lua viewCache and dialogs' openArtifact carry this
---- same chain; the group-flag contract lives on getAvailableArtifactsWithPinned).
---- The versions branch is currently unreachable (buildItems prunes that group
---- alone), but the dispatch stays complete: the View-Artifacts popups share
---- these destinations, and row-visibility settings may restore the row.
+--- One artifact row's destination: the shared opener, so the page goes where
+--- every View-Artifacts list goes for that row. The page sits under every
+--- destination but the full-screen X-Ray browser (the main X-Ray row, a
+--- section X-Ray picked from its popup), which it closes for. The versions
+--- branch is unreachable here (buildItems prunes that group alone).
 local function openArtifactRow(cache, ctx)
-    local plugin, file = ctx.plugin, ctx.file
-    logger.dbg("KOAssistant BookHub: row tap —",
-        cache.is_image_group and "images"
-        or cache.is_xray_versions_group and "xray-versions"
-        or cache.is_section_xray_group and "section-xray-group"
-        or cache.is_section_group and "section-group"
-        or cache.is_wiki_group and "wiki-group"
-        or cache.is_pinned_group and "pinned-group"
-        or cache.is_per_action and "per-action"
-        or "cache-viewer",
-        cache.key or cache.name or "?")
-    local noop = function() end
-    if cache.is_image_group then
-        require("koassistant.images.image_browser").show({
-            book_file = file, book_title = ctx.title })
-    elseif cache.is_xray_versions_group then
-        plugin:_showXrayCheckpointList({ file = file,
-            book_title = ctx.title, book_author = ctx.author })
-    elseif cache.is_section_xray_group then
-        -- Picking a section opens its full-screen browser — same stacking rule
-        -- as the main X-Ray row, so the pick closes the page
-        require("koassistant.artifacts.artifact_browser"):_showSectionXrayGroupPopup(
-            cache.data, file, ctx.title, plugin, cache._excluded_section_key,
-            BookPage.close)
-    elseif cache.is_section_group then
-        require("koassistant.artifacts.artifact_browser"):_showSectionGroupPopup(
-            cache.data, file, ctx.title, plugin, cache.section_type,
-            cache._excluded_section_key, noop)
-    elseif cache.is_wiki_group then
-        require("koassistant.artifacts.artifact_browser"):_showWikiGroupPopup(
-            cache.data, file, plugin, ctx.title, noop)
-    elseif cache.is_pinned_group then
-        require("koassistant.artifacts.artifact_browser"):_showPinnedGroupPopup(
-            cache.data, file, ctx.title, noop)
-    elseif cache.is_per_action then
-        if ctx.is_open_book then
-            plugin:viewCachedAction({ text = cache.name }, cache.key, cache.data)
-        else
-            plugin:viewCachedAction({ text = cache.name }, cache.key, cache.data,
-                { file = file, book_title = ctx.title, book_author = ctx.author })
-        end
-    else
-        if opensXrayBrowser(cache) then BookPage.close() end
-        plugin:showCacheViewer(cache)
-    end
+    require("koassistant.artifacts.artifact_browser").openRow(cache, {
+        plugin = ctx.plugin, file = ctx.file, title = ctx.title, author = ctx.author,
+        before_open = function(opens_xray)
+            if opens_xray then BookPage.close() end
+        end,
+    })
 end
 
 --- The page's rows, built fresh from disk truth on every call
@@ -175,13 +124,6 @@ local function buildItems(ctx)
         -- quizzes existed on disk and the page showed only the whole-book
         -- ones). They are rows again; openArtifactRow already dispatched them.
         if not cache.is_xray_versions_group then
-            -- File-browser convention: closed-book viewers need identity stamped
-            -- on the row (showCacheViewer prefers explicit over doc_props)
-            if not ctx.is_open_book and not cache.is_pinned_group then
-                cache.book_title = cache.book_title or ctx.title
-                cache.book_author = cache.book_author or ctx.author
-                cache.file = cache.file or file
-            end
             local mandatory
             if not cache.is_pinned_group and not cache.is_wiki_group
                     and not cache.is_section_group then

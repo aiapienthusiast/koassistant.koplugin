@@ -100,6 +100,11 @@ function ImageBrowser.groups(files, index)
     return out
 end
 
+--- How many pictures the gallery's All images shows (Browse by type's count).
+function ImageBrowser.count()
+    return #listImages()
+end
+
 --- The pictures of one place (a groups() key).
 local function filesOf(key, files, index)
     if key == "all" then return files end

@@ -43,6 +43,14 @@ local function getBookMetadata(doc_path)
     return title, author
 end
 
+--- The open book's document when it is this book (a section's page range is
+--- recomputed from it); nil for any other book, whose stored range stands
+local function openDocFor(AskGPT, doc_path)
+    local doc = AskGPT and AskGPT.ui and AskGPT.ui.document
+    if doc and SafeDocSettings.samePath(doc.file, doc_path) then return doc end
+    return nil
+end
+
 --- Shared select-mode tail for every leaf pick (attach_plan.md v1): a refusal
 --- (quiz/empty artifact) shows the reason and KEEPS the picker open; a success
 --- closes the given dialog, runs the parent-close callback, closes the browser
@@ -61,10 +69,141 @@ local function finishLeafSelect(self, opts, entry, err, dialog, parent_close)
     opts.select_mode.on_select(entry)
 end
 
+--- Every book the browser lists, newest first: a saved artifact (the artifact
+--- index, its cache file present; stale entries are dropped and the cleanup
+--- saved), a pin (the pinned index) or a generated image (the images index).
+--- ONE walk for the browser's list and Browse by type. A book with only
+--- pictures takes its title from the images index (no sidecar read).
+--- @return table books { { path, title, author, modified, count, pinned_count, image_count } }
+--- @return table image_books ImageGenerator.booksWithImages(), for the per-book aggregation
+function ArtifactBrowser.artifactBooks()
+    local lfs = require("libs/libkoreader-lfs")
+    local index = G_reader_settings:readSetting("koassistant_artifact_index", {})
+    local books, by_path = {}, {}
+    local needs_cleanup = false
+    for doc_path, stats in pairs(index) do
+        local cache_path = ActionCache.getPath(doc_path)
+        if cache_path and lfs.attributes(cache_path, "mode") == "file" then
+            local book = { path = doc_path, modified = stats.modified or 0, count = stats.count or 0 }
+            books[#books + 1] = book
+            by_path[doc_path] = book
+        else
+            -- Stale entry - cache file no longer exists
+            index[doc_path] = nil
+            needs_cleanup = true
+            logger.dbg("KOAssistant Artifacts: Cleaning stale index entry:", doc_path)
+        end
+    end
+    if needs_cleanup then
+        G_reader_settings:saveSetting("koassistant_artifact_index", index)
+        G_reader_settings:flush()
+        logger.info("KOAssistant Artifacts: Cleaned up stale index entries")
+    end
+    -- Per-book pins; a book with only pins still gets a row
+    for doc_path, pstats in pairs(PinnedManager.getPinnedIndex()) do
+        if doc_path ~= PinnedManager.GENERAL_KEY and doc_path ~= PinnedManager.LIBRARY_KEY then
+            local book = by_path[doc_path]
+            if not book then
+                book = { path = doc_path, modified = 0, count = 0 }
+                books[#books + 1] = book
+                by_path[doc_path] = book
+            end
+            book.pinned_count = pstats.count
+            if (pstats.modified or 0) > book.modified then book.modified = pstats.modified end
+        end
+    end
+    -- Generated images (book_file → { count, modified, book_title }); a book
+    -- with only images still gets a row
+    local image_books = require("koassistant.images.image_generator").booksWithImages()
+    for book_file, istats in pairs(image_books) do
+        local book = by_path[book_file]
+        if not book then
+            book = { path = book_file, modified = 0, count = 0,
+                title = istats.book_title or book_file:match("([^/]+)$") or book_file }
+            books[#books + 1] = book
+            by_path[book_file] = book
+        end
+        book.image_count = istats.count
+        if (istats.modified or 0) > book.modified then book.modified = istats.modified end
+    end
+    for _idx, book in ipairs(books) do
+        if not book.title then book.title, book.author = getBookMetadata(book.path) end
+    end
+    table.sort(books, function(a, b) return a.modified > b.modified end)
+    return books, image_books
+end
+
+--- True when a row opens the full-screen X-Ray browser (showCacheViewer's own
+--- routing condition), which the surface under it may have to close for
+local function opensXrayBrowser(row)
+    local is_xray_key = row.key == ActionCache.XRAY_CACHE_KEY
+        or (type(row.key) == "string"
+            and row.key:sub(1, #ActionCache.SECTION_XRAY_PREFIX) == ActionCache.SECTION_XRAY_PREFIX)
+    return is_xray_key and row.data and row.data.result
+        and require("koassistant.xray.xray_parser").isJSON(row.data.result) and true or false
+end
+
+--- THE opener for a row of ActionCache.getAvailableArtifactsWithPinned: the
+--- same destination wherever the row is listed (the group flags are that
+--- aggregation's contract). ctx = { plugin, file, title, author,
+--- before_open = function(opens_xray) }: before_open runs once, right before
+--- the destination opens (for a group row, when the reader picks an entry of
+--- its popup; the popup itself stacks on the surface), so the surface can
+--- close what the destination replaces; opens_xray = the destination is the
+--- full-screen X-Ray browser. The book's identity goes to the viewers
+--- explicitly; they compare it with the open book themselves. Callers: the
+--- Book Hub and Browse by type; docs/artifact_rows_plan.md lists the surfaces
+--- still on their own copies.
+function ArtifactBrowser.openRow(row, ctx)
+    local plugin, file = ctx.plugin, ctx.file
+    local function before(opens_xray)
+        if ctx.before_open then ctx.before_open(opens_xray) end
+    end
+    logger.dbg("KOAssistant Artifacts: open row",
+        row.is_image_group and "images"
+        or row.is_xray_versions_group and "xray-versions"
+        or row.is_section_xray_group and "section-xray-group"
+        or row.is_section_group and "section-group"
+        or row.is_wiki_group and "wiki-group"
+        or row.is_pinned_group and "pinned-group"
+        or row.is_per_action and "per-action"
+        or "cache-viewer",
+        row.key or "?")
+    if row.is_image_group then
+        before(false)
+        require("koassistant.images.image_browser").show({
+            book_file = file, book_title = ctx.title })
+    elseif row.is_xray_versions_group then
+        before(false)
+        plugin:_showXrayCheckpointList({ file = file,
+            book_title = ctx.title, book_author = ctx.author })
+    elseif row.is_section_xray_group then
+        -- A pick opens that section's full-screen X-Ray browser
+        ArtifactBrowser:_showSectionXrayGroupPopup(row.data, file, ctx.title, plugin,
+            row._excluded_section_key, function() before(true) end)
+    elseif row.is_section_group then
+        ArtifactBrowser:_showSectionGroupPopup(row.data, file, ctx.title, plugin,
+            row.section_type, row._excluded_section_key, function() before(false) end)
+    elseif row.is_wiki_group then
+        ArtifactBrowser:_showWikiGroupPopup(row.data, file, plugin, ctx.title,
+            function() before(false) end)
+    elseif row.is_pinned_group then
+        ArtifactBrowser:_showPinnedGroupPopup(row.data, file, ctx.title,
+            function() before(false) end)
+    elseif row.is_per_action then
+        before(false)
+        plugin:viewCachedAction({ text = row.name }, row.key, row.data,
+            { file = file, book_title = ctx.title, book_author = ctx.author })
+    else
+        before(opensXrayBrowser(row))
+        plugin:showCacheViewer({ name = row.name, key = row.key, data = row.data,
+            file = file, book_title = ctx.title, book_author = ctx.author })
+    end
+end
+
 --- Show the artifact browser (list of documents with artifacts)
 --- @param opts table|nil Optional config: { enable_emoji = bool }
 function ArtifactBrowser:showArtifactBrowser(opts)
-    local lfs = require("libs/libkoreader-lfs")
     -- One-time migration: scan known document paths for existing cache files
     local migration_version = G_reader_settings:readSetting("koassistant_artifact_index_version")
     if not migration_version or migration_version < 1 then
@@ -73,68 +212,21 @@ function ArtifactBrowser:showArtifactBrowser(opts)
         G_reader_settings:flush()
     end
 
-    local index = G_reader_settings:readSetting("koassistant_artifact_index", {})
-    local needs_cleanup = false
+    local docs = ArtifactBrowser.artifactBooks()
 
-    -- Build sorted list (newest first), validate entries exist
-    local docs = {}
-    for doc_path, stats in pairs(index) do
-        local cache_path = ActionCache.getPath(doc_path)
-        if cache_path and lfs.attributes(cache_path, "mode") == "file" then
-            local title, author = getBookMetadata(doc_path)
-            table.insert(docs, {
-                path = doc_path,
-                title = title,
-                author = author,
-                modified = stats.modified or 0,
-                count = stats.count or 0,
-            })
-        else
-            -- Stale entry - cache file no longer exists
-            index[doc_path] = nil
-            needs_cleanup = true
-            logger.dbg("KOAssistant Artifacts: Cleaning stale index entry:", doc_path)
-        end
-    end
-
-    -- Persist cleanup if needed
-    if needs_cleanup then
-        G_reader_settings:saveSetting("koassistant_artifact_index", index)
-        G_reader_settings:flush()
-        logger.info("KOAssistant Artifacts: Cleaned up stale index entries")
-    end
-
-    -- Load pinned index for merging
+    -- Pins outside any book get their own rows at the top
     local pinned_index = PinnedManager.getPinnedIndex()
     local has_general_pinned = pinned_index[PinnedManager.GENERAL_KEY] and pinned_index[PinnedManager.GENERAL_KEY].count > 0
     local has_multi_pinned = pinned_index[PinnedManager.LIBRARY_KEY] and pinned_index[PinnedManager.LIBRARY_KEY].count > 0
 
-    -- Generated-images index for merging: book_file → { count, modified, book_title }
-    local ImageGenerator = require("koassistant.images.image_generator")
-    local image_books = ImageGenerator.booksWithImages()
-
-    -- Handle empty state (no artifacts AND no pinned AND no generated images)
-    if #docs == 0 and not has_general_pinned and not has_multi_pinned
-        and next(image_books) == nil then
-        -- Check if any per-book pinned exist
-        local has_any_pinned = false
-        for doc_path, _stats in pairs(pinned_index) do
-            if doc_path ~= PinnedManager.GENERAL_KEY and doc_path ~= PinnedManager.LIBRARY_KEY then
-                has_any_pinned = true
-                break
-            end
-        end
-        if not has_any_pinned then
-            UIManager:show(InfoMessage:new{
-                text = _("No artifacts yet.\n\nRun X-Ray, Recap, Document Summary, or Document Analysis to create reusable artifacts.\n\nYou can also pin chat responses as artifacts from the chat viewer."),
-                timeout = 5,
-            })
-            return
-        end
+    -- Handle empty state (no book with artifacts, pins or images, and no general or library pins)
+    if #docs == 0 and not has_general_pinned and not has_multi_pinned then
+        UIManager:show(InfoMessage:new{
+            text = _("No artifacts yet.\n\nRun X-Ray, Recap, Document Summary, or Document Analysis to create reusable artifacts.\n\nYou can also pin chat responses as artifacts from the chat viewer."),
+            timeout = 5,
+        })
+        return
     end
-
-    -- Sort by last modified (newest first)
-    table.sort(docs, function(a, b) return a.modified > b.modified end)
 
     -- Build menu items
     local menu_items = {}
@@ -170,60 +262,6 @@ function ArtifactBrowser:showArtifactBrowser(opts)
             end,
         })
     end
-
-    -- Merge per-book pinned counts into docs, and add docs that only have pinned (no cache)
-    local docs_by_path = {}
-    for _idx, doc in ipairs(docs) do
-        docs_by_path[doc.path] = doc
-    end
-    for doc_path, pstats in pairs(pinned_index) do
-        if doc_path ~= PinnedManager.GENERAL_KEY and doc_path ~= PinnedManager.LIBRARY_KEY then
-            local existing = docs_by_path[doc_path]
-            if existing then
-                existing.pinned_count = pstats.count
-                -- Use newer timestamp between cache and pinned
-                if (pstats.modified or 0) > (existing.modified or 0) then
-                    existing.modified = pstats.modified
-                end
-            else
-                -- Book only has pinned artifacts (no cache)
-                local title, author = getBookMetadata(doc_path)
-                local doc = {
-                    path = doc_path,
-                    title = title,
-                    author = author,
-                    modified = pstats.modified or 0,
-                    count = 0,
-                    pinned_count = pstats.count,
-                }
-                table.insert(docs, doc)
-                docs_by_path[doc_path] = doc
-            end
-        end
-    end
-
-    -- Merge generated-image counts; books with only images still get a row
-    -- (title comes from the index — no DocSettings read needed)
-    for book_file, istats in pairs(image_books) do
-        local existing = docs_by_path[book_file]
-        if existing then
-            existing.image_count = istats.count
-            if (istats.modified or 0) > (existing.modified or 0) then
-                existing.modified = istats.modified
-            end
-        else
-            table.insert(docs, {
-                path = book_file,
-                title = istats.book_title or book_file:match("([^/]+)$") or book_file,
-                modified = istats.modified or 0,
-                count = 0,
-                image_count = istats.count,
-            })
-        end
-    end
-
-    -- Re-sort after merge (pinned-only / image-only docs may be newer)
-    table.sort(docs, function(a, b) return a.modified > b.modified end)
 
     for _idx, doc in ipairs(docs) do
         local captured_doc = doc
@@ -666,13 +704,88 @@ function ArtifactBrowser:showBrowserMenuOptions(opts)
     UIManager:show(dialog)
 end
 
---- Cross-book "browse by type" (device 2026-08-13): pick an artifact type,
---- list every book's artifact of that type. Walks the SAME validated index as
---- showArtifactBrowser and the same per-book aggregation
---- (getAvailableArtifacts), so a type surfaces exactly where the per-book
---- selector would list it; group rows (sections / wiki / archived versions)
---- are skipped — those live behind their book's own surfaces. Loads each
---- indexed book's cache once; explicit user action, so the scan is acceptable.
+--- How many artifacts a row stands for, when its newest was made, and whether
+--- it is a group: a saved result is one; a group row (sections, wiki entries,
+--- pins) is its members. Rows without data (images, X-Ray versions) count 0.
+local function rowSize(row)
+    if type(row.data) ~= "table" then return 0, 0, false end
+    if row.is_section_group or row.is_wiki_group or row.is_pinned_group then
+        local newest = 0
+        for _idx, member in ipairs(row.data) do
+            local ts = tonumber(member.timestamp)
+                or (type(member.data) == "table" and tonumber(member.data.timestamp)) or 0
+            if ts > newest then newest = ts end
+        end
+        return #row.data, newest, true
+    end
+    return 1, tonumber(row.data.timestamp) or 0, false
+end
+
+--- Browse by type's kinds (pure). books = { { path, title, author, rows } },
+--- rows = getAvailableArtifactsWithPinned's for that book; extra = { general,
+--- library = the pinned index's { count, modified } for the pins outside any
+--- book (or nil), images = the gallery's picture count }. A kind is named by
+--- its rows' type_name and counted in artifacts. The X-Ray versions are left
+--- out (a list for managing one book's X-Ray); the pictures are one kind that
+--- opens the gallery (its own list of places, pictures without a book
+--- included), so the per-book image rows are not listed.
+--- @return table kinds { { key, name, count, items, gallery }, ... }, most artifacts first;
+---   items = { { path, title, author, row, n, modified, group } | { pinned = "general"|"library", n, modified, group } }
+function ArtifactBrowser.typeKinds(books, extra)
+    extra = extra or {}
+    local kinds, by_key = {}, {}
+    local function kindFor(key, name)
+        local kind = by_key[key]
+        if not kind then
+            kind = { key = key, name = name, count = 0, items = {} }
+            by_key[key] = kind
+            kinds[#kinds + 1] = kind
+        end
+        return kind
+    end
+    for _idx, book in ipairs(books) do
+        for _idx2, row in ipairs(book.rows or {}) do
+            if not (row.is_xray_versions_group or row.is_image_group) then
+                local n, modified, group = rowSize(row)
+                if n > 0 then
+                    local kind = kindFor(row.key, row.type_name or row.name)
+                    kind.count = kind.count + n
+                    kind.items[#kind.items + 1] = { path = book.path, title = book.title,
+                        author = book.author, row = row, n = n, modified = modified, group = group }
+                end
+            end
+        end
+    end
+    for _idx, which in ipairs({ "general", "library" }) do
+        local pins = extra[which]
+        local n = type(pins) == "table" and tonumber(pins.count) or 0
+        if n > 0 then
+            local kind = kindFor("_pinned_artifacts", _("Pinned Artifacts"))
+            kind.count = kind.count + n
+            kind.items[#kind.items + 1] = { pinned = which, n = n,
+                modified = tonumber(pins.modified) or 0, group = true }
+        end
+    end
+    if (tonumber(extra.images) or 0) > 0 then
+        local kind = kindFor("_generated_images", _("Generated Images"))
+        kind.count = extra.images
+        kind.gallery = true
+    end
+    -- Most artifacts first, ties alphabetical
+    table.sort(kinds, function(x, y)
+        if x.count ~= y.count then return x.count > y.count end
+        return x.name < y.name
+    end)
+    return kinds
+end
+
+--- Cross-book "browse by type" (device 2026-08-13; every kind since B490):
+--- pick a kind of artifact, list every book that has it. Reads the browser's
+--- own walk (artifactBooks) and the per-book aggregation every View-Artifacts
+--- surface reads (getAvailableArtifactsWithPinned), so a kind shows up here
+--- exactly where a book's own list shows it (docs/artifact_rows_plan.md).
+--- Loads each book's artifacts once; explicit user action, so the scan is
+--- acceptable.
 --- @param opts table|nil Config passed through
 function ArtifactBrowser:showBrowseByType(opts)
     local AskGPT = self:getAskGPTInstance()
@@ -680,54 +793,38 @@ function ArtifactBrowser:showBrowseByType(opts)
         UIManager:show(InfoMessage:new{ text = _("Could not open viewer.") })
         return
     end
-    local lfs = require("libs/libkoreader-lfs")
-    local index = G_reader_settings:readSetting("koassistant_artifact_index", {})
-    local types = {}   -- key → { name, items = { {path, title, artifact, modified} } }
-    local order = {}   -- type keys, sorted below
-    for doc_path in pairs(index) do
-        local cache_path = ActionCache.getPath(doc_path)
-        if cache_path and lfs.attributes(cache_path, "mode") == "file" then
-            local title = getBookMetadata(doc_path)
-            for _idx, a in ipairs(ActionCache.getAvailableArtifacts(doc_path)) do
-                if not (a.is_xray_versions_group or a.is_section_group or a.is_wiki_group) then
-                    local t = types[a.key]
-                    if not t then
-                        t = { name = a.name, items = {} }
-                        types[a.key] = t
-                        table.insert(order, a.key)
-                    end
-                    table.insert(t.items, {
-                        path = doc_path,
-                        title = title,
-                        artifact = a,
-                        modified = a.data and a.data.timestamp or 0,
-                    })
-                end
-            end
-        end
+    local books, image_books = ArtifactBrowser.artifactBooks()
+    for _idx, book in ipairs(books) do
+        book.rows = ActionCache.getAvailableArtifactsWithPinned(book.path, nil, nil,
+            { image_books = image_books })
     end
-    if #order == 0 then
+    local pinned_index = PinnedManager.getPinnedIndex()
+    local ImageBrowser = require("koassistant.images.image_browser")
+    local kinds = ArtifactBrowser.typeKinds(books, {
+        general = pinned_index[PinnedManager.GENERAL_KEY],
+        library = pinned_index[PinnedManager.LIBRARY_KEY],
+        images = ImageBrowser.count(),
+    })
+    if #kinds == 0 then
         UIManager:show(InfoMessage:new{ text = _("No artifacts yet."), timeout = 2 })
         return
     end
-    -- Most-populated types first, ties alphabetical
-    table.sort(order, function(x, y)
-        local cx, cy = #types[x].items, #types[y].items
-        if cx ~= cy then return cx > cy end
-        return types[x].name < types[y].name
-    end)
 
     local self_ref = self
     local dialog
     local rows = {}
-    for _idx, key in ipairs(order) do
-        local t = types[key]
+    for _idx, kind in ipairs(kinds) do
+        local captured = kind
         table.insert(rows, {{
-            text = T("%1 (%2)", t.name, #t.items),
+            text = T("%1 (%2)", captured.name, captured.count),
             align = "left",
             callback = function()
                 UIManager:close(dialog)
-                self_ref:_showTypeList(t, AskGPT, opts)
+                if captured.gallery then
+                    ImageBrowser.show()
+                else
+                    self_ref:_showTypeList(captured, AskGPT, opts)
+                end
             end,
         }})
     end
@@ -740,34 +837,62 @@ function ArtifactBrowser:showBrowseByType(opts)
     UIManager:show(dialog)
 end
 
---- One type's artifacts across all books, newest first. Overlays the browser
---- Menu (X/back returns to it); a tapped artifact opens its viewer on top via
---- the selector's exact concrete-entry dispatch (per-action → viewCachedAction,
---- plain → showCacheViewer).
-function ArtifactBrowser:_showTypeList(t, AskGPT, opts)
-    table.sort(t.items, function(a, b) return (a.modified or 0) > (b.modified or 0) end)
+--- One kind's artifacts across all books: the pins outside any book first,
+--- then the books, newest first. Overlays the browser Menu (X/back returns to
+--- it); a tapped book opens on top through openRow, where the book's own list
+--- goes (a group kind: that book's popup).
+function ArtifactBrowser:_showTypeList(kind, AskGPT, opts)
+    local function rank(item)
+        if item.pinned == "general" then return 1 end
+        if item.pinned == "library" then return 2 end
+        return 3
+    end
+    table.sort(kind.items, function(a, b)
+        local ra, rb = rank(a), rank(b)
+        if ra ~= rb then return ra < rb end
+        return (a.modified or 0) > (b.modified or 0)
+    end)
+    local self_ref = self
     local menu_items = {}
-    for _idx, item in ipairs(t.items) do
+    for _idx, item in ipairs(kind.items) do
         local captured = item
+        local mandatory
+        if captured.group then
+            local rel = (captured.modified or 0) > 0 and Constants.formatRelativeTime(captured.modified) or ""
+            mandatory = rel ~= "" and (tostring(captured.n) .. " \u{00B7} " .. rel) or tostring(captured.n)
+        else
+            mandatory = Constants.formatArtifactMeta(captured.row.data)
+        end
+        local text, callback
+        if captured.pinned == "general" then
+            text = _("General (Pinned)")
+            callback = function()
+                self_ref:showPinnedList(PinnedManager.getGeneralPinned(), _("General (Pinned)"),
+                    PinnedManager.GENERAL_KEY, opts)
+            end
+        elseif captured.pinned == "library" then
+            text = _("Library (Pinned)")
+            callback = function()
+                self_ref:showPinnedList(PinnedManager.getLibraryPinned(), _("Library (Pinned)"),
+                    PinnedManager.LIBRARY_KEY, opts)
+            end
+        else
+            text = captured.title
+            callback = function()
+                ArtifactBrowser.openRow(captured.row, { plugin = AskGPT, file = captured.path,
+                    title = captured.title, author = captured.author })
+            end
+        end
         table.insert(menu_items, {
-            text = captured.title,
-            mandatory = Constants.formatArtifactMeta(captured.artifact.data),
+            text = text,
+            mandatory = mandatory,
             mandatory_dim = true,
             help_text = captured.path,
-            callback = function()
-                local a = captured.artifact
-                if a.is_per_action then
-                    AskGPT:viewCachedAction({ text = a.name }, a.key, a.data,
-                        { file = captured.path, book_title = captured.title })
-                else
-                    AskGPT:showCacheViewer({ name = a.name, key = a.key, data = a.data,
-                        book_title = captured.title, file = captured.path })
-                end
-            end,
+            callback = callback,
         })
     end
     local menu = Menu:new{
-        title = T(_("%1 — all books"), t.name),
+        title = T(_("%1 (all books)"), kind.name),
         item_table = menu_items,
         is_borderless = true,
         is_popout = false,
@@ -1113,7 +1238,7 @@ function ArtifactBrowser:_showSectionXrayGroupPopup(sections, doc_path, doc_titl
         if sec.key ~= excluded_key then
             local captured = sec
             local label = captured.label or captured.key
-            local doc = AskGPT and AskGPT.ui and AskGPT.ui.document
+            local doc = openDocFor(AskGPT, doc_path)
             local detail_parts = {}
             local page_info = captured.data and ActionCache.reconvertPageSummary(captured.data, doc) or ""
             if page_info ~= "" then table.insert(detail_parts, page_info) end
@@ -1192,7 +1317,7 @@ function ArtifactBrowser:_showSectionGroupPopup(sections, doc_path, doc_title, A
         if sec.key ~= excluded_key then
             local captured = sec
             local label = captured.label or captured.key
-            local doc = AskGPT and AskGPT.ui and AskGPT.ui.document
+            local doc = openDocFor(AskGPT, doc_path)
             local detail_parts = {}
             local page_info = captured.data and ActionCache.reconvertPageSummary(captured.data, doc) or ""
             if page_info ~= "" then table.insert(detail_parts, page_info) end
