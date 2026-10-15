@@ -1830,6 +1830,86 @@ local function runPerBookOverrideTests()
     resetMocks()
 end
 
+-- =============================================================================
+-- The run's allowance (Allow once, B395 slice 2): _data_once on the request's
+-- settings reaches every read through gateContext, for this extractor's book
+-- (a record without a book covers every book of the run); a book's own Never
+-- still wins. Found dead on the first desktop try (2026-10-15): the gate
+-- context carried no once.
+-- =============================================================================
+
+local function runOnceAllowanceTests()
+    print("\n=== Testing the run's allowance (Allow once) THROUGH extractForAction ===")
+
+    setupSidecarData({
+        annotations = {
+            { text = "Test highlight from chapter 1" },
+        },
+        percent_finished = 0.65,
+    })
+
+    local function withOverrides(extractor, overrides)
+        extractor.getBookPrivacyOverrides = function() return overrides end
+        return extractor
+    end
+
+    TestRunner:test("once for the run (no book named): highlights on Ask are sent", function()
+        local extractor = createSidecarExtractor({
+            _data_once = { kinds = { highlights = true } },
+        })
+        local data = extractor:extractForAction({ use_highlights = true, prompt = "{highlights}" })
+        TestRunner:assertContains(data.highlights, "Test highlight", "a run-wide allowance covers this book")
+    end)
+
+    TestRunner:test("once for this book: highlights on Ask are sent", function()
+        local extractor = createSidecarExtractor({
+            _data_once = { book = "/test/books/sample.epub", kinds = { highlights = true } },
+        })
+        local data = extractor:extractForAction({ use_highlights = true, prompt = "{highlights}" })
+        TestRunner:assertContains(data.highlights, "Test highlight")
+    end)
+
+    TestRunner:test("once for another book: highlights on Ask stay out", function()
+        local extractor = createSidecarExtractor({
+            _data_once = { book = "/test/books/other.epub", kinds = { highlights = true } },
+        })
+        local data = extractor:extractForAction({ use_highlights = true, prompt = "{highlights}" })
+        TestRunner:assertEquals(data.highlights, "", "another book's allowance is not this book's")
+    end)
+
+    TestRunner:test("once does not lift the book's own Never", function()
+        local extractor = withOverrides(createSidecarExtractor({
+            _data_once = { book = "/test/books/sample.epub", kinds = { highlights = true } },
+        }), { highlights = false, annotations = false })
+        local data = extractor:extractForAction({ use_highlights = true, prompt = "{highlights}" })
+        TestRunner:assertEquals(data.highlights, "", "the book's Never beats the run's allowance")
+    end)
+
+    TestRunner:test("open book: text extraction on Ask is allowed once for the open file only", function()
+        local allowed = createOpenBookExtractor({
+            _data_once = { book = "/test/books/sample.epub", kinds = { book_text = true } },
+        })
+        TestRunner:assertEquals(allowed:isBookTextExtractionEnabled(), true, "once for the open book")
+        local other = createOpenBookExtractor({
+            _data_once = { book = "/test/books/other.epub", kinds = { book_text = true } },
+        })
+        TestRunner:assertEquals(other:isBookTextExtractionEnabled(), false, "once for another book")
+        local none = createOpenBookExtractor({})
+        TestRunner:assertEquals(none:isBookTextExtractionEnabled(), false, "Ask without an allowance")
+    end)
+
+    TestRunner:test("gateContext: a run-wide allowance covers the book list judged from a book", function()
+        local Gates = require("koassistant.request.privacy_gates")
+        local extractor = createSidecarExtractor({
+            _data_once = { kinds = { book_list = true } },
+        })
+        TestRunner:assertEquals(Gates.allows("book_list", extractor:gateContext()), true)
+        TestRunner:assertEquals(Gates.allows("habits", extractor:gateContext()), false, "only the kinds allowed")
+    end)
+
+    resetMocks()
+end
+
 local function runAll()
     print("\n=== Testing Sidecar Data Access and Privacy Gating ===")
 
@@ -1837,6 +1917,7 @@ local function runAll()
     runSidecarReaderTests()
     runSidecarGatingTests()
     runPerBookOverrideTests()
+    runOnceAllowanceTests()
     runSidecarUnavailableDataTests()
     runFlagClassificationTests()
     runSidecarLiveFlagTests()

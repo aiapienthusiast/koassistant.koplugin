@@ -14333,6 +14333,7 @@ function AskGPT:onEndOfBook()
   if features.enable_end_of_book_suggestion == false then return end
   -- The suggestion sends the book list: the gates module's answer for the
   -- provider it goes to (trust counts here as everywhere since slice 1)
+  -- standing-only: an unattended suggestion needs a standing Allow, nothing asks here
   if not require("koassistant.request.privacy_gates").allows("book_list",
       { features = features, provider = features.provider }) then return end
   if not features.library_scan_folders or #features.library_scan_folders == 0 then return end

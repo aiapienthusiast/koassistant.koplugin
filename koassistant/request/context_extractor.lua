@@ -275,9 +275,14 @@ end
 
 --- What the gates need to judge this request: the settings it runs under, the
 --- provider it goes to, the book's own values (koassistant/request/privacy_gates.lua).
+--- The gate context every read of this extractor is judged by: its settings
+--- (the request's own privacy keys, Gates.copyPrivacy), the provider the
+--- request goes to, the book's own values and the run's allowance (Allow
+--- once, _data_once on those settings) for this extractor's book.
 function ContextExtractor:gateContext()
     return { features = self.settings, provider = self.settings.provider,
-        book = self:getBookPrivacyOverrides() }
+        book = self:getBookPrivacyOverrides(),
+        once = Gates.onceFor(self.settings, self:getDocumentPath()) }
 end
 
 --- Get reading progress as percentage.

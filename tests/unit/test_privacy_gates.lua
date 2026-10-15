@@ -305,4 +305,62 @@ TestRunner:test("no other file compares a privacy switch or walks trusted_provid
     TestRunner:assertTrue(#hits == 0, "raw gate reads:\n      " .. table.concat(hits, "\n      "))
 end)
 
+TestRunner:test("a gate context built by hand carries the run's allowance (once) or is marked standing-only", function()
+    -- Allow once lands as _data_once on the request's config; a ctx literal
+    -- that names a provider but no `once =` cannot see it (2026-10-15: four
+    -- such sites made Allow once a no-op on the first desktop try). A site
+    -- that needs a standing Allow says so: `-- standing-only: <reason>`.
+    -- Position is never asked, usable() and summary() do not enforce.
+    local p = io.popen('cd "' .. plugin_dir .. '" && ls main.lua && find koassistant -name "*.lua" | LC_ALL=C sort')
+    local files = {}
+    for line in p:lines() do files[#files + 1] = line end
+    p:close()
+    local skip = { ["koassistant/request/privacy_gates.lua"] = true, ["koassistant/ui/data_access.lua"] = true }
+    local hits, literals = {}, 0
+    for _idx, rel in ipairs(files) do
+        if not skip[rel] then
+            local lines = {}
+            for line in io.lines(plugin_dir .. "/" .. rel) do lines[#lines + 1] = line end
+            for i, line in ipairs(lines) do
+                local at = line:find("{%s*features%s*=")
+                if at and not line:match("^%s*%-%-") then
+                    local depth, j, pos, text = 0, i, at, ""
+                    repeat
+                        local chunk = lines[j]:sub(pos)
+                        for c in chunk:gmatch("[{}]") do depth = depth + (c == "{" and 1 or -1) end
+                        text = text .. chunk .. "\n"
+                        j = j + 1
+                        pos = 1
+                    until depth <= 0 or j > #lines
+                    if text:find("provider%s*=") then
+                        literals = literals + 1
+                        local window = table.concat(lines, "\n", math.max(1, i - 3), math.min(#lines, j))
+                        if not (text:find("once%s*=") or window:find("usable%(") or window:find('"position"')
+                                or window:find("%.summary%(") or window:find("-- standing-only:", 1, true)) then
+                            hits[#hits + 1] = rel .. ":" .. i .. ": " .. line:gsub("^%s+", "")
+                        end
+                    end
+                end
+            end
+        end
+    end
+    TestRunner:assertTrue(literals >= 6, "the gate literals were found (" .. literals .. ")")
+    TestRunner:assertTrue(#hits == 0, "gate contexts without the run's allowance:\n      " .. table.concat(hits, "\n      "))
+end)
+
+TestRunner:test("the dispatch gather judges on the request's own config, never the source", function()
+    -- handlePredefinedPrompt consumes _data_once from the source config right
+    -- after temp_config is made; everything the gather reads for the gates
+    -- (the extractor's settings, the per-book loop, the cache re-check, the
+    -- library branch) must come from temp_config.features.
+    local src = io.open(plugin_dir .. "/koassistant/ui/dialogs.lua"):read("*a")
+    TestRunner:assertTrue(not src:find("copyPrivacy(config.features", 1, true)
+        and not src:find("copyPrivacy(configuration.features", 1, true),
+        "an extractor's settings copied from the source config")
+    local _, n = src:gsub("copyPrivacy%(temp_config%.features", "")
+    TestRunner:assertTrue(n >= 3, "the extractor copies read temp_config (" .. n .. ")")
+    TestRunner:assertTrue(src:find("lib_gate = require(\"koassistant.request.privacy_gates\").context(\n            temp_config.features", 1, true) ~= nil,
+        "the library branch judges on temp_config")
+end)
+
 return TestRunner:summary()

@@ -3648,8 +3648,9 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
     if config and config.features then
         config.features._web_search_active = nil
         -- An allowance for this run (Allow once, B395): the copy in temp_config
-        -- is the chat's, for its replies; the source must not carry it into
-        -- the next request
+        -- is the request's (the gather below judges on temp_config.features) and
+        -- the chat's, for its replies; the source must not carry it into the
+        -- next request
         config.features._data_once = nil
         -- Quick controls: consume the dispatch consumables AND the chip state from
         -- the SOURCE config (same staleness rule — the copies already rode into
@@ -4623,8 +4624,10 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
         local extraction_success, ContextExtractor = pcall(require, "koassistant.request.context_extractor")
         if extraction_success and ContextExtractor then
             -- The privacy keys (the switches, the trusted column and list, the
-            -- run's allowance) ride in through the gates module's copy (B395)
-            local extractor = ContextExtractor:new(ui, require("koassistant.request.privacy_gates").copyPrivacy(config.features, {
+            -- run's allowance) ride in through the gates module's copy (B395),
+            -- from the request's own config: the source's allowance was consumed
+            -- at the dispatch entry
+            local extractor = ContextExtractor:new(ui, require("koassistant.request.privacy_gates").copyPrivacy(temp_config.features, {
                 -- Extraction limits
                 max_book_text_chars = prompt and prompt.max_book_text_chars or (config.features and config.features.max_book_text_chars),
                 max_pdf_pages = config.features and config.features.max_pdf_pages,
@@ -4695,8 +4698,9 @@ if prune_book_text then
         -- No live document — LIVE_BOOK_FLAGS (book_text, page_text, reading_stats) will return empty
         local extraction_success, ContextExtractor = pcall(require, "koassistant.request.context_extractor")
         if extraction_success and ContextExtractor then
-            -- The privacy keys ride in through the gates module's copy (B395)
-            local extractor = ContextExtractor:new(nil, require("koassistant.request.privacy_gates").copyPrivacy(config.features, {
+            -- The privacy keys ride in through the gates module's copy (B395),
+            -- from the request's own config (its allowance)
+            local extractor = ContextExtractor:new(nil, require("koassistant.request.privacy_gates").copyPrivacy(temp_config.features, {
                 document_path = fb_document_path,
                 -- Privacy settings
                 provider = effective_provider,
@@ -4716,8 +4720,11 @@ if prune_book_text then
         -- No open document but action needs library data — extract library only
         -- Global toggle is absolute gate; session folders bypass folder config only
         local lib_features = plugin and plugin.settings and plugin.settings:readSetting("features") or {}
-        local lib_toggle = require("koassistant.request.privacy_gates").allows("book_list",
-            { features = lib_features, provider = effective_provider })
+        -- Judged on the request's own config, as the extractor branches above
+        -- are: the run's allowance (Allow once) rides it and nothing else
+        local lib_gate = require("koassistant.request.privacy_gates").context(
+            temp_config.features or {}, effective_provider, {})
+        local lib_toggle = require("koassistant.request.privacy_gates").allows("book_list", lib_gate)
         local scan_folders_to_use
         if lib_toggle then
             scan_folders_to_use = plugin and plugin._session_scan_folders
@@ -4736,8 +4743,7 @@ if prune_book_text then
                     -- Stats enrichment: engagement labels + group placeholders
                     -- Gated: enable_advanced_stats (opt-in) + use_advanced_stats per-action (double-gated)
                     local stats_gated = prompt.use_advanced_stats
-                        and require("koassistant.request.privacy_gates").allows("habits",
-                            { features = lib_features, provider = effective_provider })
+                        and require("koassistant.request.privacy_gates").allows("habits", lib_gate)
                     if stats_gated then
                         local stats_ok, StatsReader = pcall(require, "koassistant.books.stats_reader")
                         if stats_ok and StatsReader then
@@ -4775,8 +4781,9 @@ if prune_book_text then
         local extraction_ok, ContextExtractor = pcall(require, "koassistant.request.context_extractor")
         if extraction_ok and ContextExtractor then
             -- Privacy: the same gates as single-book sidecar extraction, judged
-            -- for the effective dispatch provider and each book's own values
-            local features = config.features or {}
+            -- for the effective dispatch provider and each book's own values, on
+            -- the request's own config (the run's allowance covers every picked book)
+            local features = temp_config.features or {}
 
             local total_sidecar_chars = 0
             for _idx, book in ipairs(message_data.books_info) do
@@ -4785,7 +4792,8 @@ if prune_book_text then
                     -- scanned book can allow/deny its own channels; deny beats
                     -- trusted — same semantics as the single-book extractor.
                     local b_gate = { features = features, provider = effective_provider,
-                        book = require("koassistant.request.privacy_gates").bookOverrides(book.file, ui) }
+                        book = require("koassistant.request.privacy_gates").bookOverrides(book.file, ui),
+                        once = require("koassistant.request.privacy_gates").onceFor(features, book.file) }
                     local b_highlights = require("koassistant.request.privacy_gates").allows("highlights", b_gate)
                     local b_annotations = require("koassistant.request.privacy_gates").allows("annotations", b_gate)
                     local b_notebook = require("koassistant.request.privacy_gates").allows("notebook", b_gate)
@@ -4999,8 +5007,9 @@ if prune_book_text then
             -- kind for the effective dispatch provider and the cache's book (its
             -- own values win both ways): the update path re-sends the cached
             -- result verbatim, so it honours them like a fresh read.
-            local cache_gate = { features = config.features or {}, provider = effective_provider,
-                book = require("koassistant.request.privacy_gates").bookOverrides(cache_file, ui) }
+            local cache_gate = { features = temp_config.features or {}, provider = effective_provider,
+                book = require("koassistant.request.privacy_gates").bookOverrides(cache_file, ui),
+                once = require("koassistant.request.privacy_gates").onceFor(temp_config.features, cache_file) }
             local cache_kinds = require("koassistant.request.privacy_gates").stampedKinds(cached_entry)
             local cache_text_ok = not cache_kinds.book_text
                 or require("koassistant.request.privacy_gates").allows("book_text", cache_gate)
@@ -5101,7 +5110,7 @@ if prune_book_text then
                 -- If text extraction is disabled, getBookTextRange returns empty — AI updates from training knowledge
                 local extraction_success, ContextExtractor = pcall(require, "koassistant.request.context_extractor")
                 if extraction_success and ContextExtractor then
-                    local extractor = ContextExtractor:new(ui, require("koassistant.request.privacy_gates").copyPrivacy(config.features, {
+                    local extractor = ContextExtractor:new(ui, require("koassistant.request.privacy_gates").copyPrivacy(temp_config.features, {
                         max_book_text_chars = prompt.max_book_text_chars or (config.features and config.features.max_book_text_chars),
                         max_pdf_pages = config.features and config.features.max_pdf_pages,
                         -- The provider this extractor judges for, as its siblings (audit G5 rider).
