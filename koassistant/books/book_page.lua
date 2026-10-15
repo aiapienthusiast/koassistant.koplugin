@@ -2,8 +2,9 @@
 Book page ("Book Hub" — renamed from "Book Overview" with A4's shape work
 2026-08-11; internal ids/settings keys keep book_overview): one full-screen
 view of everything the plugin holds for ONE book — the TOP-LEVEL artifact rows
-the View Artifacts popup shows (same destinations; only the X-Ray versions
-group is pruned — it belongs to the X-Ray browser, which surfaces it), plus chats,
+the View Artifacts popup shows (same destinations; the X-Ray versions group is
+pruned — it belongs to the X-Ray browser, which surfaces it — and so are the
+section quizzes on an open book, whose Quiz popup lists them), plus chats,
 notebook, group membership and book settings. Strictly a VIEW over existing
 stores: nothing is generated here, nothing is stored here, and the popups stay
 the fast path.
@@ -65,11 +66,24 @@ local function artifactEmoji(cache)
     return "📦"
 end
 
+--- The open book's Quiz row opens the quiz popup, which lists the section
+--- quizzes ("View Section Quizzes"), so a list holding that row drops their
+--- own row (maintainer 2026-10-15). In place; returns the list.
+function BookPage.dropSectionQuizzes(caches)
+    local has_quiz, at = false, nil
+    for i, cache in ipairs(caches) do
+        if cache.key == "quiz" then has_quiz = true end
+        if cache.key == "_quiz_sections" then at = i end
+    end
+    if has_quiz and at then table.remove(caches, at) end
+    return caches
+end
+
 --- One artifact row's destination: the shared opener, so the page goes where
 --- every View-Artifacts list goes for that row. The page sits under every
 --- destination but the full-screen X-Ray browser (the main X-Ray row, a
 --- section X-Ray picked from its popup), which it closes for. The versions
---- branch is unreachable here (buildItems prunes that group alone).
+--- branch is unreachable here (buildItems prunes that group).
 local function openArtifactRow(cache, ctx)
     require("koassistant.artifacts.artifact_browser").openRow(cache, {
         plugin = ctx.plugin, file = ctx.file, title = ctx.title, author = ctx.author,
@@ -102,6 +116,10 @@ local function buildItems(ctx)
             break
         end
     end
+    -- Quiz opens its action popup when the book is open (below), and that
+    -- popup lists the section quizzes, so their own row goes then. A closed
+    -- book's Quiz row opens the quiz itself: its section quizzes keep their row.
+    if ctx.is_open_book then BookPage.dropSectionQuizzes(caches) end
     if not has_xray_row and ctx.is_open_book then
         items[#items + 1] = {
             text = Constants.getEmojiText("📦",
@@ -112,9 +130,9 @@ local function buildItems(ctx)
         }
     end
     for _idx, cache in ipairs(caches) do
-        -- Only the X-Ray versions group is pruned: it belongs to the X-Ray
-        -- browser, which owns the up-arrow navigation contract and already
-        -- surfaces it standalone ("Archived X-Ray Versions") when no live
+        -- The X-Ray versions group is pruned (the section quizzes went above
+        -- for an open book): it belongs to the X-Ray browser, which owns the
+        -- up-arrow navigation contract and already surfaces it standalone ("Archived X-Ray Versions") when no live
         -- X-Ray row exists, so nothing orphans.
         --
         -- Section-scoped groups (section X-Rays, section quizzes/summaries/

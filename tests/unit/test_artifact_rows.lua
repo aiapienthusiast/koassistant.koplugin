@@ -733,6 +733,31 @@ TestRunner:test("pins outside any book, opened from Browse by type, go back to i
     TestRunner:assertTrue(last_shown == pinned_list, "back rebuilds no browser over the type list")
 end)
 
+TestRunner:test("the open book's Book Hub lists its section quizzes under Quiz only", function()
+    local BookPage = require("koassistant.books.book_page")
+    local WITH_QUIZ, SECTIONS_ONLY = "/books/q.epub", "/books/s.epub"
+    local quiz_sections = { [ActionCache.SECTION_PREFIXES.quiz] = {
+        { key = "quiz_section:1", label = "Part 1", data = entry("q", 11) } } }
+    caches[WITH_QUIZ] = { quiz = entry('{"questions":[]}', 10) }
+    sections[WITH_QUIZ], sections[SECTIONS_ONLY] = quiz_sections, quiz_sections
+    local function keysOf(rows)
+        local keys = {}
+        for _idx, row in ipairs(rows) do keys[#keys + 1] = row.key end
+        return table.concat(keys, ",")
+    end
+    local rows = rowsOf(WITH_QUIZ)
+    TestRunner:assertEqual(keysOf(rows), "quiz,_quiz_sections", "the aggregation lists both")
+    TestRunner:assertEqual(keysOf(BookPage.dropSectionQuizzes(rows)), "quiz", "the Quiz popup lists them")
+    TestRunner:assertEqual(keysOf(BookPage.dropSectionQuizzes(rowsOf(SECTIONS_ONLY))), "_quiz_sections",
+        "without a Quiz row their own row stays")
+    caches[WITH_QUIZ], sections[WITH_QUIZ], sections[SECTIONS_ONLY] = nil, nil, nil
+    local f = assert(io.open(plugin_dir .. "/koassistant/books/book_page.lua", "r"))
+    local src = f:read("*a")
+    f:close()
+    TestRunner:assertTrue(src:find("if ctx.is_open_book then BookPage.dropSectionQuizzes(caches) end", 1, true) ~= nil,
+        "the page drops them for the open book only (a closed book's Quiz row opens the quiz itself)")
+end)
+
 -- ---------------------------------------------------------------------------
 -- One source of truth: the group flags are the aggregation's contract with
 -- the artifact browser (openRow, rowMeta, rowLabel, typeKinds, the selector's
