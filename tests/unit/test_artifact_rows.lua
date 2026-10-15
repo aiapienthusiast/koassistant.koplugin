@@ -733,7 +733,9 @@ TestRunner:test("pins outside any book, opened from Browse by type, go back to i
     TestRunner:assertTrue(last_shown == pinned_list, "back rebuilds no browser over the type list")
 end)
 
-TestRunner:test("the open book's Book Hub lists its section quizzes under Quiz only", function()
+TestRunner:test("the Book Hub lists a book's section quizzes under Quiz, open or closed", function()
+    -- a fresh copy, so it shows its popup through this file's UIManager
+    stubModule("koassistant.books.book_page", nil)
     local BookPage = require("koassistant.books.book_page")
     local WITH_QUIZ, SECTIONS_ONLY = "/books/q.epub", "/books/s.epub"
     local quiz_sections = { [ActionCache.SECTION_PREFIXES.quiz] = {
@@ -747,15 +749,41 @@ TestRunner:test("the open book's Book Hub lists its section quizzes under Quiz o
     end
     local rows = rowsOf(WITH_QUIZ)
     TestRunner:assertEqual(keysOf(rows), "quiz,_quiz_sections", "the aggregation lists both")
-    TestRunner:assertEqual(keysOf(BookPage.dropSectionQuizzes(rows)), "quiz", "the Quiz popup lists them")
-    TestRunner:assertEqual(keysOf(BookPage.dropSectionQuizzes(rowsOf(SECTIONS_ONLY))), "_quiz_sections",
-        "without a Quiz row their own row stays")
+    local taken = BookPage.takeSectionQuizzes(rows)
+    TestRunner:assertEqual(keysOf(rows), "quiz", "the page lists the Quiz row only")
+    TestRunner:assertTrue(taken ~= nil and taken.key == "_quiz_sections", "and keeps the section quizzes for it")
+    local only = rowsOf(SECTIONS_ONLY)
+    TestRunner:assertTrue(BookPage.takeSectionQuizzes(only) == nil, "without a Quiz row nothing is taken")
+    TestRunner:assertEqual(keysOf(only), "_quiz_sections", "and their own row stays")
+
+    local hub_plugin = setmetatable({
+        executeBookLevelAction = function(_self, id) record("action " .. id) end,
+    }, { __index = plugin })
+    local function quiz(sections_row, is_open)
+        events, last_shown = {}, nil
+        BookPage.openQuiz(rows[1], sections_row, { plugin = hub_plugin, file = WITH_QUIZ, title = "Q",
+            is_open_book = is_open })
+        return table.concat(events, " | ")
+    end
+    TestRunner:assertEqual(quiz(taken, true), "action quiz", "an open book's Quiz opens the quiz popup")
+    TestRunner:assertEqual(quiz(nil, false), "viewCachedAction quiz " .. WITH_QUIZ,
+        "a closed book without section quizzes opens the quiz")
+    TestRunner:assertEqual(quiz(taken, false), "", "a closed book with section quizzes asks first")
+    local dialog = last_shown
+    TestRunner:assertTrue(dialog ~= nil and #dialog.buttons == 3, "the quiz, the section quizzes, Cancel")
+    TestRunner:assertEqual(tapButton(dialog, "View Quiz"), "viewCachedAction quiz " .. WITH_QUIZ, "the quiz")
+    TestRunner:assertEqual(tapButton(dialog, "View Section Quizzes (1)"), "popup _showSectionGroupPopup",
+        "the section quizzes' popup")
     caches[WITH_QUIZ], sections[WITH_QUIZ], sections[SECTIONS_ONLY] = nil, nil, nil
+
+    -- the page takes them for every book and its Quiz row goes through openQuiz
     local f = assert(io.open(plugin_dir .. "/koassistant/books/book_page.lua", "r"))
     local src = f:read("*a")
     f:close()
-    TestRunner:assertTrue(src:find("if ctx.is_open_book then BookPage.dropSectionQuizzes(caches) end", 1, true) ~= nil,
-        "the page drops them for the open book only (a closed book's Quiz row opens the quiz itself)")
+    TestRunner:assertTrue(src:find("local quiz_sections = BookPage.takeSectionQuizzes(caches)\n", 1, true) ~= nil,
+        "the page takes the section quizzes whether the book is open or not")
+    TestRunner:assertTrue(src:find("row_callback = function() BookPage.openQuiz(cache, quiz_sections, ctx) end", 1, true) ~= nil,
+        "the Quiz row opens through openQuiz")
 end)
 
 -- ---------------------------------------------------------------------------

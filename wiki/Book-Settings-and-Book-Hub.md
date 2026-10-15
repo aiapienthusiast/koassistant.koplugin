@@ -99,7 +99,7 @@ The order is: an action's own override where it declares one, then a chip you se
 
 One full-screen page per book with everything KOAssistant knows about it:
 
-- every artifact with its coverage and age ("65%, today"), X-Ray first (an open book without one gets a create route); tap a row to view it. With the book open, **Quiz** opens its popup (View Quiz, the section quizzes, New Quiz…), so the section quizzes have no row of their own there;
+- every artifact with its coverage and age ("65%, today"), X-Ray first (an open book without one gets a create route); tap a row to view it. **Quiz** also holds the section quizzes: with the book open it opens its popup (View Quiz, the section quizzes, New Quiz…), with the book closed a choice of the quiz and the section quizzes (a book with section quizzes but no whole-book quiz lists them as **View Section Quizzes**);
 - **Book Chat/Action**, **Chat History** with its count, **Notebook** (tap to view, hold to edit), **Search in book** (open book; hands off to KOReader's full-text search), **Group** (tap opens the Group Hub, hold the memberships popup, "Add to group…" when ungrouped), **Book Settings** ("N customized") and **Open Book** (closed-book views); a book in a group also gets a bottom-left up-arrow to its Group Hub;
 - rows refresh in place as you generate things;
 - the title-bar ☰ menu: **Refresh index**, **Export all artifacts** (as Markdown files, to a folder you pick), **Browse all books** (the cross-book artifact browser) and **Delete all artifacts** (with a confirmation naming what it covers).

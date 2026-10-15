@@ -3,8 +3,8 @@ Book page ("Book Hub" — renamed from "Book Overview" with A4's shape work
 2026-08-11; internal ids/settings keys keep book_overview): one full-screen
 view of everything the plugin holds for ONE book — the TOP-LEVEL artifact rows
 the View Artifacts popup shows (same destinations; the X-Ray versions group is
-pruned — it belongs to the X-Ray browser, which surfaces it — and so are the
-section quizzes on an open book, whose Quiz popup lists them), plus chats,
+pruned — it belongs to the X-Ray browser, which surfaces it — and the section
+quizzes are listed under the Quiz row when there is one), plus chats,
 notebook, group membership and book settings. Strictly a VIEW over existing
 stores: nothing is generated here, nothing is stored here, and the popups stay
 the fast path.
@@ -66,17 +66,17 @@ local function artifactEmoji(cache)
     return "📦"
 end
 
---- The open book's Quiz row opens the quiz popup, which lists the section
---- quizzes ("View Section Quizzes"), so a list holding that row drops their
---- own row (maintainer 2026-10-15). In place; returns the list.
-function BookPage.dropSectionQuizzes(caches)
+--- The section quizzes are listed under the Quiz row (BookPage.openQuiz), so
+--- a list holding that row loses their own row (maintainer 2026-10-15). In
+--- place; returns the row it took, nil when there is no Quiz row (the
+--- section quizzes then keep their row).
+function BookPage.takeSectionQuizzes(caches)
     local has_quiz, at = false, nil
     for i, cache in ipairs(caches) do
         if cache.key == "quiz" then has_quiz = true end
         if cache.key == "_quiz_sections" then at = i end
     end
-    if has_quiz and at then table.remove(caches, at) end
-    return caches
+    if has_quiz and at then return table.remove(caches, at) end
 end
 
 --- One artifact row's destination: the shared opener, so the page goes where
@@ -91,6 +91,42 @@ local function openArtifactRow(cache, ctx)
             if dest == "xray" then BookPage.close() end
         end,
     })
+end
+
+--- The Quiz row. An open book's opens the Quiz action popup (View Quiz, the
+--- section quizzes, New Quiz…: the quiz viewer has no redo controls, unlike
+--- the artifact viewers). A closed book cannot run a quiz: its row opens the
+--- quiz, or, when the book has section quizzes (sections_row, taken from the
+--- list by takeSectionQuizzes), a popup of the quiz and the section quizzes.
+--- The action id and the cache key are both "quiz".
+function BookPage.openQuiz(quiz_row, sections_row, ctx)
+    if ctx.is_open_book then
+        ctx.plugin:executeBookLevelAction("quiz")
+        return
+    end
+    if not sections_row then
+        openArtifactRow(quiz_row, ctx)
+        return
+    end
+    local ButtonDialog = require("ui/widget/buttondialog")
+    local dialog
+    local function open(row)
+        return function()
+            UIManager:close(dialog)
+            openArtifactRow(row, ctx)
+        end
+    end
+    local meta = require("koassistant.artifacts.artifact_browser").rowMeta(quiz_row)
+    dialog = ButtonDialog:new{
+        title = quiz_row.name,
+        buttons = {
+            {{ text = T(_("View %1"), quiz_row.name .. (meta and (" (" .. meta .. ")") or "")),
+                callback = open(quiz_row) }},
+            {{ text = sections_row.name, callback = open(sections_row) }},
+            {{ text = _("Cancel"), callback = function() UIManager:close(dialog) end }},
+        },
+    }
+    UIManager:show(dialog)
 end
 
 --- The page's rows, built fresh from disk truth on every call
@@ -116,10 +152,8 @@ local function buildItems(ctx)
             break
         end
     end
-    -- Quiz opens its action popup when the book is open (below), and that
-    -- popup lists the section quizzes, so their own row goes then. A closed
-    -- book's Quiz row opens the quiz itself: its section quizzes keep their row.
-    if ctx.is_open_book then BookPage.dropSectionQuizzes(caches) end
+    -- The section quizzes are listed under the Quiz row (BookPage.openQuiz)
+    local quiz_sections = BookPage.takeSectionQuizzes(caches)
     if not has_xray_row and ctx.is_open_book then
         items[#items + 1] = {
             text = Constants.getEmojiText("📦",
@@ -130,10 +164,11 @@ local function buildItems(ctx)
         }
     end
     for _idx, cache in ipairs(caches) do
-        -- The X-Ray versions group is pruned (the section quizzes went above
-        -- for an open book): it belongs to the X-Ray browser, which owns the
-        -- up-arrow navigation contract and already surfaces it standalone ("Archived X-Ray Versions") when no live
-        -- X-Ray row exists, so nothing orphans.
+        -- The X-Ray versions group is pruned (the section quizzes went above,
+        -- under Quiz): it belongs to the X-Ray browser, which owns the
+        -- up-arrow navigation contract and already surfaces it standalone
+        -- ("Archived X-Ray Versions") when no live X-Ray row exists, so
+        -- nothing orphans.
         --
         -- Section-scoped groups (section X-Rays, section quizzes/summaries/
         -- analyses) were pruned alongside it 2026-08-11, but that contradicted
@@ -145,13 +180,9 @@ local function buildItems(ctx)
             -- ONE formatter with the View-Artifacts popups and the artifact
             -- browser (A4 parity): percent always when tracked + compact age
             local mandatory = require("koassistant.artifacts.artifact_browser").rowMeta(cache)
-            -- Quiz opens its ACTION popup when the book is open (View/Update/New
-            -- Quiz — the quiz viewer has no redo controls, unlike the artifact
-            -- viewers); a closed book can't quiz, so it falls through to viewing.
-            -- The action id AND cache key are "quiz" (koassistant/prompts/actions.lua:1637)
             local row_callback
-            if cache.key == "quiz" and ctx.is_open_book then
-                row_callback = function() plugin:executeBookLevelAction("quiz") end
+            if cache.key == "quiz" then
+                row_callback = function() BookPage.openQuiz(cache, quiz_sections, ctx) end
             else
                 row_callback = function() openArtifactRow(cache, ctx) end
             end
