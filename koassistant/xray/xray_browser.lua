@@ -8085,253 +8085,28 @@ function XrayBrowser:_getAvailableArtifacts()
     return ActionCache.getAvailableArtifactsWithPinned(book_file, exclude_key, doc)
 end
 
--- Check if an artifact key would open another X-Ray browser
-function XrayBrowser:_isXrayArtifact(art)
-    if art.is_section_xray_group then return true end
-    local ActionCache = require("koassistant.artifacts.action_cache")
-    return art.key == "_xray_cache"
-        or (type(art.key) == "string"
-            and art.key:sub(1, #ActionCache.SECTION_XRAY_PREFIX) == ActionCache.SECTION_XRAY_PREFIX)
-end
-
--- Open a specific artifact viewer
+-- Open one of this book's other artifacts through the shared opener (B490):
+-- the "Other Artifacts" popup closes when an artifact opens (a group's popup
+-- stacks on it until a pick), and this browser closes before another X-Ray
+-- browser and before the versions list (both reuse the module-level browser
+-- state); everything else opens on top of it
 function XrayBrowser:_openArtifact(art)
     local plugin = self.metadata.plugin
     if not plugin then return end
-    local book_file = self.metadata.book_file
-    local book_title = self.metadata.title or ""
-    -- Close current browser before opening another X-Ray browser (prevents stacking)
-    -- For section groups, defer closing until user picks a specific section
-    if not art.is_section_xray_group and self:_isXrayArtifact(art) and self.menu then
-        UIManager:close(self.menu)
-    end
-    if art.is_section_xray_group then
-        self:_showSectionXrayGroupPopup(art.data, art._excluded_section_key)
-    elseif art.is_section_group then
-        local ArtifactBrowser = require("koassistant.artifacts.artifact_browser")
-        ArtifactBrowser:_showSectionGroupPopup(
-            art.data, book_file, book_title, plugin,
-            art.section_type, art._excluded_section_key)
-    elseif art.is_wiki_group then
-        self:_showWikiGroupPopup(art.data)
-    elseif art.is_pinned_group then
-        self:_showPinnedGroupPopup(art.data)
-    elseif art.is_image_group then
-        -- Gallery opens on top; the X-Ray browser stays open beneath
-        local ImageBrowser = require("koassistant.images.image_browser")
-        ImageBrowser.show({ book_file = book_file, book_title = book_title })
-    elseif art.is_xray_versions_group then
-        -- Close the browser first: viewing an archived version reuses the
-        -- module-level XrayBrowser state
-        if self.menu then UIManager:close(self.menu) end
-        plugin:_showXrayCheckpointList({ file = book_file, book_title = book_title })
-    elseif art.is_per_action then
-        plugin:viewCachedAction(
-            { text = art.name }, art.key, art.data,
-            { file = book_file, book_title = book_title })
-    else
-        plugin:showCacheViewer({
-            name = art.name, key = art.key, data = art.data,
-            book_title = book_title, file = book_file })
-    end
-end
-
--- Show popup listing individual section X-Rays from a group entry
-function XrayBrowser:_showSectionXrayGroupPopup(sections, excluded_key)
-    local ActionCache = require("koassistant.artifacts.action_cache")
-    local plugin = self.metadata.plugin
-    if not plugin then return end
-    local book_file = self.metadata.book_file
-    local book_title = self.metadata.title or ""
     local self_ref = self
-
-    local buttons = {}
-    for _idx, sec in ipairs(sections) do
-        if sec.key ~= excluded_key then
-            local captured = sec
-            local label = captured.label or captured.key
-            local sec_doc = self_ref.ui and self_ref.ui.document
-            local page_info = captured.data and ActionCache.reconvertPageSummary(captured.data, sec_doc) or ""
-            local display = page_info ~= "" and (label .. " (" .. page_info .. ")") or label
-            table.insert(buttons, {{
-                text = display,
-                callback = function()
-                    if self_ref._section_group_dialog then
-                        UIManager:close(self_ref._section_group_dialog)
-                    end
-                    if self_ref._artifacts_dialog then
-                        UIManager:close(self_ref._artifacts_dialog)
-                    end
-                    -- Close current browser before opening another (prevents stacking)
-                    if self_ref.menu then
-                        UIManager:close(self_ref.menu)
-                    end
-                    plugin:showCacheViewer({
-                        name = label, key = captured.key, data = captured.data,
-                        book_title = book_title, file = book_file })
-                end,
-            }})
-        end
-    end
-
-    if #buttons == 0 then
-        UIManager:show(InfoMessage:new{
-            text = _("No other Section X-Rays available."),
-            timeout = 3,
-        })
-        return
-    end
-
-    self._section_group_dialog = ButtonDialog:new{
-        title = _("View Section X-Rays"),
-        buttons = buttons,
-    }
-    UIManager:show(self._section_group_dialog)
-end
-
--- Show popup listing individual wiki entries from a group entry
-function XrayBrowser:_showWikiGroupPopup(wiki_entries)
-    local ChatGPTViewer = require("koassistant.ui.chatgptviewer")
-    local ActionCache = require("koassistant.artifacts.action_cache")
-    local book_file = self.metadata.book_file
-    local self_ref = self
-
-    local buttons = {}
-    for _idx, wiki in ipairs(wiki_entries) do
-        local captured = wiki
-        table.insert(buttons, {{
-            text = captured.label,
-            callback = function()
-                if self_ref._wiki_group_dialog then
-                    UIManager:close(self_ref._wiki_group_dialog)
-                end
-                if self_ref._artifacts_dialog then
-                    UIManager:close(self_ref._artifacts_dialog)
-                end
-                local viewer = ChatGPTViewer:new{
-                    title = T(_("AI Wiki: %1"), captured.label),
-                    text = captured.data.result,
-                    simple_view = true,
-                    cache_type_name = _("AI Wiki"),
-                    on_delete = function()
-                        ActionCache.clear(book_file, captured.key)
-                        UIManager:show(Notification:new{
-                            text = _("AI Wiki deleted"),
-                            timeout = 2,
-                        })
-                    end,
-                    _book_open = self_ref.ui and self_ref.ui.document ~= nil,
-                    _plugin = self_ref.metadata.plugin,
-                    _artifact_file = book_file,
-                    _artifact_key = captured.key,
-                    _artifact_book_title = self_ref.metadata.title,
-                    _artifact_book_author = self_ref.metadata.author,
-                    on_launch_chat = self_ref.metadata.plugin and self_ref.metadata.plugin._buildLaunchChatCallback
-                        and self_ref.metadata.plugin:_buildLaunchChatCallback(book_file, self_ref.metadata.title, self_ref.metadata.author, captured.data.result, _("AI Wiki")) or nil,
-                }
-                UIManager:show(viewer)
-            end,
-        }})
-    end
-
-    if #buttons == 0 then
-        UIManager:show(InfoMessage:new{
-            text = _("No AI Wiki entries available."),
-            timeout = 3,
-        })
-        return
-    end
-
-    self._wiki_group_dialog = ButtonDialog:new{
-        title = _("AI Wiki Entries"),
-        buttons = buttons,
-    }
-    UIManager:show(self._wiki_group_dialog)
-end
-
--- Show popup listing pinned artifacts from a group entry
-function XrayBrowser:_showPinnedGroupPopup(pinned_entries)
-    local ChatGPTViewer = require("koassistant.ui.chatgptviewer")
-    local PinnedManager = require("koassistant.artifacts.pinned_manager")
-    local book_file = self.metadata.book_file
-    local self_ref = self
-
-    local buttons = {}
-    for _idx, pin in ipairs(pinned_entries) do
-        local captured = pin
-        local label = captured.name or captured.action_text or _("Pinned")
-        table.insert(buttons, {{
-            text = label,
-            callback = function()
-                if self_ref._pinned_group_dialog then
-                    UIManager:close(self_ref._pinned_group_dialog)
-                end
-                if self_ref._artifacts_dialog then
-                    UIManager:close(self_ref._artifacts_dialog)
-                end
-                local display_name = captured.name or captured.action_text or _("Pinned")
-                local info_parts = {}
-                if captured.action_text and captured.action_text ~= "" then
-                    table.insert(info_parts, _("Action") .. ": " .. captured.action_text)
-                end
-                if captured.model and captured.model ~= "" then
-                    table.insert(info_parts, _("Model") .. ": " .. captured.model)
-                end
-                if captured.timestamp and captured.timestamp > 0 then
-                    table.insert(info_parts, _("Pinned") .. ": " .. os.date("%B %d, %Y", captured.timestamp))
-                end
-                if captured.user_prompt and captured.user_prompt ~= "" then
-                    local preview = captured.user_prompt:sub(1, 200)
-                    if #captured.user_prompt > 200 then preview = preview .. "..." end
-                    table.insert(info_parts, _("Prompt") .. ": " .. preview)
-                end
-                local viewer = ChatGPTViewer:new{
-                    title = display_name .. " (" .. _("Pinned") .. ")",
-                    text = captured.result or "",
-                    simple_view = true,
-                    cache_type_name = _("pinned artifact"),
-                    cache_metadata = {
-                        cache_type = "pinned",
-                        book_title = captured.book_title,
-                        book_author = captured.book_author,
-                        model = captured.model,
-                        timestamp = captured.timestamp,
-                    },
-                    _info_text = #info_parts > 0 and table.concat(info_parts, "\n") or nil,
-                    on_delete = function()
-                        PinnedManager.removePin(book_file, captured.id)
-                        UIManager:show(Notification:new{
-                            text = _("Pinned artifact removed"),
-                            timeout = 2,
-                        })
-                    end,
-                    _book_open = self_ref.ui and self_ref.ui.document ~= nil,
-                    _plugin = self_ref.metadata.plugin,
-                    _artifact_file = book_file,
-                    _artifact_key = "pinned:" .. (captured.id or ""),
-                    _artifact_book_title = self_ref.metadata.title,
-                    _artifact_book_author = self_ref.metadata.author,
-                    on_launch_chat = self_ref.metadata.plugin and self_ref.metadata.plugin._buildLaunchChatCallback
-                        and self_ref.metadata.plugin:_buildLaunchChatCallback(book_file, self_ref.metadata.title, self_ref.metadata.author, captured.result, captured.action_text or _("Pinned")) or nil,
-                }
-                UIManager:show(viewer)
-            end,
-        }})
-    end
-
-    if #buttons == 0 then
-        UIManager:show(InfoMessage:new{
-            text = _("No pinned artifacts available."),
-            timeout = 3,
-        })
-        return
-    end
-
-    self._pinned_group_dialog = ButtonDialog:new{
-        title = _("Pinned Artifacts"),
-        buttons = buttons,
-    }
-    UIManager:show(self._pinned_group_dialog)
+    require("koassistant.artifacts.artifact_browser").openRow(art, {
+        plugin = plugin, file = self.metadata.book_file,
+        title = self.metadata.title, author = self.metadata.book_author,
+        before_open = function(dest)
+            if self_ref._artifacts_dialog then
+                UIManager:close(self_ref._artifacts_dialog)
+                self_ref._artifacts_dialog = nil
+            end
+            if (dest == "xray" or dest == "versions") and self_ref.menu then
+                UIManager:close(self_ref.menu)
+            end
+        end,
+    })
 end
 
 -- Show popup listing other cached artifacts (for 2+ artifacts)
@@ -8352,11 +8127,6 @@ function XrayBrowser:_showOtherArtifacts(available)
         table.insert(buttons, {{
             text = label,
             callback = function()
-                if not (captured.is_section_group or captured.is_wiki_group or captured.is_pinned_group) then
-                    if self_ref._artifacts_dialog then
-                        UIManager:close(self_ref._artifacts_dialog)
-                    end
-                end
                 self_ref:_openArtifact(captured)
             end,
         }})

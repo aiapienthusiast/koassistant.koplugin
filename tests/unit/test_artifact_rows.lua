@@ -605,6 +605,51 @@ TestRunner:test("the artifact browser's selector opens rows through the opener",
     TestRunner:assertTrue(attached ~= nil and attached.key == "recap", "the pick is attached")
 end)
 
+-- The X-Ray browser, fresh, so it holds this file's UIManager
+stubModule("ui/event", classStub())
+stubModule("ui/widget/textviewer", classStub())
+stubModule("device", {
+    screen = {
+        getWidth = function() return 800 end,
+        getHeight = function() return 600 end,
+        scaleBySize = function(_self, n) return n end,
+    },
+    isTouchDevice = function() return false end,
+    hasKeys = function() return false end,
+})
+local saved_xray_browser = package.loaded["koassistant.xray.xray_browser"]
+package.loaded["koassistant.xray.xray_browser"] = nil
+local XrayBrowser = require("koassistant.xray.xray_browser")
+
+TestRunner:test("the X-Ray browser opens its other artifacts through the opener", function()
+    local closed = {}
+    stubField(package.loaded["ui/uimanager"], "close", function(_self, w) closed[#closed + 1] = w end)
+    local function host()
+        closed, events = {}, {}
+        return setmetatable({ metadata = { plugin = plugin, book_file = BOOK_A, title = "Book A",
+            book_author = "Someone" }, menu = "MENU", _artifacts_dialog = "DIALOG" }, { __index = XrayBrowser })
+    end
+    local rows = byKey(rowsOf(BOOK_A))
+    local h = host()
+    h:_openArtifact(rows.recap)
+    TestRunner:assertEqual(table.concat(closed, ","), "DIALOG", "a saved result: the popup closes, the browser stays")
+    TestRunner:assertEqual(table.concat(events, " | "), "viewCachedAction recap " .. BOOK_A)
+    h = host()
+    h:_openArtifact(rows._xray_cache)
+    TestRunner:assertEqual(table.concat(closed, ","), "DIALOG,MENU", "another X-Ray browser: this one closes first")
+    h = host()
+    h:_openArtifact(rows._xray_versions)
+    TestRunner:assertEqual(table.concat(closed, ","), "DIALOG,MENU", "the versions list: this one closes first")
+    h = host()
+    h:_openArtifact(rows._generated_images)
+    TestRunner:assertEqual(table.concat(closed, ","), "DIALOG", "the gallery opens on top")
+    h = host()
+    h:_openArtifact(rows._wiki_entries)
+    TestRunner:assertEqual(#closed, 0, "a group's popup stacks on the Other Artifacts popup")
+    last_on_select()
+    TestRunner:assertEqual(table.concat(closed, ","), "DIALOG", "a pick closes the Other Artifacts popup")
+end)
+
 -- ---------------------------------------------------------------------------
 -- The X-Ray versions list and its actions act on the book they are opened
 -- for (B492): a row for another book passes that book, and these resolve the
@@ -638,6 +683,7 @@ for i = #saved_fields, 1, -1 do
 end
 for name, saved in pairs(saved_loaded) do package.loaded[name] = saved.value end
 package.loaded["koassistant.artifacts.artifact_browser"] = saved_browser
+package.loaded["koassistant.xray.xray_browser"] = saved_xray_browser
 _G.G_reader_settings = saved_settings
 
 TestRunner:summary()
