@@ -73,8 +73,8 @@ end
 local function openArtifactRow(cache, ctx)
     require("koassistant.artifacts.artifact_browser").openRow(cache, {
         plugin = ctx.plugin, file = ctx.file, title = ctx.title, author = ctx.author,
-        before_open = function(opens_xray)
-            if opens_xray then BookPage.close() end
+        before_open = function(dest)
+            if dest == "xray" then BookPage.close() end
         end,
     })
 end

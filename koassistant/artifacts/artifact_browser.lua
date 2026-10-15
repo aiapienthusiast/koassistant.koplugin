@@ -145,19 +145,25 @@ end
 
 --- THE opener for a row of ActionCache.getAvailableArtifactsWithPinned: the
 --- same destination wherever the row is listed (the group flags are that
---- aggregation's contract). ctx = { plugin, file, title, author,
---- before_open = function(opens_xray) }: before_open runs once, right before
---- the destination opens (for a group row, when the reader picks an entry of
---- its popup; the popup itself stacks on the surface), so the surface can
---- close what the destination replaces; opens_xray = the destination is the
---- full-screen X-Ray browser. The book's identity goes to the viewers
---- explicitly; they compare it with the open book themselves. Callers: the
---- Book Hub and Browse by type; docs/artifact_rows_plan.md lists the surfaces
---- still on their own copies.
+--- aggregation's contract; docs/artifact_rows_plan.md). ctx:
+---   plugin, file, title, author  the book; its identity goes to every viewer,
+---       which compares it with the open book itself
+---   before_open(dest)  runs once, right before the destination opens (for a
+---       group row, when the reader picks an entry of its popup; the popup
+---       itself stacks on the surface), so the surface can close what the
+---       destination replaces. dest = "xray" (the full-screen X-Ray browser),
+---       "viewer" (another artifact window), "gallery" or "versions"
+---   close_browser  versions only: runs when a version is viewed, installed or
+---       switched to (browsing the list keeps the surface)
+---   opts  the artifact browser's opts: in select mode (Attach) a saved result
+---       is attached instead of opened, and the group popups pick
 function ArtifactBrowser.openRow(row, ctx)
     local plugin, file = ctx.plugin, ctx.file
-    local function before(opens_xray)
-        if ctx.before_open then ctx.before_open(opens_xray) end
+    local function before(dest)
+        if ctx.before_open then ctx.before_open(dest) end
+    end
+    local function picked(dest)
+        return function() before(dest) end
     end
     logger.dbg("KOAssistant Artifacts: open row",
         row.is_image_group and "images"
@@ -170,32 +176,38 @@ function ArtifactBrowser.openRow(row, ctx)
         or "cache-viewer",
         row.key or "?")
     if row.is_image_group then
-        before(false)
+        before("gallery")
         require("koassistant.images.image_browser").show({
             book_file = file, book_title = ctx.title })
     elseif row.is_xray_versions_group then
-        before(false)
+        before("versions")
         plugin:_showXrayCheckpointList({ file = file,
-            book_title = ctx.title, book_author = ctx.author })
+            book_title = ctx.title, book_author = ctx.author,
+            close_browser = ctx.close_browser })
     elseif row.is_section_xray_group then
         -- A pick opens that section's full-screen X-Ray browser
         ArtifactBrowser:_showSectionXrayGroupPopup(row.data, file, ctx.title, plugin,
-            row._excluded_section_key, function() before(true) end)
+            row._excluded_section_key, picked("xray"), ctx.opts)
     elseif row.is_section_group then
         ArtifactBrowser:_showSectionGroupPopup(row.data, file, ctx.title, plugin,
-            row.section_type, row._excluded_section_key, function() before(false) end)
+            row.section_type, row._excluded_section_key, picked("viewer"), ctx.opts)
     elseif row.is_wiki_group then
         ArtifactBrowser:_showWikiGroupPopup(row.data, file, plugin, ctx.title,
-            function() before(false) end)
+            picked("viewer"), ctx.opts)
     elseif row.is_pinned_group then
         ArtifactBrowser:_showPinnedGroupPopup(row.data, file, ctx.title,
-            function() before(false) end)
+            picked("viewer"), ctx.opts)
+    elseif ctx.opts and ctx.opts.select_mode then
+        -- Attach: the shared build-first tail (a refusal keeps the picker open)
+        local entry, err = require("koassistant.request.attachments").makeArtifact(
+            row.name, row.key, row.data, ctx.title)
+        finishLeafSelect(ArtifactBrowser, ctx.opts, entry, err, nil, picked("viewer"))
     elseif row.is_per_action then
-        before(false)
+        before("viewer")
         plugin:viewCachedAction({ text = row.name }, row.key, row.data,
             { file = file, book_title = ctx.title, book_author = ctx.author })
     else
-        before(opensXrayBrowser(row))
+        before(opensXrayBrowser(row) and "xray" or "viewer")
         plugin:showCacheViewer({ name = row.name, key = row.key, data = row.data,
             file = file, book_title = ctx.title, book_author = ctx.author })
     end
@@ -400,61 +412,22 @@ function ArtifactBrowser:showArtifactSelector(doc_path, doc_title, opts)
         table.insert(buttons, {{
             text = display_name,
             callback = function()
-                if captured.is_section_xray_group then
-                    local selector = self_ref._cache_selector
-                    self_ref:_showSectionXrayGroupPopup(
-                        captured.data, doc_path, doc_title, AskGPT, captured._excluded_section_key,
-                        function() UIManager:close(selector) end, opts)
-                elseif captured.is_section_group then
-                    local selector = self_ref._cache_selector
-                    self_ref:_showSectionGroupPopup(
-                        captured.data, doc_path, doc_title, AskGPT, captured.section_type,
-                        captured._excluded_section_key,
-                        function() UIManager:close(selector) end, opts)
-                elseif captured.is_wiki_group then
-                    local selector = self_ref._cache_selector
-                    self_ref:_showWikiGroupPopup(captured.data, doc_path, AskGPT, doc_title,
-                        function() UIManager:close(selector) end, opts)
-                elseif captured.is_pinned_group then
-                    local selector = self_ref._cache_selector
-                    self_ref:_showPinnedGroupPopup(captured.data, doc_path, doc_title,
-                        function() UIManager:close(selector) end, opts)
-                elseif captured.is_xray_versions_group then
+                local selector = self_ref._cache_selector
+                local ab_menu = self_ref.current_menu
+                ArtifactBrowser.openRow(captured, {
+                    plugin = AskGPT, file = doc_path, title = doc_title, opts = opts,
+                    before_open = function() UIManager:close(selector) end,
                     -- Round 26 (device report: "the View/Install/Delete popup
-                    -- stays open"): this was the ONE versions entry with no
-                    -- close_browser hook, so after installing a version the
-                    -- full-screen browser behind it stayed up showing pre-
-                    -- install state. Deferred close, like the X-Ray browser's
-                    -- row: browsing versions keeps the browser, an actual
-                    -- View/Install/Switch retires it.
-                    local ab_menu = self_ref.current_menu
-                    UIManager:close(self_ref._cache_selector)
-                    AskGPT:_showXrayCheckpointList({ file = doc_path, book_title = doc_title,
-                        close_browser = function()
-                            if ab_menu then
-                                UIManager:close(ab_menu)
-                                self_ref.current_menu = nil
-                            end
-                        end })
-                elseif select_mode then
-                    local entry, err = require("koassistant.request.attachments").makeArtifact(
-                        captured.name, captured.key, captured.data, doc_title)
-                    finishLeafSelect(self_ref, opts, entry, err, self_ref._cache_selector, nil)
-                elseif captured.is_image_group then
-                    UIManager:close(self_ref._cache_selector)
-                    local ImageBrowser = require("koassistant.images.image_browser")
-                    ImageBrowser.show({ book_file = doc_path, book_title = doc_title })
-                elseif captured.is_per_action then
-                    UIManager:close(self_ref._cache_selector)
-                    AskGPT:viewCachedAction(
-                        { text = captured.name }, captured.key, captured.data,
-                        { file = doc_path, book_title = doc_title })
-                else
-                    UIManager:close(self_ref._cache_selector)
-                    AskGPT:showCacheViewer({
-                        name = captured.name, key = captured.key, data = captured.data,
-                        book_title = doc_title, file = doc_path })
-                end
+                    -- stays open"): browsing the versions keeps the browser,
+                    -- an actual View/Install/Switch retires it, so it does not
+                    -- stay up showing the pre-install state
+                    close_browser = function()
+                        if ab_menu then
+                            UIManager:close(ab_menu)
+                            self_ref.current_menu = nil
+                        end
+                    end,
+                })
             end,
         }})
         end

@@ -286,7 +286,8 @@ local plugin = {
         record("showCacheViewer " .. info.key .. " " .. tostring(info.file) .. " " .. tostring(info.book_title))
     end,
     _showXrayCheckpointList = function(_self, opts)
-        record("versions " .. tostring(opts and opts.file))
+        record("versions " .. tostring(opts and opts.file)
+            .. (opts and opts.close_browser and " close_browser" or ""))
     end,
 }
 for _idx, popup in ipairs({ "_showSectionXrayGroupPopup", "_showSectionGroupPopup",
@@ -301,7 +302,8 @@ for _idx, popup in ipairs({ "_showSectionXrayGroupPopup", "_showSectionGroupPopu
             if type(v) == "function" then on_select = v; break end
         end
         last_on_select = on_select
-        record("popup " .. name)
+        local last = select(select("#", ...), ...)
+        record("popup " .. name .. (type(last) == "table" and last.select_mode and " select" or ""))
     end)
 end
 stubModule("koassistant.images.image_browser", {
@@ -313,7 +315,7 @@ local function open(row)
     events, last_on_select = {}, nil
     ArtifactBrowser.openRow(row, {
         plugin = plugin, file = BOOK_A, title = "Book A", author = "Someone",
-        before_open = function(opens_xray) record("before " .. tostring(opens_xray)) end,
+        before_open = function(dest) record("before " .. tostring(dest)) end,
     })
     return table.concat(events, " | ")
 end
@@ -321,22 +323,22 @@ end
 TestRunner:test("each row reaches its destination, after before_open", function()
     local rows = byKey(rowsOf(BOOK_A))
     TestRunner:assertEqual(open(rows._xray_cache),
-        "before true | showCacheViewer _xray_cache " .. BOOK_A .. " Book A", "the X-Ray row")
+        "before xray | showCacheViewer _xray_cache " .. BOOK_A .. " Book A", "the X-Ray row")
     TestRunner:assertEqual(open(rows._summary_cache),
-        "before false | showCacheViewer _summary_cache " .. BOOK_A .. " Book A", "a document cache")
+        "before viewer | showCacheViewer _summary_cache " .. BOOK_A .. " Book A", "a document cache")
     TestRunner:assertEqual(open(rows.recap),
-        "before false | viewCachedAction recap " .. BOOK_A, "a per-action artifact")
-    TestRunner:assertEqual(open(rows._generated_images), "before false | gallery " .. BOOK_A, "images")
-    TestRunner:assertEqual(open(rows._xray_versions), "before false | versions " .. BOOK_A, "versions")
+        "before viewer | viewCachedAction recap " .. BOOK_A, "a per-action artifact")
+    TestRunner:assertEqual(open(rows._generated_images), "before gallery | gallery " .. BOOK_A, "images")
+    TestRunner:assertEqual(open(rows._xray_versions), "before versions | versions " .. BOOK_A, "versions")
 end)
 
 TestRunner:test("a group row opens its popup; before_open waits for the pick", function()
     local rows = byKey(rowsOf(BOOK_A))
     local cases = {
-        { rows._xray_sections, "popup _showSectionXrayGroupPopup", "before true" },
-        { rows._summary_sections, "popup _showSectionGroupPopup", "before false" },
-        { rows._wiki_entries, "popup _showWikiGroupPopup", "before false" },
-        { rows._pinned_artifacts, "popup _showPinnedGroupPopup", "before false" },
+        { rows._xray_sections, "popup _showSectionXrayGroupPopup", "before xray" },
+        { rows._summary_sections, "popup _showSectionGroupPopup", "before viewer" },
+        { rows._wiki_entries, "popup _showWikiGroupPopup", "before viewer" },
+        { rows._pinned_artifacts, "popup _showPinnedGroupPopup", "before viewer" },
     }
     for _idx, case in ipairs(cases) do
         TestRunner:assertEqual(open(case[1]), case[2], case[1].key .. " opens its popup only")
@@ -345,6 +347,39 @@ TestRunner:test("a group row opens its popup; before_open waits for the pick", f
         last_on_select()
         TestRunner:assertEqual(table.concat(events, " | "), case[3], case[1].key .. "'s pick")
     end
+end)
+
+TestRunner:test("the versions list gets the surface's close_browser", function()
+    local rows = byKey(rowsOf(BOOK_A))
+    events = {}
+    ArtifactBrowser.openRow(rows._xray_versions, { plugin = plugin, file = BOOK_A, title = "Book A",
+        close_browser = function() end })
+    TestRunner:assertEqual(table.concat(events, " | "), "versions " .. BOOK_A .. " close_browser")
+end)
+
+TestRunner:test("in select mode a saved result is attached, a refusal keeps the picker", function()
+    stubModule("koassistant.request.attachments", {
+        makeArtifact = function(name, key, _data, title)
+            if key == "recap" then return { name = name, key = key, title = title } end
+            return nil, "refused " .. key
+        end,
+    })
+    local attached
+    local opts = { select_mode = { on_select = function(entry) attached = entry end } }
+    local rows = byKey(rowsOf(BOOK_A))
+    local function pick(row)
+        events, attached = {}, nil
+        ArtifactBrowser.openRow(row, { plugin = plugin, file = BOOK_A, title = "Book A", opts = opts,
+            before_open = function(dest) record("before " .. dest) end })
+        return table.concat(events, " | ")
+    end
+    TestRunner:assertEqual(pick(rows.recap), "before viewer", "the picker closes")
+    TestRunner:assertTrue(attached ~= nil and attached.key == "recap" and attached.title == "Book A",
+        "the entry reaches the select callback")
+    TestRunner:assertEqual(pick(rows._summary_cache), "", "a refusal closes nothing")
+    TestRunner:assertTrue(attached == nil, "and attaches nothing")
+    TestRunner:assertEqual(pick(rows._wiki_entries), "popup _showWikiGroupPopup select",
+        "a group popup picks in select mode")
 end)
 
 TestRunner:test("no row of the fixture falls through to a viewer it does not belong in", function()
@@ -518,6 +553,56 @@ TestRunner:test("the dialog lists every kind; a kind opens its list, images the 
     last_shown.item_table[1].callback()
     TestRunner:assertEqual(table.concat(events, " | "), "popup _showSectionXrayGroupPopup",
         "a book's row opens that book's popup")
+end)
+
+-- ---------------------------------------------------------------------------
+-- The surfaces on the one opener, end to end: the row a reader taps reaches
+-- its destination, with the surface's own chrome closed
+-- ---------------------------------------------------------------------------
+
+print("\n  [the surfaces]")
+
+local function tapButton(dialog, prefix)
+    for _idx, row in ipairs(dialog.buttons or {}) do
+        local text = row[1] and row[1].text or ""
+        if text:sub(1, #prefix) == prefix then
+            events = {}
+            row[1].callback()
+            return table.concat(events, " | ")
+        end
+    end
+    error("no button starting " .. prefix)
+end
+
+TestRunner:test("the artifact browser's selector opens rows through the opener", function()
+    stubModule("apps/reader/readerui", { instance = nil })
+    stubModule("koassistant.images.image_generator", { booksWithImages = function() return IMAGE_BOOKS end })
+    local closed = {}
+    stubField(package.loaded["ui/uimanager"], "close", function(_self, w) closed[#closed + 1] = w end)
+
+    last_shown = nil
+    ArtifactBrowser:showArtifactSelector(BOOK_A, "Book A", {})
+    local selector = last_shown
+    TestRunner:assertTrue(selector ~= nil and selector.title == "Book A", "the selector is shown")
+    TestRunner:assertEqual(tapButton(selector, "Recap"), "viewCachedAction recap " .. BOOK_A, "a saved result")
+    TestRunner:assertTrue(closed[#closed] == selector, "the selector closed before the viewer")
+    TestRunner:assertEqual(tapButton(selector, "Previous X-Ray Versions"),
+        "versions " .. BOOK_A .. " close_browser", "the versions list gets the deferred close")
+    TestRunner:assertEqual(tapButton(selector, "View Section X-Rays"), "popup _showSectionXrayGroupPopup",
+        "a group row opens its popup")
+
+    -- Select mode (Attach): no image or versions rows; a pick attaches
+    local attached
+    last_shown = nil
+    ArtifactBrowser:showArtifactSelector(BOOK_A, "Book A",
+        { select_mode = { on_select = function(entry) attached = entry end } })
+    local texts = {}
+    for _idx, row in ipairs(last_shown.buttons) do texts[#texts + 1] = row[1].text end
+    local joined = table.concat(texts, " | ")
+    TestRunner:assertTrue(not joined:find("Generated Images", 1, true)
+        and not joined:find("X-Ray Versions", 1, true), "no image or versions rows: " .. joined)
+    tapButton(last_shown, "Recap")
+    TestRunner:assertTrue(attached ~= nil and attached.key == "recap", "the pick is attached")
 end)
 
 -- ---------------------------------------------------------------------------
