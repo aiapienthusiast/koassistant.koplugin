@@ -2381,18 +2381,6 @@ local SettingsSchema = {
                                 return require("koassistant.request.privacy_gates").summary({ features = plugin.settings:readSetting("features") or {} }).book_text.state ~= "never"
                             end,
                         },
-                        {
-                            id = "clear_action_cache",
-                            type = "action",
-                            text = _("Delete Book Artifacts"),
-                            help_text = _("Delete every saved artifact for the current book: the X-Ray (with its archived versions and checkpoints), summaries, analyses and wiki entries. They regenerate from scratch next time you run the actions."),
-                            callback = "clearActionCache",
-                            keep_menu_open = true,
-                            enabled_func = function(plugin)
-                                -- usable unless book text is Never (the question comes at the run)
-                                return require("koassistant.request.privacy_gates").summary({ features = plugin.settings:readSetting("features") or {} }).book_text.state ~= "never"
-                            end,
-                        },
                     },
                 },
             },
