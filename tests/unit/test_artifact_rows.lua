@@ -651,6 +651,64 @@ TestRunner:test("the X-Ray browser opens its other artifacts through the opener"
 end)
 
 -- ---------------------------------------------------------------------------
+-- One source of truth: the group flags are the aggregation's contract with
+-- the artifact browser (openRow, rowMeta, rowLabel, typeKinds, the selector's
+-- select-mode filter). Every other surface labels rows through rowLabel or
+-- rowMeta and opens them through openRow, so none reads a flag itself; the
+-- Book Hub's row emoji and its versions prune are the only reads allowed.
+-- ---------------------------------------------------------------------------
+
+print("\n  [one source of truth]")
+
+TestRunner:test("no file but the aggregation and the artifact browser reads the group flags", function()
+    local OWNERS = {
+        ["koassistant/artifacts/action_cache.lua"] = true,
+        ["koassistant/artifacts/artifact_browser.lua"] = true,
+    }
+    local ALLOWED = {
+        ["koassistant/books/book_page.lua"] = {
+            'if cache.is_pinned_group then return "📌" end',
+            'if cache.is_image_group then return "🖼️" end',
+            "if not cache.is_xray_versions_group then",
+        },
+    }
+    local files = { "main.lua" }
+    local list = assert(io.popen('cd "' .. plugin_dir .. '" && find koassistant -name "*.lua"'))
+    for rel in list:lines() do files[#files + 1] = rel end
+    list:close()
+    TestRunner:assertTrue(#files > 50, "the plugin's files are found")
+    local offenders = {}
+    for _idx, rel in ipairs(files) do
+        if not OWNERS[rel] then
+            local f = assert(io.open(plugin_dir .. "/" .. rel, "r"))
+            local n = 0
+            for line in f:lines() do
+                n = n + 1
+                if line:find("is_[%w_]+_group") or line:find("is_per_action", 1, true) then
+                    local allowed = false
+                    for _idx2, text in ipairs(ALLOWED[rel] or {}) do
+                        if line:find(text, 1, true) then allowed = true end
+                    end
+                    if not allowed then offenders[#offenders + 1] = rel .. ":" .. n end
+                end
+            end
+            f:close()
+        end
+    end
+    TestRunner:assertEqual(table.concat(offenders, ", "), "",
+        "group flags read outside the aggregation and the artifact browser (label rows with rowLabel/rowMeta, open them with openRow)")
+end)
+
+TestRunner:test("a row's label: a saved result's progress and age, a group's own name", function()
+    local rows = byKey(rowsOf(BOOK_A))
+    TestRunner:assertEqual(ArtifactBrowser.rowLabel(rows._wiki_entries), "AI Wiki Entries (3)")
+    TestRunner:assertEqual(ArtifactBrowser.rowLabel(rows._generated_images), "Generated Images (4)")
+    TestRunner:assertTrue(ArtifactBrowser.rowMeta(rows._pinned_artifacts) == nil, "a group row has no meta")
+    local stamped = { name = "Recap", data = { result = "r", progress_decimal = 0.06, timestamp = os.time() } }
+    TestRunner:assertEqual(ArtifactBrowser.rowLabel(stamped), "Recap (6%, today)")
+end)
+
+-- ---------------------------------------------------------------------------
 -- The X-Ray versions list and its actions act on the book they are opened
 -- for (B492): a row for another book passes that book, and these resolve the
 -- named book first, the open book only when none is named

@@ -691,12 +691,8 @@ function AskGPT:generateFileDialogRows(file, is_file, book_props)
         local ButtonDialog = require("ui/widget/buttondialog")
         local btn_rows = {}
         for _idx, cache in ipairs(caches) do
-          local display = cache.name
-          if not cache.is_pinned_group and not cache.is_section_group and not cache.is_wiki_group then
-            -- Shared meta (A4 parity): "X-Ray (65%, today)", percent always
-            local meta = Constants.formatArtifactMeta(cache.data)
-            if meta then display = display .. " (" .. meta .. ")" end
-          end
+          -- "X-Ray (65%, today)": the shared label (B490)
+          local display = require("koassistant.artifacts.artifact_browser").rowLabel(cache)
           table.insert(btn_rows, {{
             text = display,
             callback = function()
@@ -7338,13 +7334,8 @@ function AskGPT:viewCache(parent_dialog)
   local self_ref = self
   local buttons = {}
   for _idx, cache in ipairs(caches) do
-    -- Format with metadata: "X-Ray (65%, today)" or pinned indicator —
-    -- shared meta (A4 parity), percent always when tracked
-    local display = cache.name
-    if not cache.is_pinned_group and not cache.is_section_group and not cache.is_wiki_group then
-      local meta = Constants.formatArtifactMeta(cache.data)
-      if meta then display = display .. " (" .. meta .. ")" end
-    end
+    -- "X-Ray (65%, today)": the shared label (B490)
+    local display = require("koassistant.artifacts.artifact_browser").rowLabel(cache)
     table.insert(buttons, {{
       text = display,
       callback = function()

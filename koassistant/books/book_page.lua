@@ -124,13 +124,9 @@ local function buildItems(ctx)
         -- quizzes existed on disk and the page showed only the whole-book
         -- ones). They are rows again; openArtifactRow already dispatched them.
         if not cache.is_xray_versions_group then
-            local mandatory
-            if not cache.is_pinned_group and not cache.is_wiki_group
-                    and not cache.is_section_group then
-                -- ONE formatter with the View-Artifacts popups and the artifact
-                -- browser (A4 parity): percent always when tracked + compact age
-                mandatory = Constants.formatArtifactMeta(cache.data)
-            end
+            -- ONE formatter with the View-Artifacts popups and the artifact
+            -- browser (A4 parity): percent always when tracked + compact age
+            local mandatory = require("koassistant.artifacts.artifact_browser").rowMeta(cache)
             -- Quiz opens its ACTION popup when the book is open (View/Update/New
             -- Quiz — the quiz viewer has no redo controls, unlike the artifact
             -- viewers); a closed book can't quiz, so it falls through to viewing.

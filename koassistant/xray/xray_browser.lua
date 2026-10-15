@@ -1517,13 +1517,8 @@ function XrayBrowser:buildCategoryItems()
         items[#items].separator = true
         if #artifacts == 1 then
             local art = artifacts[1]
-            local label = art.name
-            -- Shared meta (A4 parity): "Recap (6%, today)", percent always
-            if not (art.is_pinned_group or art.is_section_group
-                    or art.is_section_xray_group or art.is_wiki_group) then
-                local meta = Constants.formatArtifactMeta(art.data)
-                if meta then label = label .. " (" .. meta .. ")" end
-            end
+            -- "Recap (6%, today)": the shared label (B490)
+            local label = require("koassistant.artifacts.artifact_browser").rowLabel(art)
             table.insert(items, {
                 text = Constants.getEmojiText("📋", label, enable_emoji),
                 callback = function()
@@ -8117,13 +8112,7 @@ function XrayBrowser:_showOtherArtifacts(available)
     local buttons = {}
     for _idx, art in ipairs(available) do
         local captured = art
-        local label = captured.name
-        -- Shared meta (A4 parity): "Recap (6%, today)", percent always
-        if not (captured.is_pinned_group or captured.is_section_group
-                or captured.is_section_xray_group or captured.is_wiki_group) then
-            local meta = Constants.formatArtifactMeta(captured.data)
-            if meta then label = label .. " (" .. meta .. ")" end
-        end
+        local label = require("koassistant.artifacts.artifact_browser").rowLabel(captured)
         table.insert(buttons, {{
             text = label,
             callback = function()

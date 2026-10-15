@@ -143,6 +143,23 @@ local function opensXrayBrowser(row)
         and require("koassistant.xray.xray_parser").isJSON(row.data.result) and true or false
 end
 
+--- A row's progress and age ("65%, today") when it is a saved result; nil for
+--- a group row, whose name carries its count. Every View-Artifacts list labels
+--- its rows through this and rowLabel, so none reads the group flags itself.
+function ArtifactBrowser.rowMeta(row)
+    if type(row.data) == "table" and row.data.result then
+        return Constants.formatArtifactMeta(row.data)
+    end
+end
+
+--- A row's label in a View-Artifacts popup: "Recap (6%, today)", or a group
+--- row's own name ("AI Wiki Entries (4)")
+function ArtifactBrowser.rowLabel(row)
+    local meta = ArtifactBrowser.rowMeta(row)
+    if meta then return row.name .. " (" .. meta .. ")" end
+    return row.name
+end
+
 --- THE opener for a row of ActionCache.getAvailableArtifactsWithPinned: the
 --- same destination wherever the row is listed (the group flags are that
 --- aggregation's contract; docs/artifact_rows_plan.md). ctx:
@@ -399,13 +416,7 @@ function ArtifactBrowser:showArtifactSelector(doc_path, doc_title, opts)
     local buttons = {}
     for _idx, artifact in ipairs(all_artifacts) do
         local captured = artifact
-        local display_name = captured.name
-        -- Shared meta (A4 parity with the Book Hub rows and the View-Artifacts
-        -- popups): percent always when tracked + compact age
-        local meta = Constants.formatArtifactMeta(captured.data)
-        if meta then
-            display_name = display_name .. " (" .. meta .. ")"
-        end
+        local display_name = ArtifactBrowser.rowLabel(captured)
         -- Select mode: image rows aren't text, and archived X-Ray versions are a
         -- management surface (attach the live X-Ray artifact instead) — skip both
         if not (select_mode and (captured.is_image_group or captured.is_xray_versions_group)) then
@@ -834,7 +845,7 @@ function ArtifactBrowser:_showTypeList(kind, AskGPT, opts)
             local rel = (captured.modified or 0) > 0 and Constants.formatRelativeTime(captured.modified) or ""
             mandatory = rel ~= "" and (tostring(captured.n) .. " \u{00B7} " .. rel) or tostring(captured.n)
         else
-            mandatory = Constants.formatArtifactMeta(captured.row.data)
+            mandatory = ArtifactBrowser.rowMeta(captured.row)
         end
         local text, callback
         if captured.pinned == "general" then

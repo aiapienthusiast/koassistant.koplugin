@@ -2618,7 +2618,7 @@ function ChatGPTViewer:init()
           local art_buttons = {}
           for _idx, art in ipairs(other_artifacts) do
             local captured = art
-            local label = captured.name
+            local label = require("koassistant.artifacts.artifact_browser").rowLabel(captured)
             table.insert(art_buttons, {{
               text = label,
               callback = function()

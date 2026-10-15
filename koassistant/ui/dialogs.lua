@@ -6577,12 +6577,6 @@ end
 --- Shared meta (A4 parity with the Book Hub rows): percent always when tracked
 --- @param cache table Artifact cache entry with name, data.progress_decimal, data.timestamp
 --- @return string Formatted display text
-local function formatArtifactDisplayText(cache)
-    local meta = Constants.formatArtifactMeta(cache.data)
-    if meta then return cache.name .. " (" .. meta .. ")" end
-    return cache.name
-end
-
 -- Smart-retrieval pre-flight (D3 — tools_ux_plan.md §4), shared by the popup dispatch
 -- (explicit source choice on the input-dialog path) and direct entry points (silent
 -- default — maintainer 2026-07-11): runs the gather phase, stashes the bundle + source
@@ -10352,14 +10346,6 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
             local open_doc = has_open_book and ui_instance.document or nil
             local caches = ActionCache.getAvailableArtifactsWithPinned(artifact_file, nil, open_doc)
 
-            local function formatDisplayText(cache)
-                if cache.is_pinned_group or cache.is_section_group or cache.is_wiki_group
-                    or cache.is_image_group or cache.is_xray_versions_group then
-                    return cache.name
-                end
-                return formatArtifactDisplayText(cache)
-            end
-
             if #caches > 0 then
                 artifact_button = {
                     text = Constants.getEmojiText("\u{1F4E6}", _("View Artifacts"), enable_emoji),
@@ -10370,7 +10356,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         local btn_rows = {}
                         for _idx, cache in ipairs(caches) do
                             table.insert(btn_rows, {{
-                                text = formatDisplayText(cache),
+                                text = require("koassistant.artifacts.artifact_browser").rowLabel(cache),
                                 callback = function()
                                     -- The shared opener (B490) with this dialog's
                                     -- book: the bare row took the open book's file
