@@ -125,7 +125,7 @@ KOAssistant sends data to AI providers to generate answers. The threat model is 
 |---|---|
 | **Default (Ask)** | Every value as it ships: the kinds above are asked for the first time an action wants them. |
 | **Allow everything** | Every kind goes without a question, book text included. |
-| **Never send anything extra** | Only your question, the selected text and the book's title and author. |
+| **Block everything** | Only your question, the selected text and the book's title and author. |
 
 **Book text** (**Settings → Privacy & Data → Text Extraction**) raises token costs, so the question says how much would go (up to your position, the whole book, a section); most actions that would use it answer from AI knowledge without it, while X-Ray, Document Summary and Document Analysis need it. **Trusted providers** (a local Ollama, say) follow their own column of values, Allow unless you change it. **Per-book values** in Book Settings → Privacy allow or refuse book text, highlights, annotation notes, the notebook and the text around what you tap for one book; a book's Never beats everything, trusted providers included.
 

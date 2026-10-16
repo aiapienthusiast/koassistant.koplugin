@@ -2201,7 +2201,7 @@ local SettingsSchema = {
                 {
                     id = "privacy_preset_minimal",
                     type = "action",
-                    text = _("Preset: Never send anything extra"),
+                    text = _("Preset: Block everything"),
                     help_text = _("Nothing but your question, the selected text and the book's title and author. Reading position off too. Actions that need more are refused until you allow it."),
                     callback = "applyPrivacyPresetMinimal",
                     keep_menu_open = true,

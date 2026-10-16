@@ -21707,10 +21707,10 @@ function AskGPT:applyPrivacyPresetDefault(touchmenu_instance)
     _("Default (Ask): each kind of data is asked for the first time an action wants it. Reading position and the text around what you tap are sent, as by default."))
 end
 
--- Privacy preset: Never send anything extra
+-- Privacy preset: Block everything
 function AskGPT:applyPrivacyPresetMinimal(touchmenu_instance)
   applyPrivacyPreset(self, "minimal", touchmenu_instance,
-    _("Never send anything extra: only your question, the selected text and the book's title and author go out."))
+    _("Block everything: only your question, the selected text and the book's title and author go out."))
 end
 
 -- Privacy preset: Allow everything, book text included

@@ -285,7 +285,7 @@ TestRunner:test("the default preset clears every value: each kind reads the defa
     eq(f.trusted_book_text, "never", "the trusted column is untouched")
 end)
 
-TestRunner:test("Allow everything and Never send anything extra set every kind; an unknown preset nothing", function()
+TestRunner:test("Allow everything and Block everything set every kind; an unknown preset nothing", function()
     local f = Gates.applyPreset({}, "full")
     for _idx, kind in ipairs(Gates.KINDS) do
         eq(Gates.resolve(kind, { features = f, provider = "openai" }), "allow", "full: " .. kind)

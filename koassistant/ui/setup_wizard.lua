@@ -793,7 +793,7 @@ function SetupWizard.stepPrivacy(plugin, ctx, next_step)
             },
             {
                 { text = _("Allow everything"), callback = function() applyPreset("applyPrivacyPresetFull", _("Allow everything")) end },
-                { text = _("Never send anything extra"), callback = function() applyPreset("applyPrivacyPresetMinimal", _("Never send anything extra")) end },
+                { text = _("Block everything"), callback = function() applyPreset("applyPrivacyPresetMinimal", _("Block everything")) end },
             },
             {
                 {

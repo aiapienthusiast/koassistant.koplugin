@@ -72,7 +72,7 @@ Automatic X-Ray and checkpoint builds have no moment to ask while you read, so t
 |--------|--------------|
 | **Preset: Default (Ask)** | Every value goes back to the one it ships with: each kind is asked for the first time an action wants it; reading position and the text around what you tap are sent. |
 | **Preset: Allow everything** | Every kind goes without a question, book text included (it raises token costs). |
-| **Preset: Never send anything extra** | Nothing but your question, the selected text and the book's title and author; reading position off too. Actions that need more are refused until you allow it. |
+| **Preset: Block everything** | Nothing but your question, the selected text and the book's title and author; reading position off too. Actions that need more are refused until you allow it. |
 
 A preset changes only these values. Your trusted providers, per-book values and scan folders stay as they are.
 
