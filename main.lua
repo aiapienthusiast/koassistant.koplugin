@@ -241,8 +241,10 @@ function AskGPT:init()
   -- the UI thread for several seconds on shaky WiFi connections).
   -- The HTTP request runs in a subprocess with an 8-second timeout, so it fails
   -- gracefully when offline without blocking the UI.
-  local features = self.settings:readSetting("features") or {}
-  if features.auto_check_updates ~= false then
+  -- Read from the merged view (Settings menu, then configuration.lua): a
+  -- configuration.lua override counts whenever it was written, not only when
+  -- the first start seeded it into the saved settings (B472).
+  if self.configuration.features.auto_check_updates ~= false then
     -- 24h min-interval (timestamp written by the checker on SUCCESS only): skips the
     -- fork + GitHub call + JSON parse — and even loading the checker module — on most
     -- starts. Cheap G_reader_settings read; registered in the storage registry.
@@ -8910,7 +8912,10 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
       and opts.for_highlight == true and not requires_book_text
   local smart_eligible, smart_block_reason
   if smart_row_shown then
-    -- Master switch (2026-07-11): posture "off" gates ALL tool use, incl. this row.
+    -- No Tools switch gates this row, by design (B479): smart retrieval is book
+    -- text, so it needs a tool-capable provider and model, an open book and the
+    -- book-text answer, not the AI Book Tools switch or the book's Tools setting
+    -- (Off is the Tools chip's default, not a hard kill: binary collapse 2026-08-12).
     -- The row is offered while book text is on Ask (the Run button asks); the
     -- gather itself still needs the answer (B395 slice 2)
     smart_eligible, smart_block_reason =
@@ -22828,7 +22833,7 @@ function AskGPT:_performRestore(backup_manager, backup, options)
 
   -- Show confirmation
   local confirm = ConfirmBox:new{
-    text = _("Restore from backup?\n\n⚠ A restore point will be created automatically.\n\n⚠ KOReader should be restarted after restore for changes to take full effect."),
+    text = _("Restore from backup?\n\n⚠ A restore point will be created automatically. It is a full copy of what you have now, API keys and chats included, so this restore can be undone.\n\n⚠ KOReader should be restarted after restore for changes to take full effect."),
     ok_text = _("Restore"),
     ok_callback = function()
       -- Show progress

@@ -97,6 +97,9 @@ local CONFIGURATION = {
         -- Web search
         -- enable_web_search = false,          -- Global web search toggle
 
+        -- Updates
+        -- auto_check_updates = true,          -- Check for a new version at startup (false = never)
+
         -- Development
         -- debug = false,                      -- Console Debug: the plugin's debug log lines (true/false)
     },

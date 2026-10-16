@@ -84,7 +84,7 @@ Once any provider has a key, the provider pickers (inside the **Settings → Mod
 ## No response or a timeout
 
 1. Check the internet connection.
-2. Read the error: a provider's refusal names the provider and the model, and when the cause is a known one (a rate limit, an account out of credits, a request too large for the model) one tip says what to do. **Settings → Advanced → Console Debug** also writes the provider's own error text to `crash.log`.
+2. Read the error: a provider's refusal names the provider and the model, and when the cause is a known one (a rate limit, an account out of credits, a request too large for the model) one tip says what to do. An error stays on screen until you tap it (cancelling a request is the one brief message); a rate limit, an overloaded model or an account out of credits comes with a **Try again** button where a retry makes sense. **Settings → Advanced → Console Debug** also writes the provider's own error text to `crash.log`.
 3. Try **Settings → Advanced → Test Connection**.
 4. Be patient with very long requests: the plugin waits up to 15 minutes for the provider to send something, so a big X-Ray or a full-document run on a slow model is not cut off early.
 5. If the provider stopped the answer for a reason of its own (a content filter, a recitation block, a refusal), the reply says so by name instead of reporting a broken response; a partial answer is kept and marked as cut short, never saved as complete. For Gemini, see **Settings → Advanced → Provider Settings → Gemini Content Filter**.

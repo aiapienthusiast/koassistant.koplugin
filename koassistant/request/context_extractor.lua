@@ -11,7 +11,6 @@ This module extracts reading context data from KOReader documents:
 ]]
 
 local Constants = require("koassistant.core.constants")
-local lfs = require("libs/libkoreader-lfs")
 local logger = require("koassistant.core.logger")
 local Gates = require("koassistant.request.privacy_gates")
 local ScopeResolver = require("koassistant.request.scope_resolver")
@@ -1222,14 +1221,46 @@ function ContextExtractor:getAnnotations(options)
     return { formatted = "", count = 0, items = {} }
 end
 
+--- Elapsed time worded for {time_since_last_read}: "Just now", "5 minutes ago",
+-- "1 hour ago", "3 days ago". Pure; a time ahead of now (a clock set back) is "Just now".
+-- @param seconds number  seconds since the book was last read
+-- @return string
+function ContextExtractor.timeSinceText(seconds)
+    if seconds < 60 then
+        return "Just now"
+    elseif seconds < 3600 then
+        local minutes = math.floor(seconds / 60)
+        return minutes == 1 and "1 minute ago" or (minutes .. " minutes ago")
+    elseif seconds < 86400 then
+        local hours = math.floor(seconds / 3600)
+        return hours == 1 and "1 hour ago" or (hours .. " hours ago")
+    end
+    local days = math.floor(seconds / 86400)
+    return days == 1 and "1 day ago" or (days .. " days ago")
+end
+
+--- How long ago KOReader's statistics database last recorded this book being read,
+-- worded for {time_since_last_read} (B466). The book file's access time said "Just now"
+-- at every open, reading the file being what opening does. Works for the open book and
+-- for a closed one (the md5 comes from its sidecar).
+-- @return string|nil  nil when the database holds no record of the book
+function ContextExtractor:getTimeSinceLastRead()
+    local doc_path = self:getDocumentPath()
+    if not doc_path then return nil end
+    local ok, ds = pcall(require("koassistant.storage.doc_settings").resolve, doc_path, self.ui)
+    if not ok or not ds then return nil end
+    local last_read = require("koassistant.books.stats_reader").getLastReadTime(
+        ds:readSetting("partial_md5_checksum"))
+    if not last_read then return nil end
+    return ContextExtractor.timeSinceText(os.time() - last_read)
+end
+
 --- Get reading statistics.
--- @return table { chapters_read, chapter_title, time_since_last_read, last_read_timestamp }
+-- @return table { chapters_read, chapter_title, page_number }
 function ContextExtractor:getReadingStats()
     local result = {
         chapters_read = "0",
         chapter_title = "(Chapter unavailable)",
-        time_since_last_read = "Recently",
-        last_read_timestamp = nil,
         page_number = "",
     }
 
@@ -1304,37 +1335,6 @@ function ContextExtractor:getReadingStats()
 
     if success_count then
         result.chapters_read = tostring(chapters)
-    end
-
-    -- Get time since last read from file access time
-    local success_time, time_info = pcall(function()
-        if self.ui.document and self.ui.document.file then
-            local attr = lfs.attributes(self.ui.document.file)
-            if attr and attr.access then
-                local now = os.time()
-                local diff_seconds = now - attr.access
-                result.last_read_timestamp = attr.access
-
-                -- Format human-readable duration
-                if diff_seconds < 60 then
-                    return "Just now"
-                elseif diff_seconds < 3600 then
-                    local minutes = math.floor(diff_seconds / 60)
-                    return minutes == 1 and "1 minute ago" or (minutes .. " minutes ago")
-                elseif diff_seconds < 86400 then
-                    local hours = math.floor(diff_seconds / 3600)
-                    return hours == 1 and "1 hour ago" or (hours .. " hours ago")
-                else
-                    local days = math.floor(diff_seconds / 86400)
-                    return days == 1 and "1 day ago" or (days .. " days ago")
-                end
-            end
-        end
-        return "Recently"
-    end)
-
-    if success_time then
-        result.time_since_last_read = time_info
     end
 
     return result
@@ -1509,7 +1509,17 @@ function ContextExtractor:extractForAction(action)
         local stats = self:getReadingStats()
         data.chapter_title = stats.chapter_title
         data.chapters_read = stats.chapters_read
-        data.time_since_last_read = stats.time_since_last_read
+        -- The statistics database is opened only for a prompt that carries the
+        -- placeholder (the update prompt included: it replaces the prompt on an
+        -- incremental run), and nothing is sent when it holds no record of the
+        -- book (B466)
+        data.time_since_last_read = ""
+        for _idx, template in ipairs({ action.prompt, action.update_prompt }) do
+            if type(template) == "string" and template:find("{time_since_last_read}", 1, true) then
+                data.time_since_last_read = self:getTimeSinceLastRead() or ""
+                break
+            end
+        end
         data.page_number = stats.page_number
     else
         data.chapter_title = ""

@@ -67,7 +67,7 @@ By default KOAssistant checks for updates at most once a day, about 20 seconds a
 
 The check compares your installed version with GitHub's releases, pre-releases included, by semantic version (it strips `v` and `v.` prefixes and picks the highest version, not the newest entry). A failed check is retried at the next start; the timestamp is recorded only on success.
 
-To turn the automatic check off: **Settings → Auto-check for updates on startup** (near the bottom of the KOAssistant menu, beside About KOAssistant and Check for Updates).
+To turn the automatic check off: **Settings → Auto-check for updates on startup** (near the bottom of the KOAssistant menu, beside About KOAssistant and Check for Updates). Or set `auto_check_updates = false` in the `features` table of `configuration.lua` and restart KOReader; a choice made in the menu wins over the file ([Advanced Configuration and Development](Advanced-Configuration-and-Development#configurationlua)).
 
 ### Manual check
 
@@ -84,7 +84,7 @@ Backups are selective:
 | **Core Settings** | provider and model, behaviors, domains, temperature, languages, every toggle, custom providers, custom models, action menu customizations, general and library pinned artifacts, book groups, and the per-book settings of every book KOAssistant can find (the same search as Rebuild Data Indexes) | always included |
 | **API Keys** | your API keys and an OpenAI Subscription sign-in, in plain text | excluded by default |
 | **Config Files** | `configuration.lua`, `custom_actions.lua`, `custom_models.lua` (and `apikeys.lua` only when API keys are included), if they exist | included if the files exist |
-| **Domains & Behaviors** | your custom domains and behaviors (`.md` and `.txt` files) | included |
+| **Domains & Behaviors** | your custom domains and behaviors (`.md` and `.txt` files; hidden files such as a macOS `._name.md` companion are left out) | included |
 | **Chat History** | all saved conversations (book, general and library chats) | excluded, can be large |
 
 API keys are stored in plain text in a backup: include them only when you control who can read the backup files. A backup does not hold notebooks, artifacts (X-Rays and the rest), per-book pinned items, generated images or exports.
@@ -106,7 +106,7 @@ A backup is a `.koa` file (KOAssistant Archive), a tar.gz holding your settings,
 5. Choose the mode: **Replace** (default, safest: your current settings are replaced outright) or **Merge** (advanced, below).
 6. Tap Restore Now and confirm, then restart KOReader (the last dialog offers Restart Now) for everything to take effect.
 
-A restore point, a full backup with your API keys and chats, is created before every restore; a restore that fails midway rolls back to it on its own. A backup made before KOAssistant moved chats into the books' own sidecar files is imported into the current storage during the restore, so its chats appear in Chat History without an extra step.
+A restore point, a full backup with your API keys and chats, is created before every restore; a restore that fails midway rolls back to it on its own, and you can restore it yourself to undo a restore. It holds your API keys even when you left them out of your own backups, because an undo has to bring back everything, and like any backup with keys it keeps them in plain text; the confirmation before a restore says it is a full copy. A backup made before KOAssistant moved chats into the books' own sidecar files is imported into the current storage during the restore, so its chats appear in Chat History without an extra step.
 
 ### Restore modes
 

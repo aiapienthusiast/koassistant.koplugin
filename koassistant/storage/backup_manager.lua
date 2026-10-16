@@ -1006,13 +1006,15 @@ function BackupManager:createBackup(options)
         end
     end
 
-    -- Copy user content dirs (domains, behaviors; .md/.txt only) — registry-driven
+    -- Copy user content dirs (registry-driven): domains and behaviors, .md/.txt
+    -- only and no dotfiles (a macOS copy leaves a hidden "._name.md" beside every
+    -- file; _countItems skips them the same way)
     if options.include_content then
         for _idx, dir_name in ipairs(StorageRegistry.backupPluginDirs()) do
             local src = self.PLUGIN_DIR .. "/" .. dir_name
             if lfs.attributes(src, "mode") == "directory" then
                 local success, err_msg = self:_copyDirectory(src, temp_dir .. "/" .. dir_name, function(entry, path)
-                    return entry:match("%.md$") or entry:match("%.txt$")
+                    return entry:sub(1, 1) ~= "." and (entry:match("%.md$") or entry:match("%.txt$"))
                 end)
                 if not success then
                     self:_removeTempDir(temp_dir)

@@ -1058,8 +1058,8 @@ function BookSettings.showBackgroundEditor(opts)
     input = InputDialog:new{
         title = is_group and _("Background (this group)") or _("Background (this book)"),
         description = is_group
-            and _("Standing context for every book in this group: why you're reading them, the stance you bring. Books that follow the group send it with every request about them, alongside your domain and behavior settings. Leave empty to remove.")
-            or _("Standing context for this book: why you're reading it, the stance you bring, anything the book's own description gets wrong. It is kept with this book and sent with every request about it, alongside your domain and behavior settings. Leave empty to remove."),
+            and T(_("Standing context for every book in this group: why you're reading them, the stance you bring. Books that follow the group send it with every request about them, alongside your domain and behavior settings. Only the first %1 characters are sent. Leave empty to remove."), BookSettings.BACKGROUND_MAX_CHARS)
+            or T(_("Standing context for this book: why you're reading it, the stance you bring, anything the book's own description gets wrong. It is kept with this book and sent with every request about it, alongside your domain and behavior settings. Only the first %1 characters are sent. Leave empty to remove."), BookSettings.BACKGROUND_MAX_CHARS),
         input = current,
         input_hint = _("e.g. \"I'm reading this biography critically; I admire its subject and I think the author has an axe to grind\"\ne.g. \"for a seminar on X\" · \"this is the Arberry translation\""),
         allow_newline = true,

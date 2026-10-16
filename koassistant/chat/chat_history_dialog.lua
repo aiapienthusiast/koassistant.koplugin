@@ -276,9 +276,11 @@ function ChatHistoryDialog:showChatsByDomainBrowser(ui, chat_history_manager, co
     -- Get chats grouped by domain
     local chats_by_domain = chat_history_manager:getChatsByDomain()
 
-    -- Load domain definitions for display names
+    -- Domain names by id: the merged lookup (built-ins, the domains/ folder and
+    -- the domains made in Manage Domains), as every other surface names a domain
     local DomainLoader = require("koassistant.prompts.domain_loader")
-    local all_domains = DomainLoader.load()
+    local custom_domains = config and config.features and config.features.custom_domains or {}
+    local all_domains = DomainLoader.getAllDomains(custom_domains)
 
     -- Build menu items for each domain that has chats
     local menu_items = {}

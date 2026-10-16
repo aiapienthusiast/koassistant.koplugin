@@ -1133,6 +1133,30 @@ TestRunner:test("backgroundRowLabel: 'not set' when empty, preview when set", fu
         "newlines collapsed for the row")
 end)
 
+TestRunner:test("the Background editor says how much of the note is sent (B457)", function()
+    local shown
+    local saved_input = package.loaded["ui/widget/inputdialog"]
+    local screen = package.loaded["device"].screen
+    local saved_scale = screen.scaleBySize
+    package.loaded["ui/widget/inputdialog"] = {
+        new = function(_self, o) shown = o; o.onShowKeyboard = function() end; return o end,
+    }
+    screen.scaleBySize = function(_self, n) return n end
+    local ds = { readSetting = function() return nil end, saveSetting = function() end, flush = function() end }
+    local ok, err = pcall(function()
+        for _idx, scope in ipairs({ "book", "group" }) do
+            shown = nil
+            BookSettings.showBackgroundEditor({ doc_settings = ds, scope = scope == "group" and "group" or nil })
+            TestRunner:assertEqual(type(shown and shown.description), "string", scope .. ": the editor opened")
+            TestRunner:assertEqual(shown.description:find("Only the first " .. BookSettings.BACKGROUND_MAX_CHARS
+                .. " characters are sent.", 1, true) ~= nil, true, scope .. ": the cap is in the description")
+        end
+    end)
+    package.loaded["ui/widget/inputdialog"] = saved_input
+    screen.scaleBySize = saved_scale
+    if not ok then error(err, 0) end
+end)
+
 --==========================================================================
 TestRunner:suite("Per-book privacy overrides (effectivePrivacyOverrides)")
 

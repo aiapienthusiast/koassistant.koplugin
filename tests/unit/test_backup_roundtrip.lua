@@ -248,6 +248,29 @@ TestRunner:test("the domain/behavior counts skip macOS '._' companions (#112)", 
         "counts should be 1 and 1, got " .. tostring(r.counts.domains) .. " and " .. tostring(r.counts.behaviors))
 end)
 
+TestRunner:test("the content copy leaves macOS '._' companions out (B474)", function()
+    -- tar on macOS folds a "._name" entry back into its file's metadata, so the archive
+    -- cannot show whether one was copied: the filter createBackup hands the directory
+    -- copy is what gets checked
+    local filters = {}
+    local copy = bm._copyDirectory
+    bm._copyDirectory = function(self, src, dest, filter)
+        filters[#filters + 1] = filter
+        return copy(self, src, dest, filter)
+    end
+    local r = bm:createBackup(BACKUP_OPTS)
+    bm._copyDirectory = nil  -- back to the class method
+    TestRunner:assertTrue(r and r.success, "backup should succeed")
+    TestRunner:assertTrue(#filters >= 1, "the content folders are copied through a filter")
+    for _idx, filter in ipairs(filters) do
+        TestRunner:assertTrue(filter("academic.md"), ".md is content")
+        TestRunner:assertTrue(filter("notes.txt"), ".txt is content")
+        TestRunner:assertTrue(not filter("._academic.md"), "a macOS companion is not")
+        TestRunner:assertTrue(not filter(".hidden.txt"), "no dotfile is")
+        TestRunner:assertTrue(not filter("cover.png"), "only .md and .txt")
+    end
+end)
+
 TestRunner:test("ordinary backup excludes API keys and subscription OAuth tokens", function()
     local sanitized = bm:createBackup({
         include_settings = true,
@@ -589,6 +612,41 @@ TestRunner:test("the keys, the sign-in and the key selection survive the Replace
     TestRunner:assertTrue(f.api_keys ~= nil and f.api_keys.anthropic == "sk-secret", "api key kept")
     TestRunner:assertTrue(f.openai_codex_oauth ~= nil and f.openai_codex_oauth.access_token == "oauth-access", "sign-in kept")
     TestRunner:assertTrue(f.api_key_selected ~= nil and f.api_key_selected.anthropic == "fp-1", "selection kept")
+end)
+
+--------------------------------------------------------------------------------
+TestRunner:suite("a restore point is a full copy, API keys included (B475)")
+
+wipeTmp()
+seed()
+local bm4 = freshManager()
+-- The reader never chose to back keys up here. The restore point holds them anyway
+-- (ruled: an undo has to bring back everything), and the restore confirmation says so.
+local rp = bm4:createRestorePoint()
+
+TestRunner:test("the restore point is written and named as one", function()
+    TestRunner:assertTrue(rp and rp.success, "createRestorePoint failed: " .. tostring(rp and rp.error))
+    TestRunner:assertTrue(rp.backup_name:match("^koassistant_restore_point_") ~= nil, "named as a restore point")
+    TestRunner:assertTrue(exists(rp.backup_path), "the archive exists")
+end)
+
+TestRunner:test("it holds the API keys and the sign-in", function()
+    local check = TMP .. "/check_restore_point"
+    mkdirs(check)
+    TestRunner:assertTrue(sh(string.format('tar -xzf "%s" -C "%s"', rp.backup_path, check)), "archive should extract")
+    local body = readFile(check .. "/settings/koassistant_settings.lua") or ""
+    TestRunner:assertTrue(body:find("sk-secret", 1, true) ~= nil, "the API key is in the restore point")
+    TestRunner:assertTrue(body:find("oauth-access", 1, true) ~= nil, "the sign-in is in the restore point")
+end)
+
+TestRunner:test("the restore confirmation says it is a full copy with the keys (structural)", function()
+    local here = debug.getinfo(1, "S").source:match("@?(.*)")
+    local root = here:gsub("/?tests/unit/[^/]+$", "")
+    if root == "" then root = "." end
+    local f = assert(io.open(root .. "/main.lua", "r"))
+    local src = f:read("*all"); f:close()
+    TestRunner:assertTrue(src:find("A restore point will be created automatically. It is a full copy of what you have now, API keys and chats included", 1, true) ~= nil,
+        "the confirmation names what a restore point holds")
 end)
 
 wipeTmp()

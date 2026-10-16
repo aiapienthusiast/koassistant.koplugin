@@ -98,6 +98,22 @@ function DomainManager:deleteCustomDomain(id)
     return false
 end
 
+-- Delete every custom domain
+function DomainManager:deleteAllCustomDomains()
+    local custom = self:getCustomDomains()
+    self:saveCustomDomains({})
+    -- If a deleted domain was selected, clear selection (as deleteCustomDomain does)
+    local features = self.plugin.settings:readSetting("features") or {}
+    for _idx, d in ipairs(custom) do
+        if features.selected_domain == d.id then
+            features.selected_domain = nil
+            self.plugin.settings:saveSetting("features", features)
+            self.plugin.settings:flush()
+            break
+        end
+    end
+end
+
 function DomainManager:show()
     self:showDomainMenu()
 end
@@ -252,17 +268,7 @@ function DomainManager:_showMenuOptions()
                 UIManager:show(ConfirmBox:new{
                     text = T(_("Delete all %1 custom domains?"), #custom),
                     ok_callback = function()
-                        self_ref:saveCustomDomains({})
-                        self_ref:refreshMenu()
-                    end,
-                })
-            end }},
-            {{ text = _("Restore defaults"), align = "left", callback = function()
-                UIManager:close(self_ref._anchored_menu)
-                UIManager:show(ConfirmBox:new{
-                    text = _("This will delete all custom domains and restore built-in defaults. Continue?"),
-                    ok_callback = function()
-                        self_ref:saveCustomDomains({})
+                        self_ref:deleteAllCustomDomains()
                         self_ref:refreshMenu()
                     end,
                 })

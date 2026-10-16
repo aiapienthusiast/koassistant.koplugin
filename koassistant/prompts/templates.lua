@@ -23,7 +23,7 @@
 --   {chapter_title}        - Current chapter name (highlight, book contexts)
 --   {chapters_read}        - Number of chapters completed (highlight, book contexts)
 --   {page_number}          - EPUB reference page label, e.g. "37" (highlight, book contexts; requires open book with a page map)
---   {time_since_last_read} - Human-readable time since last read (highlight, book contexts)
+--   {time_since_last_read} - Human-readable time since last read, from KOReader's reading statistics (highlight, book contexts)
 --
 -- Section-aware placeholders (include label, disappear when empty - RECOMMENDED):
 --   {book_text_section}    - "Book content so far:\n[text]" or "" if disabled/empty
@@ -39,7 +39,7 @@
 --   {chapter_title}        - Fallback: "(Chapter unavailable)"
 --   {chapters_read}        - Fallback: "0"
 --   {page_number}          - Empty string "" when no page map is available
---   {time_since_last_read} - Fallback: "Recently"
+--   {time_since_last_read} - Empty string "" when the statistics have no record of the book
 --
 -- Utility placeholders (always available):
 --   {conciseness_nudge}   - Standard conciseness instruction for verbose models

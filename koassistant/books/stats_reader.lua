@@ -214,6 +214,38 @@ function StatsReader.getReadingTimeInRange(id_book, first_page, last_page)
     return tonumber(result.secs[1])
 end
 
+--- When the statistics database last recorded this book being read, as a Unix time:
+--- the newest page view stored for it (every `book` row with this md5, since a book
+--- whose title or author was edited has a second row). nil when the database, the
+--- book or any stored page view is missing, so the caller sends nothing rather than
+--- a guess. KOReader writes page views to the database every 50 page turns and when
+--- the book closes or the device sleeps, so inside a session this is the end of the
+--- earlier one (or a recent save of this one). Read-only; all failures return nil.
+--- @param md5 string  the book's partial_md5_checksum (hex, as the statistics plugin stores it)
+--- @return number|nil  seconds since the epoch
+function StatsReader.getLastReadTime(md5)
+    -- Only hex reaches the SQL text below
+    if type(md5) ~= "string" or md5 == "" or md5:find("%X") then return nil end
+    local db_path = StatsReader.getDbPath()
+    if not db_path then return nil end
+
+    local sq3_ok, SQ3 = pcall(require, "lua-ljsqlite3/init")
+    if not sq3_ok then return nil end
+
+    local conn_ok, conn = pcall(SQ3.open, db_path, "ro")
+    if not conn_ok or not conn then return nil end
+
+    local sql = string.format(
+        "SELECT MAX(start_time) AS last_read FROM page_stat_data "
+        .. "WHERE id_book IN (SELECT id FROM book WHERE md5 = '%s')", md5)
+    local query_ok, result = pcall(conn.exec, conn, sql)
+    pcall(conn.close, conn)
+    if not query_ok or not result or not result.last_read then return nil end
+    local ts = tonumber(result.last_read[1])
+    if not ts or ts <= 0 then return nil end
+    return ts
+end
+
 --- Compute engagement group for a single book
 --- @param book table Book metadata (from scanner: title, author, status, progress, md5)
 --- @param stats table Stats data (from DB: total_read_time, last_open, etc.)

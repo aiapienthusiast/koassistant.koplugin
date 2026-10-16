@@ -901,6 +901,8 @@ end
 -- 2026-08-12 — Off is a chip DEFAULT, not a hard kill), so this is now a thin
 -- alias of sessionEligible kept for its call sites and reason strings:
 -- "provider" | "consent" | "no_book". opts.offer: see sessionEligible.
+-- Neither the AI Book Tools switch nor a book's Tools setting is checked, by
+-- design (B479): smart retrieval is book text, which the text answer governs.
 function BookToolRunner.smartRetrievalAllowed(config, ui, opts)
     return BookToolRunner.sessionEligible(config, ui, opts)
 end

@@ -346,7 +346,7 @@ local function ensureMarkdownViewer()
     if MarkdownViewer then return end
     loadUI()
     MarkdownViewer = InputContainer:extend{
-        title = "Release Notes",
+        title = _("Release Notes"),
         markdown_text = "",
         width = nil,
         height = nil,
@@ -372,7 +372,7 @@ local function ensureMarkdownViewer()
         local html_body, err = MD(preprocessed_text, {})
         if err then
             logger.warn("MarkdownViewer: could not generate HTML", err)
-            html_body = "<pre>" .. (self.markdown_text or "No content.") .. "</pre>"
+            html_body = "<pre>" .. (self.markdown_text or _("No content.")) .. "</pre>"
         end
 
         -- Create title bar
@@ -389,7 +389,7 @@ local function ensureMarkdownViewer()
         local button_table = ButtonTable:new{
             width = self.width - 2 * Size.padding.default,
             buttons = self.buttons_table or {{
-                { text = "Close", callback = function() UIManager:close(self) end }
+                { text = _("Close"), callback = function() UIManager:close(self) end }
             }},
             zero_sep = true,
             show_parent = self,
@@ -746,10 +746,10 @@ showUpdatePopup = function(update_info)
 
     -- Format as markdown with version info header
     local markdown_content = string.format(
-        "**New %sversion available!**\n\n**Current:** %s  \n**Latest:** %s\n\n---\n\n%s",
-        update_info.is_prerelease and "pre-release " or "",
-        update_info.current_version,
-        update_info.latest_version,
+        "**%s**\n\n**%s** %s  \n**%s** %s\n\n---\n\n%s",
+        update_info.is_prerelease and _("New pre-release version available!") or _("New version available!"),
+        _("Current:"), update_info.current_version,
+        _("Latest:"), update_info.latest_version,
         update_info.release_notes
     )
 
@@ -805,7 +805,7 @@ showUpdatePopup = function(update_info)
                 callback = function()
                     UIManager:close(update_viewer)
                     NetworkMgr:runWhenConnected(function()
-                        local title = update_info.is_prerelease and "KOAssistant Pre-release Update" or "KOAssistant Update Available"
+                        local title = update_info.is_prerelease and _("KOAssistant Pre-release Update") or _("KOAssistant Update Available")
                         if #translate_languages == 1 then
                             -- Single language: translate directly
                             translateAndShowContent(markdown_content, translate_languages[1], title, update_info)
@@ -842,7 +842,7 @@ showUpdatePopup = function(update_info)
     end
 
     update_viewer = MarkdownViewer:new{
-        title = update_info.is_prerelease and "KOAssistant Pre-release Update" or "KOAssistant Update Available",
+        title = update_info.is_prerelease and _("KOAssistant Pre-release Update") or _("KOAssistant Update Available"),
         markdown_text = markdown_content,
         width = math.floor(Screen:getWidth() * 0.85),
         height = math.floor(Screen:getHeight() * 0.85),
@@ -1510,26 +1510,26 @@ local function verifyExtractedPlugin(staging_dir, expected_version)
     -- Check _meta.lua exists
     local meta_path = staging_dir .. "/_meta.lua"
     if lfs.attributes(meta_path, "mode") ~= "file" then
-        return false, "_meta.lua not found in extracted plugin"
+        return false, _("_meta.lua not found in extracted plugin")
     end
 
     -- Check main.lua exists
     if lfs.attributes(staging_dir .. "/main.lua", "mode") ~= "file" then
-        return false, "main.lua not found in extracted plugin"
+        return false, _("main.lua not found in extracted plugin")
     end
 
     -- Load and verify version
     local load_ok, loaded_meta = pcall(dofile, meta_path)
     if not load_ok then
-        return false, "Failed to load _meta.lua: " .. tostring(loaded_meta)
+        return false, T(_("Failed to load _meta.lua: %1"), tostring(loaded_meta))
     end
 
     if not loaded_meta or not loaded_meta.version then
-        return false, "_meta.lua does not contain version"
+        return false, _("_meta.lua does not contain version")
     end
 
     if loaded_meta.version ~= expected_version then
-        return false, "Version mismatch: expected " .. expected_version .. ", got " .. loaded_meta.version
+        return false, T(_("Version mismatch: expected %1, got %2"), expected_version, loaded_meta.version)
     end
 
     return true
@@ -1584,7 +1584,7 @@ local function preserveUserFiles(src_dir, preserve_dir)
     getBinPaths()  -- self-contained: direct calls (tests) skip the update flow's init
     lfs.mkdir(preserve_dir)
     if lfs.attributes(preserve_dir, "mode") ~= "directory" then
-        return false, "Failed to create preserve directory"
+        return false, _("Failed to create preserve directory")
     end
 
     for _idx, filename in ipairs(USER_FILES) do
@@ -1987,7 +1987,7 @@ function UpdateChecker.checkForUpdates(auto, include_prereleases)
     if not auto then
         loadUI()
         loading_msg = InfoMessage:new{
-            text = "Checking for updates...",
+            text = _("Checking for updates..."),
         }
         UIManager:show(loading_msg)
         -- Force screen refresh to show loading message immediately
@@ -2010,8 +2010,8 @@ function UpdateChecker.checkForUpdates(auto, include_prereleases)
             logger.err("Failed to check for updates:", response_data)
             if not auto then
                 local error_text = response_data == "Timeout"
-                    and "Failed to check for updates (timed out). Please try again."
-                    or "Failed to check for updates. Please check your internet connection."
+                    and _("Failed to check for updates (timed out). Please try again.")
+                    or _("Failed to check for updates. Please check your internet connection.")
                 UIManager:show(InfoMessage:new{
                     text = error_text,
                     timeout = 3
@@ -2026,7 +2026,7 @@ function UpdateChecker.checkForUpdates(auto, include_prereleases)
             if not auto then
                 loadUI()
                 UIManager:show(InfoMessage:new{
-                    text = "Failed to check for updates: Empty response from server",
+                    text = _("Failed to check for updates: Empty response from server"),
                     timeout = 3
                 })
             end
@@ -2039,7 +2039,7 @@ function UpdateChecker.checkForUpdates(auto, include_prereleases)
             logger.err("Failed to parse GitHub API response:", releases)
             if not auto then
                 UIManager:show(InfoMessage:new{
-                    text = "Failed to check for updates: Invalid response format",
+                    text = _("Failed to check for updates: Invalid response format"),
                     timeout = 3
                 })
             end
@@ -2051,7 +2051,7 @@ function UpdateChecker.checkForUpdates(auto, include_prereleases)
             logger.err("Failed to parse GitHub API response: expected array, got " .. type(releases), "data:", response_data:sub(1, 200))
             if not auto then
                 UIManager:show(InfoMessage:new{
-                    text = "Failed to check for updates: Invalid response format",
+                    text = _("Failed to check for updates: Invalid response format"),
                     timeout = 3
                 })
             end
@@ -2092,7 +2092,7 @@ function UpdateChecker.checkForUpdates(auto, include_prereleases)
         if not latest_release then
             if not auto then
                 UIManager:show(InfoMessage:new{
-                    text = "No releases found",
+                    text = _("No releases found"),
                     timeout = 3
                 })
             end
@@ -2108,7 +2108,7 @@ function UpdateChecker.checkForUpdates(auto, include_prereleases)
             logger.err("Update check: current_version is not a string, type=" .. type(current_version) .. ", value=" .. tostring(current_version))
             if not auto then
                 UIManager:show(InfoMessage:new{
-                    text = "Update check failed: invalid current version format",
+                    text = _("Update check failed: invalid current version format"),
                     timeout = 3
                 })
             end
@@ -2118,7 +2118,7 @@ function UpdateChecker.checkForUpdates(auto, include_prereleases)
             logger.err("Update check: latest_version is not a string, type=" .. type(latest_version) .. ", value=" .. tostring(latest_version))
             if not auto then
                 UIManager:show(InfoMessage:new{
-                    text = "Update check failed: invalid latest version format",
+                    text = _("Update check failed: invalid latest version format"),
                     timeout = 3
                 })
             end
@@ -2150,7 +2150,7 @@ function UpdateChecker.checkForUpdates(auto, include_prereleases)
             local update_info = {
                 current_version = current_version,
                 latest_version = latest_version,
-                release_notes = latest_release.body or "No release notes available.",
+                release_notes = latest_release.body or _("No release notes available."),
                 download_url = latest_release.html_url,
                 is_prerelease = latest_release.prerelease or false,
                 zip_url = zip_url,
@@ -2168,7 +2168,7 @@ function UpdateChecker.checkForUpdates(auto, include_prereleases)
         elseif comparison == 0 then
             if not auto then
                 UIManager:show(InfoMessage:new{
-                    text = "You are running the latest version (" .. current_version .. ")",
+                    text = T(_("You are running the latest version (%1)"), current_version),
                     timeout = 3
                 })
             end
@@ -2176,7 +2176,7 @@ function UpdateChecker.checkForUpdates(auto, include_prereleases)
             -- Current version is newer (development version)
             if not auto then
                 UIManager:show(InfoMessage:new{
-                    text = "You are running a development version (" .. current_version .. ")",
+                    text = T(_("You are running a development version (%1)"), current_version),
                     timeout = 3
                 })
             end

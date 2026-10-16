@@ -534,6 +534,20 @@ function TestAutoUpdate:runAll()
         end
     end)
 
+    -- The startup check cannot be run here (main.lua needs KOReader), so its one
+    -- wiring is read from the source: the switch comes from the merged view
+    -- (Settings menu, then configuration.lua), because an override added to
+    -- configuration.lua after the first start was never in the saved settings (B472)
+    self:test("the startup update check reads the merged configuration", function()
+        local f = assert(io.open("main.lua", "r"))
+        local main_src = f:read("*a")
+        f:close()
+        local check = main_src:match("\n[^\n]*if [^\n]*auto_check_updates ~= false then")
+        self:assert(check, "the startup check is in main.lua")
+        self:assert(check:find("self.configuration.features.auto_check_updates", 1, true),
+            "it reads configuration.features, not the saved settings alone")
+    end)
+
     -- Cleanup
     self:cleanup()
 

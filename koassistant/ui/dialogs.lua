@@ -86,17 +86,20 @@ end
 local ERROR_DIALOG_MAX_CHARS = 400
 
 --- Show a failed request. Rate/quota refusals and overload/503s get a persistent
---- dialog with a retry button instead of the usual 3-second toast: they are the
---- failure classes where trying again is the correct response (a per-minute limit
---- recovers in seconds, an overloaded model in moments, and the 429 message now says
---- how long to wait), and a toast that vanishes leaves the reader with nothing to act
---- on. Every other error keeps the toast — making all of them unmissable would be
---- worse. `retry_fn` is optional; without one this is just a toast.
+--- dialog with a retry button: they are the failure classes where trying again is
+--- the correct response (a per-minute limit recovers in seconds, an overloaded model
+--- in moments, and the 429 message now says how long to wait), and a toast that
+--- vanishes leaves the reader with nothing to act on. Every other failure is a
+--- notice that stays until tapped (B480): a missing key or a refused request is
+--- what the reader has to act on, and a 3-second toast was gone before it could be
+--- read. Only the reader's own cancel keeps the short toast. `retry_fn` is
+--- optional; without one this is just the notice.
 --- @param err_text string: message to display (already decorated by ModelConstraints)
 --- @param retry_fn function|nil: re-runs the same request; called as retry_fn() for a
 ---        plain retry, retry_fn(true) to retry with the offered extras dropped (the
 ---        call site knows which were active and builds the stripped request)
---- @param timeout number|nil: toast timeout in seconds (default 3; ignored by the dialog)
+--- @param timeout number|nil: how long a CANCEL toast stays, in seconds (default 3);
+---        a failure has no timeout and the dialog ignores it
 --- @param drop_offer table|nil: { web = bool, tools = bool } — which optional request
 ---        extras were active on the failed request. When either is true, a labelled
 ---        "Try again without …" row re-runs via retry_fn(true). Free-tier Gemini 3.x
@@ -170,10 +173,16 @@ local function showRequestError(err_text, retry_fn, timeout, drop_offer)
         UIManager:show(dialog)
         return
     end
-    UIManager:show(InfoMessage:new{
-        text = err_text,
-        timeout = timeout or 3,
-    })
+    -- A cancel the reader asked for is no failure to act on: it keeps the short
+    -- toast. Cancels arrive as this wording, translated or (the stream's) English,
+    -- sometimes behind "Error: " or followed by the recovery hint.
+    local msg = { text = err_text }
+    if type(err_text) == "string"
+            and (err_text:find(_("Request cancelled by user."), 1, true)
+                or err_text:find("Request cancelled by user.", 1, true)) then
+        msg.timeout = timeout or 3
+    end
+    UIManager:show(InfoMessage:new(msg))
 end
 
 -- Helper function to determine prompt context
@@ -7552,10 +7561,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                     else
                         closeLoadingDialog()
                         local error_msg = temp_config_or_error or "Unknown error"
-                        UIManager:show(InfoMessage:new{
-                            text = _("Error: ") .. action_id .. " - " .. error_msg,
-                            timeout = 2
-                        })
+                        showRequestError(_("Error: ") .. action_id .. " - " .. error_msg, nil, 2)
                     end
                 end
 
@@ -13266,10 +13272,7 @@ local function executeDirectAction(ui, action, highlighted_text, configuration, 
                     ActionCache.setWikiEntry(document_path, wiki_category, normalized, result, metadata)
                     showWikiArtifact(result)
                 else
-                    UIManager:show(InfoMessage:new{
-                        text = _("Error: ") .. (metadata or "Unknown error"),
-                        timeout = 3,
-                    })
+                    showRequestError(_("Error: ") .. (metadata or "Unknown error"))
                 end
             end)
         return
