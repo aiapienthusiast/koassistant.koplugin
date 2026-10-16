@@ -3151,7 +3151,7 @@ local SettingsSchema = {
                                 local f = plugin.settings:readSetting("features") or {}
                                 return T(_("Detail: %1"), optionText(IMAGE_DETAIL_OPTIONS, f.image_gen_detail or "draft"))
                             end,
-                            help_text = _("How much detail a picture gets, for every image provider. Draft is the fastest and cheapest; Best is the slowest and costs the most.\n\nOpenAI: quality low, medium or high (xhigh on the 2.5 models). xAI: grok-imagine-image-2.0 draws at low or medium quality, and Best at 2k. Gemini: Best draws at 2K, Draft and Standard at 1K.\n\nGrayed out while the model in use has a single setting (grok-imagine-image, Gemini Flash Lite)."),
+                            help_text = _("How much detail a picture gets, for every image provider. Draft is the fastest and cheapest; Best is the slowest and costs the most.\n\nOpenAI: quality low, medium or high (xhigh on the 2.5 models). xAI: grok-imagine-image-2.0 draws at low or medium quality, and Best at 2k. Gemini: Best draws at 2K, Draft and Standard at 1K, and at Draft Nano Banana 2.1 and Pro think as little as they can before drawing, which makes a picture faster.\n\nGrayed out while the model in use has a single setting (grok-imagine-image, Gemini Flash Lite)."),
                             path = "features.image_gen_detail",
                             default = "draft",
                             options = IMAGE_DETAIL_OPTIONS,

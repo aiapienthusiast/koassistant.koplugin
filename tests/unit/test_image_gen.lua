@@ -444,6 +444,22 @@ local function runAll()
         lite = ImageGenerator.buildRequest("gemini", "gemini-3.1-flash-lite-image", "p", { image_gen_shape = "auto" }, SCREEN)
         TestRunner:assertEquals(lite.body.generationConfig.imageConfig, nil, "nothing to say: no imageConfig")
     end)
+    TestRunner:test("Draft: Gemini's thinking models think as little as they can; nothing above Draft", function()
+        local function thinking(model, detail)
+            local r = ImageGenerator.buildRequest("gemini", model, "p", { image_gen_detail = detail }, SCREEN)
+            return r.body.generationConfig.thinkingConfig
+        end
+        TestRunner:assertEquals(thinking("gemini-nano-banana-2.1", nil).thinkingLevel, "minimal", "Draft is the default")
+        TestRunner:assertEquals(thinking("gemini-3-pro-image", "draft").thinkingLevel, "minimal")
+        TestRunner:assertEquals(thinking("gemini-nano-banana-2.1", "standard"), nil, "Standard: the model's own")
+        TestRunner:assertEquals(thinking("gemini-3-pro-image", "best"), nil, "Best: the model's own")
+        TestRunner:assertEquals(thinking("gemini-3.1-flash-lite-image", "draft"), nil, "Flash Lite does not think")
+        TestRunner:assertEquals(thinking("gemini-nano-banana-2.2", "draft"), nil,
+            "an id nobody probed gets nothing (a refused level is a 400)")
+        local o = ImageGenerator.buildRequest("openrouter", "google/gemini-nano-banana-2.1", "p", {}, SCREEN)
+        TestRunner:assertEquals(o.body.thinkingConfig, nil, "OpenRouter's Image API takes no thinking level")
+        TestRunner:assertEquals(o.body.generationConfig, nil)
+    end)
     TestRunner:test("pictureFacts: the models with one setting gray the Detail row", function()
         TestRunner:assertEquals(ImageGenerator.pictureFacts("xai", "grok-imagine-image").detail, false)
         TestRunner:assertEquals(ImageGenerator.pictureFacts("xai", "grok-imagine-image-2026-03-02").detail, false,

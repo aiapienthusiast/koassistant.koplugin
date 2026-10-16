@@ -1035,6 +1035,12 @@ local XAI_V1_RATIOS = { "1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16" }
 local XAI_V2_RATIOS = { "1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16", "2:1", "1:2",
     "19.5:9", "9:19.5", "20:9", "9:20", "21:9", "5:2" }
 local GEMINI_RATIOS = { "1:1", "5:4", "4:5", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16", "21:9" }
+-- The Gemini image models that think before they draw and take the level
+-- "minimal", which Draft sends (a probe, 2026-10-15: Nano Banana 2.1 drew in
+-- about 9 s instead of 13 to 23 s, with no thinking tokens and pictures as
+-- good). Exact ids: a level a model refuses is a 400. Flash Lite does not
+-- think, so it gets nothing.
+local GEMINI_THINKING_MINIMAL = { ["gemini-nano-banana-2.1"] = true, ["gemini-3-pro-image"] = true }
 -- The three sizes every gpt-image model takes, with their ratios
 local OPENAI_SIZES = { { "1024x1024", 1 }, { "1536x1024", 3 / 2 }, { "1024x1536", 2 / 3 } }
 
@@ -1188,8 +1194,9 @@ end
 --- ratios; OpenAI takes sizes instead), `custom_size` (any width and height in
 --- steps of 16: OpenAI's 2.5 models), `best_quality` (the quality Best sends to
 --- OpenAI), `detail` (false where the model has one quality and size: xAI's
---- grok-imagine-image, Gemini's Flash Lite). OpenRouter's models add
---- `resolutions`, `qualities` and `formats` from its catalog: the listed
+--- grok-imagine-image, Gemini's Flash Lite), `thinking_minimal` (a Gemini
+--- model that thinks first and takes "minimal", which Draft sends). OpenRouter's
+--- models add `resolutions`, `qualities` and `formats` from its catalog: the listed
 --- models' own, or a More models… pick's, stored in
 --- features.image_gen_openrouter_caps. Pure; the Detail row asks it too.
 function ImageGenerator.pictureFacts(provider, model, features)
@@ -1222,7 +1229,8 @@ function ImageGenerator.pictureFacts(provider, model, features)
         end
         return { ratios = XAI_V1_RATIOS, detail = false }
     elseif provider == "gemini" then
-        return { ratios = GEMINI_RATIOS, detail = model:find("flash%-lite") == nil }
+        return { ratios = GEMINI_RATIOS, detail = model:find("flash%-lite") == nil,
+            thinking_minimal = GEMINI_THINKING_MINIMAL[model] or nil }
     end
     return { detail = false }
 end
@@ -1298,15 +1306,21 @@ function ImageGenerator.buildRequest(provider, model, prompt, features, screen)
         local image_config = {}
         if ratio then image_config.aspectRatio = nearest(facts.ratios, ratio, ratioValue) end
         if facts.detail then image_config.imageSize = (detail == "best") and "2K" or "1K" end
+        local generation = {
+            responseModalities = { "IMAGE", "TEXT" },
+            imageConfig = next(image_config) and image_config or nil,
+        }
+        -- Draft is the quick picture: a model that thinks first thinks as
+        -- little as it can (Standard and Best leave it to the model)
+        if detail == "draft" and facts.thinking_minimal then
+            generation.thinkingConfig = { thinkingLevel = "minimal" }
+        end
         return {
             url = endpoint.url .. "/" .. model .. ":generateContent",
             key_header = endpoint.key_header,
             body = {
                 contents = { { role = "user", parts = { { text = prompt } } } },
-                generationConfig = {
-                    responseModalities = { "IMAGE", "TEXT" },
-                    imageConfig = next(image_config) and image_config or nil,
-                },
+                generationConfig = generation,
                 safetySettings = require("koassistant.api.gemini").safetySettings(features),
             },
         }
