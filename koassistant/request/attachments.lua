@@ -174,20 +174,25 @@ end
 --- @return table|nil the list to send (nil when empty)
 function Attachments.forProvider(list, features, provider, ui)
     if not list then return nil end
-    local out, dropped = {}, 0
+    local out, dropped, dropped_artifacts = {}, 0, 0
     for _idx, e in ipairs(list) do
         if e.type == "notebook" and not Attachments.notebookAllowed(features, provider,
                 Attachments.notebookOverrideFor(e.path, ui), e.path) then
             dropped = dropped + 1
+        elseif e.type == "artifact" and not Attachments.artifactAllowed(features, provider, e, ui) then
+            -- stored material follows its stamps at every send (B395 slice 5)
+            dropped_artifacts = dropped_artifacts + 1
         else
             out[#out + 1] = e
         end
     end
-    if dropped > 0 then
-        require("koassistant.core.logger").warn("KOAssistant: notebook attachment left out: not allowed for", provider)
+    if dropped > 0 or dropped_artifacts > 0 then
+        require("koassistant.core.logger").warn("KOAssistant: attachment left out: not allowed for", provider,
+            "notebook", dropped, "artifacts", dropped_artifacts)
         local UIManager = require("ui/uimanager")
         UIManager:show(require("ui/widget/notification"):new{
-            text = _("Your notebook was left out: it is not allowed for this provider."),
+            text = dropped > 0 and _("Your notebook was left out: it is not allowed for this provider.")
+                or _("An attached artifact was left out: what it was built from is not allowed for this provider."),
             timeout = 3,
         })
     end
@@ -259,7 +264,10 @@ function Attachments.artifactText(key, data, book_title)
 end
 
 --- Saved artifact (per-action cache, doc cache, section entry, AI Wiki).
-function Attachments.makeArtifact(name, key, data, book_title, section_type)
+--- The entry carries its book and its stamps (B395 slice 5): the Attach pick
+--- asks for the kinds it was built from, and the send re-judges them for the
+--- provider the request goes to (forProvider).
+function Attachments.makeArtifact(name, key, data, book_title, section_type, book_path)
     if Attachments.isQuizKey(key, section_type) then
         return nil, _("Quiz artifacts can't be attached (they are stored as quiz data, not text).")
     end
@@ -274,10 +282,18 @@ function Attachments.makeArtifact(name, key, data, book_title, section_type)
         label = display_name,
         text = text,
         note = note,
+        path = book_path,
+        used_book_text = data and data.used_book_text,
+        used_highlights = data and data.used_highlights,
+        used_annotations = data and data.used_annotations,
+        used_notebook = data and data.used_notebook,
     }
 end
 
---- Pinned artifact (user-curated chat response).
+--- Pinned artifact (user-curated chat response). A pin made since B395
+--- slice 5 carries the kinds its chat's context carried; an older pin of a
+--- book chat counts as built from text (the stamps' rule), one of a general
+--- or library chat sent nothing of the book.
 function Attachments.makePinned(pin)
     local content = pin and pin.result
     if type(content) ~= "string" or content == "" then
@@ -285,6 +301,10 @@ function Attachments.makePinned(pin)
     end
     local name = pin.name or pin.action_text or _("Pinned artifact")
     local text, note = Attachments.truncate(content, Attachments.BUDGETS.artifact, "head")
+    local used_book_text = pin.used_book_text
+    if used_book_text == nil and pin.context_type ~= nil and pin.context_type ~= "book" then
+        used_book_text = false
+    end
     return {
         type = "artifact",
         name = name,
@@ -292,7 +312,26 @@ function Attachments.makePinned(pin)
         label = name,
         text = text,
         note = note,
+        path = pin.document_path,
+        used_book_text = used_book_text,
+        used_highlights = pin.used_highlights,
+        used_annotations = pin.used_annotations,
+        used_notebook = pin.used_notebook,
     }
+end
+
+--- Whether an attached artifact may go to this provider: every kind it was
+--- built from, for its own book (the book's value, the run's allowance, the
+--- column). The same rule as the artifact chat's.
+function Attachments.artifactAllowed(features, provider, entry, ui)
+    local Gates = require("koassistant.request.privacy_gates")
+    local kinds = Gates.stampedList(entry or {})
+    if #kinds == 0 then return true end
+    local ctx = Gates.context(features, provider, { path = entry.path, ui = ui })
+    for _idx, kind in ipairs(kinds) do
+        if not Gates.allows(kind, ctx) then return false end
+    end
+    return true
 end
 
 --- Saved chat: formatted as visible turns only (is_context messages are the

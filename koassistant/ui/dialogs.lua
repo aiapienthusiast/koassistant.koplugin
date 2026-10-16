@@ -1928,6 +1928,9 @@ local function createSaveDialog(document_path, history, chat_history_manager, is
                                 system_metadata = config and config.system,
                                 -- Per-chat control state — resume reactivates it (parity §8c)
                                 control_state = chat_history_manager.captureControlState(config),
+                                -- the kinds the context carried and the provider that answered (B395 slice 5)
+                                data_kinds = history.data_kinds,
+                                provider = history.provider or config.provider,
                                 -- Store cache continuation info (for "Updated from X% cache" notice)
                                 used_cache = history.used_cache,
                                 cached_progress = history.cached_progress,
@@ -2899,6 +2902,9 @@ local function showResponseDialog(title, history, highlightedText, addMessage, t
                                 system_metadata = cfg.system,
                                 -- Per-chat control state — resume reactivates it (parity §8c)
                                 control_state = chat_history_manager.captureControlState(cfg),
+                                -- the kinds the context carried and the provider that answered (B395 slice 5)
+                                data_kinds = history.data_kinds,
+                                provider = history.provider or cfg.provider,
                                 -- Store cache continuation info (for "Updated from X% cache" notice)
                                 used_cache = history.used_cache,
                                 cached_progress = history.cached_progress,
@@ -3034,6 +3040,9 @@ local function showResponseDialog(title, history, highlightedText, addMessage, t
                         system_metadata = viewer_config and viewer_config.system,
                         -- Per-chat control state — resume reactivates it (parity §8c)
                         control_state = chat_history_manager.captureControlState(viewer_config),
+                        -- the kinds the context carried and the provider that answered (B395 slice 5)
+                        data_kinds = history.data_kinds,
+                        provider = history.provider or viewer_config.provider,
                         -- Store cache continuation info (for "Updated from X% cache" notice)
                         used_cache = history.used_cache,
                         cached_progress = history.cached_progress,
@@ -3261,6 +3270,8 @@ local function showResponseDialog(title, history, highlightedText, addMessage, t
                                     UIManager:close(pin_name_dialog)
 
                                     local is_multi = temp_config and temp_config.features and temp_config.features.is_library_context
+                                    -- the kinds the chat's context carried are the pin's stamps (B395 slice 5)
+                                    local pin_stamps = require("koassistant.ui.data_access").stampsFromKinds(history.data_kinds)
                                     local pin_entry = {
                                         id = PinnedManager.generateId(),
                                         name = pin_name,
@@ -3270,6 +3281,11 @@ local function showResponseDialog(title, history, highlightedText, addMessage, t
                                         user_prompt = last_prompt,
                                         timestamp = os.time(),
                                         model = history:getModel() or "",
+                                        provider = history.provider or (temp_config and temp_config.provider),
+                                        used_book_text = pin_stamps.used_book_text,
+                                        used_highlights = pin_stamps.used_highlights,
+                                        used_annotations = pin_stamps.used_annotations,
+                                        used_notebook = pin_stamps.used_notebook,
                                         context_type = is_multi and "library" or (document_path and "book" or "general"),
                                         book_title = book_metadata and book_metadata.title,
                                         book_author = book_metadata and book_metadata.author,
@@ -3512,6 +3528,9 @@ local function showResponseDialog(title, history, highlightedText, addMessage, t
                     system_metadata = temp_config.system,
                     -- Per-chat control state — resume reactivates it (parity §8c)
                     control_state = chat_history_manager.captureControlState(temp_config),
+                    -- the kinds the context carried and the provider that answered (B395 slice 5)
+                    data_kinds = history.data_kinds,
+                    provider = history.provider or temp_config.provider,
                     -- Store cache continuation info (for "Updated from X% cache" notice)
                     used_cache = history.used_cache,
                     cached_progress = history.cached_progress,
@@ -3747,6 +3766,14 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
     local attachments_active = config and config.features and config.features._attachments_active
     if config and config.features then
         config.features._attachments_active = nil
+    end
+    -- Attachments ride a freeform Send and plain actions only (D12, B395
+    -- slice 5): never an action that writes an artifact, nor the dictionary
+    -- and translate family, whose answers are no chat about the attachment
+    if attachments_active and prompt and (prompt.use_response_caching or prompt.cache_as_xray
+            or prompt.cache_as_analyze or prompt.cache_as_summary
+            or prompt.dictionary_view or prompt.translate_view) then
+        attachments_active = nil
     end
     -- Background auto-update (xray_background_plan.md §4): consume the dispatch flag
     -- (the fire path passes a config COPY, but consume defensively — same staleness
@@ -5109,7 +5136,10 @@ if prune_book_text then
                 -- Get incremental book text (from cached to current position)
                 -- If text extraction is disabled, getBookTextRange returns empty — AI updates from training knowledge
                 local extraction_success, ContextExtractor = pcall(require, "koassistant.request.context_extractor")
-                if extraction_success and ContextExtractor then
+                -- An action whose text the reader unticked sends none, its
+                -- update included (B395 slice 5, P6): the model updates from
+                -- the cached result alone
+                if extraction_success and ContextExtractor and prompt.use_book_text ~= false then
                     local extractor = ContextExtractor:new(ui, require("koassistant.request.privacy_gates").copyPrivacy(temp_config.features, {
                         max_book_text_chars = prompt.max_book_text_chars or (config.features and config.features.max_book_text_chars),
                         max_pdf_pages = config.features and config.features.max_pdf_pages,
@@ -5143,7 +5173,10 @@ if prune_book_text then
                 -- slice text it lists them all, as before.
                 if message_data._parsed_old_xray then
                     message_data.entity_index = XrayParser.buildEntityIndex(
-                        message_data._parsed_old_xray, { text = message_data.incremental_book_text })
+                        message_data._parsed_old_xray, { text = message_data.incremental_book_text,
+                            -- a Never book's carried names stay off the bridge (B395 slice 5)
+                            exclude_files = require("koassistant.xray.xray_merge").neverSourceFiles(
+                                message_data._parsed_old_xray, temp_config.features, effective_provider, ui) })
                 end
 
                 -- The update prompt sends only {cached_result} + the incremental
@@ -5596,6 +5629,10 @@ if prune_book_text then
             if using_cache and message_data.cached_used_book_text == true then
                 book_text_was_provided = true
             end
+            -- An artifact inherits the stamps of the artifacts it read (B395 slice 5)
+            if message_data._inherited_stamps and message_data._inherited_stamps.book_text then
+                book_text_was_provided = true
+            end
 
             -- Pre-format unavailable data for cache metadata (artifact viewers use this)
             local unavailable_text
@@ -5703,6 +5740,9 @@ if prune_book_text then
                 if using_cache and message_data.cached_used_highlights == true then
                     highlights_were_provided = true
                 end
+                if message_data._inherited_stamps and message_data._inherited_stamps.highlights then
+                    highlights_were_provided = true
+                end
                 -- Position-irrelevant actions (no use_reading_progress) store 1.0
                 -- so the popup correctly shows "Redo" instead of misleading "Update to X%"
                 local save_progress = prompt and prompt.use_reading_progress
@@ -5713,8 +5753,10 @@ if prune_book_text then
                     original_action_id,
                     cache_answer,
                     save_progress,
-                    { model = ConfigHelper:getModelInfo(temp_config), used_book_text = book_text_was_provided,
+                    { model = ConfigHelper:getModelInfo(temp_config), used_book_text = book_text_was_provided, provider = temp_config.provider,
                       used_highlights = highlights_were_provided,
+                      -- the notebook, stamped since B395 slice 5
+                      used_notebook = (message_data.notebook_content ~= nil and message_data.notebook_content ~= "") or nil,
                       used_reasoning = (reasoning ~= nil and reasoning ~= ""),
                       tokens_in = message_data._usage and message_data._usage.input_tokens or nil,
                       tokens_out = message_data._usage and message_data._usage.output_tokens or nil,
@@ -5801,7 +5843,7 @@ if prune_book_text then
                         timestamp = os.time(),
                         model = model_name,
                         used_highlights = rung_used_highlights,
-                        used_book_text = book_text_was_provided,
+                        used_book_text = book_text_was_provided, provider = temp_config.provider,
                         flow_visible_pages = message_data.flow_visible_pages,
                         source_mode = source_mode,
                         chapter_label = message_data._ladder_chapter_label,
@@ -5834,7 +5876,7 @@ if prune_book_text then
                     local xray_metadata = {
                         model = model_name,
                         used_highlights = used_highlights,
-                        used_book_text = book_text_was_provided,
+                        used_book_text = book_text_was_provided, provider = temp_config.provider,
                         used_reasoning = (reasoning ~= nil and reasoning ~= ""),
                         tokens_in = message_data._usage and message_data._usage.input_tokens or nil,
                         tokens_out = message_data._usage and message_data._usage.output_tokens or nil,
@@ -5911,7 +5953,7 @@ if prune_book_text then
                                 timestamp = xray_fold_ts,
                                 model = model_name,
                                 used_highlights = used_highlights,
-                                used_book_text = book_text_was_provided,
+                                used_book_text = book_text_was_provided, provider = temp_config.provider,
                                 flow_visible_pages = message_data.flow_visible_pages,
                                 source_mode = source_mode,
                                 coverage_spans = xray_spans,
@@ -5936,7 +5978,7 @@ if prune_book_text then
                 if section_scope and cache_answer then
                     local section_metadata = {
                         model = model_name,
-                        used_book_text = book_text_was_provided,
+                        used_book_text = book_text_was_provided, provider = temp_config.provider,
                         used_highlights = (message_data.highlights and message_data.highlights ~= "") or false,
                         used_reasoning = (reasoning ~= nil and reasoning ~= ""),
                         tokens_in = message_data._usage and message_data._usage.input_tokens or nil,
@@ -5966,7 +6008,7 @@ if prune_book_text then
                 if action.cache_as_analyze then
                     local analyze_metadata = {
                         model = model_name,
-                        used_book_text = book_text_was_provided,
+                        used_book_text = book_text_was_provided, provider = temp_config.provider,
                         used_reasoning = (reasoning ~= nil and reasoning ~= ""),
                         tokens_in = message_data._usage and message_data._usage.input_tokens or nil,
                         tokens_out = message_data._usage and message_data._usage.output_tokens or nil,
@@ -5986,7 +6028,7 @@ if prune_book_text then
                     local summary_metadata = {
                         model = model_name,
                         language = temp_config.features and temp_config.features.translation_language or "English",
-                        used_book_text = book_text_was_provided,
+                        used_book_text = book_text_was_provided, provider = temp_config.provider,
                         used_reasoning = (reasoning ~= nil and reasoning ~= ""),
                         tokens_in = message_data._usage and message_data._usage.input_tokens or nil,
                         tokens_out = message_data._usage and message_data._usage.output_tokens or nil,
@@ -6026,6 +6068,11 @@ if prune_book_text then
             if message_data._unavailable_data and #message_data._unavailable_data > 0 then
                 history.unavailable_data = message_data._unavailable_data
             end
+            -- The kinds this chat's context carried and the provider that
+            -- answered (B395 slice 5): a resume checks them against the book's
+            -- values then, and a pin made from the chat carries them as stamps
+            history.data_kinds = require("koassistant.ui.data_access").carriedKinds(message_data)
+            history.provider = temp_config.provider
 
             -- Carry layer 3(iii): the pre-create fold ask already ran (Step 0)
             -- — an accepted fold now executes against the freshly written
@@ -6323,7 +6370,10 @@ if prune_book_text then
         local XrayMerge = require("koassistant.xray.xray_merge")
         local src = XrayMerge.seedSource(cache_file, config.features,
             temp_config and temp_config.provider, ui)
-        local canon = src and XrayMerge.namingCanonBlock(src.parsed, src.title)
+        -- the source itself is not Never (seedSource); its own carried names
+        -- from a Never book stay out (B395 slice 5)
+        local canon = src and XrayMerge.namingCanonBlock(src.parsed, src.title,
+            XrayMerge.neverSourceFiles(src.parsed, config.features, temp_config and temp_config.provider, ui))
         if not canon then return end
         local msgs = history:getMessages()
         for i = 1, #msgs do
@@ -6761,8 +6811,22 @@ local function showAttachMenu(opts)
                     enable_emoji = enable_emoji,
                     select_mode = {
                         on_select = function(entry)
-                            require("koassistant.request.attachments").add(entry)
-                            on_change()
+                            -- Stored material follows its stamps (B395 slice 5):
+                            -- the kinds this artifact was built from, for this
+                            -- chat's provider; Ask asks here, Never refuses
+                            require("koassistant.ui.data_access").withAccess(plugin, nil, {
+                                features = configuration.features, provider = configuration.provider,
+                                path = entry.path, ui = ui_instance,
+                                kinds = require("koassistant.request.privacy_gates").stampedList(entry),
+                                action_name = _("Attach"),
+                                amounts = { book_text = _("this artifact, built from the book's text"),
+                                    highlights = _("this artifact, built with your highlights"),
+                                    annotations = _("this artifact, built with your notes"),
+                                    notebook = _("this artifact, built with your notebook") },
+                            }, function()
+                                require("koassistant.request.attachments").add(entry)
+                                on_change()
+                            end)
                         end,
                     },
                 }
@@ -11032,6 +11096,10 @@ local function openXrayBrowserFromCache(ui, data, cached, config, plugin, book_m
         model = cached.model,
         timestamp = cached.timestamp,
         book_file = target_file,
+        -- the X-Ray's stamps: what its entries and chats send (B395 slice 5)
+        used_book_text = cached.used_book_text,
+        used_highlights = cached.used_highlights,
+        used_annotations = cached.used_annotations,
         enable_emoji = config_features.enable_emoji_icons == true,
         configuration = config,
         plugin = plugin,
@@ -11306,10 +11374,12 @@ local function showPredecessorEntity(opts)
                 local XrayMerge = require("koassistant.xray.xray_merge")
                 local features = (opts.config and opts.config.features) or {}
                 local provider = opts.config and opts.config.provider
-                if pred_entry and not XrayMerge.consentOk({ pred_entry }, features,
+                -- A local write: the carry's rule (a Never book contributes
+                -- nothing; Ask is fine, nothing is sent here; B395 slice 5)
+                if pred_entry and not XrayMerge.carryOk(pred_entry, features,
                         provider, hit.pred_file, opts.ui) then
                     UIManager:show(InfoMessage:new{
-                        text = T(_("Adding this entry needs text extraction allowed for %1 (Book Settings, Privacy) or a trusted provider."),
+                        text = T(_("This entry can't be carried over: the book it comes from, %1, has its text set to Never (Book Settings, Privacy)."),
                             hit.pred_title or _("that book")),
                         timeout = 6,
                     })
@@ -12864,6 +12934,9 @@ local function executeDirectAction(ui, action, highlighted_text, configuration, 
                             progress = "Complete",
                             model = section_cache.model,
                             timestamp = section_cache.timestamp,
+                            used_book_text = section_cache.used_book_text,
+                            used_highlights = section_cache.used_highlights,
+                            used_annotations = section_cache.used_annotations,
                             book_file = ui.document.file,
                             enable_emoji = config_features.enable_emoji_icons == true,
                             configuration = configuration,
@@ -12944,6 +13017,9 @@ local function executeDirectAction(ui, action, highlighted_text, configuration, 
                                 (math.floor(xray_cache.progress_decimal * 100 + 0.5) .. "%"),
                             model = xray_cache.model,
                             timestamp = xray_cache.timestamp,
+                            used_book_text = xray_cache.used_book_text,
+                            used_highlights = xray_cache.used_highlights,
+                            used_annotations = xray_cache.used_annotations,
                             book_file = ui.document.file,
                             enable_emoji = config_features.enable_emoji_icons == true,
                             configuration = configuration,
@@ -13165,7 +13241,7 @@ local function executeDirectAction(ui, action, highlighted_text, configuration, 
                 _artifact_book_title = book_metadata and book_metadata.title,
                 _artifact_book_author = book_metadata and book_metadata.author,
                 on_launch_chat = plugin and plugin._buildLaunchChatCallback
-                    and plugin:_buildLaunchChatCallback(document_path, book_metadata and book_metadata.title, book_metadata and book_metadata.author, wiki_text, _("AI Wiki")) or nil,
+                    and plugin:_buildLaunchChatCallback(document_path, book_metadata and book_metadata.title, book_metadata and book_metadata.author, wiki_text, _("AI Wiki"), { stamps = ActionCache.getWikiEntry(document_path, wiki_category, normalized) or {} }) or nil,
             }
             UIManager:show(wiki_viewer)
         end
@@ -13322,6 +13398,7 @@ local function headlessResult(history, temp_config_or_error)
         model = model_info and model_info.model or "",
         used_reasoning = last.reasoning ~= nil,
         web_search_used = last.web_search_used or false,
+        provider = type(temp_config_or_error) == "table" and temp_config_or_error.provider or nil,
         config = type(temp_config_or_error) == "table" and temp_config_or_error or nil,
     }
 end
@@ -13522,6 +13599,39 @@ local function launchArtifactChat(user_question, artifact_content, artifact_type
                 features = configuration.features, provider = nb_provider, path = document_path, ui = ui,
                 book = nb_book, kinds = { "notebook" }, action_name = _("Chat about this notebook"),
                 amounts = { notebook = _("your notebook for this book") },
+            }, function()
+                launchArtifactChat(user_question, artifact_content, artifact_type_name, ui,
+                    configuration, plugin, book_metadata, opts)
+            end)
+            return
+        end
+    end
+
+    -- Stored material follows its stamps (B395 slice 5): the kinds this
+    -- artifact was built from, for the provider the chat goes to; a Never
+    -- refuses with the door, Ask asks once (the allowance on this chat's own
+    -- config), Allow passes. The notebook took its own question above.
+    if opts and opts.stamps and not opts.notebook and not opts.stamps_asked then
+        local Gates = require("koassistant.request.privacy_gates")
+        local st_provider = configuration.provider or configuration.default_provider
+        local st_kinds = Gates.stampedList(opts.stamps)
+        local st_ctx = Gates.context(configuration.features, st_provider, { path = document_path, ui = ui })
+        local pending = false
+        for _idx, kind in ipairs(st_kinds) do
+            if Gates.resolve(kind, st_ctx) ~= "allow" then pending = true end
+        end
+        if pending then
+            opts.stamps_asked = true
+            local what = artifact_type_name or _("artifact")
+            require("koassistant.ui.data_access").withAccess(plugin, nil, {
+                features = configuration.features, provider = st_provider, path = document_path, ui = ui,
+                kinds = st_kinds, action_name = T(_("Chat about this %1"), what),
+                amounts = {
+                    book_text = T(_("this %1, built from the book's text"), what),
+                    highlights = T(_("this %1, built with your highlights"), what),
+                    annotations = T(_("this %1, built with your notes"), what),
+                    notebook = T(_("this %1, built with your notebook"), what),
+                },
             }, function()
                 launchArtifactChat(user_question, artifact_content, artifact_type_name, ui,
                     configuration, plugin, book_metadata, opts)

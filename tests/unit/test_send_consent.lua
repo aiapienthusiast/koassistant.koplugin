@@ -334,6 +334,45 @@ end)
 
 -- ------------------------------------------------------------------- cleanup
 
+-- ------------------------------------------------------------------- (e)
+
+print("\n  [(e) a chat about a text-built artifact]")
+
+local function artifactChat(features, provider, opts)
+    sent, shown = 0, {}
+    local cfg = { provider = provider, model = "m", provider_settings = {}, features = features }
+    Dialogs.launchArtifactChat("Why?", "summary text", "Summary", nil, cfg, nil,
+        { file = "/books/b.epub", title = "B" }, opts)
+    return sent, shown
+end
+
+local function lastText(dialogs)
+    local w = dialogs[#dialogs]
+    return tostring(w and (w.title or w.text) or "")
+end
+
+TestRunner:test("a text-built artifact on Ask asks first, nothing sent", function()
+    local n, dialogs = artifactChat({}, "openai", { stamps = { used_book_text = true } })
+    TestRunner:assertEqual(n, 0, "nothing sent before the answer")
+    TestRunner:assertTrue(lastText(dialogs):find("Chat about this Summary", 1, true) ~= nil, "the question names the chat: " .. lastText(dialogs))
+end)
+
+TestRunner:test("a text-built artifact under a global Never is refused, nothing sent", function()
+    local n, dialogs = artifactChat({ enable_book_text_extraction = "never" }, "openai", { stamps = { used_book_text = true } })
+    TestRunner:assertEqual(n, 0)
+    TestRunner:assertTrue(lastText(dialogs):find("Never", 1, true) ~= nil, "a refusal naming Never: " .. lastText(dialogs))
+end)
+
+TestRunner:test("an artifact built without text, or text allowed, sends without a question", function()
+    local n = artifactChat({}, "openai", { stamps = { used_book_text = false } })
+    TestRunner:assertEqual(n, 1, "no text stamp: sent")
+    n = artifactChat({ enable_book_text_extraction = true }, "openai", { stamps = { used_book_text = true } })
+    TestRunner:assertEqual(n, 1, "Allow: sent")
+    n = artifactChat({ _data_once = { book = "/books/b.epub", kinds = { book_text = true } } }, "openai",
+        { stamps = { used_book_text = true } })
+    TestRunner:assertEqual(n, 1, "the run's allowance on the chat's config: sent")
+end)
+
 UIManager.show = saved.show
 BTR.queryWith = saved.queryWith
 SDS.resolve = saved.resolve

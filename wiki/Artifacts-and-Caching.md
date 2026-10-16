@@ -37,6 +37,8 @@ The window title names the artifact and the book, with how far into the book the
 
 **Info** shows how an artifact was made: the data source (extracted text, the summary or AI knowledge), the model, the date, whether reasoning or web search was used, and the tokens the run cost (in, out and reasoning). An artifact built without text extraction comes from the AI's knowledge, which works for well-known books and less for obscure ones; regenerate with extraction on for better quality.
 
+A chat about an artifact, like attaching one, follows what the artifact was built from: the first time it asks for those kinds when they are still on Ask, and a kind set to Never for the book refuses it ([Privacy and Data](Privacy-and-Data#where-it-is-asked)).
+
 A chat or artifact started from a Book Hub, a group page or the artifact browser while another book is open belongs to that book: its artifacts are saved with it, never listed among the open book's; a summary or analysis of a book that is not the open one offers no Regenerate (open that book first).
 
 ## Caching and incremental updates

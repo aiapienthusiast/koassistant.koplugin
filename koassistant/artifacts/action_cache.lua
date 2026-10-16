@@ -250,6 +250,12 @@ local function saveCache(document_path, cache)
             if entry.used_book_text ~= nil then
                 file:write(string.format("        used_book_text = %s,\n", tostring(entry.used_book_text)))
             end
+            if entry.used_notebook ~= nil then
+                file:write(string.format("        used_notebook = %s,\n", tostring(entry.used_notebook)))
+            end
+            if type(entry.provider) == "string" and entry.provider ~= "" then
+                file:write(string.format("        provider = %q,\n", entry.provider))
+            end
             if entry.previous_progress_decimal then
                 file:write(string.format("        previous_progress_decimal = %s,\n", tostring(entry.previous_progress_decimal)))
             end
@@ -440,6 +446,10 @@ function ActionCache.set(document_path, action_id, result, progress_decimal, met
         used_highlights = metadata and metadata.used_highlights,
         used_annotations = metadata and metadata.used_annotations,
         used_book_text = metadata and metadata.used_book_text,
+        -- The notebook, stamped since B395 slice 5 (nil = never read)
+        used_notebook = metadata and metadata.used_notebook,
+        -- The provider the request went to (recorded, gates nothing yet)
+        provider = metadata and metadata.provider,
         -- Track incremental update origin
         previous_progress_decimal = metadata and metadata.previous_progress_decimal,
         -- Track hidden flow state when cache was built (nil = no hidden flows)

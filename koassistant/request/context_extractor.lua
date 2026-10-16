@@ -1618,6 +1618,16 @@ function ContextExtractor:extractForAction(action)
     -- bypass a per-book deny)
     local text_extraction_allowed = self:isBookTextExtractionEnabled()
 
+    -- An artifact built from stored material inherits its stamps (B395
+    -- slice 5): what a cache read carries into the request is recorded on the
+    -- new entry and on the chat
+    local function inherit(kinds)
+        data._inherited_stamps = data._inherited_stamps or {}
+        for kind, used in pairs(kinds) do
+            if used then data._inherited_stamps[kind] = true end
+        end
+    end
+
     -- {xray_cache} / {xray_cache_section} → cached X-Ray
     if action.use_xray_cache then
         local xray = self:getXrayCache()
@@ -1638,6 +1648,7 @@ function ContextExtractor:extractForAction(action)
         if text_ok and highlights_ok and annotations_ok then
             -- The dormant carry ledger never rides a prompt (item 49)
             data.xray_cache = require("koassistant.xray.xray_parser").stripDormantJSON(xray.text)
+            if data.xray_cache ~= "" then inherit(xray_kinds) end
             data.xray_cache_progress = xray.progress_formatted
         end
     end
@@ -1648,6 +1659,7 @@ function ContextExtractor:extractForAction(action)
         local requires_text = Gates.stampedKinds(analyze).book_text
         if not requires_text or text_extraction_allowed then
             data.analyze_cache = analyze.text
+            if data.analyze_cache and data.analyze_cache ~= "" then inherit(Gates.stampedKinds(analyze)) end
         end
     end
 
@@ -1673,6 +1685,7 @@ function ContextExtractor:extractForAction(action)
         local requires_text = Gates.stampedKinds(summary).book_text
         if not requires_text or text_extraction_allowed then
             data.summary_cache = summary.text
+            if data.summary_cache and data.summary_cache ~= "" then inherit(Gates.stampedKinds(summary)) end
         end
     end
 

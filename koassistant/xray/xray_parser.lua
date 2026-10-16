@@ -3235,8 +3235,12 @@ function XrayParser.buildEntityIndex(data, opts)
         local text = opts and opts.text
         local probe = type(text) == "string" and text ~= "" and textNameProbe(text) or nil
         local names, total, mentioned = {}, 0, 0
+        -- opts.exclude_files: books whose text is Never contribute nothing
+        -- (B395 slice 5): their carried names stay off the bridge
+        local excluded = opts and opts.exclude_files
         for _idx, stub in ipairs(ledger) do
-            if type(stub) == "table" and type(stub.name) == "string" and stub.name ~= "" then
+            if type(stub) == "table" and type(stub.name) == "string" and stub.name ~= ""
+                    and not (excluded and stub.file and excluded[stub.file]) then
                 total = total + 1
                 local stub_aliases = ensure_array(stub.aliases) or {}
                 local shown = {}

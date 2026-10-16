@@ -264,17 +264,23 @@ end
 --- the kinds no book holds (the book list, reading habits) as the action
 --- declares them, and the count of books on Never.
 local function needsForSet(action, opts)
-    local kinds = { "highlights", "annotations", "notebook" }
+    local kinds = { "book_text", "highlights", "annotations", "notebook" }
+    -- what the action reads of each book, or what each book's own stored
+    -- material was built from (book.kinds, a merge's set: slice 5)
     local wanted = {}
     if action.use_highlights then wanted.highlights = true end
     if action.use_annotations then wanted.annotations = true; wanted.highlights = true end
     if action.use_notebook then wanted.notebook = true end
+    local function bookWants(book, kind)
+        if type(book.kinds) == "table" then return book.kinds[kind] == true end
+        return wanted[kind] == true
+    end
     local out, never_books = {}, 0
     local never_seen = {}
     for _idx, kind in ipairs(kinds) do
-        if wanted[kind] then
-            local any_ask = false
-            for _b, book in ipairs(opts.books) do
+        local any_ask = false
+        for _b, book in ipairs(opts.books) do
+            if bookWants(book, kind) then
                 local ctx = Gates.context(opts.features, opts.provider, { path = book.file, ui = opts.ui })
                 local state = Gates.resolve(kind, ctx)
                 if state == "ask" then any_ask = true end
@@ -283,9 +289,9 @@ local function needsForSet(action, opts)
                     never_books = never_books + 1
                 end
             end
-            if any_ask then
-                out[#out + 1] = { kind = kind, state = "ask", layer = "global", required = false }
-            end
+        end
+        if any_ask then
+            out[#out + 1] = { kind = kind, state = "ask", layer = "global", required = false }
         end
     end
     local ctx = Gates.context(opts.features, opts.provider, {})
@@ -316,7 +322,11 @@ function DataAccess.needsFor(action, opts)
     local ctx = Gates.context(features, opts.provider, { path = opts.path, ui = opts.ui, book = opts.book })
     if opts.kinds then
         local needs = {}
-        for _idx, kind in ipairs(opts.kinds) do
+        for _idx, k in ipairs(opts.kinds) do
+            -- a kind, or { kind, required } when the list mixes required and
+            -- optional kinds (the X-Ray chat: the entry's text, its highlights)
+            local kind, req = k, opts.required ~= false
+            if type(k) == "table" then kind, req = k.kind, k.required ~= false end
             local state, layer
             for _p, provider in ipairs(opts.providers or {}) do
                 ctx.provider = provider
@@ -328,7 +338,7 @@ function DataAccess.needsFor(action, opts)
                 ctx.provider = opts.provider
                 state, layer = Gates.resolve(kind, ctx)
             end
-            needs[#needs + 1] = { kind = kind, state = state, layer = layer, required = opts.required ~= false }
+            needs[#needs + 1] = { kind = kind, state = state, layer = layer, required = req }
         end
         return needs
     end
@@ -426,6 +436,87 @@ function DataAccess.withAccess(plugin, action, opts, run_fn)
         end
     end)
     return true
+end
+
+--- The kinds a request's context carried, read from what the gather put in
+--- message_data (B395 slice 5): recorded on the chat and on a pin made from
+--- it, checked at resume. nil when nothing of the reader's was sent.
+function DataAccess.carriedKinds(md)
+    md = md or {}
+    local function has(key) return type(md[key]) == "string" and md[key] ~= "" end
+    local set = {}
+    if has("book_text") or has("full_document") or has("incremental_book_text") then set.book_text = true end
+    if has("highlights") then set.highlights = true end
+    if has("annotations") then set.annotations = true end
+    if has("notebook_content") then set.notebook = true end
+    if has("library_content") then set.book_list = true end
+    if type(md.stats_groups) == "table" and next(md.stats_groups) then set.habits = true end
+    if has("surrounding_context") or has("page_text") then set.nearby_text = true end
+    -- stored material read along: its stamps (an update's cache, a cache read)
+    if md.cached_used_book_text == true then set.book_text = true end
+    if md.cached_used_highlights == true then set.highlights = true end
+    if md.cached_used_annotations == true then set.annotations = true end
+    for kind, used in pairs(md._inherited_stamps or {}) do
+        if used then set[kind] = true end
+    end
+    local out = {}
+    for _idx, kind in ipairs(Gates.KINDS) do
+        if set[kind] then out[#out + 1] = kind end
+    end
+    if #out == 0 then return nil end
+    return out
+end
+
+--- A recorded list of kinds as an artifact's stamps (a pin made from a chat).
+--- With no record the pin is stamped as text-free: a chat that recorded
+--- nothing sent nothing of the reader's.
+function DataAccess.stampsFromKinds(kinds)
+    local set = {}
+    for _idx, kind in ipairs(kinds or {}) do set[kind] = true end
+    return {
+        used_book_text = set.book_text == true,
+        used_highlights = set.highlights == true,
+        used_annotations = set.annotations == true,
+        used_notebook = set.notebook == true,
+    }
+end
+
+--- What a resumed chat needs before its stored context goes out again
+--- (B395 slice 5, ruling 16): a kind it carried that is Never now for its
+--- book refuses (out.refused = { kind, layer }); toward another provider than
+--- the one that answered, the kinds still on Ask are asked once
+--- (out.asked). The same provider has the data already: nothing asked.
+--- Chats saved before the kinds were recorded pass.
+function DataAccess.resumeNeeds(chat, features, provider, path, ui)
+    local out = { asked = {} }
+    local kinds = chat and chat.data_kinds
+    if type(kinds) ~= "table" or #kinds == 0 then return out end
+    local ctx = Gates.context(features or {}, provider, { path = path, ui = ui })
+    local same_provider = chat.provider ~= nil and chat.provider == provider
+    for _idx, kind in ipairs(kinds) do
+        local state, layer = Gates.resolve(kind, ctx)
+        if state == "never" then
+            out.refused = { kind = kind, layer = layer }
+            return out
+        elseif state == "ask" and not same_provider then
+            out.asked[#out.asked + 1] = kind
+        end
+    end
+    return out
+end
+
+--- The messages a resumed chat sends when the reader chose to go on without
+--- its stored context: the context messages saved with the chat
+--- (features._drop_stored_context = how many messages the chat had) stay
+--- out; the turns and anything added since ride as they are.
+function DataAccess.sendableMessages(messages, features)
+    local n = features and features._drop_stored_context
+    if type(n) ~= "number" or type(messages) ~= "table" then return messages end
+    local out = {}
+    for i, m in ipairs(messages) do
+        if not (i <= n and type(m) == "table" and m.is_context) then out[#out + 1] = m end
+    end
+    return out
 end
 
 --- The dispatch entry's funnel (the dialogs module's handlePredefinedPrompt):

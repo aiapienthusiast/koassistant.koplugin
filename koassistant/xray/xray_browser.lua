@@ -4522,20 +4522,34 @@ function XrayBrowser:chatAboutItem(detail_text, entity)
     end
     config.features._xray_context_prefix = framing
 
-    -- The highlights block rides the chat's text: on Ask the question comes
-    -- here, before the chat opens (B395 slice 2); its allowance lives on this
-    -- chat's own config, so every send re-judges the block with it
-    if entity and entity.highlights and self.metadata.book_file then
+    -- The entry's text follows the X-Ray's stamps and the highlights block
+    -- rides along (B395 slices 2 and 5): one question for what is still on
+    -- Ask, for the provider this chat goes to; a Never on a kind the X-Ray
+    -- was built from refuses with the door; the allowance lives on this
+    -- chat's own config, so every send re-judges with it
+    if self.metadata.book_file then
         local Gates = require("koassistant.request.privacy_gates")
-        local state = Gates.resolve("highlights", Gates.context(config.features,
-            config.provider, { path = self.metadata.book_file, ui = self.ui }))
-        if state ~= "allow" then
+        local ctx = Gates.context(config.features, config.provider,
+            { path = self.metadata.book_file, ui = self.ui })
+        local kinds, seen, pending = {}, {}, false
+        for _idx, kind in ipairs(Gates.stampedList(self.metadata)) do
+            kinds[#kinds + 1] = { kind = kind, required = true }
+            seen[kind] = true
+            if Gates.resolve(kind, ctx) ~= "allow" then pending = true end
+        end
+        if entity and entity.highlights and not seen.highlights then
+            kinds[#kinds + 1] = { kind = "highlights", required = false }
+            if Gates.resolve("highlights", ctx) ~= "allow" then pending = true end
+        end
+        if pending then
             local self_ref = self
             require("koassistant.ui.data_access").withAccess(self.metadata.plugin, nil, {
                 features = config.features, provider = config.provider,
                 path = self.metadata.book_file, ui = self.ui,
-                kinds = { "highlights" }, required = false, action_name = _("Chat about this"),
-                amounts = { highlights = _("your highlights that mention this entry") },
+                kinds = kinds, action_name = _("Chat about this"),
+                amounts = { book_text = _("this X-Ray entry, built from the book's text"),
+                    highlights = _("your highlights that mention this entry"),
+                    annotations = _("this X-Ray entry, built with your notes") },
             }, function()
                 Dialogs.showChatGPTDialog(self_ref.ui, detail_text, config, nil, self_ref.metadata.plugin)
             end)
@@ -4590,6 +4604,18 @@ function XrayBrowser:runWikiForItem(item, category_key, title, source, nav_conte
     local book_metadata = config.features.book_metadata
     local self_ref = self
 
+    -- The entry's text follows the X-Ray's stamps (B395 slice 5): a Never
+    -- refuses with the door, Ask asks once (the allowance on this run's
+    -- config), and the wiki entry inherits the stamps it was built from
+    local Gates = require("koassistant.request.privacy_gates")
+    local xray_stamps = Gates.stampedKinds(self.metadata)
+    require("koassistant.ui.data_access").withAccess(self.metadata.plugin, nil, {
+        features = config.features, provider = config.provider, path = file, ui = self.ui,
+        kinds = Gates.stampedList(self.metadata), action_name = _("AI Wiki"),
+        amounts = { book_text = _("this X-Ray entry, built from the book's text"),
+            highlights = _("this X-Ray entry, built with your highlights"),
+            annotations = _("this X-Ray entry, built with your notes") },
+    }, function()
     Dialogs.executeActionForResult(wiki_action, item_name, self.ui, config, self.metadata.plugin, book_metadata,
         function(result, metadata)
             -- Close stale item detail viewer (buttons reflect pre-generation state)
@@ -4598,6 +4624,10 @@ function XrayBrowser:runWikiForItem(item, category_key, title, source, nav_conte
                 self_ref._detail_viewer = nil
             end
             if result then
+                metadata = metadata or {}
+                metadata.used_book_text = xray_stamps.book_text
+                metadata.used_highlights = xray_stamps.highlights
+                metadata.used_annotations = xray_stamps.annotations
                 ActionCache.setWikiEntry(file, category_key, item_name, result, metadata)
                 local cached = ActionCache.getWikiEntry(file, category_key, item_name)
                 -- Re-open item detail (fresh "View AI Wiki" button) with wiki on top
@@ -4609,6 +4639,7 @@ function XrayBrowser:runWikiForItem(item, category_key, title, source, nav_conte
             end
         end
     )
+    end)
 end
 
 --- Show a cached wiki entry in a simple viewer with Delete/Regenerate
@@ -4662,7 +4693,7 @@ function XrayBrowser:showWikiViewer(item, category_key, cached, title, source, n
         _artifact_book_title = self.metadata.title,
         _artifact_book_author = self.metadata.author,
         on_launch_chat = self.metadata.plugin and self.metadata.plugin._buildLaunchChatCallback
-            and self.metadata.plugin:_buildLaunchChatCallback(file, self.metadata.title, self.metadata.author, cached.result, _("AI Wiki")) or nil,
+            and self.metadata.plugin:_buildLaunchChatCallback(file, self.metadata.title, self.metadata.author, cached.result, _("AI Wiki"), { stamps = cached }) or nil,
     }
     UIManager:show(wiki_viewer)
 end
@@ -7040,6 +7071,9 @@ function XrayBrowser:_openOtherXrayAtItem(group, result)
         model = ce.model,
         timestamp = ce.timestamp,
         book_file = self.metadata.book_file,
+        used_book_text = ce.used_book_text,
+        used_highlights = ce.used_highlights,
+        used_annotations = ce.used_annotations,
         enable_emoji = self.metadata.enable_emoji,
         configuration = self.metadata.configuration,
         plugin = self.metadata.plugin,
@@ -7517,7 +7551,7 @@ function XrayBrowser:showFullView()
                 self.metadata.plugin:openGroupHubFor(self.metadata.book_file)
             end or nil,
         on_launch_chat = self.metadata.plugin and self.metadata.plugin._buildLaunchChatCallback
-            and self.metadata.plugin:_buildLaunchChatCallback(self.metadata.book_file, self.metadata.title, self.metadata.book_author, markdown, _("X-Ray")) or nil,
+            and self.metadata.plugin:_buildLaunchChatCallback(self.metadata.book_file, self.metadata.title, self.metadata.book_author, markdown, _("X-Ray"), { stamps = self.metadata }) or nil,
     })
 end
 

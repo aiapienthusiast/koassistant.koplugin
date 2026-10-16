@@ -58,6 +58,8 @@ A required kind (X-Ray's book text, say) on Never is a short refusal that names 
 
 At the moment of need, and nowhere else: when an action starts (from a menu, a gesture, the Quick Actions panel, the highlight menu, the file browser or an input dialog), on the **Run** button of an action's scope and source popup (where the spoiler reminder also sits, so the two are one dialog), when you pick a Scope chip range or turn the Tools chip on and send, when you attach your notebook or chat about it, when you chat about an X-Ray entry whose page lists your highlights, when you generate an image, illustrate an X-Ray entry or draw a kept image's prompt again, and when a library chat sends your book list. Viewing, browsing and deleting what is already on the device never ask.
 
+A saved result follows what it was built from, wherever it goes: chatting about an artifact (the artifact window's → Chat, Chat about this on an X-Ray entry, the X-Ray's Full View, an AI Wiki article), attaching an artifact or a pinned answer to a chat, writing an AI Wiki article and every AI merge ask the same way for the kinds the result was built from, and a kind set to Never for the book refuses them. Continuing a saved chat checks the kinds it was given ([Conversations, Notebooks and Export](Conversations-Notebooks-and-Export#chat-history)).
+
 ### Background features
 
 Automatic X-Ray and checkpoint builds have no moment to ask while you read, so they need a standing Allow: the book's own value, the value for all books, or a trusted provider. When a book with automatic building on is still on Ask, the engine asks once, in the foreground, at the moment a checkpoint would build (and the confirm that turns automatic building on carries the same line): **Allow for this book and start** writes the book's value; **Cancel** pauses automatic building for that book until you turn it on again or reopen the book. A build you start by hand (checkpoints now, one background request) asks before its own confirm, and **Allow once** there covers every checkpoint of that build, never the automatic continuation afterwards.
@@ -249,6 +251,8 @@ When caches (saved artifacts) are built, they record what data was used. Actions
 - Older X-Ray caches built before X-Ray stopped reading highlights carry the same requirement until they are rebuilt.
 
 The same check runs when you update an artifact: if a kind its cache needs is now Never, the update is skipped and a fresh full generation runs instead.
+
+A result also records the notebook when it read it and the provider that made it, and a result built from another result inherits what that one was built from: a Recap that read an X-Ray built from the book's text counts as built from text. A pinned answer carries the kinds its chat was given. Results and pins saved before v0.24.0 count as built from text, as before.
 
 The artifact viewer shows "Based on AI training data knowledge" or "Based on extracted document text", so you always know what a cache contains. If you set a kind to Never after building a cache, actions may render the cache placeholder empty. To fix it, either allow the kind again or regenerate the cache with your current values. See [Troubleshooting](Troubleshooting) if text extraction isn't working.
 

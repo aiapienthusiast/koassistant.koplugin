@@ -231,7 +231,20 @@ function Gates.stampedKinds(entry)
         highlights = entry.used_highlights == true
             or (entry.used_highlights == nil and entry.used_annotations == true),
         annotations = entry.used_annotations == true and entry.used_highlights ~= nil,
+        -- stamped since B395 slice 5; an older entry never read the notebook
+        notebook = entry.used_notebook == true,
     }
+end
+
+--- The same stamps as a list of kinds, in KINDS order, for a question's
+--- opts.kinds (an artifact chat, an attached artifact, a merge's set).
+function Gates.stampedList(entry)
+    local k = Gates.stampedKinds(entry)
+    local out = {}
+    for _idx, kind in ipairs(Gates.KINDS) do
+        if k[kind] then out[#out + 1] = kind end
+    end
+    return out
 end
 
 --- The book's own values for ctx.book, from a DocSettings or the facade a

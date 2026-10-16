@@ -7414,7 +7414,8 @@ end
 --- @param artifact_book_title string The book title
 --- @param artifact_book_author string The book author
 --- @param opts table|nil { notebook = true }: the content is the book's notebook
---- (launchArtifactChat checks notebook sharing for the provider it goes to)
+--- (launchArtifactChat checks notebook sharing for the provider it goes to);
+--- { stamps = entry }: the artifact's stamps, the kinds its chat sends (B395 slice 5)
 --- @return function|nil The callback, or nil if no file
 function AskGPT:_buildLaunchChatCallback(artifact_file, artifact_book_title, artifact_book_author, artifact_content, artifact_type_name, opts)
   if not artifact_file then return nil end
@@ -8064,6 +8065,10 @@ function AskGPT:showCacheViewer(cache_info)
           model = cache_info.data.model,
           timestamp = cache_info.data.timestamp,
           book_file = cache_info.file or (self.ui and self.ui.document and self.ui.document.file),
+          -- the X-Ray's stamps: what its entries and chats send (B395 slice 5)
+          used_book_text = cache_info.data.used_book_text,
+          used_highlights = cache_info.data.used_highlights,
+          used_annotations = cache_info.data.used_annotations,
           enable_emoji = features.enable_emoji_icons == true,
           cache_metadata = cache_metadata,
           configuration = configuration,
@@ -8193,7 +8198,7 @@ function AskGPT:showCacheViewer(cache_info)
     _book_open = (self.ui and self.ui.document ~= nil),
     group_open = (not cache_info.checkpoint and self:_inBookGroup(file))
       and function() self:openGroupHubFor(file) end or nil,
-    on_launch_chat = self:_buildLaunchChatCallback(file, book_title, book_author, cache_info.data.result, cache_info.name),
+    on_launch_chat = self:_buildLaunchChatCallback(file, book_title, book_author, cache_info.data.result, cache_info.name, { stamps = cache_info.data }),
   }
   UIManager:show(viewer)
 end
@@ -14206,7 +14211,7 @@ function AskGPT:viewCachedAction(action, action_id, cached_entry, opts)
     _book_open = (self.ui and self.ui.document ~= nil),
     group_open = self:_inBookGroup(file)
       and function() self:openGroupHubFor(file) end or nil,
-    on_launch_chat = self:_buildLaunchChatCallback(file, book_title, book_author, cached_entry.result, action_name),
+    on_launch_chat = self:_buildLaunchChatCallback(file, book_title, book_author, cached_entry.result, action_name, { stamps = cached_entry }),
   }
   UIManager:show(viewer)
 end

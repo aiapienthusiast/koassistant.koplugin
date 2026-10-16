@@ -1267,7 +1267,7 @@ function XrayMerge.seedSource(file, features, provider, ui)
     for i = #preds, 1, -1 do
         local entry = ActionCache.getXrayCache(preds[i])
         if entry and entry.result and XrayParser.isJSON(entry.result)
-            and XrayMerge.consentOk({ entry }, features, provider, preds[i], ui) then
+            and XrayMerge.carryOk(entry, features, provider, preds[i], ui) then
             local source_parsed = XrayParser.parse(entry.result)
             if source_parsed and not source_parsed.error then
                 return { file = preds[i], title = BookGroups.displayTitle(preds[i], ui),
@@ -1316,7 +1316,7 @@ function XrayMerge.seedSources(file, features, provider, ui)
             local entry = ActionCache.getXrayCache(p)
             if entry and entry.result and entry.source_mode ~= "ai_knowledge"
                 and XrayParser.isJSON(entry.result)
-                and XrayMerge.consentOk({ entry }, features, provider, p, ui) then
+                and XrayMerge.carryOk(entry, features, provider, p, ui) then
                 local parsed = XrayParser.parse(entry.result)
                 if parsed and not parsed.error then
                     out[#out + 1] = { file = p, title = BookGroups.displayTitle(p, ui),
@@ -1501,7 +1501,7 @@ end
 --- @param source_parsed table Predecessor's parsed X-Ray
 --- @param source_title string|nil
 --- @return string|nil block Framed prompt block (nil when nothing to list)
-function XrayMerge.namingCanonBlock(source_parsed, source_title)
+function XrayMerge.namingCanonBlock(source_parsed, source_title, exclude_files)
     if type(source_parsed) ~= "table" then return nil end
     local XrayParser = require("koassistant.xray.xray_parser")
     local order, bucket = {}, {}
@@ -1531,7 +1531,8 @@ function XrayMerge.namingCanonBlock(source_parsed, source_title)
     local ledger = source_parsed[XrayParser.DORMANT_KEY]
     if type(ledger) == "table" then
         for _idx, stub in ipairs(ledger) do
-            if type(stub) == "table" and ENTITY_CATEGORIES[stub.category or ""] then
+            if type(stub) == "table" and ENTITY_CATEGORIES[stub.category or ""]
+                    and not (exclude_files and stub.file and exclude_files[stub.file]) then
                 put(stub.category, stub.name, stub.aliases)
             end
         end
@@ -1800,6 +1801,112 @@ function XrayMerge.consentOk(entries, features, provider, book_file, ui)
     return Gates.allows("book_text", Gates.context(features, provider, { path = book_file, ui = ui }))
 end
 
+--- The carry's rule (B395 slice 5): a book's X-Ray may be read INTO another
+--- book's carried list, locally and token-free, unless a kind it was built
+--- from is Never for that book (a Never book contributes nothing). Ask is
+--- fine here: nothing is sent at seed time, and the prompt seams that list
+--- carried names drop the Never sources (neverSourceFiles).
+function XrayMerge.carryOk(entry, features, provider, book_file, ui)
+    local Gates = require("koassistant.request.privacy_gates")
+    local ctx
+    for _idx, kind in ipairs(Gates.stampedList(entry or {})) do
+        ctx = ctx or Gates.context(features, provider, { path = book_file, ui = ui })
+        if not Gates.usable(kind, ctx) then return false end
+    end
+    return true
+end
+
+--- The source books of a parsed X-Ray's carried list whose text is Never
+--- (their own value or the switch), as a set of files for the prompt seams
+--- that list carried names: the entity index and the naming canon.
+function XrayMerge.neverSourceFiles(parsed, features, provider, ui)
+    local Gates = require("koassistant.request.privacy_gates")
+    local XrayParser = require("koassistant.xray.xray_parser")
+    local out, seen = {}, {}
+    local ledger = type(parsed) == "table" and parsed[XrayParser.DORMANT_KEY]
+    if type(ledger) ~= "table" then return out end
+    for _idx, stub in ipairs(ledger) do
+        local file = type(stub) == "table" and stub.file
+        if type(file) == "string" and file ~= "" and not seen[file] then
+            seen[file] = true
+            if not Gates.usable("book_text", Gates.context(features, provider, { path = file, ui = ui })) then
+                out[file] = true
+            end
+        end
+    end
+    return out
+end
+
+--- One entry standing for several (a section merge's inputs): stamped with
+--- every kind any of them was built from.
+function XrayMerge.unionStamps(entries)
+    local Gates = require("koassistant.request.privacy_gates")
+    local out = { used_book_text = false }
+    local field = { book_text = "used_book_text", highlights = "used_highlights",
+        annotations = "used_annotations", notebook = "used_notebook" }
+    for _idx, e in ipairs(entries or {}) do
+        for kind, used in pairs(Gates.stampedKinds(e)) do
+            if used and field[kind] then out[field[kind]] = true end
+        end
+    end
+    if out.used_annotations and out.used_highlights == nil then out.used_highlights = false end
+    return out
+end
+
+--- A Never on any book an AI merge would send: the refusal with that book's
+--- door (B395 slice 5). books: { { file, title, entry }, ... }.
+--- @return boolean refused
+function XrayMerge.refusedBook(opts, books, action_name)
+    local Gates = require("koassistant.request.privacy_gates")
+    local cfg = opts.configuration or {}
+    local provider = cfg.provider or cfg.default_provider
+    for _idx, b in ipairs(books or {}) do
+        for _k, kind in ipairs(Gates.stampedList(b.entry or {})) do
+            local state, layer = Gates.resolve(kind,
+                Gates.context(cfg.features or {}, provider, { path = b.file, ui = opts.ui }))
+            if state == "never" then
+                require("koassistant.ui.data_access").refuse(opts.plugin, { kind = kind, layer = layer,
+                    action_name = action_name, path = b.file, ui = opts.ui })
+                return true
+            end
+        end
+    end
+    return false
+end
+
+--- The question before an AI merge (B395 slice 5): the books whose X-Rays
+--- the run sends, each with the kinds its X-Ray was built from. A Never on
+--- any of them refuses (refusedBook); the kinds on Ask are asked once for
+--- the set; the allowance lands on a PRIVATE copy of the configuration,
+--- which run(run_cfg) receives and every request of the run is built from
+--- (a chain's later hops must find it; nothing else may).
+--- @return boolean true when the run started or a question is up
+function XrayMerge.withDataAccess(opts, books, action_name, run)
+    if XrayMerge.refusedBook(opts, books, action_name) then return false end
+    local Gates = require("koassistant.request.privacy_gates")
+    local src = opts.configuration or {}
+    local run_cfg = {}
+    for k, v in pairs(src) do run_cfg[k] = v end
+    run_cfg.features = {}
+    for k, v in pairs(src.features or {}) do run_cfg.features[k] = v end
+    run_cfg.features._data_once = nil
+    local set = {}
+    for _idx, b in ipairs(books or {}) do
+        set[#set + 1] = { file = b.file, title = b.title, kinds = Gates.stampedKinds(b.entry or {}) }
+    end
+    require("koassistant.ui.data_access").withAccess(opts.plugin, nil, {
+        features = run_cfg.features, provider = run_cfg.provider or run_cfg.default_provider,
+        books = set, ui = opts.ui, action_name = action_name,
+        amounts = {
+            book_text = _("the X-Rays of these books, built from their text"),
+            highlights = _("the highlights these X-Rays were built with"),
+            annotations = _("the notes these X-Rays were built with"),
+            notebook = _("the notebook these X-Rays were built with"),
+        },
+    }, function() run(run_cfg) end)
+    return true
+end
+
 -- ============================ execution ============================
 
 --- Config copy for a headless artifact request (never the shared module
@@ -1896,8 +2003,11 @@ function XrayMerge.execute(opts)
     if delta_mode then
         local parsed_main = XrayParser.parse(opts.main_entry.result)
         -- The carried names listed are the ones the section X-Rays mention (B394 slice 4)
+        local m_cfg = opts.configuration or {}
         local entity_index = parsed_main and XrayParser.buildEntityIndex(parsed_main,
-            { text = XrayMerge.buildInputsBlock(opts.sections) }) or ""
+            { text = XrayMerge.buildInputsBlock(opts.sections),
+              exclude_files = XrayMerge.neverSourceFiles(parsed_main, m_cfg.features,
+                  m_cfg.provider or m_cfg.default_provider, opts.ui) }) or ""
         prompt_text, payload = XrayMerge.buildDeltaPrompt(opts.sections, opts.main_entry, entity_index, never_pairs)
     else
         prompt_text, payload = XrayMerge.buildCompletePrompt(opts.sections, never_pairs)
@@ -2051,9 +2161,24 @@ end
 
 -- ============================ UI flow ============================
 
+-- The question before a section merge's one request (B395 slice 5): the
+-- kinds every input was built from, once; the run copies from the private
+-- config the allowance lands on
+local function runSectionMerge(opts)
+    local entries = {}
+    for _idx, sec in ipairs(opts.sections or {}) do entries[#entries + 1] = sec.data end
+    if opts.main_entry then entries[#entries + 1] = opts.main_entry end
+    XrayMerge.withDataAccess(opts, { { file = opts.file, title = opts.title,
+            entry = XrayMerge.unionStamps(entries) } }, _("AI merge section X-Rays"),
+        function(run_cfg)
+            opts.configuration = run_cfg
+            XrayMerge.execute(opts)
+        end)
+end
+
 local function showWarningsThenRun(opts, warnings)
     if #warnings == 0 then
-        XrayMerge.execute(opts)
+        runSectionMerge(opts)
         return
     end
     local ButtonDialog = require("ui/widget/buttondialog")
@@ -2065,7 +2190,7 @@ local function showWarningsThenRun(opts, warnings)
                 text = _("AI merge anyway"),
                 callback = function()
                     UIManager:close(dialog)
-                    XrayMerge.execute(opts)
+                    runSectionMerge(opts)
                 end,
             }},
             {{
@@ -2295,16 +2420,13 @@ function XrayMerge.startFlow(opts)
 
     -- Read-gate parity: revoked text-extraction consent blocks re-sending
     -- text-derived artifacts (trusted provider bypasses, as everywhere)
-    local features = (opts.configuration and opts.configuration.features) or {}
-    local provider = (opts.configuration and (opts.configuration.provider or opts.configuration.default_provider))
+    -- A Never on a kind these X-Rays were built from refuses here with the
+    -- door; the kinds on Ask are asked once at the run (B395 slice 5)
     local gate_entries = {}
     for _idx, sec in ipairs(sections) do gate_entries[#gate_entries + 1] = sec.data end
     if main_entry then gate_entries[#gate_entries + 1] = main_entry end
-    if not XrayMerge.consentOk(gate_entries, features, provider, opts.file, opts.ui) then
-        UIManager:show(InfoMessage:new{
-            text = _("These X-Rays were built from extracted book text. Enable \"Allow book text extraction\" (or use a trusted provider) to merge them."),
-            timeout = 5,
-        })
+    if XrayMerge.refusedBook(opts, { { file = opts.file, title = opts.title,
+            entry = XrayMerge.unionStamps(gate_entries) } }, _("AI merge section X-Rays")) then
         return
     end
 
@@ -2492,8 +2614,11 @@ function XrayMerge.executeCrossBook(opts)
         return
     end
     -- The carried names listed are the ones the other book's X-Ray mentions (B394 slice 4)
+    local x_cfg = opts.configuration or {}
     local entity_index = XrayParser.buildEntityIndex(parsed_main,
-        { text = XrayMerge.buildCrossBookInputsBlock(opts.source) }) or ""
+        { text = XrayMerge.buildCrossBookInputsBlock(opts.source),
+          exclude_files = XrayMerge.neverSourceFiles(parsed_main, x_cfg.features,
+              x_cfg.provider or x_cfg.default_provider, opts.ui) }) or ""
     local never_pairs = ActionCache.getNeverMergePairs(opts.file)
     local prompt_text, payload = XrayMerge.buildCrossBookPrompt(
         main_entry, entity_index, never_pairs, opts.source)
@@ -3021,7 +3146,6 @@ function XrayMerge.runPostCreateFold(opts)
     local nearest_entry = ActionCache.getXrayCache(nearest)
     if not (nearest_entry and nearest_entry.result and XrayParser.isJSON(nearest_entry.result)) then return end
     local nearest_title = BookGroups.displayTitle(nearest, opts.ui)
-    local features = (opts.configuration and opts.configuration.features) or {}
     local provider = (opts.configuration
         and (opts.configuration.provider or opts.configuration.default_provider))
     if opts.mode == "chain" then
@@ -3036,27 +3160,27 @@ function XrayMerge.runPostCreateFold(opts)
         chain[#chain + 1] = { file = nearest, title = nearest_title, entry = nearest_entry }
         chain[#chain + 1] = { file = opts.file, title = opts.title,
             author = opts.author, entry = main_entry }
-        XrayMerge.runSeriesChain({
-            chain = chain, features = features, provider = provider,
-            ui = opts.ui, plugin = opts.plugin, configuration = opts.configuration,
-            -- Round 28: hops that already ran are skipped — the ask said
-            -- "bring the series up to date", not "redo it"
-            skip_done = true,
-        })
+        -- The question before the first request (B395 slice 5)
+        XrayMerge.withDataAccess(opts, chain, _("AI merge the series"), function(run_cfg)
+            XrayMerge.runSeriesChain({
+                chain = chain, features = run_cfg.features, provider = provider,
+                ui = opts.ui, plugin = opts.plugin, configuration = run_cfg,
+                -- Round 28: hops that already ran are skipped — the ask said
+                -- "bring the series up to date", not "redo it"
+                skip_done = true,
+            })
+        end)
         return
     end
-    if not XrayMerge.consentOk({ nearest_entry }, features, provider, nearest, opts.ui)
-        or not XrayMerge.consentOk({ main_entry }, features, provider, opts.file, opts.ui) then
-        UIManager:show(InfoMessage:new{
-            text = _("These X-Rays were built from extracted book text. Enable \"Allow book text extraction\" (or use a trusted provider) to merge them."),
-            timeout = 5,
-        })
-        return
-    end
+    -- The question before the request (B395 slice 5): both X-Rays' kinds, once
+    XrayMerge.withDataAccess(opts,
+        { { file = nearest, title = nearest_title, entry = nearest_entry },
+          { file = opts.file, title = opts.title, entry = main_entry } },
+        _("AI merge"), function(run_cfg)
     UIManager:show(Notification:new{ text = T(_("AI merge with \"%1\"…"), nearest_title) })
     XrayMerge.executeCrossBook({
         file = opts.file, ui = opts.ui, plugin = opts.plugin,
-        configuration = opts.configuration,
+        configuration = run_cfg,
         title = opts.title, author = opts.author,
         main_entry = main_entry,
         source = { file = nearest, title = nearest_title, entry = nearest_entry },
@@ -3079,6 +3203,7 @@ function XrayMerge.runPostCreateFold(opts)
             end
         end,
     })
+    end)
 end
 
 --- Land back on the live X-Ray after a fold that closed the browser it ran
@@ -3169,17 +3294,23 @@ local function confirmFanIn(opts, mates, main_entry, tgt_group, back)
             .. T(_("%1 of them were merged in before, but their X-Rays have changed since: those run again."), stale_n)
     end
     local function launch(skip_done)
-        XrayMerge.runFanIn({
-            file = opts.file, title = opts.title, author = opts.author,
-            ui = opts.ui, plugin = opts.plugin,
-            configuration = opts.configuration,
-            features = features, provider = provider,
-            main_entry = main_entry, sources = mates,
-            skip_done = skip_done,
-            close_browser = opts.close_browser,
-            reopen_live = opts.reopen_live,
-            on_done = opts.on_done,
-        })
+        -- The question before the first request (B395 slice 5): the target
+        -- and every member, their X-Rays' kinds, asked once
+        local books = { { file = opts.file, title = opts.title, entry = main_entry } }
+        for _idx, m in ipairs(mates) do books[#books + 1] = m end
+        XrayMerge.withDataAccess(opts, books, _("AI merge the group"), function(run_cfg)
+            XrayMerge.runFanIn({
+                file = opts.file, title = opts.title, author = opts.author,
+                ui = opts.ui, plugin = opts.plugin,
+                configuration = run_cfg,
+                features = run_cfg.features, provider = provider,
+                main_entry = main_entry, sources = mates,
+                skip_done = skip_done,
+                close_browser = opts.close_browser,
+                reopen_live = opts.reopen_live,
+                on_done = opts.on_done,
+            })
+        end)
     end
     local confirm
     local btns = {}
@@ -3317,15 +3448,20 @@ local function confirmSeriesChain(opts, predecessors, main_entry, group, back)
             .. T(_("%1 ran before, but those X-Rays have changed since: they run again."), stale_n)
     end
     local function launchChain(skip_done)
-        XrayMerge.runSeriesChain({
-            chain = chain, features = features, provider = provider,
-            ui = opts.ui, plugin = opts.plugin,
-            configuration = opts.configuration,
-            close_browser = opts.close_browser,
-            reopen_live = opts.reopen_live,
-            on_done = opts.on_done,
-            skip_done = skip_done,
-        })
+        -- The question before the first request (B395 slice 5): every book of
+        -- the chain, its X-Ray's kinds, asked once; the allowance rides the
+        -- private copy every hop's request is built from
+        XrayMerge.withDataAccess(opts, chain, _("AI merge the series"), function(run_cfg)
+            XrayMerge.runSeriesChain({
+                chain = chain, features = run_cfg.features, provider = provider,
+                ui = opts.ui, plugin = opts.plugin,
+                configuration = run_cfg,
+                close_browser = opts.close_browser,
+                reopen_live = opts.reopen_live,
+                on_done = opts.on_done,
+                skip_done = skip_done,
+            })
+        end)
     end
     local confirm
     local chain_buttons = {}
@@ -3561,17 +3697,11 @@ function XrayMerge.startCrossBookFlow(opts)
             align = "left",
             callback = function()
                 closePickers()
-                -- Read-gate parity, PER BOOK: the source artifact and the
-                -- target main are both re-sent; each book's own privacy
-                -- override wins (deny beats trusted)
-                if not XrayMerge.consentOk({ captured.entry }, features, provider, captured.file, opts.ui)
-                    or not XrayMerge.consentOk({ main_entry }, features, provider, opts.file, opts.ui) then
-                    UIManager:show(InfoMessage:new{
-                        text = _("These X-Rays were built from extracted book text. Enable \"Allow book text extraction\" (or use a trusted provider) to merge them."),
-                        timeout = 5,
-                    })
-                    return
-                end
+                -- A Never on either book refuses with that book's door; the
+                -- kinds on Ask are asked after the confirm (B395 slice 5)
+                local pair_books = { { file = captured.file, title = captured.title, entry = captured.entry },
+                    { file = opts.file, title = opts.title, entry = main_entry } }
+                if XrayMerge.refusedBook(opts, pair_books, _("AI merge")) then return end
                 -- Item 46: earlier feeds later — merging a LATER group-mate is
                 -- legal (re-readers) but the spoiler warning names the direction
                 local confirm_text = T(_("AI merge the X-Ray of \"%1\" into \"%2\"?"), captured.title, opts.title or "?")
@@ -3597,12 +3727,13 @@ function XrayMerge.startCrossBookFlow(opts)
                             text = _("AI merge (1 request)"),
                             callback = function()
                                 UIManager:close(confirm)
+                                XrayMerge.withDataAccess(opts, pair_books, _("AI merge"), function(run_cfg)
                                 if opts.close_browser then opts.close_browser() end
                                 XrayMerge.executeCrossBook({
                                     file = opts.file,
                                     ui = opts.ui,
                                     plugin = opts.plugin,
-                                    configuration = opts.configuration,
+                                    configuration = run_cfg,
                                     title = opts.title,
                                     author = opts.author,
                                     main_entry = main_entry,
@@ -3642,6 +3773,7 @@ function XrayMerge.startCrossBookFlow(opts)
                                         end
                                     end,
                                 })
+                                end)
                             end,
                         }},
                         {{

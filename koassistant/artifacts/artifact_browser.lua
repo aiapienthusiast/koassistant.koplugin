@@ -225,7 +225,7 @@ function ArtifactBrowser.openRow(row, ctx)
     elseif ctx.opts and ctx.opts.select_mode then
         -- Attach: the shared build-first tail (a refusal keeps the picker open)
         local entry, err = require("koassistant.request.attachments").makeArtifact(
-            row.name, row.key, row.data, title)
+            row.name, row.key, row.data, title, nil, file)
         finishLeafSelect(ArtifactBrowser, ctx.opts, entry, err, nil, picked("viewer"))
     elseif row.is_per_action then
         before("viewer")
@@ -1071,7 +1071,7 @@ function ArtifactBrowser:showPinnedViewer(entry, context_path, opts)
         _book_open = (AskGPT.ui and AskGPT.ui.document ~= nil),
         _plugin = AskGPT,
         on_launch_chat = AskGPT._buildLaunchChatCallback
-            and AskGPT:_buildLaunchChatCallback(context_path, entry.book_title, entry.book_author, entry.result, entry.action_text or _("Pinned")) or nil,
+            and AskGPT:_buildLaunchChatCallback(context_path, entry.book_title, entry.book_author, entry.result, entry.action_text or _("Pinned"), { stamps = entry }) or nil,
         on_delete = function()
             PinnedManager.removePin(context_path, entry.id)
             UIManager:show(Notification:new{
@@ -1255,7 +1255,7 @@ function ArtifactBrowser:_showSectionXrayGroupPopup(sections, doc_path, doc_titl
                     -- Select mode (attach_plan.md): shared build-first tail
                     if opts and opts.select_mode then
                         local entry, err = require("koassistant.request.attachments")
-                            .makeArtifact(label, captured.key, captured.data, doc_title)
+                            .makeArtifact(label, captured.key, captured.data, doc_title, nil, doc_path)
                         finishLeafSelect(self_ref, opts, entry, err,
                             self_ref._section_group_dialog, on_select)
                         return
@@ -1341,7 +1341,7 @@ function ArtifactBrowser:_showSectionGroupPopup(sections, doc_path, doc_title, A
                     if opts and opts.select_mode then
                         local entry, err = require("koassistant.request.attachments").makeArtifact(
                             T(_("Section %1: %2"), type_label, label),
-                            captured.key, captured.data, doc_title, section_type)
+                            captured.key, captured.data, doc_title, section_type, doc_path)
                         finishLeafSelect(self_ref, opts, entry, err,
                             self_ref._section_group_dialog, on_select)
                         return
@@ -1416,7 +1416,7 @@ function ArtifactBrowser:_showWikiGroupPopup(wiki_entries, doc_path, AskGPT, doc
                 if opts and opts.select_mode then
                     local entry, err = require("koassistant.request.attachments").makeArtifact(
                         T(_("AI Wiki: %1"), captured.label),
-                        captured.key, captured.data, doc_title)
+                        captured.key, captured.data, doc_title, nil, doc_path)
                     finishLeafSelect(self_ref, opts, entry, err,
                         self_ref._wiki_group_dialog, on_select)
                     return
@@ -1444,7 +1444,7 @@ function ArtifactBrowser:_showWikiGroupPopup(wiki_entries, doc_path, AskGPT, doc
                     _artifact_book_title = doc_title,
                     _artifact_book_author = doc_author,
                     on_launch_chat = AskGPT and AskGPT._buildLaunchChatCallback
-                        and AskGPT:_buildLaunchChatCallback(doc_path, doc_title, doc_author, captured.data.result, _("AI Wiki")) or nil,
+                        and AskGPT:_buildLaunchChatCallback(doc_path, doc_title, doc_author, captured.data.result, _("AI Wiki"), { stamps = captured.data }) or nil,
                 }
                 UIManager:show(viewer)
             end,
@@ -1546,7 +1546,7 @@ function ArtifactBrowser:_showPinnedGroupPopup(pinned_entries, doc_path, doc_tit
                     _artifact_book_title = doc_title,
                     _artifact_book_author = doc_author,
                     on_launch_chat = AskGPT and AskGPT._buildLaunchChatCallback
-                        and AskGPT:_buildLaunchChatCallback(doc_path, doc_title, doc_author, captured.result, captured.action_text or _("Pinned")) or nil,
+                        and AskGPT:_buildLaunchChatCallback(doc_path, doc_title, doc_author, captured.result, captured.action_text or _("Pinned"), { stamps = captured }) or nil,
                 }
                 UIManager:show(viewer)
             end,

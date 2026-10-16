@@ -867,7 +867,7 @@ TestRunner:test("populateDormant: another book's row of the same name keeps its 
     TestRunner:assertEqual(#base.__dormant, 1, "still one row")
 end)
 
-TestRunner:test("seedDormant: walks past X-Ray-less and consent-denied predecessors", function()
+TestRunner:test("seedDormant: walks past X-Ray-less predecessors and those whose text is Never; Ask seeds", function()
     local XrayParser = require("koassistant.xray.xray_parser")
     local vol1_result = [[{
       "type": "fiction",
@@ -876,17 +876,61 @@ TestRunner:test("seedDormant: walks past X-Ray-less and consent-denied predecess
     withSeedStubs(
         { ["/b/vol4.epub"] = { "/b/vol1.epub", "/b/vol2.epub", "/b/vol3.epub" } },
         {
-            -- vol3: no X-Ray at all; vol2: text-built with NO consent (features
-            -- empty, no trusted provider) -> denied; vol1: consent-free entry
+            -- vol3: no X-Ray at all; vol2: text-built; vol1: built without text
             ["/b/vol2.epub"] = { result = vol1_result, used_book_text = true },
             ["/b/vol1.epub"] = { result = vol1_result, used_book_text = false },
         },
         function()
+            -- Never for book text: the text-built vol2 contributes nothing, vol1 seeds
             local parsed = XrayParser.parse(SEED_FRESH_JSON)
-            local added, src = XrayMerge.seedDormant("/b/vol4.epub", parsed, {}, nil, nil)
-            TestRunner:assertEqual(src, "vol1", "denied/missing predecessors skipped, farther one seeds")
+            local added, src = XrayMerge.seedDormant("/b/vol4.epub", parsed,
+                { enable_book_text_extraction = "never" }, "openai", nil)
+            TestRunner:assertEqual(src, "vol1", "a Never book is skipped, the farther one seeds")
             TestRunner:assertEqual(added, 1, "its actives stubbed")
+            -- Ask (every reader after the upgrade): the carry is local and free,
+            -- so the nearest X-Rayed book seeds (B395 slice 5, the carry's rule)
+            parsed = XrayParser.parse(SEED_FRESH_JSON)
+            added, src = XrayMerge.seedDormant("/b/vol4.epub", parsed, {}, "openai", nil)
+            TestRunner:assertEqual(src, "vol2", "Ask does not block the free carry")
+            TestRunner:assertEqual(added, 1)
         end)
+end)
+
+TestRunner:test("carryOk: the carry's rule is not-Never; consentOk's is Allow", function()
+    local text = { used_book_text = true }
+    TestRunner:assertTrue(XrayMerge.carryOk(text, {}, "openai", "/b/x.epub", nil), "Ask carries")
+    TestRunner:assertFalse(XrayMerge.carryOk(text, { enable_book_text_extraction = "never" }, "openai", "/b/x.epub", nil),
+        "Never does not")
+    TestRunner:assertTrue(XrayMerge.carryOk({ used_book_text = false }, { enable_book_text_extraction = "never" },
+        "openai", "/b/x.epub", nil), "no text stamp: nothing to refuse")
+    TestRunner:assertFalse(XrayMerge.consentOk({ text }, {}, "openai", "/b/x.epub", nil), "a send still needs Allow")
+end)
+
+TestRunner:test("neverSourceFiles: a Never book's carried names stay off the entity index and the naming canon", function()
+    local XrayParser = require("koassistant.xray.xray_parser")
+    local parsed = XrayParser.parse([[{ "type": "fiction",
+      "characters": [{"name": "Mira", "description": "Here."}],
+      "__dormant": [
+        {"name": "Old Tove", "category": "characters", "source": "vol1", "file": "/b/vol1.epub"},
+        {"name": "Kell", "category": "characters", "source": "vol2", "file": "/b/vol2.epub"} ] }]])
+    local none = XrayMerge.neverSourceFiles(parsed, {}, "openai", nil)
+    TestRunner:assertEqual(next(none), nil, "Ask: nothing excluded")
+    local all = XrayMerge.neverSourceFiles(parsed, { enable_book_text_extraction = "never" }, "openai", nil)
+    TestRunner:assertTrue(all["/b/vol1.epub"] == true and all["/b/vol2.epub"] == true, "Never: every source excluded")
+    local index = XrayParser.buildEntityIndex(parsed, { exclude_files = { ["/b/vol1.epub"] = true } })
+    TestRunner:assertTrue(index:find("Kell", 1, true) ~= nil, "the other source is listed")
+    TestRunner:assertTrue(index:find("Old Tove", 1, true) == nil, "the excluded source's name is not")
+    local canon = XrayMerge.namingCanonBlock(parsed, "vol3", { ["/b/vol2.epub"] = true })
+    TestRunner:assertTrue(canon:find("Old Tove", 1, true) ~= nil and canon:find("Kell", 1, true) == nil,
+        "the canon drops the excluded source's carried names")
+end)
+
+TestRunner:test("unionStamps: one entry stamped with every kind its inputs were built from", function()
+    local u = XrayMerge.unionStamps({ { used_book_text = false }, { used_book_text = true, used_highlights = true } })
+    TestRunner:assertEqual(u.used_book_text, true)
+    TestRunner:assertEqual(u.used_highlights, true)
+    local none = XrayMerge.unionStamps({ { used_book_text = false } })
+    TestRunner:assertEqual(none.used_book_text, false, "no text anywhere stays false (nil would read as text)")
 end)
 
 TestRunner:test("seedDormant: no group -> zero, artifact untouched", function()

@@ -1090,20 +1090,18 @@ function XrayDedup.startFlow(opts)
                     if opts.plugin and opts.plugin.updateConfigFromSettings then
                         opts.plugin:updateConfigFromSettings()
                     end
-                    local features = (opts.configuration and opts.configuration.features) or {}
-                    local provider = opts.configuration
-                        and (opts.configuration.provider or opts.configuration.default_provider)
                     local entry = ActionCache.getXrayCache(opts.file)
-                    if not XrayMerge.consentOk({ entry or {} }, features, provider, opts.file, opts.ui) then
-                        UIManager:show(InfoMessage:new{
-                            text = _("This X-Ray was built from extracted book text. Enable \"Allow book text extraction\" (or use a trusted provider) for AI merge."),
-                            timeout = 5,
-                        })
-                        return
-                    end
-                    runAiMerge(opts, state, pair, "a", function(ok)
-                        if ok then showList(true) end
-                    end)
+                    -- The question before the request (B395 slice 5): the kinds
+                    -- this X-Ray was built from, once for the review session; a
+                    -- Never refuses with the door
+                    XrayMerge.withDataAccess(opts,
+                        { { file = opts.file, title = opts.title, entry = entry or {} } },
+                        _("AI merge"), function(run_cfg)
+                            opts.configuration = run_cfg
+                            runAiMerge(opts, state, pair, "a", function(ok)
+                                if ok then showList(true) end
+                            end)
+                        end)
                 end,
             }}
         end

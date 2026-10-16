@@ -1135,6 +1135,11 @@ function ChatHistoryDialog:showChatOptions(ui, document_path, chat, chat_history
                                         user_prompt = last_prompt,
                                         timestamp = os.time(),
                                         model = chat.model or "",
+                                        provider = chat.provider,
+                                        used_book_text = require("koassistant.ui.data_access").stampsFromKinds(chat.data_kinds).used_book_text,
+                                        used_highlights = require("koassistant.ui.data_access").stampsFromKinds(chat.data_kinds).used_highlights,
+                                        used_annotations = require("koassistant.ui.data_access").stampsFromKinds(chat.data_kinds).used_annotations,
+                                        used_notebook = require("koassistant.ui.data_access").stampsFromKinds(chat.data_kinds).used_notebook,
                                         context_type = document_path == "__LIBRARY_CHATS__" and "library"
                                                        or (document_path == "__GENERAL_CHATS__" and "general" or "book"),
                                         book_title = chat.book_title,
@@ -1879,7 +1884,9 @@ function ChatHistoryDialog:continueChat(ui, document_path, chat, chat_history_ma
         -- Only enable book tools when the currently open document matches this chat's book.
         -- A continued chat opened from the file browser may run against a different (or no) ui.document.
         local tool_ui = (ui and ui.document and ui.document.file == document_path) and ui or nil
-        local answer_result = BookToolRunner.queryWith(queryChatGPT, history:getMessages(), config, function(success, answer, err, reasoning, web_search_used)
+        local answer_result = BookToolRunner.queryWith(queryChatGPT,
+            require("koassistant.ui.data_access").sendableMessages(history:getMessages(), config.features),
+            config, function(success, answer, err, reasoning, web_search_used)
             logger.dbg("KOAssistant: queryChatGPT callback - success: " .. tostring(success) .. ", answer length: " .. tostring(answer and #answer or 0) .. ", err: " .. tostring(err))
             -- Only save if we got a non-empty answer
             if success and answer and answer ~= "" then
@@ -1929,6 +1936,9 @@ function ChatHistoryDialog:continueChat(ui, document_path, chat, chat_history_ma
                         book_text_coverage_end = chat.book_text_coverage_end,
                         -- Preserve unavailable data info
                         unavailable_data = chat.unavailable_data,
+                        -- the kinds the context carried, and the provider the chat goes to now (B395 slice 5)
+                        data_kinds = chat.data_kinds,
+                        provider = config.provider or config.default_provider or chat.provider,
                     }
 
                     if document_path == "__GENERAL_CHATS__" then
@@ -2228,6 +2238,9 @@ function ChatHistoryDialog:continueChat(ui, document_path, chat, chat_history_ma
                         book_text_coverage_end = chat.book_text_coverage_end,
                         -- Preserve unavailable data info
                         unavailable_data = chat.unavailable_data,
+                        -- the kinds the context carried, and the provider the chat goes to now (B395 slice 5)
+                        data_kinds = chat.data_kinds,
+                        provider = config.provider or config.default_provider or chat.provider,
                     }
 
                     if document_path == "__GENERAL_CHATS__" then
@@ -2370,6 +2383,11 @@ function ChatHistoryDialog:continueChat(ui, document_path, chat, chat_history_ma
                                         user_prompt = last_prompt,
                                         timestamp = os.time(),
                                         model = history:getModel() or "",
+                                        provider = config.provider or config.default_provider or chat.provider,
+                                        used_book_text = require("koassistant.ui.data_access").stampsFromKinds(chat.data_kinds).used_book_text,
+                                        used_highlights = require("koassistant.ui.data_access").stampsFromKinds(chat.data_kinds).used_highlights,
+                                        used_annotations = require("koassistant.ui.data_access").stampsFromKinds(chat.data_kinds).used_annotations,
+                                        used_notebook = require("koassistant.ui.data_access").stampsFromKinds(chat.data_kinds).used_notebook,
                                         context_type = document_path == "__GENERAL_CHATS__" and "general"
                                             or (document_path == "__LIBRARY_CHATS__" and "library" or "book"),
                                         book_title = chat.book_title,
@@ -2431,6 +2449,51 @@ function ChatHistoryDialog:continueChat(ui, document_path, chat, chat_history_ma
 
         self_ref.current_chat_viewer = viewer
         UIManager:show(viewer)
+    end
+
+    -- Stored context follows the book's values at resume (B395 slice 5): a
+    -- kind this chat carried that is Never now is refused, with the choice to
+    -- go on without the stored context; toward another provider than the one
+    -- that answered, the kinds still on Ask are asked once (the allowance on
+    -- this chat's private config). Chats saved before the kinds were recorded
+    -- pass as before.
+    local resume_path = (document_path ~= "__GENERAL_CHATS__" and document_path ~= "__LIBRARY_CHATS__")
+        and document_path or nil
+    local DataAccess = require("koassistant.ui.data_access")
+    local resume = DataAccess.resumeNeeds(chat, config.features,
+        config.provider or config.default_provider, resume_path, ui)
+    if resume.refused then
+        local ButtonDialog = require("ui/widget/buttondialog")
+        local dlg
+        dlg = ButtonDialog:new{
+            title = T(_("This chat was given %1, which is set to Never %2 now. Its stored context will not be sent again."),
+                DataAccess.kindLabel(resume.refused.kind), DataAccess.layerLabel(resume.refused.layer)),
+            buttons = {
+                {{ text = _("Continue without the stored context"), callback = function()
+                    UIManager:close(dlg)
+                    config.features._drop_stored_context = #(chat.messages or {})
+                    showChatViewer()
+                end }},
+                {{ text = _("Cancel"), callback = function() UIManager:close(dlg) end }},
+            },
+        }
+        UIManager:show(dlg)
+        return
+    elseif #resume.asked > 0 then
+        DataAccess.withAccess(ui and ui.koassistant, nil, {
+            features = config.features, provider = config.provider or config.default_provider,
+            path = resume_path, ui = ui, kinds = resume.asked, action_name = _("Continue this chat"),
+            amounts = {
+                book_text = _("the book text this chat was given"),
+                highlights = _("the highlights this chat was given"),
+                annotations = _("the notes this chat was given"),
+                notebook = _("the notebook this chat was given"),
+                book_list = _("the book list this chat was given"),
+                habits = _("the reading habits this chat was given"),
+                nearby_text = _("the text around the selection this chat was given"),
+            },
+        }, function() showChatViewer() end)
+        return
     end
 
     showChatViewer()

@@ -14,6 +14,8 @@ The document view lists, in order: a **Starred** folder with every starred chat 
 
 **A chat's options** (select it): **Continue Chat**, **Rename**, **Tags**, **Star / Unstar**, **Pin Last Response as Artifact / Unpin from Artifacts**, **Export** (clipboard or file), **Open Book** (books only), **Delete Chat**. Chats get a 💬 prefix and tag entries a 🏷️ prefix with emoji icons on.
 
+**Continue Chat** checks what the chat was given before its stored context goes out again: a kind set to Never for the book since the chat stops it, with **Continue without the stored context** (your turns stay; the context saved with the chat is left out of the replies); continuing toward another provider than the one that answered asks once for the kinds still on Ask. Chats saved before v0.24.0 carry no record and open as before.
+
 ## Export and save to file
 
 **Export** on a chat in Chat History offers **Copy to Clipboard** (the formatted text) or **Save to File** (Markdown or plain text, in your Export Style). The chat window's own **Export** (in its gear menu) only saves a file ([Chat Windows](Chat-Windows#copy-and-export)).
