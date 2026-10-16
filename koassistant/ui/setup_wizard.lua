@@ -789,7 +789,7 @@ function SetupWizard.stepPrivacy(plugin, ctx, next_step)
             _("Spoiler protection is separate and ON by default: responses respect your reading position."),
         buttons = {
             {
-                { text = _("Ask about everything"), callback = function() applyPreset("applyPrivacyPresetDefault", _("Ask about everything")) end },
+                { text = _("Default (Ask)"), callback = function() applyPreset("applyPrivacyPresetDefault", _("Default (Ask)")) end },
             },
             {
                 { text = _("Allow everything"), callback = function() applyPreset("applyPrivacyPresetFull", _("Allow everything")) end },

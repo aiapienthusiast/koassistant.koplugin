@@ -2185,8 +2185,8 @@ local SettingsSchema = {
                 {
                     id = "privacy_preset_default",
                     type = "action",
-                    text = _("Preset: Ask about everything"),
-                    help_text = _("The default. Each kind of data is asked for the first time an action wants it, and your answer can be kept for the book. Reading position and the text around what you tap are sent. Every value here goes back to the one it ships with."),
+                    text = _("Preset: Default (Ask)"),
+                    help_text = _("Each kind of data is asked for the first time an action wants it, and your answer can be kept for the book. Reading position and the text around what you tap are sent. Every value here goes back to the one it ships with."),
                     callback = "applyPrivacyPresetDefault",
                     keep_menu_open = true,
                 },

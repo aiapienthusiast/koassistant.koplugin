@@ -24,7 +24,7 @@ If Analyze Notes, Connect (With Notes), X-Ray or Recap seem to ignore your readi
 
 Actions that use document text still work without it: they do not fail, the AI is told to use its training knowledge and to be honest about what it does not recognize. For well-known books that often gives reasonable results; for obscure works or papers, allow the book's text. With book text allowed and a provider and model that support tool calls, Explain in Context and Analyze in Context can search the book for the passages they need (**Smart retrieval** in their source popup) instead of sending a full extraction; see [Reasoning, Web Search and Book Tools](Reasoning-Web-Search-and-Book-Tools).
 
-**Quick fix:** **Settings → Privacy & Data → Preset: Allow everything** sends every kind without a question, book text included; **Preset: Ask about everything** brings the questions back.
+**Quick fix:** **Settings → Privacy & Data → Preset: Allow everything** sends every kind without a question, book text included; **Preset: Default (Ask)** brings the questions back.
 
 **See what an action needs:** **Settings → Display Settings → Emoji → Emoji Data Access Indicators** adds a suffix to each action's name showing what it accesses (📄 🔖 📝 📓 📚 📊 🌐; the legend is on [Privacy and Data](Privacy-and-Data#seeing-what-an-action-uses)). It needs an emoji font, below.
 

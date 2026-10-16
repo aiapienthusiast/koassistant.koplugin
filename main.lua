@@ -21701,10 +21701,10 @@ local function applyPrivacyPreset(self, preset, touchmenu_instance, message)
   UIManager:show(InfoMessage:new{ text = message, timeout = 3 })
 end
 
--- Privacy preset: Ask about everything (the default)
+-- Privacy preset: Default (Ask)
 function AskGPT:applyPrivacyPresetDefault(touchmenu_instance)
   applyPrivacyPreset(self, "default", touchmenu_instance,
-    _("Ask about everything: each kind of data is asked for the first time an action wants it. Reading position and the text around what you tap are sent, as by default."))
+    _("Default (Ask): each kind of data is asked for the first time an action wants it. Reading position and the text around what you tap are sent, as by default."))
 end
 
 -- Privacy preset: Never send anything extra

@@ -123,7 +123,7 @@ KOAssistant sends data to AI providers to generate answers. The threat model is 
 
 | Preset | What it does |
 |---|---|
-| **Ask about everything** | The default: each kind is asked for the first time an action wants it. |
+| **Default (Ask)** | Every value as it ships: the kinds above are asked for the first time an action wants them. |
 | **Allow everything** | Every kind goes without a question, book text included. |
 | **Never send anything extra** | Only your question, the selected text and the book's title and author. |
 
