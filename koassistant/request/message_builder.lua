@@ -126,6 +126,17 @@ local function appendPositionLines(parts, data)
     end
 end
 
+-- Book info None means none (B500): nothing in the prompt names the book. The
+-- quoted form first, so 'About "{title}"' reads 'About this book'.
+local function neutralBookPlaceholders(text)
+    text = replace_placeholder(text, '"{title}"', "this book")
+    text = replace_placeholder(text, "{title}", "this book")
+    text = replace_placeholder(text, "{author_clause}", "")
+    text = replace_placeholder(text, "{author}", "")
+    text = replace_placeholder(text, "{doi_clause}", "")
+    return text
+end
+
 function MessageBuilder.build(params)
     local prompt = params.prompt or {}
     local context = params.context or "general"
@@ -619,7 +630,7 @@ function MessageBuilder.build(params)
     elseif context == "book" or context == "file_browser" then
         -- Book context: add book info and substitute template variables
         -- Book-info level gates the generic auto-block (per-book "Book info" setting); "none"
-        -- skips it. Explicit {title}/{author} placeholders always resolve regardless.
+        -- skips it, and the action's own {title}/{author} placeholders read "this book" then.
         local book_info_level = data._book_info_level or "basic"
         if data.book_metadata then
             local metadata = data.book_metadata
@@ -636,8 +647,9 @@ function MessageBuilder.build(params)
             end
             -- Replace template variables in user prompt using replace_placeholder (avoids gsub escaping issues)
             if logger then
-                logger.dbg("MessageBuilder: BOOK CONTEXT - substituting {title} with:", metadata.title or "Unknown")
+                logger.dbg("MessageBuilder: BOOK CONTEXT - substituting {title}, book info level", book_info_level)
             end
+            if book_info_level == "none" then user_prompt = neutralBookPlaceholders(user_prompt) end
             user_prompt = replace_placeholder(user_prompt, "{title}", metadata.title or "Unknown")
             user_prompt = replace_placeholder(user_prompt, "{author}", metadata.author or "")
             user_prompt = replace_placeholder(user_prompt, "{author_clause}", metadata.author_clause or "")
@@ -647,6 +659,8 @@ function MessageBuilder.build(params)
             table.insert(parts, "[Context]")
             table.insert(parts, data.book_context)
             table.insert(parts, "")
+        elseif book_info_level == "none" then
+            user_prompt = neutralBookPlaceholders(user_prompt)
         end
         table.insert(parts, "[Request]")
         table.insert(parts, user_prompt)
@@ -707,7 +721,10 @@ function MessageBuilder.build(params)
         -- Support template variables using replace_placeholder (avoids gsub escaping issues)
         -- Resolved whether or not a title is known: a prompt carrying {doi_clause}
         -- without a title placeholder, or a selection made in a chat window, used
-        -- to send these as written (B465)
+        -- to send these as written (B465). Book info None: "this book" (B500).
+        if (data._book_info_level or "basic") == "none" then
+            user_prompt = neutralBookPlaceholders(user_prompt)
+        end
         user_prompt = replace_placeholder(user_prompt, "{title}", data.book_title or "")
         user_prompt = replace_placeholder(user_prompt, "{author}", data.book_author or "")
         user_prompt = replace_placeholder(user_prompt, "{author_clause}",

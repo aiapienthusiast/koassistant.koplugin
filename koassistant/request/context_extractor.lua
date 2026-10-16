@@ -13,6 +13,8 @@ This module extracts reading context data from KOReader documents:
 local Constants = require("koassistant.core.constants")
 local logger = require("koassistant.core.logger")
 local Gates = require("koassistant.request.privacy_gates")
+local _ = require("koassistant.core.gettext")
+local T = require("ffi/util").template
 local ScopeResolver = require("koassistant.request.scope_resolver")
 
 local ContextExtractor = {}
@@ -502,7 +504,7 @@ function ContextExtractor:getBookText(options)
                 -- Handle complex table structure returned by some PDF handlers
                 if type(page_text) == "table" then
                     local words = {}
-                    for _, block in ipairs(page_text) do
+                    for _idx, block in ipairs(page_text) do
                         if type(block) == "table" then
                             for i = 1, #block do
                                 local span = block[i]
@@ -675,7 +677,7 @@ function ContextExtractor:getBookTextRange(from_progress, to_progress, options)
                 -- Handle complex table structure
                 if type(page_text) == "table" then
                     local words = {}
-                    for _, block in ipairs(page_text) do
+                    for _idx, block in ipairs(page_text) do
                         if type(block) == "table" then
                             for i = 1, #block do
                                 local span = block[i]
@@ -1111,7 +1113,7 @@ function ContextExtractor.formatHighlights(annotations, options)
     local lines = {}
     local count = 0
 
-    for _, annotation in ipairs(annotations) do
+    for _idx, annotation in ipairs(annotations) do
         if count >= max_count then break end
         if annotation.text and annotation.text ~= "" then
             count = count + 1
@@ -1173,7 +1175,7 @@ function ContextExtractor.formatAnnotations(annotations, options)
     local lines = {}
     local count = 0
 
-    for _, annotation in ipairs(annotations) do
+    for _idx, annotation in ipairs(annotations) do
         if count >= max_count then break end
         if annotation.text and annotation.text ~= "" then
             count = count + 1
@@ -1323,7 +1325,7 @@ function ContextExtractor:getReadingStats()
             end
 
             local count = 0
-            for _, entry in ipairs(toc) do
+            for _idx, entry in ipairs(toc) do
                 if entry.page and entry.page <= current_page then
                     count = count + 1
                 end
@@ -1528,12 +1530,17 @@ function ContextExtractor:extractForAction(action)
         data.page_number = ""
     end
 
-    -- Page text extraction: exempt from text extraction gating (single page, minimal data)
-    -- Triggered by {page_text} / {page_text_section} placeholder in prompt
+    -- Page text extraction: not book text (a single page) but the text around
+    -- what you tap, the eighth kind (ruled 2026-10-14): only where it may go
+    -- (the funnel asked on Ask). Triggered by {page_text} / {page_text_section}
     local prompt = action.prompt or ""
     if prompt:find("{page_text", 1, true) then
-        local page_result = self:getVisiblePageText()
-        data.page_text = page_result.text
+        if Gates.allows("nearby_text", gate) then
+            local page_result = self:getVisiblePageText()
+            data.page_text = page_result.text
+        else
+            data.page_text = ""
+        end
     end
 
     -- Text extraction: flag is permission gate, placeholders trigger extraction
@@ -1758,21 +1765,41 @@ function ContextExtractor:extractForAction(action)
 
     -- Track unavailable data: when action requested data but it wasn't provided
     -- This helps users understand when AI relied on training data vs actual book content
-    -- Two cases: permission denied (setting disabled) OR data empty (no highlights, etc.)
+    -- Two cases: not allowed (the gates said no, with the true cause) OR data
+    -- empty (no highlights, etc.). Shown above the answer, in the reader's
+    -- language (B395).
     local unavailable = {}
+    local function withheld(kind, what)
+        local state, layer = Gates.resolve(kind, gate)
+        local why
+        if state == "never" then
+            if layer == "book" then
+                why = _("set to Never for this book")
+            elseif layer == "chat" then
+                why = _("left out of this chat")
+            elseif layer == "trusted" then
+                why = _("set to Never for trusted providers")
+            else
+                why = _("set to Never")
+            end
+        else
+            why = _("not allowed for this request")
+        end
+        return T(_("%1 (%2)"), what, why)
+    end
 
     -- Book text: check if requested but not available
     if action.use_book_text then
         local book_text_enabled = self:isBookTextExtractionEnabled()
         if not book_text_enabled then
             -- Permission denied
-            table.insert(unavailable, "book text (extraction disabled)")
+            table.insert(unavailable, withheld("book_text", _("book text")))
         elseif (not data.book_text or data.book_text == "") and
                (not data.full_document or data.full_document == "") then
             -- Permission granted but no text extracted (could be PDF without text layer, etc.)
             -- Only flag if action likely expected text (has placeholder in prompt)
             if prompt:find("{book_text", 1, true) or prompt:find("{full_document", 1, true) then
-                table.insert(unavailable, "book text (none extracted)")
+                table.insert(unavailable, _("book text (none extracted)"))
             end
         end
     end
@@ -1780,9 +1807,9 @@ function ContextExtractor:extractForAction(action)
     -- Highlights: check if requested but not available
     if action.use_highlights then
         if not highlights_allowed then
-            table.insert(unavailable, "highlights (sharing disabled)")
+            table.insert(unavailable, withheld("highlights", _("highlights")))
         elseif not data.highlights or data.highlights == "" then
-            table.insert(unavailable, "highlights (none found)")
+            table.insert(unavailable, _("highlights (none found)"))
         end
     end
 
@@ -1791,16 +1818,16 @@ function ContextExtractor:extractForAction(action)
         if data._annotations_degraded then
             -- Using highlights instead of full annotations (either gate blocked)
             if data.annotations and data.annotations ~= "" then
-                table.insert(unavailable, "annotations (using highlights only)")
+                table.insert(unavailable, _("annotations (using highlights only)"))
             else
-                table.insert(unavailable, "highlights (none found)")
+                table.insert(unavailable, _("highlights (none found)"))
             end
         elseif action.use_annotations then
             -- Full annotations were requested
             if not highlights_allowed and not annotations_allowed then
-                table.insert(unavailable, "annotations (sharing disabled)")
+                table.insert(unavailable, withheld("annotations", _("annotations")))
             elseif not data.annotations or data.annotations == "" then
-                table.insert(unavailable, "annotations (none found)")
+                table.insert(unavailable, _("annotations (none found)"))
             end
         end
     end
@@ -1809,28 +1836,33 @@ function ContextExtractor:extractForAction(action)
     if action.use_notebook then
         if not notebook_allowed then
             -- Permission denied
-            table.insert(unavailable, "notebook (sharing disabled)")
+            table.insert(unavailable, withheld("notebook", _("notebook")))
         elseif not data.notebook_content or data.notebook_content == "" then
             -- Permission granted but notebook is empty
-            table.insert(unavailable, "notebook (empty)")
+            table.insert(unavailable, _("notebook (empty)"))
         end
     end
 
     -- Library: check if requested but not available
     if action.use_library then
         if not library_setting_allowed then
-            table.insert(unavailable, "library (scanning disabled)")
+            table.insert(unavailable, withheld("book_list", _("book list")))
         elseif not library_folders_configured then
-            table.insert(unavailable, "library (no folders configured)")
+            table.insert(unavailable, _("book list (no folders configured)"))
         elseif not data.library_content or data.library_content == "" then
-            table.insert(unavailable, "library (no books found)")
+            table.insert(unavailable, _("book list (no books found)"))
         end
+    end
+
+    -- The current page ({page_text}): the text around what you tap
+    if prompt:find("{page_text", 1, true) and not Gates.allows("nearby_text", gate) then
+        table.insert(unavailable, withheld("nearby_text", _("current page")))
     end
 
     -- Summary cache: check if requested but not available
     if action.use_summary_cache then
         if not data.summary_cache or data.summary_cache == "" then
-            table.insert(unavailable, "summary cache (not generated)")
+            table.insert(unavailable, _("summary (not generated yet)"))
         end
     end
 

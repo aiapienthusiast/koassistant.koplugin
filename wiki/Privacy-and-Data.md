@@ -2,9 +2,9 @@
 
 KOAssistant sends data to the AI provider you choose so it can answer you. This page explains what is sent, what is asked for before it goes, and every control you have: the value of each kind of data (Ask, Allow or Never), the presets, per-book values, trusted providers, and the per-action flags of custom actions.
 
-> ⚠️ **Nothing of yours leaves the device unasked.** Your highlights, notes, notebook, book text, book list and reading habits are each on **Ask** by default: the first time an action wants one of them, KOAssistant shows what it is about to send and to whom, and you answer **Allow once** or **Allow for this book**. Set a kind to **Allow** in **Settings → Privacy & Data** to skip the question, or to **Never** to refuse it everywhere.
+> ⚠️ **Nothing of yours leaves the device unasked.** Your highlights, notes, notebook, book text, book list and reading habits are each on **Ask** by default: the first time an action wants one of them, KOAssistant shows what it is about to send and to whom, and you answer **Allow once** or **Allow for this book** (**Always allow** for the book list and reading habits). Set a kind to **Allow** in **Settings → Privacy & Data** to skip the question, or to **Never** to refuse it everywhere.
 
-This is not privacy theater: the "threat model" is simply users including sensitive data (annotations, notes, content) by accident. You are already being permissive by using online AIs at all, this plugin encourages AI analysis of your reading material, and the available placeholders (template variables) can carry a substantial amount of sensitive data. Reading habits (Never until you allow them) are read from KOReader's Statistics plugin locally to derive reading engagement groups; see [Design Choices](#design-choices) for what this means. Best practice is to pick providers thoughtfully, and the very best practice is to use local or self-hosted solutions, such as Ollama (see [Local Processing](#local-processing)).
+This is not privacy theater: the "threat model" is simply users including sensitive data (annotations, notes, content) by accident. You are already being permissive by using online AIs at all, this plugin encourages AI analysis of your reading material, and the available placeholders (template variables) can carry a substantial amount of sensitive data. Reading habits (Ask by default, like the others) are read from KOReader's Statistics plugin locally to derive reading engagement groups; see [Design Choices](#design-choices) for what this means. Best practice is to pick providers thoughtfully, and the very best practice is to use local or self-hosted solutions, such as Ollama (see [Local Processing](#local-processing)).
 
 ## What Gets Sent
 
@@ -15,7 +15,7 @@ This is not privacy theater: the "threat model" is simply users including sensit
 
 ### Sent by default (for actions that use it)
 
-- **Document metadata** such as title, author and identifiers (a DOI when one is detected). A highlight action leaves it out when you uncheck **Include book info** in its settings in the action manager. **Settings → Chat & Export Settings → Book Info in Chat** sets how much book context freeform chats and book-aware actions get (None, Title only, Title & author, or Title, author & position), and Book Settings can change that per book, or change or blank the title and author the AI is told (see [Book Settings and Book Hub](Book-Settings-and-Book-Hub)).
+- **Book info**: what the AI is told about the book, set in **Settings → Privacy & Data → Book info**: None, Title only, Title & author (the default), or Title, author & position (adds your reading progress, chapter and page when Reading position is on). It is never asked and the presets leave it alone. **None sends nothing that names the book**: no book line, and an action's own prompt says "this book" where it would name the title and leaves out the author and any DOI. Book actions that answer from what the AI knows about the book (About, About Author, Find Similar, Historical Context, Related Thinkers, Reviews, Suggest from Library, X-Ray (Simple), and any book action run with the AI-knowledge source) cannot work without the title, so they say so instead of running. A book can have its own level in **Book Settings → Privacy**, and one chat can go without it ([the Data chip](#the-data-chip)). A highlight action leaves the book line out when you uncheck **Include book info** in its settings in the action manager, and Book Settings → Identity can change or blank the title and author the AI is told (see [Book Settings and Book Hub](Book-Settings-and-Book-Hub)).
 - **Enabled system content**, like your languages, domain and behavior.
 - **Reading position**: reading progress (percentage), chapter title, chapters read count, how long ago you last read the book, and the print page number when the book carries a page list. The data used to calculate them (the exact date and time you last read, from KOReader's reading statistics, and so on) stays local. It is on by default because spoiler protection relies on it, and it is the one kind that is never asked: **Settings → Privacy & Data → Reading position** turns it on or off.
 - **The text around what you tap**: the bounded text around a selection (the context of a highlight or of a dictionary lookup), your current page (page translate, the Scope chip's "Current page") and the text around an image prompt. A few sentences or one page, never more; it has its own value (Allow by default), independent of the book's text.
@@ -27,7 +27,7 @@ This is not privacy theater: the "threat model" is simply users including sensit
 - **Annotation notes**: your highlighted text with the personal notes you attached. Allowing notes allows highlights; Never for highlights is Never for notes.
 - **Notebook**: your KOAssistant notebook for the book, with the dates of its entries.
 - **Book text**: actual text from the document (for X-Ray, Recap and others). See [Text Extraction and Double-gating](#text-extraction-and-double-gating).
-- **Book list**: metadata of the books in your scan folders: title, author, series and reading status, with the progress percentage of books you are reading or have put on hold. Books are grouped by status and ordered by when you last read them; the dates themselves are not sent. Only sent by library actions, and only with folders configured.
+- **Book list**: metadata of the books in your scan folders: title, author, series and reading status, with the progress percentage of books you are reading or have put on hold. Books are grouped by status and ordered by when you last read them; the dates themselves are not sent. Only sent by library chats and by actions that use your library (such as Next Read, Find Similar and Suggest from Library), and only with a scan folder, permanent or picked on the fly.
 - **Reading habits**: reading engagement data derived from KOReader's Statistics plugin: curated groups based on reading time and completion patterns (books read extensively, stalled reads, briefly started, recently finished). Raw statistics (session logs, pages per session, reading speed, exact timestamps) are computed locally and **never** sent; only book lists with rounded labels reach the AI (see [Design Choices](#design-choices)). Only used by library scan actions.
 
 ## The Three Values and the Question
@@ -47,36 +47,36 @@ It names the action, the provider the request goes to, and every kind of data th
 - **Not for this book** (only when nothing asked is required): the run goes on without those kinds, and the book's own value becomes Never for them. Change it on the book's Privacy screen.
 - **Always allow** replaces "Allow for this book" for the two kinds no book can hold, the book list and your reading habits: it sets the value for all books.
 - A request about no book (an image made outside a book, for instance) has neither "Allow for this book" nor "Not for this book": there is no book to keep the answer.
-- **More…**: opens the book's Privacy screen (or the settings), and asks again when you come back.
+- **More…**: opens the book's Privacy screen, and asks again when you come back. With no book, or when only the book list or reading habits are asked, it opens the settings instead, and the run does not go on.
 - **Cancel**: nothing is sent.
 
 Generate Image with its prompt writer on (and Illustrate… on an X-Ray entry) sends the text around the passage and X-Ray descriptions to two providers: the one that writes the prompt and the one that draws it, which receives a prompt made from them. Each kind must be allowed for both, and the question names both ("Generate Image will send to Anthropic, to write the prompt, and to OpenAI, to draw it"). Its **Continue without** (in place of Not for this book) makes this picture without them and stores nothing, since a Never for the book's text would also stop its X-Ray updates; see [Image Generation](Image-Generation#the-prompt-writer). A kept image remembers what its prompt carried: drawing that prompt again from the gallery (**Regenerate**, **Regenerate and replace** or **Edit prompt…**) asks the same way for the provider drawing now, and for the prompt writer's provider too when a new Style has it restyle the prompt ("Regenerate will send to Anthropic, to restyle the prompt, and to OpenAI, to draw it"), without Continue without (what a written prompt took from them cannot be taken out), and a Never refuses it ([Image Generation](Image-Generation#the-gallery)).
 
-A required kind (X-Ray's book text, say) on Never is a short refusal that names where the value comes from (this book, all books, or trusted providers) with one button to that screen. A request over several picked books asks once for the set; each book's own value still decides for its data, and books set to Never stay out.
+A required kind (X-Ray's book text, say) on Never is a short refusal that names where the value comes from (this book, all books, trusted providers, or this chat's [Data chip](#the-data-chip)): **Change for this book…** opens the book's Privacy screen, **Open Settings** the settings, and a kind left out of this chat is changed on the chip. A request over several picked books asks once for the set; each book's own value still decides for its data, and books set to Never stay out.
 
 ### Where it is asked
 
-At the moment of need, and nowhere else: when an action starts (from a menu, a gesture, the Quick Actions panel, the highlight menu, the file browser or an input dialog), on the **Run** button of an action's scope and source popup (where the spoiler reminder also sits, so the two are one dialog), when you pick a Scope chip range or turn the Tools chip on and send, when you attach your notebook or chat about it, when you chat about an X-Ray entry whose page lists your highlights, when you generate an image, illustrate an X-Ray entry or draw a kept image's prompt again, and when a library chat sends your book list. Viewing, browsing and deleting what is already on the device never ask.
+At the moment of need, and nowhere else: when an action starts (from a menu, a gesture, the Quick Actions panel, the highlight menu, the file browser or an input dialog), on the **Run** button of an action's scope and source popup (where the spoiler reminder also sits, so the two are one dialog), when you pick a Scope chip range or turn the Tools chip on and send, when you attach your notebook or chat about it, when you chat about an X-Ray entry whose page lists your highlights, when you generate an image, illustrate an X-Ray entry or draw a kept image's prompt again, when a library chat sends your book list, and, while the text around what you tap is on Ask, when a lookup, a highlight chat or **Translate Page** would send it. Viewing, browsing and deleting what is already on the device never ask.
 
-A saved result follows what it was built from, wherever it goes: chatting about an artifact (the artifact window's → Chat, Chat about this on an X-Ray entry, the X-Ray's Full View, an AI Wiki article), attaching an artifact or a pinned answer to a chat, writing an AI Wiki article and every AI merge ask the same way for the kinds the result was built from, and a kind set to Never for the book refuses them. Continuing a saved chat checks the kinds it was given ([Conversations, Notebooks and Export](Conversations-Notebooks-and-Export#chat-history)).
+A saved result follows what it was built from, wherever it goes: chatting about an artifact (the artifact window's → Chat, Chat about this on an X-Ray entry, the X-Ray's Full View, an AI Wiki article), attaching an artifact or a pinned answer to a chat, writing an AI Wiki article and every AI merge ask the same way for the kinds the result was built from, and a kind set to Never refuses them. Continuing a saved chat checks the kinds it was given ([Conversations, Notebooks and Export](Conversations-Notebooks-and-Export#chat-history)).
 
 ### Background features
 
-Automatic X-Ray and checkpoint builds have no moment to ask while you read, so they need a standing Allow: the book's own value, the value for all books, or a trusted provider. When a book with automatic building on is still on Ask, the engine asks once, in the foreground, at the moment a checkpoint would build (and the confirm that turns automatic building on carries the same line): **Allow for this book and start** writes the book's value; **Cancel** pauses automatic building for that book until you turn it on again or reopen the book. A build you start by hand (checkpoints now, one background request) asks before its own confirm, and **Allow once** there covers every checkpoint of that build, never the automatic continuation afterwards.
+Automatic X-Ray and checkpoint builds have no moment to ask while you read, so they need a standing Allow: the book's own value, the value for all books, or a trusted provider. When a book with automatic building on is still on Ask, the engine asks once, in the foreground, at the moment a checkpoint would build: **Allow for this book** writes the book's value and lets it build; **Cancel** pauses automatic building for that book until you start it yourself or reopen the book. The confirm that turns automatic building on asks the same thing with **Allow for this book and start**. A build you start by hand (checkpoints now, one background request) asks before its own confirm, and **Allow once** there covers every checkpoint of that build, never the automatic continuation afterwards.
 
 ## Privacy Controls
 
 ### Presets
 
-**Settings → Privacy & Data** provides three presets, one value for every kind of data (reading position apart):
+**Settings → Privacy & Data → Preset** names the preset your values match, or **Custom** when they match none, and opens the three with the matching one marked. A pick applies at once; a note then lists the rows it changed ("Book text: Allow → Ask") and what it left alone.
 
 | Preset | What it does |
 |--------|--------------|
-| **Preset: Default (Ask)** | Every value goes back to the one it ships with: each kind is asked for the first time an action wants it; reading position and the text around what you tap are sent. |
-| **Preset: Allow everything** | Every kind goes without a question, book text included (it raises token costs). |
-| **Preset: Block everything** | Nothing but your question, the selected text and the book's title and author; reading position off too. Actions that need more are refused until you allow it. |
+| **Default (Ask)** | Every value goes back to the one it ships with, the trusted providers' column included: each kind is asked for the first time an action wants it; reading position and the text around what you tap are sent. |
+| **Allow everything** | Every kind goes without a question, book text included (it raises token costs). |
+| **Block everything** | Nothing but your question, the selected text and the book info; reading position goes off too, so spoiler protection no longer knows where you are. Actions that need more are refused until you allow it. |
 
-A preset changes only these values. Your trusted providers, per-book values and scan folders stay as they are.
+A preset sets the values for all books (Default (Ask) the trusted providers' column as well). The trusted providers list, each book's own values, Book info and the scan folders stay as they are: under Allow everything and Block everything a trusted provider keeps its own column, and a book with its own Allow still sends that kind.
 
 ### The kinds of data
 
@@ -89,8 +89,9 @@ The rows sit under the presets in **Settings → Privacy & Data**, each with Ask
 - **Book list** (default: Ask): the same value as **Book list** in Reading & Library; see [Library Scanning Settings](#library-scanning-settings).
 - **Reading habits** (default: Ask): reading engagement data derived from KOReader's Statistics plugin, shared as curated groups with library scan actions. See [Design Choices](#design-choices).
 - **Text around what you tap** (default: Allow): the bounded text around a selection, your current page and the text around an image prompt; independent of book text.
+- **Book info** (default: Title & author): what the AI is told about the book; see [What Gets Sent](#what-gets-sent).
 - **Text Extraction**: a submenu holding **Book text** and the extraction limits; see [Text Extraction Settings](#text-extraction-settings).
-- **Tip: Per-book values** explains [Per-Book Values](#per-book-values).
+- **Tip: Per-book values**, right under the preset, explains [Per-Book Values](#per-book-values).
 
 ### Library Scanning Settings
 
@@ -103,7 +104,7 @@ A library action needs three things: the book list's value (Ask asks the first t
 
 ### Graceful Degradation
 
-When a kind of data is not allowed, actions adapt automatically. Section placeholders like `{highlights_section}` simply disappear from prompts, so you don't need to modify your actions. For book text, most actions fall back to the AI's training knowledge; see [Text Extraction and Double-gating](#text-extraction-and-double-gating). When an action asked for data it did not get, its response starts with a line such as *Response generated without: highlights (sharing disabled)*.
+When a kind of data is not allowed, actions adapt automatically. Section placeholders like `{highlights_section}` simply disappear from prompts, so you don't need to modify your actions. For book text, most actions fall back to the AI's training knowledge; see [Text Extraction and Double-gating](#text-extraction-and-double-gating). When an action asked for data it did not get, its response starts with a line that says why, such as *Response generated without: highlights (not allowed for this request)*: "set to Never", "set to Never for this book", "left out of this chat" or "set to Never for trusted providers" when a value said no, "none found" when there was nothing to send.
 
 Attaching your notebook with the Attach chip in a chat follows the notebook's value like the `{notebook}` placeholder does: on Ask it asks when you pick it, and it will not attach under Never.
 
@@ -122,7 +123,7 @@ If your device supports emoji fonts, turn on **Settings → Display Settings →
 
 ## Per-Book Values
 
-Every kind that concerns one book's data (book text, highlights, annotation notes, notebook, the text around what you tap) can have its own value for one book in **Book Settings → Privacy**. Each row offers **Follow all books** (the row shows the value that applies: Allow, Ask or Never), **Allow** (sent without asking for this book) or **Never** (not sent, whatever else says). The question writes these rows too: **Allow for this book** sets Allow, **Not for this book** sets Never.
+Every kind that concerns one book's data (book text, highlights, annotation notes, notebook, the text around what you tap) can have its own value for one book in **Book Settings → Privacy**, the book's Data access screen. A row reads **Follow all books (Ask)** (the value for all books), **Follow group …** when the book follows a [group's value](#group-values), **Allow** or **Never**, and opens the same picker as the book's other settings: its **For this book** tab offers Follow global, a Follow group row for each of the book's groups that sets a value, **Allow** (sent without asking for this book) or **Never** (not sent, whatever else says); its **Global** tab sets the value for all books (Ask, Allow or Never). **Book info** sits at the end of the screen on the same picker. The question writes these rows too: **Allow for this book** sets Allow, **Not for this book** sets Never.
 
 - **A book's Never always wins**, even over [trusted providers](#trusted-providers) and an allowance given for one run, and it binds background features such as Automatic X-Ray too.
 - **A book's Allow satisfies only the global gate**: per-action flags still apply (see [Double-gating for Custom Actions](#double-gating-for-custom-actions)).
@@ -131,9 +132,24 @@ Every kind that concerns one book's data (book text, highlights, annotation note
 
 This lets you keep a kind on Ask or Never for all books and allow it for specific books, or allow it everywhere and fence off a sensitive one. **How this works…** at the bottom of the screen restates these rules.
 
+### Group values
+
+A group can hold the same five values in **Group Settings → Privacy** ([Book Groups and Series](Book-Groups-and-Series#group-settings)). Setting one offers to apply it to every book in the group ("Apply Book text: Never to all 6 books in …?"), a book added to the group is asked once with each value named, and a book follows the group's value until it picks its own. A group's Never works like a book's own: that kind of every member stays out of every request, trusted providers included. Values are set at the group only, never from a book's screen or the question.
+
 A book that is not open is judged by its own values: an action on it from the file browser, or from a chat about that book (opened from its Book Hub, for example), reads its highlights, annotations and notebook from disk under the same gates, and checks that book's settings before it starts. A library action on several selected books applies each book's own values and asks once for the set.
 
-The Quick Settings panel's **Book Text** tile shows the value for the open book, "(book)" when this book's own value masks the one for all books; tapping it steps the value for all books between Ask and Allow (Never goes to Ask), and holding it opens this book's Privacy screen (see [Setup, Gestures and Panels](Setup-Gestures-and-Panels)).
+The Quick Settings panel's **Data access** tile shows the open book's values in a few words ("Ask", "2 allowed, 3 ask"); tapping it opens this book's Data access screen (the values for all books when no book is open), and holding it opens the values for all books (see [Setup, Gestures and Panels](Setup-Gestures-and-Panels)).
+
+### The Data chip
+
+The input dialog's **Data** chip shows what this chat may send. Tap it for one row per kind (book text, highlights, annotation notes, notebook and the text around what you tap in a book or highlight chat; the book list and reading habits in a library chat), each with its value and where it comes from, then **Book info** (in a book or highlight chat) and a row to the Data access screen. A kind's row offers:
+
+- **Allow for this chat**: the question's Allow once, for this chat and its replies.
+- **Leave out of this chat**: the kind is Never for this chat only. An action that needs it is refused, one that can do without runs without it.
+- **Back to the usual value**, once you changed it here.
+- **Change for this book…**: the kind's picker, on the book's tab.
+
+**Book info** can be turned off for this chat: nothing in its requests names the book. Holding the chip opens the book's Data access screen (in a library chat, the values for all books). The chip reads **Data**, **Data: 2 ask** when kinds this chat may send would be asked, or **Data: this chat** once you changed something for this chat; a new chat starts from the usual values. A book's own Never cannot be lifted for this chat alone: **Change for this book…** changes the book's value. The chip is hidden in a general chat.
 
 ## Trusted Providers
 
@@ -147,7 +163,7 @@ A trusted provider follows its own column of values, **Settings → Privacy & Da
 
 **Which provider counts.** The value is judged for the provider a request actually goes to: your active provider, an action's own pinned provider, a model picked from the long-press menu of an action or of Send, or the Quick chip's preset model. Pinning an action to a different provider never inherits trust it shouldn't. When the receiving provider may not get something, it is left out of that request:
 
-- book passages gathered by smart retrieval, a notebook attached with the Attach chip (in a new chat, a reply, or a chat reopened from Chat History) and the book list of a library chat, each with a short notice;
+- book passages gathered by smart retrieval, a notebook or an artifact attached with the Attach chip (in a new chat, a reply, or a chat reopened from Chat History) and the book list of a library chat, each with a short notice;
 - the highlights an X-Ray entry's "Chat about this" carries.
 
 A chat about your notebook from the notebook viewer ("Chat about this notebook") follows the notebook's value for the provider that chat goes to: the book's own value decides first, then the question on Ask, Allow, or a trusted provider; under Never it does not start.
@@ -167,7 +183,7 @@ Text extraction sends actual book or document content to the AI, enabling featur
 
 - Answer the question when an action asks: **Allow once** for that run, **Allow for this book** to keep it for the book.
 - For all books: **Settings → Privacy & Data → Text Extraction → Book text**, set to Allow (a notice explains the token cost). Built-in actions (X-Ray, Recap, Explain in Context, Analyze in Context and the others that read text) already have the per-action flag enabled.
-- The Quick Settings panel's **Book Text** tile steps the value for all books between Ask and Allow. AI Book Tools need the same value (a trusted provider satisfies it too).
+- The Quick Settings panel's **Data access** tile opens the book's Data access screen, where the Global tab of Book text sets it for all books. AI Book Tools need the same value (a trusted provider satisfies it too).
 
 ### Text Extraction Settings
 
@@ -224,7 +240,7 @@ Which flags each data type needs (relevant when you create custom actions from s
 
 ### When an Action Is Blocked
 
-Built-in actions that cannot work without a kind of data check before anything is sent. On Ask they ask; on Never they stop with a short refusal that names where the value comes from (this book, all books, or trusted providers) and a button to that screen:
+Built-in actions that cannot work without a kind of data check before anything is sent. On Ask they ask; on Never they stop with a short refusal that names where the value comes from (this book, all books, trusted providers, or this chat) and a way to change it (**Change for this book…**, **Open Settings**, or the chat's Data chip):
 
 | Needs | Actions |
 |-------|---------|
@@ -234,11 +250,13 @@ Built-in actions that cannot work without a kind of data check before anything i
 
 The check follows the same rules as the extraction: a trusted provider's column passes it, a book's Never fails it, and for a book that isn't open it reads that book's own values.
 
+With **Book info** at None (for all books, for the book, or for the chat), a book action that answers from what the AI knows about the book (About, About Author, Find Similar, Historical Context, Related Thinkers, Reviews, Suggest from Library, X-Ray (Simple), or any book action run from the AI-knowledge source) stops the same way: it cannot work without the title, and the message says where None is set.
+
 ### Highlights, Recap and X-Ray
 
 **Recap** uses highlights, never annotation notes, so your personal notes never reach it. If you want it to see your highlighted passages, answer Allow when it asks, or set **Highlights** to Allow (Annotation notes are not needed for Recap, and would share your notes with the actions that use them); without them it analyzes the book text alone.
 
-**X-Ray does not read your highlights at all.** It works from book text only, and X-Ray (Simple) from AI knowledge only, so the highlights value changes nothing they send. An X-Ray entity page matches your highlights locally and offers them as "Your highlights (N)…" whatever the value; they go to the AI only when you tap "Chat about this", which asks on Ask and refuses under Never, and only to a provider that may receive highlights.
+**X-Ray does not read your highlights at all.** It works from book text only, and X-Ray (Simple) from AI knowledge only, so the highlights value changes nothing they send. An X-Ray entity page matches your highlights locally and offers them as "Your highlights (N)…" whatever the value; they go to the AI only when you tap "Chat about this", which asks on Ask and leaves them out under Never, and only to a provider that may receive highlights.
 
 ### Cache Permission Inheritance
 
@@ -250,15 +268,15 @@ When caches (saved artifacts) are built, they record what data was used. Actions
 - Recap cache built **with highlights**: highlights (or annotation notes) also required.
 - Older X-Ray caches built before X-Ray stopped reading highlights carry the same requirement until they are rebuilt.
 
-The same check runs when you update an artifact: if a kind its cache needs is now Never, the update is skipped and a fresh full generation runs instead.
+The same check runs when you update an artifact: if a kind its cache needs is not allowed for this run (set to Never, say), the update is skipped and a fresh full generation runs instead.
 
-A result also records the notebook when it read it and the provider that made it, and a result built from another result inherits what that one was built from: a Recap that read an X-Ray built from the book's text counts as built from text. A pinned answer carries the kinds its chat was given. Results and pins saved before v0.24.0 count as built from text, as before.
+A result also records the notebook when it read it and the provider that made it, and a result built from another result inherits what that one was built from: Key Arguments run on a document summary built from the book's text counts as built from text. A pinned answer carries the kinds its chat was given. Results saved before v0.24.0 count as built from text, as before, and so do older pins made in a book's chats.
 
 The artifact viewer shows "Based on AI training data knowledge" or "Based on extracted document text", so you always know what a cache contains. If you set a kind to Never after building a cache, actions may render the cache placeholder empty. To fix it, either allow the kind again or regenerate the cache with your current values. See [Troubleshooting](Troubleshooting) if text extraction isn't working.
 
 ## Upgrading from an earlier version
 
-Earlier versions had on/off switches. On the first start after the upgrade, every switch becomes **Ask**, the ones that were on included, and a one-time notice says so; your per-book values (a book's On or Off) and your trusted providers are kept, since they are exactly "Allow for this book" and "Not for this book". The first action that wants a kind of data then asks, and your answer can be kept for the book.
+Earlier versions had on/off switches. On the first start after the upgrade, every sharing switch becomes **Ask**, the ones that were on included (Reading position keeps its on or off), and a one-time notice says so the first time you open KOAssistant; your per-book values (a book's On or Off) and your trusted providers are kept, since they are exactly "Allow for this book" and "Not for this book". The first action that wants a kind of data then asks, and your answer can be kept for the book.
 
 ## Local Processing
 

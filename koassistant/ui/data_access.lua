@@ -68,9 +68,34 @@ end
 --- Where a value comes from, in words.
 function DataAccess.layerLabel(layer)
     if layer == "book" then return _("this book") end
+    if layer == "chat" then return _("this chat") end
     if layer == "trusted" then return _("trusted providers") end
     if layer == "once" then return _("this run") end
     return _("all books")
+end
+
+--- A few words for the states of several kinds (the Quick Settings tile):
+--- "Ask" (or "Allow", "Never") when all agree, else the counts. Pure.
+function DataAccess.shortSummary(states)
+    local n = { allow = 0, ask = 0, never = 0 }
+    for _idx, st in ipairs(states or {}) do n[st] = (n[st] or 0) + 1 end
+    local total = #(states or {})
+    if total > 0 and n.ask == total then return _("Ask") end
+    if total > 0 and n.allow == total then return _("Allow") end
+    if total > 0 and n.never == total then return _("Never") end
+    local parts = {}
+    if n.allow > 0 then parts[#parts + 1] = T(_("%1 allowed"), n.allow) end
+    if n.ask > 0 then parts[#parts + 1] = T(_("%1 ask"), n.ask) end
+    if n.never > 0 then parts[#parts + 1] = T(_("%1 never"), n.never) end
+    return table.concat(parts, ", ")
+end
+
+--- A privacy preset's name (B499): "default" | "full" | "minimal", nil = Custom.
+function DataAccess.presetLabel(preset)
+    if preset == "default" then return _("Default (Ask)") end
+    if preset == "full" then return _("Allow everything") end
+    if preset == "minimal" then return _("Block everything") end
+    return _("Custom")
 end
 
 --- Pure: what a list of needs (Gates.needs) means for the dialog.
@@ -180,6 +205,9 @@ function DataAccess.refuse(plugin, spec)
     if spec.layer == "book" then
         text = T(_("%1 needs %2, which is set to Never for this book (Book Settings → Privacy)."),
             spec.action_name or _("This action"), name:lower())
+    elseif spec.layer == "chat" then
+        text = T(_("%1 needs %2, which you left out of this chat (the Data chip)."),
+            spec.action_name or _("This action"), name:lower())
     elseif spec.layer == "trusted" then
         text = T(_("%1 needs %2, which is set to Never for trusted providers (Settings → Privacy & Data → What trusted providers may use)."),
             spec.action_name or _("This action"), name:lower())
@@ -195,7 +223,8 @@ function DataAccess.refuse(plugin, spec)
             UIManager:close(dialog)
             openBookPrivacy(plugin, spec.path, spec.ui, nil)
         end } }
-    elseif plugin and plugin.onKOAssistantSettings then
+    -- (a kind left out of this chat: the Data chip that did it is the door)
+    elseif spec.layer ~= "chat" and plugin and plugin.onKOAssistantSettings then
         rows[#rows + 1] = { { text = _("Open Settings"), callback = function()
             UIManager:close(dialog)
             plugin:onKOAssistantSettings()
@@ -353,7 +382,8 @@ end
 --- path (the book's file, nil = no book), ui, action_name, source, stamps,
 --- nearby, amounts (kind = line), note, standing_only, kinds (an explicit list
 --- of kinds, for a pick that is not an action), books (a set, see needsForSet),
---- hint, required (with kinds: whether they are required).
+--- hint, required (with kinds: whether they are required), on_cancel (after
+--- Cancel), on_refused (after a refusal).
 --- run_fn(granted) runs the request; granted = { once = kinds } after Allow
 --- once, {} otherwise. Never called after Cancel or a refusal.
 function DataAccess.withAccess(plugin, action, opts, run_fn)
@@ -365,6 +395,7 @@ function DataAccess.withAccess(plugin, action, opts, run_fn)
     if plan.refused then
         DataAccess.refuse(plugin, { kind = plan.refused.kind, layer = plan.refused.layer,
             action_name = opts.action_name or action.text, path = opts.path, ui = opts.ui, hint = opts.hint })
+        if opts.on_refused then opts.on_refused() end
         return false
     end
     if #plan.asked == 0 then
@@ -525,6 +556,63 @@ end
 --- selection's window), with the amounts the reader can judge. Returns true
 --- when a question or a refusal is up (the run continues through run_fn, or
 --- not at all), false when nothing needs asking (the caller goes on).
+-- What a request carries of the book besides its text: an action with one of
+-- these has something to go on without the title.
+local CONTENT_FLAGS = { "use_highlights", "use_annotations", "use_notebook", "use_xray_cache",
+    "use_analyze_cache", "use_summary_cache", "use_page_text" }
+
+--- Book info None means none (B500): whether an action names the book only
+--- through its title, with nothing of the book itself to go on (no text,
+--- or the AI-knowledge source, and none of the stored or reader's material),
+--- so it cannot run while the AI is told nothing about the book. Pure.
+function DataAccess.needsTitle(action, source)
+    action = action or {}
+    local prompt = action.prompt
+    if not prompt and action.template then
+        local ok, Templates = pcall(require, "koassistant.prompts.templates")
+        prompt = ok and Templates and Templates.get(action.template) or nil
+    end
+    if type(prompt) ~= "string" or not prompt:find("{title}", 1, true) then return false end
+    if action.use_book_text and source ~= "ai_knowledge" then return false end
+    for _idx, flag in ipairs(CONTENT_FLAGS) do
+        if action[flag] then return false end
+    end
+    return true
+end
+
+--- The refusal for an action that needs the title while Book info is None.
+--- spec: action_name, layer ("chat" | "book" | "global"), path, ui.
+function DataAccess.refuseNoTitle(plugin, spec)
+    local where
+    if spec.layer == "chat" then
+        where = _("for this chat (the Data chip)")
+    elseif spec.layer == "book" then
+        where = _("for this book (Book Settings → Privacy)")
+    else
+        where = _("for all books (Settings → Privacy & Data)")
+    end
+    local text = T(_("%1 answers from what the AI knows about the book, which it cannot do without the title, and Book info is set to None %2."),
+        spec.action_name or _("This action"), where)
+    local dialog
+    local rows = {}
+    if spec.layer == "book" and spec.path then
+        rows[#rows + 1] = { { text = _("Change for this book…"), callback = function()
+            UIManager:close(dialog)
+            require("koassistant.books.book_settings").showBookInfoPicker({
+                plugin = plugin, ui = spec.ui, document_path = spec.path, target_override = "book",
+            })
+        end } }
+    elseif spec.layer == "global" and plugin and plugin.onKOAssistantSettings then
+        rows[#rows + 1] = { { text = _("Open Settings"), callback = function()
+            UIManager:close(dialog)
+            plugin:onKOAssistantSettings()
+        end } }
+    end
+    rows[#rows + 1] = { { text = _("Close"), id = "close", callback = function() UIManager:close(dialog) end } }
+    dialog = ButtonDialog:new{ title = text, buttons = rows }
+    UIManager:show(dialog)
+end
+
 function DataAccess.askForDispatch(plugin, action, features, ui, config, run_fn)
     local cf = features or {}
     -- The book this request is about (the dispatch's own per-book rule): a
@@ -549,6 +637,32 @@ function DataAccess.askForDispatch(plugin, action, features, ui, config, run_fn)
     local provider = require("koassistant.ui.dialogs").effectiveDispatchProvider(
         cf, action, action.provider or (config and config.provider))
     local sm = cf._source_mode
+    -- A refusal or a Cancel: the chat this run would have opened never starts
+    -- (an input dialog closes before its action dispatches), so the chat's own
+    -- data choices and its allowance end here, never reaching a later request
+    local function drop()
+        cf._chat_data = nil
+        cf._data_once = nil
+    end
+    -- Book info None (B500): an action with nothing of the book to go on but
+    -- its title says so, instead of asking the AI about "this book"
+    if cf.is_book_context and DataAccess.needsTitle(action, sm) then
+        local BookSettings = require("koassistant.books.book_settings")
+        local ds = path and require("koassistant.storage.doc_settings").resolve(path, ui) or nil
+        if BookSettings.resolveBookInfoLevel(ds, cf) == "none" then
+            local cd = Gates.chatData(cf)
+            local layer = "global"
+            if cd and cd.book_info_off then
+                layer = "chat"
+            elseif ds and ds:readSetting(BookSettings.KEY_BOOK_INFO) == "none" then
+                layer = "book"
+            end
+            DataAccess.refuseNoTitle(plugin, { action_name = action.text or action.id,
+                layer = layer, path = path, ui = ui })
+            drop()
+            return true
+        end
+    end
     local live = ui and ui.document and ui.document.file ~= nil and ui.document.file == path
     -- The stored material the run will read: its stamps are the kinds it needs
     local stamps
@@ -570,8 +684,23 @@ function DataAccess.askForDispatch(plugin, action, features, ui, config, run_fn)
         end
     end
     local prompt_text = action.prompt or ""
-    local nearby = (cf._selection_context_window ~= nil and action.use_surrounding_context ~= false)
-        or prompt_text:find("{page_text", 1, true) ~= nil
+    local nearby = prompt_text:find("{page_text", 1, true) ~= nil
+    -- The context around a selection, only when this run will carry it: the
+    -- dispatch's own resolution (the action's flag over the session, book or
+    -- global mode, None by default); an X-Ray chat's pseudo-selection never
+    if not nearby and cf._selection_context_window ~= nil and not cf._xray_context_prefix then
+        local ok_ds, sc_ds = pcall(function() return require("koassistant.storage.doc_settings").resolve(path, ui) end)
+        local ambient = cf._highlight_context_active
+            or require("koassistant.books.book_settings").resolveHighlightContext(ok_ds and sc_ds or nil, cf)
+        nearby = require("koassistant.prompts.actions").effectiveSurroundingContextMode(action, cf, ambient) ~= nil
+    end
+    -- the dictionary's context channel ({context}), when the book's mode sends any
+    if not nearby and live and not cf._non_document_selection
+            and (prompt_text:find("{context}", 1, true) or prompt_text:find("{context_section}", 1, true)) then
+        local ok_ds, ds = pcall(function() return require("koassistant.storage.doc_settings").resolve(path, ui) end)
+        local mode = require("koassistant.books.book_settings").resolveDictionaryContext(ok_ds and ds or nil, cf)
+        nearby = mode ~= nil and mode ~= "none"
+    end
     -- The amounts, where known
     local amounts = {}
     if cf._section_scope and cf._section_scope.label then
@@ -618,6 +747,7 @@ function DataAccess.askForDispatch(plugin, action, features, ui, config, run_fn)
     local plan = DataAccess.plan(needs)
     if not plan.refused and #plan.asked == 0 then return false end
     opts.needs, opts.never_books = needs, never_books
+    opts.on_cancel, opts.on_refused = drop, drop
     DataAccess.withAccess(plugin, action, opts, run_fn)
     return true
 end

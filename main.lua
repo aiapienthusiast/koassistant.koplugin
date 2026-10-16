@@ -1516,6 +1516,17 @@ function AskGPT:initSettings()
   self._settings_path = DataStorage:getSettingsDir() .. "/koassistant_settings.lua"
   -- Initialize settings with default values from configuration.lua
   self.settings = LuaSettings:open(self._settings_path)
+  -- A chat's own data choices (the Data chip) and an allowance for one run live
+  -- on the features table while a dialog or a request holds them, and that table
+  -- is the one a settings flush writes: one that reached the disk must not come
+  -- back with the next start (B395)
+  do
+    local f = self.settings:readSetting("features")
+    if type(f) == "table" then
+      f._chat_data = nil
+      f._data_once = nil
+    end
+  end
 
   -- Set default values if they don't exist
   if not self.settings:has("provider") then
@@ -7320,7 +7331,7 @@ local function buildInlineIndicators(cached_entry, config)
   end
   -- Show unavailable data notice (same format as chat viewer's MessageHistory)
   if cached_entry.unavailable_data_text then
-    table.insert(indicators, "*Response generated without: " .. cached_entry.unavailable_data_text .. "*")
+    table.insert(indicators, "*" .. T(_("Response generated without: %1"), cached_entry.unavailable_data_text) .. "*")
   end
   if #indicators > 0 then
     return table.concat(indicators, "\n") .. "\n\n"
@@ -9796,6 +9807,7 @@ function AskGPT:_generateSummaryAndContinue(on_done, section_scope, data_once)
   config_copy.features.is_book_context = true
   -- The popup's allowance covers the summary generated on the way (B395)
   config_copy.features._data_once = nil
+  config_copy.features._chat_data = nil  -- a chat's own choices (the Data chip) are that chat's
   if data_once then
     require("koassistant.request.privacy_gates").grantOnce(config_copy.features,
       self.ui and self.ui.document and self.ui.document.file, data_once)
@@ -15005,6 +15017,7 @@ function AskGPT:_fireXrayAutoUpdate(opts)
   config_copy.features = {}
   for k, v in pairs((configuration or {}).features or {}) do config_copy.features[k] = v end
   config_copy.features._data_once = nil
+  config_copy.features._chat_data = nil  -- a chat's own choices (the Data chip) are that chat's
   if opts.data_once then
     require("koassistant.request.privacy_gates").grantOnce(config_copy.features, file, opts.data_once)
   end
@@ -16094,6 +16107,7 @@ function AskGPT:_fireXrayLadderRung()
   end
   -- The build's allowance (Allow once at its start, B395) rides every rung
   config_copy.features._data_once = nil
+  config_copy.features._chat_data = nil  -- a chat's own choices (the Data chip) are that chat's
   if build.data_once then
     require("koassistant.request.privacy_gates").grantOnce(config_copy.features, file, build.data_once)
   end
@@ -17095,6 +17109,7 @@ function AskGPT:_executeBookLevelActionDirect(action, action_id, opts)
   -- popup's question handed over (opts.data_once, the kinds): a record left on
   -- the shared table by a chat is that chat's and never rides a book-level run
   config_copy.features._data_once = nil
+  config_copy.features._chat_data = nil  -- a chat's own choices (the Data chip) are that chat's
   if opts and opts.data_once then
     require("koassistant.request.privacy_gates").grantOnce(config_copy.features,
       self.ui and self.ui.document and self.ui.document.file, opts.data_once)
@@ -17219,6 +17234,7 @@ function AskGPT:executeFileBrowserAction(file, title, authors, book_props, actio
     end
     -- A chat's run allowance (B395) never rides a book-level run
     config_copy.features._data_once = nil
+    config_copy.features._chat_data = nil  -- a chat's own choices (the Data chip) are that chat's
 
     -- Signal synthetic book metadata (same as _executeBookLevelActionDirect)
     config_copy.features._is_book_level_action = true
@@ -18125,8 +18141,6 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
   -- The picker stays usable (it sets the defaults); we just annotate when N/A.
   local ModelConstraints = require("koassistant.request.model_constraints")
   local web_search_supported = ModelConstraints.supportsWebSearch(provider, model)
-  -- The tile shows the global value it flips (Ask, Allow or Never)
-  local text_state = require("koassistant.request.privacy_gates").summary({ features = features }).book_text.state
 
   -- Get behavior display name (with source indicator)
   local custom_behaviors = features.custom_behaviors or {}
@@ -18605,51 +18619,38 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
     end,
   }
 
+  -- Data access (B395 slice 3, data_access_picture.md 4.10; the Book Text
+  -- tile's slot and id): the open book's values for the five kinds a book can
+  -- hold, in a few words; tap = the book's Data access screen (Book Settings
+  -- → Privacy), or the values for all books with no book open; hold = the
+  -- values for all books
   button_defs["text_extraction"] = {
     text = (function()
-      -- P4 (deviation 7): the panel family rule — label shows the EFFECTIVE
-      -- state for the open book, "(book)" when a per-book privacy override
-      -- masks the global; tap keeps toggling the global, hold opens the
-      -- per-book Privacy screen.
-      local doc_settings = has_document and self:_openBookDS() or nil
-      local ov = doc_settings and doc_settings:readSetting(BookSettingsQS.KEY_TEXT_EXTRACTION)
-      local state = text_state
-      if ov == true then state = "allow" elseif ov == false then state = "never" end
-      local label = BookSettingsQS.privacyStateLabel(state)
-      if ov ~= nil then label = label .. _(" (book)") end
-      return E("\u{1F4C4}", T(_("Book Text: %1"), label))
+      local Gates = require("koassistant.request.privacy_gates")
+      local book = has_document and Gates.overridesOf(self:_openBookDS()) or nil
+      local states = {}
+      for _idx, kind in ipairs({ "book_text", "highlights", "annotations", "notebook", "nearby_text" }) do
+        states[#states + 1] = Gates.resolve(kind, { features = features, book = book })  -- standing-only: the tile shows the values, no run
+      end
+      return E("\u{1F512}", T(_("Data access: %1"),
+        require("koassistant.ui.data_access").shortSummary(states)))
     end)(),
     callback = function()
-      local f = self_ref.settings:readSetting("features") or {}
-      -- The tap steps the value for all books: Ask to Allow, Allow to Ask,
-      -- Never to Ask (the question is the acknowledgement; the old first-time
-      -- guard is gone, B395 slice 2)
-      f.enable_book_text_extraction = (f.enable_book_text_extraction ~= true) and true or false  -- raw-gate: the tile flips the switch it shows
-      self_ref.settings:saveSetting("features", f)
-      self_ref.settings:flush()
-      self_ref:updateConfigFromSettings()
-      -- Masked-global rule (the spoiler tile's pattern): the global saved
-      -- either way; if this book's own override masks it, say so — a silent
-      -- no-op reads as a dead button.
-      local doc_settings = has_document and self_ref:_openBookDS() or nil
-      if doc_settings and doc_settings:readSetting(BookSettingsQS.KEY_TEXT_EXTRACTION) ~= nil then
-        UIManager:show(Notification:new{
-          text = _("Saved as default. This book has its own override — hold the button to change it."),
-          timeout = 3,
-        })
-      end
-      opening_subdialog = true
-      UIManager:close(dialog)
-      reopenQuickSettings()
-    end,
-    hold_callback = has_document and function()
       opening_subdialog = true
       UIManager:close(dialog)
       require("koassistant.books.book_settings").showPrivacyConfig({
-        plugin = self_ref, ui = self_ref.ui,
+        plugin = self_ref, ui = has_document and self_ref.ui or nil,
+        all_books = not has_document,
         on_close = reopenQuickSettings,
       })
-    end or nil,
+    end,
+    hold_callback = function()
+      opening_subdialog = true
+      UIManager:close(dialog)
+      require("koassistant.books.book_settings").showPrivacyConfig({
+        plugin = self_ref, all_books = true, on_close = reopenQuickSettings,
+      })
+    end,
   }
 
   button_defs["chat_history"] = {
@@ -19452,15 +19453,27 @@ function AskGPT:translateCurrentPage()
   -- features copy above could carry a stale one from an earlier highlight
   config_copy.features._selection_context_window = nil
 
-  -- Execute translation
-  logger.dbg("KOAssistant: translateCurrentPage calling executeDirectAction with page_text:", page_text and #page_text or "nil/empty")
-  Dialogs.executeDirectAction(
-    self.ui,
-    translate_action,
-    page_text,
-    config_copy,
-    self
-  )
+  -- The current page is the text around what you tap (the eighth kind, ruled
+  -- 2026-10-14): asked on Ask, refused on Never, for the provider the
+  -- translation goes to, before anything is sent
+  local self_ref = self
+  require("koassistant.ui.data_access").withAccess(self, translate_action, {
+    features = config_copy.features,
+    provider = Dialogs.effectiveDispatchProvider(config_copy.features, translate_action, config_copy.provider),
+    path = self.ui.document.file, ui = self.ui,
+    kinds = { "nearby_text" },
+    amounts = { nearby_text = _("the text of your current page") },
+    action_name = _("Translate Page"),
+  }, function()
+    logger.dbg("KOAssistant: translateCurrentPage calling executeDirectAction with page_text:", page_text and #page_text or "nil/empty")
+    Dialogs.executeDirectAction(
+      self_ref.ui,
+      translate_action,
+      page_text,
+      config_copy,
+      self_ref
+    )
+  end)
 end
 
 -- Change Dictionary Language gesture handler
@@ -20874,6 +20887,9 @@ function AskGPT:_scrubContextFeatures(features)
   -- An allowance for one run (Allow once, B395) is the request's, consumed at
   -- its dispatch; a stray on the shared table would let data out unasked
   features._data_once = nil
+  -- A chat's own data choices (the Data chip) are that dialog's and its chat's;
+  -- a stray would leave kinds or the book info out of unrelated requests
+  features._chat_data = nil
 end
 
 function AskGPT:executeHighlightBypassAction(action, selected_text, highlight_instance)
@@ -21697,10 +21713,64 @@ function AskGPT:quickResetFreshStart()
   })
 end
 
--- The three privacy presets (ruling 10 of 2026-10-14): what each writes is
--- privacy_gates.lua's applyPreset ("default" clears every value, B498).
-local function applyPrivacyPreset(self, preset, touchmenu_instance, message)
+-- The three privacy presets (ruling 10 of 2026-10-14; one row since B499):
+-- what each writes is privacy_gates.lua's applyPreset ("default" clears every
+-- value, the trusted column's too: B498, B499). A pick applies at once (no
+-- confirm, ruled 2026-10-16); the popup after it lists the rows that changed
+-- and what stayed.
+local PRIVACY_PRESET_IDS = { "default", "full", "minimal" }
+
+-- The popup after a preset: what changed (only the rows that differ), then
+-- what a preset leaves alone. Pure but for the reads of `self`.
+local function privacyPresetSummary(self, before, after, preset)
+  local Gates = require("koassistant.request.privacy_gates")
+  local DataAccess = require("koassistant.ui.data_access")
+  local BookSettings = require("koassistant.books.book_settings")
+  local function word(kind, state)
+    if kind == "position" then return state == "allow" and _("On") or _("Off") end
+    return BookSettings.privacyStateLabel(state)
+  end
+  local lines = { T(_("%1 applied."), DataAccess.presetLabel(preset)) }
+  local changed = {}
+  for _idx, kind in ipairs(Gates.KINDS) do
+    local a, b = Gates.globalState(before, kind), Gates.globalState(after, kind)
+    if a ~= b then
+      changed[#changed + 1] = "• " .. T(_("%1: %2 → %3"), DataAccess.kindName(kind), word(kind, a), word(kind, b))
+    end
+  end
+  for _idx, kind in ipairs(Gates.KINDS) do
+    local a, b = Gates.columnState(before, kind, true), Gates.columnState(after, kind, true)
+    if a ~= b then
+      changed[#changed + 1] = "• " .. T(_("Trusted providers, %1: %2 → %3"),
+        DataAccess.kindName(kind):lower(), word(kind, a), word(kind, b))
+    end
+  end
+  if #changed == 0 then
+    lines[#lines + 1] = _("Nothing changed: your values already matched it.")
+  else
+    for _idx, line in ipairs(changed) do lines[#lines + 1] = line end
+  end
+  lines[#lines + 1] = ""
+  local trusted = after.trusted_providers
+  if preset ~= "default" and type(trusted) == "table" and #trusted > 0 then
+    local names = {}
+    for _idx, id in ipairs(trusted) do names[#names + 1] = self:getProviderDisplayName(id) end
+    lines[#lines + 1] = T(_("Trusted providers (%1) keep their own values: Settings → Privacy & Data → What trusted providers may use."),
+      table.concat(names, ", "))
+  end
+  lines[#lines + 1] = _("Books with their own values keep them (Book Settings → Privacy).")
+  if preset == "minimal" then
+    lines[#lines + 1] = T(_("Book info is not part of a preset: %1 still goes with every request."),
+      BookSettings.bookInfoLabel(after.book_info_in_chat or "basic"))
+    lines[#lines + 1] = _("Reading position is off, so spoiler protection no longer knows where you are.")
+  end
+  return table.concat(lines, "\n")
+end
+
+local function applyPrivacyPreset(self, preset, touchmenu_instance, timeout)
   local f = self.settings:readSetting("features") or {}
+  local before = {}
+  for k, v in pairs(f) do before[k] = v end
   require("koassistant.request.privacy_gates").applyPreset(f, preset)
   self.settings:saveSetting("features", f)
   self.settings:flush()
@@ -21708,25 +21778,51 @@ local function applyPrivacyPreset(self, preset, touchmenu_instance, message)
   if touchmenu_instance then
     touchmenu_instance:updateItems()
   end
-  UIManager:show(InfoMessage:new{ text = message, timeout = 3 })
+  UIManager:show(InfoMessage:new{ text = privacyPresetSummary(self, before, f, preset), timeout = timeout })
 end
 
--- Privacy preset: Default (Ask)
+-- The preset row's picker (Settings → Privacy & Data → Preset: <name>): the
+-- three as a radio list, the one the values match dotted (B499, the X-Ray
+-- presets' rule: no stored preset id, "Custom" when none matches).
+function AskGPT:showPrivacyPresetPicker(touchmenu_instance)
+  local Gates = require("koassistant.request.privacy_gates")
+  local DataAccess = require("koassistant.ui.data_access")
+  local current = Gates.presetOf(self.settings:readSetting("features") or {})
+  local dialog
+  local buttons = {}
+  for _idx, id in ipairs(PRIVACY_PRESET_IDS) do
+    local preset = id
+    buttons[#buttons + 1] = {{
+      text = (current == preset and "● " or "○ ") .. DataAccess.presetLabel(preset),
+      callback = function()
+        UIManager:close(dialog)
+        applyPrivacyPreset(self, preset, touchmenu_instance, nil)
+      end,
+    }}
+  end
+  buttons[#buttons + 1] = {{ text = _("Close"), id = "close", callback = function() UIManager:close(dialog) end }}
+  dialog = ButtonDialog:new{
+    title = T(_("Privacy preset: %1"), DataAccess.presetLabel(current)) .. "\n\n"
+      .. _("Default (Ask): each kind of data is asked the first time an action wants it; reading position and the text around what you tap are sent.") .. "\n"
+      .. _("Allow everything: every kind goes without a question, book text included.") .. "\n"
+      .. _("Block everything: nothing but your question, the selected text and the book info."),
+    buttons = buttons,
+  }
+  UIManager:show(dialog)
+end
+
+-- The presets by name, for the Setup Wizard's privacy step (a short popup:
+-- the wizard's next step follows)
 function AskGPT:applyPrivacyPresetDefault(touchmenu_instance)
-  applyPrivacyPreset(self, "default", touchmenu_instance,
-    _("Default (Ask): each kind of data is asked for the first time an action wants it. Reading position and the text around what you tap are sent, as by default."))
+  applyPrivacyPreset(self, "default", touchmenu_instance, 3)
 end
 
--- Privacy preset: Block everything
 function AskGPT:applyPrivacyPresetMinimal(touchmenu_instance)
-  applyPrivacyPreset(self, "minimal", touchmenu_instance,
-    _("Block everything: only your question, the selected text and the book's title and author go out."))
+  applyPrivacyPreset(self, "minimal", touchmenu_instance, 3)
 end
 
--- Privacy preset: Allow everything, book text included
 function AskGPT:applyPrivacyPresetFull(touchmenu_instance)
-  applyPrivacyPreset(self, "full", touchmenu_instance,
-    _("Allow everything: every kind of data goes without a question, book text included. Per-book values still apply."))
+  applyPrivacyPreset(self, "full", touchmenu_instance, 3)
 end
 
 -- The per-book values, spelled out (schema privacy tip row)

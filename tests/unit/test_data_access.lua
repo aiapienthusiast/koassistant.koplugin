@@ -159,6 +159,98 @@ TestRunner:test("artifactAllowed and forProvider judge a text-built artifact for
     TestRunner:assertEqual(#A.forProvider({ e, note }, { enable_book_text_extraction = true }, "openai", nil), 2, "Allow: both ride")
 end)
 
+-- B395 slice 3 and B500: the Data chip's pure parts, the no-title rule, the
+-- tile's words, the presets' names, the group's privacy keys
+
+TestRunner:test("the Data chip lists a chat's kinds with their states and counts the asks", function()
+    local DataChip = require("koassistant.ui.data_chip")
+    TestRunner:assertEqual(#DataChip.kindsFor("book"), 5, "a book or highlight chat: the five book kinds")
+    TestRunner:assertEqual(DataChip.kindsFor("library")[1], "book_list", "a library chat: the book list first")
+    local rows, n_ask = DataChip.rows(DataChip.kindsFor("book"),
+        { features = { enable_highlights_sharing = true, _chat_data = { never = { notebook = true } } },
+          provider = "openai", once = { book_text = true } })
+    TestRunner:assertEqual(n_ask, 1, "notes still ask")
+    local by = {}
+    for _idx, r in ipairs(rows) do by[r.kind] = r end
+    TestRunner:assertEqual(by.book_text.layer, "once", "allowed for this chat")
+    TestRunner:assertEqual(by.notebook.layer, "chat", "left out of this chat")
+    TestRunner:assertEqual(by.nearby_text.state, "allow", "the text around: Allow by default")
+    TestRunner:assertEqual(DataChip.label(0, false, false), "Data")
+    TestRunner:assertEqual(DataChip.label(2, false, false), "Data: 2 ask")
+    TestRunner:assertEqual(DataChip.label(2, true, false), "Data: this chat", "the chat's own choice first")
+end)
+
+TestRunner:test("needsTitle: an action with nothing of the book but its title (B500)", function()
+    TestRunner:assertTrue(DataAccess.needsTitle({ prompt = 'Tell me about "{title}"{author_clause}.' }, nil),
+        "an AI-knowledge book action")
+    TestRunner:assertTrue(DataAccess.needsTitle({ template = "book_info" }, nil), "through its template")
+    TestRunner:assertFalse(DataAccess.needsTitle({ prompt = 'X-Ray of "{title}"', use_book_text = true }, nil),
+        "the text goes")
+    TestRunner:assertTrue(DataAccess.needsTitle({ prompt = 'Summarize "{title}"', use_book_text = true }, "ai_knowledge"),
+        "the AI-knowledge source sends no text")
+    TestRunner:assertFalse(DataAccess.needsTitle({ prompt = 'My notes on "{title}"', use_annotations = true }, nil),
+        "the reader's notes go")
+    TestRunner:assertFalse(DataAccess.needsTitle({ prompt = "Explain this." }, nil), "no title in the prompt")
+end)
+
+TestRunner:test("the tile's words and the presets' names", function()
+    TestRunner:assertEqual(DataAccess.shortSummary({ "ask", "ask" }), "Ask")
+    TestRunner:assertEqual(DataAccess.shortSummary({ "allow", "allow" }), "Allow")
+    TestRunner:assertEqual(DataAccess.shortSummary({ "allow", "ask", "ask", "never" }), "1 allowed, 2 ask, 1 never")
+    TestRunner:assertEqual(DataAccess.presetLabel("default"), "Default (Ask)")
+    TestRunner:assertEqual(DataAccess.presetLabel(nil), "Custom")
+    TestRunner:assertEqual(DataAccess.layerLabel("chat"), "this chat")
+end)
+
+TestRunner:test("a group can hold the five privacy values (B395 slice 4)", function()
+    local GS = require("koassistant.books.group_settings")
+    local BS = require("koassistant.books.book_settings")
+    local keys = {}
+    for _idx, k in ipairs(GS.keys()) do keys[k] = true end
+    for _kind, key in pairs(BS.PRIVACY_KEY_OF_KIND) do
+        TestRunner:assertTrue(keys[key], key .. " is a group key")
+        TestRunner:assertTrue(GS.keyLabel(key) ~= key, key .. " has a label")
+    end
+    TestRunner:assertEqual(GS.valueLabel(BS.KEY_TEXT_EXTRACTION, false), "Never")
+    TestRunner:assertEqual(GS.valueLabel(BS.KEY_HIGHLIGHTS_SHARING, true), "Allow")
+end)
+
+TestRunner:test("the privacy picker's spec: the book holds Allow or Never, all books Ask, Allow or Never", function()
+    local BS = require("koassistant.books.book_settings")
+    local spec = BS.privacySpec("book_text")
+    TestRunner:assertEqual(#spec.book_options, 2)
+    TestRunner:assertEqual(#spec.options, 3)
+    local f = {}
+    spec.set_global(f, "never")
+    TestRunner:assertEqual(f.enable_book_text_extraction, "never")
+    spec.set_global(f, "allow")
+    TestRunner:assertEqual(f.enable_book_text_extraction, true)
+    spec.set_global(f, "ask")
+    TestRunner:assertEqual(Gates.globalState(f, "book_text"), "ask")
+    local notes = BS.privacySpec("annotations")
+    local g = {}
+    notes.set_global(g, "allow")
+    TestRunner:assertEqual(g.enable_highlights_sharing, true, "allowing notes allows highlights")
+    local near = BS.privacySpec("nearby_text")
+    local h = {}
+    near.set_global(h, "never")
+    TestRunner:assertEqual(h.nearby_text_sharing, "never", "string-valued")
+    TestRunner:assertEqual(BS.privacySpec("position").global({}), true, "position on unless off")
+end)
+
+TestRunner:test("a refusal or a Cancel runs the caller's hook; nothing runs", function()
+    shown = {}
+    local refused, ran = false, false
+    local ok = DataAccess.withAccess(nil, nil, {
+        features = { enable_book_text_extraction = "never" }, provider = "openai",
+        kinds = { "book_text" }, action_name = "X-Ray",
+        on_refused = function() refused = true end,
+    }, function() ran = true end)
+    TestRunner:assertFalse(ok, "refused")
+    TestRunner:assertTrue(refused, "the hook ran")
+    TestRunner:assertFalse(ran, "the run did not")
+end)
+
 SDS.resolve = saved.resolve
 UIManager.show = saved.show
 

@@ -246,13 +246,26 @@ end)
 
 TestRunner:suite("book-info level gates the [Context] auto-block")
 
-TestRunner:test("none (book): drops Book: line, but {title} still resolves", function()
+TestRunner:test("none (book): drops the Book: line and the title in the prompt (B500)", function()
     local result = MessageBuilder.build({
-        prompt = { prompt = 'About "{title}".' }, context = "book",
-        data = { book_metadata = { title = "T", author = "A" }, _book_info_level = "none" },
+        prompt = { prompt = 'About "{title}"{author_clause}.{doi_clause} By {author}.' }, context = "book",
+        data = { book_metadata = { title = "T", author = "A", author_clause = " by A",
+            doi_clause = " (DOI 10.1/x)" }, _book_info_level = "none" },
     })
     TestRunner:assertNotContains(result, 'Book: "T"', "auto-block suppressed")
-    TestRunner:assertContains(result, 'About "T"', "{title} still resolves")
+    TestRunner:assertContains(result, "About this book.", "the quoted title reads this book")
+    TestRunner:assertNotContains(result, '"T"', "no title")
+    TestRunner:assertNotContains(result, "by A", "no author clause")
+    TestRunner:assertNotContains(result, "10.1/x", "no DOI")
+end)
+TestRunner:test("none (highlight): a {title} in the prompt reads this book (B500)", function()
+    local result = MessageBuilder.build({
+        prompt = { prompt = 'Explain, from "{title}"{author_clause}.' }, context = "highlight",
+        data = { book_title = "T", book_author = "A", highlighted_text = "the passage", _book_info_level = "none" },
+    })
+    TestRunner:assertContains(result, "Explain, from this book.")
+    TestRunner:assertNotContains(result, '"T"')
+    TestRunner:assertContains(result, "the passage")
 end)
 TestRunner:test("basic (book): keeps Book: line", function()
     local result = MessageBuilder.build({
@@ -329,15 +342,24 @@ TestRunner:test("full + custom title/author: custom values AND position; origina
     TestRunner:assertNotContains(result, "Real Author")
 end)
 
-TestRunner:test("none + custom title: no auto-block, but {title} still resolves to custom (X-Ray case)", function()
+TestRunner:test("none + custom title: nothing names the book, the custom title included (B500)", function()
     local meta = BookSettings.applyMetadataOverride(REAL, makeDocSettings({ [KT] = "Fake T" }))
     local result = MessageBuilder.build({
         prompt = { prompt = 'Create an X-Ray for "{title}".' }, context = "book",
         data = { book_metadata = meta, _book_info_level = "none" },
     })
     TestRunner:assertNotContains(result, 'Book: "', "generic auto-block suppressed")
-    TestRunner:assertContains(result, 'X-Ray for "Fake T"', "{title} still resolves to the custom value")
+    TestRunner:assertContains(result, "X-Ray for this book.", "{title} reads this book")
+    TestRunner:assertNotContains(result, "Fake T", "the custom title is not sent either")
     TestRunner:assertNotContains(result, "Real Title", "original never appears")
+end)
+
+TestRunner:test("the Data chip's book info switch: none for this chat (B500)", function()
+    local ds = makeDocSettings({ koassistant_book_info_level = "full" })
+    TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
+        { book_info_in_chat = "basic", _chat_data = { book_info_off = true } }), "none")
+    TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
+        { book_info_in_chat = "basic", _chat_data = {} }), "full")
 end)
 
 -- Per-book quiz overrides: per-book field > global > built-in default

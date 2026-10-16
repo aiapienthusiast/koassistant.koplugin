@@ -273,16 +273,66 @@ end)
 
 print("\n  [the presets]")
 
-TestRunner:test("the default preset clears every value: each kind reads the default it ships with (B498)", function()
+TestRunner:test("the default preset clears every value: each kind reads the default it ships with (B498, B499)", function()
     local f = { enable_book_text_extraction = true, enable_highlights_sharing = "never", nearby_text_sharing = "ask",
-        enable_basic_stats = false, enable_library_scanning = true, trusted_book_text = "never" }
+        enable_basic_stats = false, enable_library_scanning = true, trusted_book_text = "never",
+        trusted_providers = { "ollama" } }
     Gates.applyPreset(f, "default")
     for _idx, kind in ipairs(Gates.KINDS) do
         eq(f[Gates.GLOBAL_KEY[kind]], nil, kind .. " cleared")
         local want = (kind == "position" or kind == "nearby_text") and "allow" or "ask"
         eq(Gates.resolve(kind, { features = f, provider = "openai" }), want, kind .. " reads its default")
     end
-    eq(f.trusted_book_text, "never", "the trusted column is untouched")
+    eq(f.trusted_book_text, nil, "the trusted column goes back to its default too (B499)")
+    eq(Gates.resolve("book_text", { features = f, provider = "ollama" }), "allow", "trusted: Allow again")
+    eq(f.trusted_providers[1], "ollama", "the trusted list is kept")
+end)
+
+TestRunner:test("presetOf names the preset the values match, or nil for Custom (B499)", function()
+    eq(Gates.presetOf({}), "default", "nothing set: Default")
+    eq(Gates.presetOf({ enable_book_text_extraction = false, nearby_text_sharing = "allow" }), "default",
+        "explicit default values still read Default")
+    eq(Gates.presetOf(Gates.applyPreset({}, "full")), "full", "Allow everything")
+    eq(Gates.presetOf(Gates.applyPreset({}, "minimal")), "minimal", "Block everything")
+    eq(Gates.presetOf(Gates.applyPreset({ trusted_book_text = "never" }, "minimal")), "minimal",
+        "Block everything leaves the trusted column alone and still matches")
+    eq(Gates.presetOf({ trusted_book_text = "never" }), nil, "a trusted value off its default: Custom")
+    eq(Gates.presetOf({ enable_book_text_extraction = true }), nil, "one kind allowed: Custom")
+end)
+
+TestRunner:test("a kind left out of this chat is Never at the chat layer, below the book's own Never", function()
+    local f = { enable_highlights_sharing = true, enable_book_text_extraction = true,
+        _chat_data = { never = { highlights = true } } }
+    eq(Gates.resolve("highlights", { features = f, provider = "openai" }), "never", "left out")
+    eq(select(2, Gates.resolve("highlights", { features = f, provider = "openai" })), "chat", "layer chat")
+    eq(Gates.resolve("annotations", { features = f, provider = "openai" }), "never", "the notes go with their highlights")
+    eq(select(2, Gates.resolve("book_text", { features = f, provider = "openai",
+        book = { book_text = false } })), "book", "the book's own Never still names the book")
+    eq(Gates.resolve("highlights", { features = f, provider = "openai", once = { highlights = true } }),
+        "never", "an allowance for one run does not beat the chat's no")
+    eq(Gates.copyPrivacy(f, {})._chat_data, f._chat_data, "the extractor's copy carries it")
+end)
+
+TestRunner:test("a stored summary is asked for only where the run sends it", function()
+    local action = { use_book_text = true, use_summary_cache = true, prompt = "{document_context_section}" }
+    local stamps = { summary = { used_book_text = true } }
+    local ctx = { features = {}, provider = "openai" }
+    local function asksText(source)
+        for _idx, n in ipairs(Gates.needs(action, ctx, { source = source, stamps = stamps })) do
+            if n.kind == "book_text" then return true end
+        end
+        return false
+    end
+    TestRunner:assertFalse(asksText("ai_knowledge"), "AI knowledge: no text, no summary")
+    TestRunner:assertTrue(asksText("summary"), "the summary source sends the text-built summary")
+    TestRunner:assertTrue(asksText(nil), "no source pick: the action reads its summary")
+end)
+
+TestRunner:test("globalState reads a kind's own value for all books, before the pairing", function()
+    eq(Gates.globalState({ enable_annotations_sharing = true }, "highlights"), "ask", "own value, not paired")
+    eq(Gates.columnState({ enable_annotations_sharing = true }, "highlights", false), "allow", "the column pairs")
+    eq(Gates.globalState({ nearby_text_sharing = "never" }, "nearby_text"), "never")
+    eq(Gates.globalState({}, "position"), "allow")
 end)
 
 TestRunner:test("Allow everything and Block everything set every kind; an unknown preset nothing", function()

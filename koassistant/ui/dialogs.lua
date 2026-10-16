@@ -3680,6 +3680,9 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
         -- the chat's, for its replies; the source must not carry it into the
         -- next request
         config.features._data_once = nil
+        -- The chat's own data choices (the Data chip): same rule, the copy is
+        -- the chat's
+        config.features._chat_data = nil
         -- Quick controls: consume the dispatch consumables AND the chip state from
         -- the SOURCE config (same staleness rule — the copies already rode into
         -- temp_config for dialog launches, where they are the chat's live state).
@@ -4376,10 +4379,12 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
         end
     end
 
-    -- Resolve the per-book "book info" level for the generic [Context] auto-block (per-book > global).
-    -- "none" suppresses it; explicit {title}/{author} placeholders are unaffected.
+    -- Resolve the "book info" level (this chat's Data chip > per-book > global) on the
+    -- request's own config: the chat's choice was consumed from the source at the
+    -- dispatch entry. "none" drops the book line and neutralizes the {title}/{author}
+    -- placeholders (B500, message_builder).
     message_data._book_info_level = require("koassistant.books.book_settings").resolveBookInfoLevel(
-        per_book_ds, config.features)
+        per_book_ds, temp_config.features or config.features)
 
     -- Resolve effective research mode
     -- Priority: action override > per-book setting > DOI auto-detection > global setting
@@ -4645,6 +4650,22 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
     if xray_prefix then
         message_data.highlighted_text = require("koassistant.request.attachments").xrayChatTextFor(
             message_data.highlighted_text, config.features, effective_provider)
+    end
+
+    -- The text around what you tap (the eighth kind, ruled 2026-10-14) goes only
+    -- where it may: the context around a selection and the dictionary's context.
+    -- The funnel asked on Ask (Allow once rides temp_config); a Never for all
+    -- books, for this book or for this chat, or an Ask left unanswered, drops it
+    -- here, for the provider the request goes to
+    if (message_data.surrounding_context and message_data.surrounding_context ~= "")
+            or (message_data.context and message_data.context ~= "") then
+        local NearbyGates = require("koassistant.request.privacy_gates")
+        if not NearbyGates.allows("nearby_text", NearbyGates.context(temp_config.features or {},
+                effective_provider, { ds = per_book_ds, path = per_book_file })) then
+            message_data.surrounding_context = nil
+            message_data.context = nil
+            if temp_config.features then temp_config.features.dictionary_context = nil end
+        end
     end
 
     -- Open book: full extraction (text, highlights, annotations, stats, etc.)
@@ -7015,6 +7036,16 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
             configuration.features._session_ctx_paragraphs = nil
             configuration.features._session_ctx_spoiler_limit = nil
             configuration.features._session_ctx_label_stale = nil
+            -- The Data chip's choices for this chat (B395 slice 3): same
+            -- config-resident lifecycle as the scope pick
+            configuration.features._chat_data = nil
+            -- An allowance for one chat (the Send's question, the chip's
+            -- "Allow for this chat") is that chat's: a new dialog starts
+            -- without it. The X-Ray chat grants its own right before it opens
+            -- this dialog, on a config of its own, and keeps it
+            if not is_xray_chat then
+                configuration.features._data_once = nil
+            end
             -- Quick-controls chip state (controls_parity_plan.md §2/§9): same
             -- config-resident lifecycle as the scope pick — survives a refresh
             -- via the marker, cleared on a fresh open — then SEEDED from the
@@ -7624,8 +7655,9 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
             configuration.features = configuration.features or {}
             configuration.features._source_mode = popup_state.source
             -- The popup's question allowed these kinds once (B395): on this
-            -- dialog's config, read by the gather and consumed at the dispatch
-            configuration.features._data_once = nil
+            -- dialog's config, read by the gather and consumed at the dispatch;
+            -- merged with what the chat allowed (the Data chip): grantOnce
+            -- replaces only another book's record
             if popup_state.data_once then
                 require("koassistant.request.privacy_gates").grantOnce(configuration.features,
                     document_path, popup_state.data_once)
@@ -9084,7 +9116,19 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                                 or _("No extra book text")),
                                 callback = function() setPick(nil) end }},
                             {{ text = mark("page") .. _("Current page"),
-                                callback = function() setPick({ kind = "page" }) end }},
+                                callback = function()
+                                    -- the current page is the text around what you tap:
+                                    -- explained here under Never, as the text rows are
+                                    if not require("koassistant.request.privacy_gates").usable("nearby_text",
+                                            require("koassistant.request.privacy_gates").context(feats,
+                                                configuration.provider, { path = document_path, ui = ui_instance })) then
+                                        UIManager:show(InfoMessage:new{
+                                            text = _("The current page counts as text around what you tap, which is set to Never for this book, for all books or for this chat (Book Settings → Privacy, Settings → Privacy & Data, or the Data chip)."),
+                                        })
+                                        return
+                                    end
+                                    setPick({ kind = "page" })
+                                end }},
                         }
                         if cur_page > 1 then
                             table.insert(rows, {{
@@ -9385,6 +9429,26 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                     end,
                 }
             end,
+            data = function()
+                -- Data chip (B395 slice 3): what this chat may send, the chat's
+                -- own choices, Book info for this chat. Hidden in a general
+                -- chat (no book, no book list). Inline require (60-upvalue cap).
+                if is_general_context then return nil end
+                local DataChip = require("koassistant.ui.data_chip")
+                local o = {
+                    configuration = configuration, plugin = plugin,
+                    ui = chips_book_or_highlight and ui_instance or nil,
+                    document_path = chips_book_or_highlight and document_path or nil,
+                    chat = chips_book_or_highlight and "book" or "library",
+                    enable_emoji = enable_emoji,
+                    on_change = refreshInputDialog,
+                }
+                return {
+                    text = DataChip.chipText(o),
+                    callback = function() DataChip.open(o) end,
+                    hold_callback = function() DataChip.hold(o) end,
+                }
+            end,
         }
         local session_chips = {}
         for _idx, chip_id in ipairs(getSessionChips(configuration and configuration.features)) do
@@ -9445,8 +9509,22 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                     if require("koassistant.request.attachments").hasType("notebook") then
                         da_kinds[#da_kinds + 1] = "notebook"
                     end
+                    -- The text around the selection (a highlight chat's ambient
+                    -- context), optional: the Send goes on without it
+                    local amb_w = configuration.features._selection_context_window
+                    if highlighted_text and amb_w and amb_w.text == highlighted_text
+                            and not xray_context_prefix
+                            and (configuration.features._session_highlight_context
+                                or require("koassistant.books.book_settings").resolveHighlightContext(
+                                    require("koassistant.storage.doc_settings").resolve(document_path, ui_instance),
+                                    configuration.features)) ~= "none" then
+                        da_kinds[#da_kinds + 1] = { kind = "nearby_text", required = false }
+                        da_amounts.nearby_text = _("the text around your selection")
+                    end
                     if configuration.features.is_library_context and library_toggle_on then
-                        da_kinds[#da_kinds + 1] = "book_list"
+                        -- optional: a book list left out of this chat (the Data chip)
+                        -- lets the Send go without it
+                        da_kinds[#da_kinds + 1] = { kind = "book_list", required = false }
                         da_amounts.book_list = _("your book list (titles, authors, reading status)")
                     end
                     if #da_kinds > 0 then
@@ -9688,7 +9766,10 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         -- ⚡ pick can re-point it after the dialog opened (B396 c).
                         local lib_features = plugin and plugin.settings and plugin.settings:readSetting("features") or {}
                         local scan_folders_to_use
-                        if require("koassistant.request.privacy_gates").allows("book_list",
+                        -- Left out of this chat by its Data chip: no list, no notice
+                        local lib_chat_out = require("koassistant.request.privacy_gates")
+                            .chatNever(configuration.features, "book_list")
+                        if not lib_chat_out and require("koassistant.request.privacy_gates").allows("book_list",
                                 { features = lib_features,
                                   provider = send_rv and send_rv.provider
                                       or require("koassistant.ui.dialogs").effectiveDispatchProvider(
@@ -9701,7 +9782,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                                     scan_folders_to_use = lib_features.library_scan_folders
                                 end
                             end
-                        elseif library_toggle_on then
+                        elseif library_toggle_on and not lib_chat_out then
                             -- The dialog offered the list for its own provider; say why
                             -- this Send goes without it rather than drop it silently
                             UIManager:show(require("ui/widget/notification"):new{
@@ -9800,8 +9881,17 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         -- add upvalues to a closure at LuaJIT's 60-upvalue cap.
                         local sc_window = configuration.features._selection_context_window
                         configuration.features._selection_context_window = nil
+                        -- The text around what you tap goes only where it may (the
+                        -- eighth kind): the Send's question asked on Ask; a Never
+                        -- (all books, this book, this chat) leaves it out
                         if sc_window and sc_window.text == highlighted_text
-                            and not xray_context_prefix then
+                            and not xray_context_prefix
+                            and require("koassistant.request.privacy_gates").allows("nearby_text",
+                                require("koassistant.request.privacy_gates").context(configuration.features,
+                                    send_rv and send_rv.provider
+                                        or require("koassistant.ui.dialogs").effectiveDispatchProvider(
+                                            configuration.features, nil, configuration.provider),
+                                    { path = document_path, ui = ui_instance })) then
                             -- Session override (Scope chip, highlight facet) wins over the
                             -- per-book/global mode; "none" is an explicit session OFF.
                             local sc_mode = configuration.features._session_highlight_context
@@ -9944,6 +10034,11 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                             end
                         end
                         configuration = copy
+                        -- The chat's own data choices and its allowance ride the
+                        -- private copy for the replies; the shared table drops them
+                        -- so no later request inherits them (B395)
+                        shared_features._chat_data = nil
+                        shared_features._data_once = nil
                         -- Per-chat conversation id on the private copy (B285 / #107)
                         configuration.conversation_id = history.conversation_id
                         -- Send's long-press pick rides the private copy to the bake
@@ -10199,7 +10294,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
         end
         -- Chips + Send fill the TOP ROW ONLY, shrinking with count (maintainer
         -- 2026-07-12): all chips + Send share one row; font size steps down as the row
-        -- fills. Current max is 7 chips + Send (Quick joined 2026-07-19); if the row
+        -- fills. Current max is 8 chips + Send (Quick joined 2026-07-19); if the row
         -- gets too tight on device, revisit membership defaults in the defaults sweep
         -- (noted alternative: a gear-anchored controls menu).
         local top_chip_row = {}
@@ -10681,6 +10776,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
             spoiler = _("Spoiler protection"),
             scope = _("Scope & context"),
             attach = _("Attach"),
+            data = _("Data"),
         }
         -- Membership is GLOBAL (any view can edit it), but chips with a
         -- structural hide won't appear in THIS view — say so instead of
@@ -10698,6 +10794,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
             book_tools = (m_book_or_hl and m_has_book) or false,
             scope = (m_book_or_hl and m_has_book and not mf._xray_chat_context) or false,
             spoiler = m_book_or_hl,
+            data = not mf.is_general_context,
         }
         local enabled = {}
         for _idx, id in ipairs(getSessionChips(configuration and configuration.features)) do
@@ -10965,6 +11062,9 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
         end
         if configuration and configuration.features then
             configuration.features._session_library = nil
+            -- The chat's own data choices and its allowance end with it (B395)
+            configuration.features._chat_data = nil
+            configuration.features._data_once = nil
         end
     end
     input_dialog.title_bar.title_face = Font:getFace("smallinfofont")
@@ -10984,6 +11084,9 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
         end
         if configuration and configuration.features then
             configuration.features._session_library = nil
+            -- The chat's own data choices and its allowance end with it (B395)
+            configuration.features._chat_data = nil
+            configuration.features._data_once = nil
         end
         return true
     end
@@ -13658,10 +13761,15 @@ local function launchArtifactChat(user_question, artifact_content, artifact_type
     local parts = {}
 
     table.insert(parts, "[Context]")
-    if ai_book_metadata and ai_book_metadata.title then
+    -- The book line follows Book info (B500: None names nothing, Title only
+    -- leaves the author out)
+    local art_info_level = require("koassistant.books.book_settings").resolveBookInfoLevel(
+        artifact_ds, configuration.features)
+    if ai_book_metadata and ai_book_metadata.title and art_info_level ~= "none" then
         table.insert(parts, string.format('From "%s"%s',
             ai_book_metadata.title,
-            (ai_book_metadata.author and ai_book_metadata.author ~= "") and (" by " .. ai_book_metadata.author) or ""))
+            (art_info_level ~= "title" and ai_book_metadata.author and ai_book_metadata.author ~= "")
+                and (" by " .. ai_book_metadata.author) or ""))
         table.insert(parts, "")
     end
 

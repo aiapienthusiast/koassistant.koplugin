@@ -81,13 +81,14 @@ A group can hold values for many of the settings a book can, so a series is set 
 
 - **Domain**, **Research mode**, **Background** and **Spoiler protection**;
 - under **X-Ray ▸**: **Automatic X-Ray**, **New X-Ray preset**, **New X-Ray categories** (with the status block), **New X-Ray depth**, **New X-Ray type**, **Checkpoint spacing** and **Carried entries**;
+- under **Privacy ▸**: **Book text**, **Highlights**, **Annotation notes**, **Notebook** and **Text around what you tap**, each Not set, Allow or Never. A group's Never keeps that kind of every member out of every request, trusted providers included, as a book's own Never does ([Privacy and Data](Privacy-and-Data#group-values));
 - under **Languages ▸**: the AI response language, translation language, dictionary language and book text language.
 
 Open the screen with the hub's **Group Settings…** row, or **Group settings…** in the Groups list's hold popup. Each row opens the same picker Book Settings uses, with **For this group** in place of **For this book**.
 
-Setting a value asks **Apply … to all N books in *group*?**, and says how many of them have their own value, which it replaces. **Not now** keeps the value at the group without writing it into the books. A book that follows the group reads the group's value live; its Book Settings row and the pickers show **Follow group *name* (*value*)**. A book that picks its own value stops following the group for that setting, and a notice says so; the **Follow group…** row in a picker makes it follow again. The screen lists the books that do not follow in **Re-apply to all (N not following: …)**, which writes every group value into every book.
+Setting a value asks **Apply *setting*: *value* to all N books in *group*?** (for example "Apply Book text: Never to all 6 books in …?"), and says how many of them have their own value, which it replaces. **Not now** keeps the value at the group without writing it into the books. A book that follows the group reads the group's value live; its Book Settings row and the pickers show **Follow group *name* (*value*)**. A book that picks its own value stops following the group for that setting, and a notice says so; the **Follow group…** row in a picker makes it follow again. The screen lists the books that do not follow in **Re-apply to all (N not following: …)**, which writes every group value into every book.
 
-Books added to a group that sets values are asked once per batch whether to take them: **Apply** or **Keep their own**. A book that leaves the group, and every book of a deleted group, goes back to the global settings for what it followed from the group. **Clear all group settings…** does the same for every book at once, and clearing a single value at the group does it for that setting.
+Books added to a group that sets values are asked once per batch whether to take them, with each setting and its value named: **Apply** or **Keep their own**. A book that leaves the group, and every book of a deleted group, goes back to the global settings for what it followed from the group. **Clear all group settings…** does the same for every book at once, and clearing a single value at the group does it for that setting.
 
 How a book resolves each setting (its own value, its group, or global) is on [Book Settings and Book Hub](Book-Settings-and-Book-Hub).
 

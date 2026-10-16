@@ -611,7 +611,7 @@ local function runSidecarUnavailableDataTests()
 
     print("\n--- Sidecar: _unavailable_data messages ---")
 
-    TestRunner:test("sidecar _unavailable_data: 'highlights (sharing disabled)' when off", function()
+    TestRunner:test("sidecar _unavailable_data: 'highlights (not allowed for this request)' when off", function()
         local extractor = createSidecarExtractor({
             enable_highlights_sharing = false,
             enable_annotations_sharing = false,
@@ -620,12 +620,26 @@ local function runSidecarUnavailableDataTests()
         TestRunner:assert(data._unavailable_data, "should have _unavailable_data")
         local found = false
         for _idx, msg in ipairs(data._unavailable_data) do
-            if msg:find("highlights (sharing disabled)", 1, true) then found = true end
+            if msg:find("highlights (not allowed for this request)", 1, true) then found = true end
         end
-        TestRunner:assert(found, "should contain 'highlights (sharing disabled)'")
+        TestRunner:assert(found, "should contain 'highlights (not allowed for this request)'")
     end)
 
-    TestRunner:test("sidecar _unavailable_data: 'annotations (sharing disabled)' when both off", function()
+    TestRunner:test("sidecar _unavailable_data: the true cause of a Never (B395)", function()
+        local function items(settings, action)
+            local data = createSidecarExtractor(settings):extractForAction(action)
+            return table.concat(data._unavailable_data or {}, "; ")
+        end
+        TestRunner:assertContains(items({ enable_highlights_sharing = "never" },
+            { use_highlights = true, prompt = "{highlights_section}" }), "highlights (set to Never)")
+        TestRunner:assertContains(items({ enable_highlights_sharing = true,
+            _chat_data = { never = { highlights = true } } },
+            { use_highlights = true, prompt = "{highlights_section}" }), "highlights (left out of this chat)")
+        TestRunner:assertContains(items({ enable_notebook_sharing = "never" }, { use_notebook = true }),
+            "notebook (set to Never)")
+    end)
+
+    TestRunner:test("sidecar _unavailable_data: 'annotations (not allowed for this request)' when both off", function()
         local extractor = createSidecarExtractor({
             enable_highlights_sharing = false,
             enable_annotations_sharing = false,
@@ -634,9 +648,9 @@ local function runSidecarUnavailableDataTests()
         TestRunner:assert(data._unavailable_data, "should have _unavailable_data")
         local found = false
         for _idx, msg in ipairs(data._unavailable_data) do
-            if msg:find("annotations (sharing disabled)", 1, true) then found = true end
+            if msg:find("annotations (not allowed for this request)", 1, true) then found = true end
         end
-        TestRunner:assert(found, "should contain 'annotations (sharing disabled)'")
+        TestRunner:assert(found, "should contain 'annotations (not allowed for this request)'")
     end)
 
     TestRunner:test("sidecar _unavailable_data: 'annotations (using highlights only)' when degraded", function()
@@ -659,15 +673,15 @@ local function runSidecarUnavailableDataTests()
         TestRunner:assert(found, "should contain 'annotations (using highlights only)'")
     end)
 
-    TestRunner:test("sidecar _unavailable_data: 'notebook (sharing disabled)' when off", function()
+    TestRunner:test("sidecar _unavailable_data: 'notebook (not allowed for this request)' when off", function()
         local extractor = createSidecarExtractor({})  -- default: notebook sharing off
         local data = extractor:extractForAction({ use_notebook = true })
         TestRunner:assert(data._unavailable_data, "should have _unavailable_data")
         local found = false
         for _idx, msg in ipairs(data._unavailable_data) do
-            if msg:find("notebook (sharing disabled)", 1, true) then found = true end
+            if msg:find("notebook (not allowed for this request)", 1, true) then found = true end
         end
-        TestRunner:assert(found, "should contain 'notebook (sharing disabled)'")
+        TestRunner:assert(found, "should contain 'notebook (not allowed for this request)'")
     end)
 
     TestRunner:test("sidecar _unavailable_data: no progress entry when sharing enabled (opt-out)", function()
@@ -1138,8 +1152,8 @@ local function runParityTests()
         TestRunner:assert(o._unavailable_data, "open-book should have _unavailable_data")
         -- Check same message appears in both
         local s_msg, o_msg = table.concat(s._unavailable_data, "; "), table.concat(o._unavailable_data, "; ")
-        TestRunner:assertContains(s_msg, "highlights (sharing disabled)")
-        TestRunner:assertContains(o_msg, "highlights (sharing disabled)")
+        TestRunner:assertContains(s_msg, "highlights (not allowed for this request)")
+        TestRunner:assertContains(o_msg, "highlights (not allowed for this request)")
     end)
 
     TestRunner:test("PARITY: same _unavailable_data for degraded annotations", function()
@@ -1164,8 +1178,8 @@ local function runParityTests()
         TestRunner:assert(s._unavailable_data, "sidecar should have _unavailable_data")
         TestRunner:assert(o._unavailable_data, "open-book should have _unavailable_data")
         local s_msg, o_msg = table.concat(s._unavailable_data, "; "), table.concat(o._unavailable_data, "; ")
-        TestRunner:assertContains(s_msg, "notebook (sharing disabled)")
-        TestRunner:assertContains(o_msg, "notebook (sharing disabled)")
+        TestRunner:assertContains(s_msg, "notebook (not allowed for this request)")
+        TestRunner:assertContains(o_msg, "notebook (not allowed for this request)")
     end)
 
     TestRunner:test("PARITY: no _unavailable_data when all permissions granted", function()

@@ -55,7 +55,7 @@ Assign **KOAssistant: Quick Settings** to a gesture for one-tap access to a two-
 - **Minimal Popup:** turn the chrome-less anchored response popup on or off; hold for its mode and action list.
 - **H.Bypass and D.Bypass:** turn Highlight Bypass and Dictionary Bypass on or off; hold to pick the bypass action.
 - **Language, Translate and Dictionary:** your primary response language, translation language and dictionary language. With a book open, hold one for that book's languages.
-- **Book Text:** the value of the book's text for all books (Ask, Allow or Never); a tap steps it between Ask and Allow (Never goes to Ask). With a book open, the tile shows that book's own value with "(book)", and holding it opens that book's privacy settings.
+- **Data access:** the open book's privacy values in a few words ("Ask", "2 allowed, 3 ask"). A tap opens that book's Data access screen (Book Settings → Privacy), or the values for all books when no book is open; hold for the values for all books. See [Privacy and Data](Privacy-and-Data#per-book-values).
 - **Chat History, Browse Notebooks and Browse Artifacts:** quick access to saved chats (all books), notebooks and cached artifacts.
 - **Groups:** the Groups list (every group's hub, settings and management).
 - **Library Chat/Action:** run library actions on books you select from your reading history.
@@ -66,7 +66,7 @@ Assign **KOAssistant: Quick Settings** to a gesture for one-tap access to a two-
 
 In the reader, one more tile appears (the others shift to make room): **Quick Actions...** switches to the Quick Actions panel. Book Chat/Action lives there as a utility; it is no longer a Quick Settings tile.
 
-With a book open, a tile shows that book's own setting when it has one, marked "(book)": Domain, Language, Translate, Dictionary, Text Extraction, Book Tools, Quick Answer and Web Search. The Spoiler Protection tile names what overrides the global setting for the book ("(book)", "(research mode)" or "(book finished)"). A tap on an on/off tile still changes the global default.
+With a book open, a tile shows that book's own setting when it has one, marked "(book)": Domain, Language, Translate, Dictionary, Book Tools, Quick Answer and Web Search (the Data access tile shows the book's privacy values in its own words). The Spoiler Protection tile names what overrides the global setting for the book ("(book)", "(research mode)" or "(book finished)"). A tap on an on/off tile still changes the global default.
 
 The panel's **gear icon** (top-left) opens **Sort Items** (reorder and show or hide the tiles) and **Align Buttons** (left-aligned or centered; Quick Settings starts left-aligned). The same tile manager is **Settings → Menus & Buttons → Quick Settings Items**, and the alignment is also **Settings → Display Settings → Panel Alignment**.
 
@@ -243,7 +243,7 @@ A **shorter long-press interval** makes text selection easier. Go to KOReader's 
 
 After the basic setup, these pages show what else KOAssistant can do. For tips on getting better answers (models, behavior styles, domains), see [Prompts, Behaviors and Domains](Prompts-Behaviors-and-Domains).
 
-- [Contexts and Chat](Contexts-and-Chat): the chips row under the input field (Domain, Web, Tools, Quick, Scope, Attach, Spoiler) changes one chat only, and a long press opens the per-book or global default behind a chip; the ⚡ Quick chip gets a fast, brief reply.
+- [Contexts and Chat](Contexts-and-Chat): the chips row under the input field (Domain, Web, Tools, Quick, Scope, Attach, Spoiler, Data) sets up one chat, and a long press opens the per-book or global default behind a chip; the ⚡ Quick chip gets a fast, brief reply.
 - [Chat Windows](Chat-Windows): short answers (Translate, Quick Define and Quick Explain by default) land in a small Minimal Popup at your selection; tap it to expand.
 - [Using X-Ray](Using-X-Ray): a browsable guide to the book, with section X-Rays, AI Wiki, checkpoints and version history; names are underlined as you read, and a tap opens a short card.
 - [Spoiler Protection](Spoiler-Protection): on by default; replies and X-Ray checkpoint installs stay within your reading position.

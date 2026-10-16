@@ -249,6 +249,20 @@ TestRunner:test("session chips seeded then rebuilt to canonical 7; spoiler toggl
     TestRunner:assertEqual(f._dismissed_session_chips, nil, "full membership -> no dismissal seed")
 end)
 
+TestRunner:test("a chip added after the registry move is never seeded as dismissed", function()
+    local f = v020Fixture()
+    Migrations.run(f)
+    local dismissed = {}
+    for _idx, id in ipairs(f._dismissed_session_chips or {}) do dismissed[id] = true end
+    TestRunner:assertEqual(dismissed.data, nil, "the Data chip reaches upgraders")
+    local Constants = require("koassistant.core.constants")
+    local shown = {}
+    for _idx, id in ipairs(Constants.resolveSessionChips(f.session_chips, f._dismissed_session_chips)) do
+        shown[id] = true
+    end
+    TestRunner:assertTrue(shown.data, "rendered for an upgrader")
+end)
+
 TestRunner:test("web_search_max_uses maps to the effort dial and is removed", function()
     local cases = { [2] = "light", [8] = "thorough", [5] = nil }  -- 4-7 = standard = nil
     for old_uses, effort in pairs(cases) do
@@ -365,8 +379,10 @@ TestRunner:test("deliberately removed chips seed the dismissal list, membership 
     Migrations.run(f)
     assertDeepEqual(f.session_chips, { "domain", "web_search" },
         "membership must not be re-expanded")
+    -- the canonical ids as of the registry migration (frozen there: a chip
+    -- added later is injected, never seeded as dismissed)
     local expected = {}
-    for _idx, id in ipairs(Constants.SESSION_CHIP_IDS) do
+    for _idx, id in ipairs(CANONICAL_CHIPS) do
         if id ~= "domain" and id ~= "web_search" then
             table.insert(expected, id)
         end

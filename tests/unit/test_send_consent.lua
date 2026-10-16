@@ -221,10 +221,12 @@ print("\n  [(c) the library Send]")
 
 TestRunner:test("the book list is judged for the provider the Send goes to", function()
     local cond = dialogs_src:match(
-        "Auto%-attach library scan data.-local scan_folders_to_use\n%s*if (.-) then\n%s*scan_folders_to_use = ")
+        "Auto%-attach library scan data.-local scan_folders_to_use\n.-\n%s*if (.-) then\n%s*scan_folders_to_use = ")
     TestRunner:assertTrue(cond, "the catalog condition")
-    local allowed = assert(load("local lib_features, send_rv, configuration = ...; return " .. cond,
+    local cond_fn = assert(load("local lib_features, send_rv, configuration, lib_chat_out = ...; return " .. cond,
         "library catalog"))
+    -- the chat's own choice (the Data chip) is read beside it: false unless left out
+    local function allowed(lib, rv, c, out) return cond_fn(lib, rv, c, out or false) end
     local lib = { enable_library_scanning = false, trusted_providers = { "ollama" } }
     local function cfg(provider, f) return { provider = provider, features = f or {} } end
     TestRunner:assertTrue(allowed(lib, nil, cfg("ollama")), "trusted provider, no re-point")
@@ -235,9 +237,11 @@ TestRunner:test("the book list is judged for the provider the Send goes to", fun
     TestRunner:assertTrue(allowed(lib, { provider = "ollama" }, cfg("openai")), "re-pointed to trusted")
     TestRunner:assertTrue(allowed({ enable_library_scanning = true }, { provider = "openai" },
         cfg("openai")), "scanning on")
+    TestRunner:assertFalse(allowed({ enable_library_scanning = true }, { provider = "openai" },
+        cfg("openai"), true), "left out of this chat by the Data chip")
     TestRunner:assertFalse(cond:find("library_toggle_on", 1, true), "no judgment from the dialog's opening")
     local block = dialogs_src:match("Auto%-attach library scan data(.-)if scan_folders_to_use and #scan_folders_to_use")
-    TestRunner:assertTrue(block:find("elseif library_toggle_on then", 1, true)
+    TestRunner:assertTrue(block:find("elseif library_toggle_on and not lib_chat_out then", 1, true)
         and block:find("Your book list was left out", 1, true),
         "a list the dialog offered and this Send drops is named, never dropped silently")
 end)

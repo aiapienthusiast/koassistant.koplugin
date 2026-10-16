@@ -735,20 +735,6 @@ local SettingsSchema = {
                     -- the single flip point for requests AND X-Ray promotion.
                     default = true,
                     help_text = _("On by default: the AI is told not to reveal events beyond your current reading position in book and highlight chats, and X-Ray checkpoint updates follow your position instead of installing the newest version. Research mode disables protection. Override per book in Book Settings; per chat via the Spoiler chip (chat input's gear menu → Toolbar Buttons). Custom actions can use the {spoiler_free_nudge} placeholder."),
-                },
-                {
-                    id = "book_info_in_chat",
-                    type = "dropdown",
-                    text = _("Book Info in Chat"),
-                    path = "features.book_info_in_chat",
-                    default = "basic",
-                    options = {
-                        { value = "none", label = _("None") },
-                        { value = "title", label = _("Title only") },
-                        { value = "basic", label = _("Title & author") },
-                        { value = "full", label = _("Title, author & position") },
-                    },
-                    help_text = _("Default book context sent with freeform chats and book-aware actions (Explain, etc.). 'None' sends no book line; 'Title only' omits the author; 'Title & author' is the default; 'Title, author & position' also adds reading progress, chapter, and page (when basic stats are enabled). Override per book in Book Settings. Image prompts follow it too (title and author only). Actions that don't request book info (e.g. Translate) are unaffected."),
                     separator = true,
                 },
                 -- Content Format submenu
@@ -1008,7 +994,7 @@ local SettingsSchema = {
                             text = _("Automatic X-Ray (all books)"),
                             path = "features.xray_auto_update",
                             default = false,
-                            help_text = _("Keep the X-Rays you started up to date as you read (flowing formats like EPUB only): checkpoints at chapter-sized steps, always keeping the next checkpoint ready ahead of you; reaching it installs it instantly and the one after starts building. Books with no X-Ray are left alone: start one from the X-Ray popup with \"In checkpoints, as I read (automatic)\", or switch a book to Automatic individually (X-Ray popup or Book Settings → Automatic X-Ray), which works even with this off; a per-book Off always wins.\n\nSpend guards: a cooldown before retrying a step that was declined, failed or cancelled, WiFi only, and text-extraction consent (or a trusted provider) required; background runs extract book text and use API tokens without a per-request tap. Leave off if every request should be explicit."),
+                            help_text = _("Keep the X-Rays you started up to date as you read (flowing formats like EPUB only): checkpoints at chapter-sized steps, always keeping the next checkpoint ready ahead of you; reaching it installs it instantly and the one after starts building. Books with no X-Ray are left alone: start one from the X-Ray popup with \"In checkpoints, as I read (automatic)\", or switch a book to Automatic individually (X-Ray popup or Book Settings → X-Ray → Automatic X-Ray), which works even with this off; a per-book Off always wins.\n\nSpend guards: a cooldown before retrying a step that was declined, failed or cancelled, WiFi only, and text-extraction consent (or a trusted provider) required; background runs extract book text and use API tokens without a per-request tap. Leave off if every request should be explicit."),
                             on_change = function(new_value, plugin)
                                 -- Round 22 (R4 / known gap (a)): flipping the master with a
                                 -- book open must reach that book immediately — refresh the
@@ -2181,29 +2167,18 @@ local SettingsSchema = {
                     },
                     separator = true,
                 },
-                -- The three presets (ruling 10 of 2026-10-14)
+                -- The presets (ruling 10 of 2026-10-14; one row since B499): the
+                -- row names the preset the values match, or Custom
                 {
-                    id = "privacy_preset_default",
+                    id = "privacy_preset",
                     type = "action",
-                    text = _("Preset: Default (Ask)"),
-                    help_text = _("Each kind of data is asked for the first time an action wants it, and your answer can be kept for the book. Reading position and the text around what you tap are sent. Every value here goes back to the one it ships with."),
-                    callback = "applyPrivacyPresetDefault",
-                    keep_menu_open = true,
-                },
-                {
-                    id = "privacy_preset_full",
-                    type = "action",
-                    text = _("Preset: Allow everything"),
-                    help_text = _("Every kind of data goes without a question, book text included (it raises token costs). Per-book values still apply."),
-                    callback = "applyPrivacyPresetFull",
-                    keep_menu_open = true,
-                },
-                {
-                    id = "privacy_preset_minimal",
-                    type = "action",
-                    text = _("Preset: Block everything"),
-                    help_text = _("Nothing but your question, the selected text and the book's title and author. Reading position off too. Actions that need more are refused until you allow it."),
-                    callback = "applyPrivacyPresetMinimal",
+                    text_func = function(plugin)
+                        local f = plugin.settings:readSetting("features") or {}
+                        return T(_("Preset: %1"), require("koassistant.ui.data_access").presetLabel(
+                            require("koassistant.request.privacy_gates").presetOf(f)))
+                    end,
+                    help_text = _("One tap sets every kind of data below for all books. Default (Ask) puts every value back to the one it ships with: Ask, with reading position and the text around what you tap sent, and Allow for trusted providers. Allow everything sends every kind without a question, book text included (it raises token costs). Block everything sends nothing but your question, the selected text and the book info; reading position goes off too, so spoiler protection no longer knows where you are. Allow everything and Block everything leave the trusted providers' own values alone, and every preset keeps the books' own values and Book info. The row names the preset your values match, or Custom."),
+                    callback = "showPrivacyPresetPicker",
                     keep_menu_open = true,
                     separator = true,
                 },
@@ -2294,6 +2269,22 @@ local SettingsSchema = {
                     default = "allow",
                     options = TRUSTED_VALUE_OPTIONS,
                     help_text = _("The bounded text around a selection (the context of a highlight or a dictionary lookup), your current page (page translate, the Scope chip's \"Current page\") and the text around an image prompt: a few sentences or one page, never more. Allow by default; independent of book text, so a book can keep its text to itself while these still work."),
+                },
+                -- What the AI is told about the book (B500: from Chat & Export
+                -- Settings). Never asked; the presets leave it alone.
+                {
+                    id = "book_info_in_chat",
+                    type = "dropdown",
+                    text = _("Book info"),
+                    path = "features.book_info_in_chat",
+                    default = "basic",
+                    options = {
+                        { value = "none", label = _("None") },
+                        { value = "title", label = _("Title only") },
+                        { value = "basic", label = _("Title & author") },
+                        { value = "full", label = _("Title, author & position") },
+                    },
+                    help_text = _("What the AI is told about the book with every request: the title, the author, and with \"Title, author & position\" your reading progress, chapter and page (when Reading position is on). Never asked, and the presets leave it alone. None sends nothing that names the book: no book line, and an action's own prompt says \"this book\" where it would name the title; actions that answer from what the AI knows about the book (About, Find Similar, Reviews…) cannot run then, and say so. Image prompts follow it too. Override per book in Book Settings → Privacy; for one chat, the Data chip."),
                     separator = true,
                 },
                 -- Text Extraction settings (moved from Advanced)

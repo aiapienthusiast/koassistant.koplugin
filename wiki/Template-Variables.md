@@ -8,9 +8,9 @@ The placeholders an action's prompt can use. Each is replaced at run time with t
 |---|---|---|---|
 | `{highlighted_text}` | Highlight | The selected text | |
 | `{user_input}` | Any | The text typed in the input dialog, placed where the placeholder sits (without it, typed text is appended after the prompt). Run without typed text, the placeholder is left in the prompt as written, so such an action belongs in the input dialog: its details screen offers no **+ Highlight Menu** or **+ Dict. Popup** button (the Highlight Menu and Dictionary Popup lists can still add it) | |
-| `{title}` | Book, Highlight | Book title | |
-| `{author}` | Book, Highlight | Book author | |
-| `{author_clause}` | Book, Highlight | " by Author", or empty | |
+| `{title}` | Book, Highlight | Book title; "this book" when [Book info](Privacy-and-Data#what-gets-sent) is None (a quoted `"{title}"` too) | |
+| `{author}` | Book, Highlight | Book author; empty when Book info is None | |
+| `{author_clause}` | Book, Highlight | " by Author", or empty (always empty when Book info is None) | |
 | `{count}` | Library | Number of selected books | |
 | `{books_list}` | Library | The selected books as a list, enriched with per-book highlights, annotations and notebook when the action declares those flags | Highlights / Annotation notes / Notebook, when those flags are set; one question for the set |
 | `{library}` | Library, Book, Highlight | The library catalog, raw, no label | Allow Library Scanning and a scan folder |

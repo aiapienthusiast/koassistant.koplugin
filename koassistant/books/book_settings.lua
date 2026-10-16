@@ -33,17 +33,25 @@ local BookSettings = {}
 BookSettings.KEY_AI_TITLE = "koassistant_book_ai_title"
 BookSettings.KEY_AI_AUTHOR = "koassistant_book_ai_author"
 BookSettings.KEY_SPOILER_FREE = "koassistant_book_spoiler_free"  -- true | false | nil(=follow global)
--- Book-info level for the generic [Context] book-info block (freeform Send + include_book_context
--- actions). "none" | "basic" (title+author) | "full" (+position) | nil(=follow global).
+-- Book-info level: what the AI is told about the book with every request (the
+-- [Context] book line of the freeform Send and the include_book_context actions;
+-- B500 moved its rows under privacy). "none" = nothing that names the book: no
+-- book line, and the title, author and DOI placeholders in action prompts read
+-- "this book" / nothing (message_builder) | "title" | "basic" (title+author) |
+-- "full" (+position) | nil(=follow global).
 BookSettings.KEY_BOOK_INFO = "koassistant_book_info_level"
 -- Per-book quiz overrides. Sparse table; each field nil = follow global:
 --   enabled (true|false; suppress-only — can't force-on a globally-disabled chapter quiz),
 --   count, difficulty, mc, sa, essay, chapter_depth, min_pages, min_minutes.
 BookSettings.KEY_QUIZ = "koassistant_book_quiz"
 
---- Resolve the effective book-info level for a book: per-book override > global default ("basic").
--- @return "none" | "basic" | "full"
+--- Resolve the effective book-info level for a book: this chat's switch (the
+-- Data chip, features._chat_data.book_info_off) > per-book override > global
+-- default ("basic").
+-- @return "none" | "title" | "basic" | "full"
 function BookSettings.resolveBookInfoLevel(doc_settings, features)
+    local cd = features and features._chat_data
+    if type(cd) == "table" and cd.book_info_off then return "none" end
     doc_settings = BookStore.wrap(doc_settings)
     local per_book = doc_settings and doc_settings:readSetting(BookSettings.KEY_BOOK_INFO)
     if per_book ~= nil then return per_book end
@@ -1519,6 +1527,9 @@ end
 --   title        string, or fn(ctx) -> string (dynamic note lines, e.g. spoiler)
 --   key          sidecar key (book layer; picking nil = follow global)
 --   options      { { value=..., label=... }, ... } radio rows, in order
+--   book_options optional radio rows for the book (and group) tab when its
+--                values differ from the global ones (privacy: a book holds
+--                Allow or Never, all books Ask, Allow or Never)
 --   global       fn(features) -> current global value (the check pattern lives
 --                there so it always matches the schema default)
 --   field        features key for the plain global write, OR:
@@ -1685,7 +1696,7 @@ function BookSettings.showLayeredPicker(spec, opts)
             end
         end
         local following = not is_group and BookSettings.followingGroup(doc_settings, spec.key) or nil
-        for _idx, o in ipairs(spec.options) do
+        for _idx, o in ipairs(spec.book_options or spec.options) do
             table.insert(buttons, optionRow(o, not following and book_val == o.value, pickBook))
         end
     else
@@ -3180,7 +3191,7 @@ function BookSettings.show(opts)
     }), BookSettings.showXrayConfig))
     addButton(subScreenRow(_("Chat behavior"), groupCount({
         BookSettings.KEY_TOOLS, BookSettings.KEY_WEB_SEARCH,
-        BookSettings.KEY_QUICK_ANSWER, BookSettings.KEY_BOOK_INFO,
+        BookSettings.KEY_QUICK_ANSWER,
         BookSettings.KEY_HIGHLIGHT_CONTEXT, BookSettings.KEY_DICTIONARY_CONTEXT,
         BookSettings.KEY_TOOL_EFFORT, BookSettings.KEY_WEB_EFFORT,
         BookSettings.KEY_TOOL_WHOLE_TEXT,
@@ -3188,7 +3199,7 @@ function BookSettings.show(opts)
     addButton(subScreenRow(_("Privacy"), groupCount({
         BookSettings.KEY_HIGHLIGHTS_SHARING, BookSettings.KEY_ANNOTATIONS_SHARING,
         BookSettings.KEY_NOTEBOOK_SHARING, BookSettings.KEY_TEXT_EXTRACTION,
-        BookSettings.KEY_NEARBY_TEXT,
+        BookSettings.KEY_NEARBY_TEXT, BookSettings.KEY_BOOK_INFO,
     }), BookSettings.showPrivacyConfig))
     addButton(subScreenRow(_("Identity"), groupCount({
         BookSettings.KEY_AI_TITLE, BookSettings.KEY_AI_AUTHOR,
@@ -3234,7 +3245,7 @@ end
 -- the flat screen ran 13 "AI behavior" rows). Every row but Book info opens a SHARED
 -- scope-aware picker on the book tab (seam 2 / consolidation P2) — the same dialogs
 -- as the chip holds and QS tiles. The effort dials have first-class rows since P3
--- (deviation 12); Book info keeps a local picker (no shared sibling yet).
+-- (deviation 12). Book info moved to the Privacy sub-screen (B500).
 -- @param opts table: { plugin, ui, document_path, on_close }
 function BookSettings.showChatBehaviorConfig(opts)
     opts = opts or {}
@@ -3277,40 +3288,6 @@ function BookSettings.showChatBehaviorConfig(opts)
         show_fn(picker_opts)
     end
 
-    -- Book-info level: label + sub-picker (None / Title & author / +position)
-    local function bookInfoLabel(v)
-        if v == "none" then return _("None")
-        elseif v == "title" then return _("Title only")
-        elseif v == "full" then return _("Title, author & position")
-        elseif v == "basic" then return _("Title & author") end
-        return _("Follow global")
-    end
-    local function showBookInfoSubPicker()
-        closeDialog()
-        local cur = doc_settings:readSetting(BookSettings.KEY_BOOK_INFO)  -- nil | "none" | "basic" | "full"
-        local picker
-        local function setVal(val)
-            doc_settings:saveSetting(BookSettings.KEY_BOOK_INFO, val)
-            doc_settings:flush()
-            syncConfig()
-            UIManager:close(picker)
-            BookSettings.showChatBehaviorConfig(opts)
-        end
-        local rows = {
-            {{ text = dot(cur == nil) .. T(_("Follow global (%1)"), bookInfoLabel(features.book_info_in_chat or "basic")),
-                callback = function() setVal(nil) end }},
-            {{ text = dot(cur == "none") .. _("None"), callback = function() setVal("none") end }},
-            {{ text = dot(cur == "title") .. _("Title only"), callback = function() setVal("title") end }},
-            {{ text = dot(cur == "basic") .. _("Title & author"), callback = function() setVal("basic") end }},
-            {{ text = dot(cur == "full") .. _("Title, author & position"), callback = function() setVal("full") end }},
-            {{ text = _("Cancel"), id = "close",
-                callback = function() UIManager:close(picker); BookSettings.showChatBehaviorConfig(opts) end }},
-        }
-        picker = ButtonDialog:new{ title = _("Book info in chat (this book)"), buttons = rows,
-            tap_close_callback = function() BookSettings.showChatBehaviorConfig(opts) end }
-        UIManager:show(picker)
-    end
-
     local function contextRowLabel(v, global_mode)
         if v == nil then
             return T(_("Follow global (%1)"), BookSettings.contextModeLabel(global_mode))
@@ -3339,7 +3316,6 @@ function BookSettings.showChatBehaviorConfig(opts)
             BookSettings.wholeTextLabel(BookSettings.resolveToolWholeText(nil, features)))
     end
 
-    local book_info_v = doc_settings:readSetting(BookSettings.KEY_BOOK_INFO)
     local buttons = {
         {{ text = T(_("AI Book Tools: %1"), toolsRowLabel(doc_settings:readSetting(BookSettings.KEY_TOOLS))),
             callback = function() sharedPicker(BookSettings.showToolsPosture) end }},
@@ -3361,10 +3337,6 @@ function BookSettings.showChatBehaviorConfig(opts)
         {{ text = T(_("Quick answer default: %1"), boolLabel(doc_settings:readSetting(BookSettings.KEY_QUICK_ANSWER),
                 features.quick_answer_default == true)),
             callback = function() sharedPicker(BookSettings.showQuickAnswerDefault) end }},
-        {{ text = T(_("Book info: %1"),
-                book_info_v and bookInfoLabel(book_info_v)
-                    or T(_("Follow global (%1)"), bookInfoLabel(features.book_info_in_chat or "basic"))),
-            callback = showBookInfoSubPicker }},
         {{ text = T(_("Highlight context: %1"), contextRowLabel(doc_settings:readSetting(BookSettings.KEY_HIGHLIGHT_CONTEXT),
                 features.highlight_context_mode or "none")),
             callback = function() sharedPicker(BookSettings.showHighlightContext) end }},
@@ -3784,90 +3756,211 @@ function BookSettings.privacyStateLabel(state)
     return _("Ask")
 end
 
---- Per-book PRIVACY values — a sub-screen of Book Settings. A book's Allow or
--- Never beats the value for all books (Settings → Privacy & Data) for THIS
--- book (Never also beats trusted providers and an allowance for one run);
--- per-action flags still apply on top (double-gating). Implications ride the
--- resolver, same as the globals: allow-annotations implies allow-highlights,
--- never-highlights implies never-annotations.
--- @param opts table: { plugin, ui, document_path, on_close }
+-- One line about each kind, under its name in the picker (the Data access
+-- screen's rows open it).
+local function privacyNote(kind)
+    if kind == "book_text" then return _("The book's own text: up to your position, a part of it, or all of it.") end
+    if kind == "highlights" then return _("Your highlighted passages, without the notes.") end
+    if kind == "annotations" then return _("Your notes on highlights. Allowing them allows the highlights too.") end
+    if kind == "notebook" then return _("Your notebook for the book.") end
+    if kind == "nearby_text" then return _("The few sentences around what you select or look up, and your current page.") end
+    if kind == "position" then return _("Your reading progress, the chapter and the time since you last read. Spoiler protection relies on it.") end
+    if kind == "book_list" then return _("The titles, authors and reading status of the books in your scan folders.") end
+    if kind == "habits" then return _("Lists made from your reading statistics: books read a lot, stalled, barely started.") end
+    return nil
+end
+
+--- The shared picker's spec for one kind of data (B395 slice 3): the book
+-- (or group) tab holds Allow or Never, below Follow global and the Follow
+-- group rows; the global tab holds Ask, Allow or Never for all books.
+-- Reading position is On or Off for all books. One spec serves a book, a
+-- group facade and all books (a picker opened without a book shows the
+-- global values alone).
+function BookSettings.privacySpec(kind)
+    local Gates = require("koassistant.request.privacy_gates")
+    local gkey = Gates.GLOBAL_KEY[kind]
+    local name = require("koassistant.ui.data_access").kindName(kind)
+    local note = privacyNote(kind)
+    local spec = {
+        title = note and (name .. "\n" .. note) or name,
+        key = BookSettings.PRIVACY_KEY_OF_KIND[kind],
+    }
+    if kind == "position" then
+        spec.options = {
+            { value = true, label = _("On: sent with the requests that use it") },
+            { value = false, label = _("Off: not sent") },
+        }
+        spec.global = function(f) return f[gkey] ~= false end
+        spec.field = gkey
+        spec.value_label = function(v) return v and _("On") or _("Off") end
+        return spec
+    end
+    spec.options = {
+        { value = "ask", label = _("Ask: asked the first time an action wants it") },
+        { value = "allow", label = _("Allow: sent without asking") },
+        { value = "never", label = _("Never: not sent") },
+    }
+    spec.book_options = {
+        { value = true, label = _("Allow: sent without asking") },
+        { value = false, label = _("Never: not sent, whatever else says") },
+    }
+    spec.global = function(f) return Gates.globalState(f, kind) end
+    spec.set_global = function(f, v)
+        if kind == "nearby_text" then
+            f[gkey] = v
+        elseif v == "allow" then
+            f[gkey] = true
+        elseif v == "never" then
+            f[gkey] = "never"
+        else
+            f[gkey] = false
+        end
+        -- Allowing notes allows highlights (the Privacy & Data row's own rule)
+        if kind == "annotations" and v == "allow" then
+            f[Gates.GLOBAL_KEY.highlights] = true
+        end
+    end
+    spec.value_label = function(v)
+        if v == true or v == "allow" then return _("Allow") end
+        if v == false or v == "never" then return _("Never") end
+        return _("Ask")
+    end
+    return spec
+end
+
+--- One kind's picker (opts.kind) on the shared engine.
+-- @param opts table: { kind, plugin, ui, document_path, doc_settings, scope, on_close, target_override }
+function BookSettings.showPrivacyPicker(opts)
+    BookSettings.showLayeredPicker(BookSettings.privacySpec(opts.kind), opts)
+end
+
+--- The Book info levels, in picker order.
+BookSettings.BOOK_INFO_OPTIONS = {
+    { value = "none", label = _("None") },
+    { value = "title", label = _("Title only") },
+    { value = "basic", label = _("Title & author") },
+    { value = "full", label = _("Title, author & position") },
+}
+
+--- A Book info level's label.
+function BookSettings.bookInfoLabel(v)
+    for _idx, o in ipairs(BookSettings.BOOK_INFO_OPTIONS) do
+        if o.value == v then return o.label end
+    end
+    return _("Title & author")
+end
+
+--- Book info on the shared picker (B500): For this book / Global. Never
+-- asked and never a kind: what the AI is told about the book with every
+-- request; None sends nothing that names it. No group value (ruled
+-- 2026-10-16).
+-- @param opts table: { plugin, ui, document_path, on_close, target_override }
+function BookSettings.showBookInfoPicker(opts)
+    BookSettings.showLayeredPicker({
+        title = _("Book info") .. "\n"
+            .. _("What the AI is told about the book with every request. None sends nothing that names it: no book line, and actions say \"this book\" instead of the title."),
+        key = BookSettings.KEY_BOOK_INFO,
+        options = BookSettings.BOOK_INFO_OPTIONS,
+        global = function(f) return f.book_info_in_chat or "basic" end,
+        field = "book_info_in_chat",
+    }, opts)
+end
+
+--- The Data access screen (B395 slice 3; Book Settings → Privacy): one row
+-- per kind of data with its value, each opening the shared picker, then
+-- Book info. For a book (the default) the rows are the five kinds a book can
+-- hold a value for and read "Follow all books (Ask)", "Follow group X
+-- (Never)", "Allow" or "Never"; with opts.all_books (or no book in scope)
+-- they are the eight kinds' values for all books. A book's Allow or Never
+-- beats the value for all books for THIS book (Never also beats trusted
+-- providers and an allowance for one run); per-action flags still apply on
+-- top (double-gating). The pairing rides the resolver: allowing notes allows
+-- highlights, Never for highlights is Never for notes.
+-- @param opts table: { plugin, ui, document_path, on_close, all_books }
 function BookSettings.showPrivacyConfig(opts)
     opts = opts or {}
     local plugin = opts.plugin
     local ui = opts.ui
     local on_close = opts.on_close
 
-    local doc_settings = resolveDocSettings(ui, opts.document_path)
-    if not doc_settings then return end
+    local doc_settings = not opts.all_books and resolveDocSettings(ui, opts.document_path) or nil
+    local all_books = doc_settings == nil
+    if all_books and not plugin then return end
 
     local features = plugin and plugin.settings and plugin.settings:readSetting("features") or {}
-    -- The global switches as the follow-global rows name them: the gates module's
-    -- states with no provider and no book (so trust plays no part in the label)
-    local g = require("koassistant.request.privacy_gates").summary({ features = features })
+    local Gates = require("koassistant.request.privacy_gates")
+    local DataAccess = require("koassistant.ui.data_access")
 
     local dialog
     local function closeDialog()
         if dialog then UIManager:close(dialog); dialog = nil end
     end
-    local function syncConfig()
-        if plugin and plugin.updateConfigFromSettings then plugin:updateConfigFromSettings() end
-    end
-    local function dot(active) return active and "● " or "○ " end
-    -- The follow row carries the value for all books (Allow / Ask / Never)
-    local function valueLabel(v, global_state)
-        if v == true then return _("Allow")
-        elseif v == false then return _("Never") end
-        return T(_("Follow all books (%1)"), BookSettings.privacyStateLabel(global_state))
-    end
-
-    -- Tri-state picker (follow / Allow / Never) for one privacy key.
-    local function showValuePicker(key, dialog_title, global_state)
+    local function reopen() BookSettings.showPrivacyConfig(opts) end
+    local function openPicker(show_fn, extra)
         closeDialog()
-        local cur = doc_settings:readSetting(key)  -- true | false | nil
-        local picker
-        local function pick(val)
-            doc_settings:saveSetting(key, val)
-            doc_settings:flush()
-            syncConfig()
-            UIManager:close(picker)
-            BookSettings.showPrivacyConfig(opts)
-        end
-        local rows = {
-            {{ text = dot(cur == nil) .. T(_("Follow all books (%1)"), BookSettings.privacyStateLabel(global_state)),
-                callback = function() pick(nil) end }},
-            {{ text = dot(cur == true) .. _("Allow: sent without asking"), callback = function() pick(true) end }},
-            {{ text = dot(cur == false) .. _("Never: not sent, whatever else says"), callback = function() pick(false) end }},
-            {{ text = _("Cancel"), id = "close",
-                callback = function() UIManager:close(picker); BookSettings.showPrivacyConfig(opts) end }},
+        local popts = {
+            plugin = plugin, on_close = reopen,
+            ui = not all_books and ui or nil,
+            document_path = not all_books and opts.document_path or nil,
+            target_override = not all_books and "book" or nil,
         }
-        picker = ButtonDialog:new{ title = dialog_title, buttons = rows,
-            tap_close_callback = function() BookSettings.showPrivacyConfig(opts) end }
-        UIManager:show(picker)
+        for k, v in pairs(extra or {}) do popts[k] = v end
+        show_fn(popts)
     end
 
-    local function row(label, key, kind, picker_title)
-        return {{ text = T(label, valueLabel(doc_settings:readSetting(key), g[kind].state)),
-            callback = function() showValuePicker(key, picker_title, g[kind].state) end }}
+    local buttons = {}
+    local function row(text, fn) buttons[#buttons + 1] = {{ text = text, callback = fn }} end
+    local kinds = all_books and Gates.KINDS or { "book_text", "highlights", "annotations", "notebook", "nearby_text" }
+    for _idx, kind in ipairs(kinds) do
+        local name = DataAccess.kindName(kind)
+        local label
+        if kind == "position" then
+            label = features.enable_basic_stats ~= false and _("On") or _("Off")  -- raw-gate: the row shows the switch it opens
+        elseif all_books then
+            label = BookSettings.privacyStateLabel(Gates.globalState(features, kind))
+        else
+            local key = BookSettings.PRIVACY_KEY_OF_KIND[kind]
+            local v = doc_settings:readSetting(key)
+            local global_label = BookSettings.privacyStateLabel(Gates.globalState(features, kind))
+            if BookSettings.followingGroup(doc_settings, key) then
+                label = BookSettings.followGroupLabel(doc_settings, key,
+                    v == true and _("Allow") or v == false and _("Never") or global_label)
+            elseif v == true then
+                label = _("Allow")
+            elseif v == false then
+                label = _("Never")
+            else
+                label = T(_("Follow all books (%1)"), global_label)
+            end
+        end
+        row(T(_("%1: %2"), name, label), function()
+            openPicker(BookSettings.showPrivacyPicker, { kind = kind })
+        end)
     end
-    local buttons = {
-        row(_("Book text: %1"), BookSettings.KEY_TEXT_EXTRACTION, "book_text", _("Book text (this book)")),
-        row(_("Highlights: %1"), BookSettings.KEY_HIGHLIGHTS_SHARING, "highlights", _("Highlights (this book)")),
-        row(_("Annotation notes: %1"), BookSettings.KEY_ANNOTATIONS_SHARING, "annotations", _("Annotation notes (this book)")),
-        row(_("Notebook: %1"), BookSettings.KEY_NOTEBOOK_SHARING, "notebook", _("Notebook (this book)")),
-        row(_("Text around what you tap: %1"), BookSettings.KEY_NEARBY_TEXT, "nearby_text", _("Text around what you tap (this book)")),
-        -- The rules, spelled out (device note 2026-08-13; the model of 2026-10-14)
-        {{ text = _("How this works…"), callback = function()
-            UIManager:show(require("ui/widget/infomessage"):new{
-                text = _("Each kind of data has a value for all books (Settings → Privacy & Data) and can have its own for this book. Ask means KOAssistant asks the first time an action wants it, and \"Allow for this book\" in that question sets Allow here. Never wins over everything, trusted providers included. Allow lets the data go without a question; actions still take only the kinds they declare. Allowing annotation notes allows highlights; Never for highlights is Never for notes."),
-            })
-        end }},
-        {{ text = _("Close"), id = "close", callback = function()
-            closeDialog()
-            if on_close then on_close() end
-        end }},
-    }
+    -- Book info: never asked, sent with every request at its level (B500)
+    local info_v = not all_books and doc_settings:readSetting(BookSettings.KEY_BOOK_INFO) or nil
+    local info_label
+    if info_v ~= nil then
+        info_label = BookSettings.bookInfoLabel(info_v)
+    elseif all_books then
+        info_label = BookSettings.bookInfoLabel(features.book_info_in_chat or "basic")
+    else
+        info_label = T(_("Follow global (%1)"), BookSettings.bookInfoLabel(features.book_info_in_chat or "basic"))
+    end
+    row(T(_("Book info: %1"), info_label), function() openPicker(BookSettings.showBookInfoPicker) end)
+    -- The rules, spelled out (device note 2026-08-13; the model of 2026-10-14)
+    row(_("How this works…"), function()
+        UIManager:show(require("ui/widget/infomessage"):new{
+            text = _("Each kind of data has a value for all books (Settings → Privacy & Data), and a book can have its own here, or follow a group's (Group Settings → Privacy). Ask means KOAssistant asks the first time an action wants it, and \"Allow for this book\" in that question sets Allow here. Never wins over everything, trusted providers included. Allow lets the data go without a question; actions still take only the kinds they declare. Allowing annotation notes allows highlights; Never for highlights is Never for notes.\n\nBook info is not asked: it is what the AI is told about the book with every request (the title, the author, your position). None sends nothing that names the book."),
+        })
+    end)
+    buttons[#buttons + 1] = {{ text = _("Close"), id = "close", callback = function()
+        closeDialog()
+        if on_close then on_close() end
+    end }}
 
-    dialog = ButtonDialog:new{ title = _("Privacy (this book)"), buttons = buttons,
+    local title = all_books and _("Privacy (all books)") or _("Privacy (this book)")
+    dialog = ButtonDialog:new{ title = title, buttons = buttons,
         tap_close_callback = function() dialog = nil; if on_close then on_close() end end }
     UIManager:show(dialog)
 end

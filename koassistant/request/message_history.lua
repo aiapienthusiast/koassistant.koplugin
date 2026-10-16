@@ -2,6 +2,8 @@ local ModelConstraints = require("koassistant.request.model_constraints")
 local ReasoningPrefs = require("koassistant.request.reasoning_prefs")
 local DebugUtils = require("koassistant.core.debug_utils")
 local Constants = require("koassistant.core.constants")
+local _ = require("koassistant.core.gettext")
+local T = require("ffi/util").template
 
 local MessageHistory = {}
 
@@ -259,7 +261,7 @@ function MessageHistory:fromSavedMessages(messages, model, chat_id, prompt_actio
 
     -- Add all saved messages
     if messages and #messages > 0 then
-        for _, msg in ipairs(messages) do
+        for _idx, msg in ipairs(messages) do
             table.insert(history.messages, msg)
         end
     end
@@ -352,7 +354,7 @@ function MessageHistory:getSuggestedTitle()
     -- Priority 2: Regex extraction from message content (legacy/continued chats)
     local highlighted_text = nil
 
-    for _, msg in ipairs(self.messages) do
+    for _idx, msg in ipairs(self.messages) do
         if msg.role == self.ROLES.USER then
             -- Check if this is a consolidated message with sections
             if msg.content:match("%[Context%]") or msg.content:match("Highlighted text:") then
@@ -380,7 +382,7 @@ function MessageHistory:getSuggestedTitle()
     end
 
     -- Priority 3: First actual user message/question
-    for _, msg in ipairs(self.messages) do
+    for _idx, msg in ipairs(self.messages) do
         if msg.role == self.ROLES.USER and not msg.is_context then
             local content = msg.content
             local user_part = content:match("%[User Question%]%s*\n([^\n]+)") or
@@ -449,8 +451,7 @@ function MessageHistory:createResultText(highlightedText, config)
     -- Show unavailable data notice if action requested data but didn't receive it
     if self.unavailable_data and #self.unavailable_data > 0 then
         local items = table.concat(self.unavailable_data, ", ")
-        table.insert(result, string.format(
-            "*Response generated without: %s*\n\n---\n\n", items))
+        table.insert(result, "*" .. T(_("Response generated without: %1"), items) .. "*\n\n---\n\n")
     end
 
     -- Show launch context header if this is a general chat launched from a book
@@ -641,7 +642,7 @@ function MessageHistory:createResultText(highlightedText, config)
                 end
             -- Legacy array format (for backwards compatibility)
             elseif #config.system > 0 then
-                for _, block in ipairs(config.system) do
+                for _idx, block in ipairs(config.system) do
                     local label = block.label or "unknown"
                     local cached_flag = block.cache_control and " [CACHED]" or ""
                     local preview = block.text or ""

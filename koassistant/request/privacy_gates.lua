@@ -14,6 +14,7 @@ The model (slice 2, rulings 1, 19 to 22 of 2026-10-14): every kind has one of
 three states, "allow", "ask" or "never", and the answer carries the layer
 that gave it:
   1. the book's own Never (Book Settings > Privacy)               "book"
+     a kind left out of this chat (the Data chip)                  "chat"
   2. an allowance given for this run (Allow once)                  "once"
   3. the book's own Allow                                          "book"
   4. the column of the provider the request goes to: a trusted
@@ -117,6 +118,14 @@ local function rawColumnState(features, kind, trusted)
     return switchState(v)
 end
 
+--- A kind's own value for all books (the column for every provider that is
+--- not trusted), before the pairing: what the global switch itself holds, for
+--- the pickers that show and write it.
+--- @return string "allow" | "ask" | "never"
+function Gates.globalState(features, kind)
+    return rawColumnState(features or {}, kind, false)
+end
+
 --- A column's state for a kind, with the pairing of highlights and notes:
 --- allowing notes allows highlights, Never for highlights is Never for notes.
 --- trusted = read the trusted column (the provider is trusted).
@@ -168,6 +177,25 @@ function Gates.grantOnce(features, path, kinds)
     end
 end
 
+--- The chat's own choices, set by the Data chip on the dialog's config and
+--- carried by the request's copy for the chat's replies: `never` = the kinds
+--- left out of this chat, `book_info_off` = this chat goes without the book's
+--- title and author. nil when the chat set nothing.
+function Gates.chatData(features)
+    local cd = type(features) == "table" and features._chat_data
+    if type(cd) ~= "table" then return nil end
+    return cd
+end
+
+--- Whether a kind was left out of this chat. Leaving highlights out leaves
+--- the notes out too (the pairing).
+function Gates.chatNever(features, kind)
+    local cd = Gates.chatData(features)
+    if not (cd and type(cd.never) == "table") then return false end
+    if cd.never[kind] then return true end
+    return kind == "annotations" and cd.never.highlights == true
+end
+
 --- Whether a kind may go into the request, and which layer said so.
 --- ctx.features  the settings the request runs under (configuration.features,
 ---               or the extractor's own settings table)
@@ -176,12 +204,17 @@ end
 ---               (nil = none known); its Never beats everything, its Allow
 ---               needs no switch
 --- ctx.once      the kinds allowed for this run (Gates.onceFor), nil = none
---- @return string state "allow" | "ask" | "never"; string layer "book" | "once" | "trusted" | "global"
+--- The kinds left out of this chat (the Data chip) ride the request's own
+--- features as `_chat_data.never`, so every context carries them.
+--- @return string state "allow" | "ask" | "never"; string layer "book" | "chat" | "once" | "trusted" | "global"
 function Gates.resolve(kind, ctx)
     ctx = ctx or {}
     local book = ctx.book
     if type(book) == "table" and book[kind] == false then
         return "never", "book"
+    end
+    if Gates.chatNever(ctx.features, kind) then
+        return "never", "chat"
     end
     if type(ctx.once) == "table" and ctx.once[kind] then
         return "allow", "once"
@@ -270,7 +303,8 @@ end
 
 --- Copy every key the gates read from one features table into another (the
 --- extractor's settings table is built field by field): the global switches,
---- the trusted column, the trusted list and the run's allowance.
+--- the trusted column, the trusted list, the run's allowance and the chat's
+--- own choices.
 --- @return table `to`
 function Gates.copyPrivacy(from, to)
     to = to or {}
@@ -279,6 +313,7 @@ function Gates.copyPrivacy(from, to)
     for _kind, key in pairs(Gates.TRUSTED_KEY) do to[key] = from[key] end
     to.trusted_providers = from.trusted_providers
     to._data_once = from._data_once
+    to._chat_data = from._chat_data
     return to
 end
 
@@ -354,8 +389,10 @@ function Gates.needs(action, ctx, opts)
     if action.use_analyze_cache and stamps.analyze and Gates.stampedKinds(stamps.analyze).book_text then
         want("book_text", false)
     end
-    if (action.use_summary_cache or source == "summary") and stamps.summary
-            and Gates.stampedKinds(stamps.summary).book_text then
+    -- The summary goes only where the dispatch sends it: the "summary" source,
+    -- or an action without a source pick that reads it (another source drops it)
+    local summary_read = source == "summary" or (action.use_summary_cache and source == nil)
+    if summary_read and stamps.summary and Gates.stampedKinds(stamps.summary).book_text then
         want("book_text", false)
     end
     local out = {}
@@ -417,18 +454,21 @@ function Gates.dispatchProvider(features, action, base_provider, quick_model_fn)
 end
 
 --- A privacy preset written onto a features table (ruling 10 of 2026-10-14;
---- the Privacy & Data rows in main.lua): "full" = Allow for every kind,
+--- the Privacy & Data preset row in main.lua): "full" = Allow for every kind,
 --- "minimal" = Never for every kind and reading position off, "default" =
---- every value cleared, so each reads the default it ships with (Ask; reading
---- position on, the text around what you tap Allow) and a later change of a
---- default reaches the reader (B498). Per-book values and the trusted column
---- are untouched; an unknown preset changes nothing. Pure.
+--- every value cleared, the trusted column's included (B499), so each reads
+--- the default it ships with (Ask; reading position on, the text around what
+--- you tap Allow; Allow for trusted providers) and a later change of a default
+--- reaches the reader (B498). Per-book values and the trusted list are
+--- untouched, and "full" and "minimal" leave the trusted column alone; an
+--- unknown preset changes nothing. Pure.
 function Gates.applyPreset(features, preset)
     if preset ~= "full" and preset ~= "minimal" and preset ~= "default" then return features end
     for _idx, kind in ipairs(Gates.KINDS) do
         local key = Gates.GLOBAL_KEY[kind]
         if preset == "default" then
             features[key] = nil
+            features[Gates.TRUSTED_KEY[kind]] = nil
         elseif kind == "position" then
             features[key] = preset == "full"
         elseif kind == "nearby_text" then
@@ -438,6 +478,31 @@ function Gates.applyPreset(features, preset)
         end
     end
     return features
+end
+
+-- The state each kind ships with, in the column for every provider.
+local DEFAULT_STATE = { position = "allow", nearby_text = "allow" }
+
+--- The preset the values match, for the "Preset: <name>" row (B499, the X-Ray
+--- presets' rule): "default" when both columns read their defaults, "full"
+--- when every kind is Allow for all books, "minimal" when every kind is Never
+--- for all books (reading position off); nil = Custom. Pure.
+function Gates.presetOf(features)
+    features = features or {}
+    local full, minimal, default = true, true, true
+    for _idx, kind in ipairs(Gates.KINDS) do
+        local state = rawColumnState(features, kind, false)
+        if state ~= "allow" then full = false end
+        if state ~= "never" then minimal = false end
+        if state ~= (DEFAULT_STATE[kind] or "ask")
+                or rawColumnState(features, kind, true) ~= "allow" then
+            default = false
+        end
+    end
+    if default then return "default" end
+    if full then return "full" end
+    if minimal then return "minimal" end
+    return nil
 end
 
 return Gates

@@ -4505,8 +4505,9 @@ function XrayBrowser:chatAboutItem(detail_text, entity)
     else
         subject = "an entry from the X-Ray"
     end
-    local book_name = self.metadata.title
-        and (' of "' .. self.metadata.title .. '"') or " of this book"
+    -- The book is named by the chat's own book line, which follows Book info
+    -- (the chat's Data chip included, B500); the framing never names it
+    local book_name = " of this book"
     local framing
     if self.scope then
         framing = "(Note: The following is " .. subject .. " from a Section X-Ray" .. book_name

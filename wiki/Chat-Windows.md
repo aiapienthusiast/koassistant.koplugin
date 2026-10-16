@@ -272,7 +272,7 @@ Every row with its default is listed on [Settings Reference](Settings-Reference)
 
 A Book Hub, a group's page and the artifact browser can open chats and artifacts of a book other than the one you have open. Such a window belongs to that book:
 
-- A chat started there uses that book's title, AI title, settings and saved reading position, and it is saved with that book. With **Settings → Chat & Export Settings → Book Info in Chat** set to "Title, author & position", it includes that book's saved reading position. AI Book Tools stay off in such a chat, since they can only search the open book.
+- A chat started there uses that book's title, AI title, settings and saved reading position, and it is saved with that book. With **Settings → Privacy & Data → Book info** set to "Title, author & position", it includes that book's saved reading position. AI Book Tools stay off in such a chat, since they can only search the open book.
 - An artifact made from such a chat (X-Ray (Simple), for example) is saved with that book, not among the open book's artifacts.
 - A window showing another book's artifact deletes, regenerates and chats about that book. Regenerating rebuilds that book's artifact and never overwrites the open book's copy.
 

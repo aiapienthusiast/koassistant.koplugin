@@ -16,7 +16,9 @@ settings asks once per add (offerJoin).
 
 Wave 1 = domain, research mode, Background, spoiler protection, automatic
 X-Ray, the categories and depth of new X-Rays, where carried entries are
-listed (#116), the three per-book languages
+listed (#116), the three per-book languages, and the five privacy values a
+book can hold (B316, B395 slice 4: a group's Never keeps that kind of every
+member from every provider, as a book's own does)
 (the chat dials stay per book for now, Q-E in the plan). Nothing new
 is defined: every row opens the shared BookSettings picker on a GROUP FACADE
 (`GroupSettings.facade`) — an object with the doc_settings surface the
@@ -47,8 +49,13 @@ function GroupSettings.keys()
         BS.KEY_XRAY_CATEGORIES, BS.KEY_XRAY_STATUS, BS.KEY_XRAY_DEPTH, BS.KEY_XRAY_TYPE,
         BS.KEY_XRAY_SPACING, BS.KEY_XRAY_CARRIED,
         BS.KEY_RESPONSE_LANG, BS.KEY_TRANSLATION_LANG, BS.KEY_DICTIONARY_LANG, BS.KEY_TEXT_LANG,
+        BS.KEY_TEXT_EXTRACTION, BS.KEY_HIGHLIGHTS_SHARING, BS.KEY_ANNOTATIONS_SHARING,
+        BS.KEY_NOTEBOOK_SHARING, BS.KEY_NEARBY_TEXT,
     }
 end
+
+-- The privacy kinds a group can hold a value for, in screen order.
+local PRIVACY_KINDS = { "book_text", "highlights", "annotations", "notebook", "nearby_text" }
 
 --- Plain name of a setting, for confirms and toasts.
 function GroupSettings.keyLabel(key)
@@ -69,8 +76,27 @@ function GroupSettings.keyLabel(key)
         [BS.KEY_TRANSLATION_LANG] = _("Translation language"),
         [BS.KEY_DICTIONARY_LANG] = _("Dictionary language"),
         [BS.KEY_TEXT_LANG] = _("Book text language"),
+        [BS.KEY_TEXT_EXTRACTION] = _("Book text"),
+        [BS.KEY_HIGHLIGHTS_SHARING] = _("Highlights"),
+        [BS.KEY_ANNOTATIONS_SHARING] = _("Annotation notes"),
+        [BS.KEY_NOTEBOOK_SHARING] = _("Notebook"),
+        [BS.KEY_NEARBY_TEXT] = _("Text around what you tap"),
     }
     return labels[key] or key
+end
+
+-- The saved features, for the value labels that name a domain.
+local function hostFeatures(host)
+    local plugin = host and host.plugin
+    return plugin and plugin.settings and plugin.settings:readSetting("features") or nil
+end
+
+-- Whether a key is one of the privacy values.
+local function isPrivacyKey(key)
+    for _idx, k in pairs(bookSettings().PRIVACY_KEY_OF_KIND) do
+        if k == key then return true end
+    end
+    return false
 end
 
 local function domainName(id, features)
@@ -107,6 +133,7 @@ function GroupSettings.valueLabel(key, v, features, facade)
         return require("koassistant.core.languages").getDisplay(v)
     end
     if key == BS.KEY_TEXT_LANG then return BS.textLanguageLabel(v) end
+    if isPrivacyKey(key) then return v and _("Allow") or _("Never") end
     return tostring(v)
 end
 
@@ -259,6 +286,12 @@ local function offerApply(group_id, key, host, label)
     end
     local group = groups().byId(group_id)
     local name = group and displayName(group) or ""
+    -- One key: the setting with its value ("Book text: Never", B316)
+    if not label and #keys == 1 then
+        label = T(_("%1: %2"), GroupSettings.keyLabel(keys[1]),
+            GroupSettings.valueLabel(keys[1], groups().getSetting(group_id, keys[1]), hostFeatures(host),
+                GroupSettings.facade(group_id, host)))
+    end
     local text = T(_("Apply %1 to all %2 books in %3?"), label or GroupSettings.keyLabel(keys[1]), #paths, name)
     if own > 0 then
         text = text .. "\n" .. T(_("%1 of them have their own value, which this replaces."), own)
@@ -342,7 +375,11 @@ function GroupSettings.offerJoin(group_id, paths, host, done)
     local keys, labels = {}, {}
     for key in pairs(settings) do keys[#keys + 1] = key end
     table.sort(keys)
-    for _idx, key in ipairs(keys) do labels[#labels + 1] = GroupSettings.keyLabel(key) end
+    local facade = GroupSettings.facade(group_id, host)
+    for _idx, key in ipairs(keys) do
+        labels[#labels + 1] = T(_("%1 (%2)"), GroupSettings.keyLabel(key),
+            GroupSettings.valueLabel(key, settings[key], hostFeatures(host), facade))
+    end
     local group = groups().byId(group_id)
     local name = group and displayName(group) or ""
     UIManager:show(require("ui/widget/confirmbox"):new{
@@ -407,6 +444,9 @@ function GroupSettings.show(opts)
     local XRAY_KEYS = { BS.KEY_XRAY_AUTO, BS.KEY_XRAY_CATEGORIES, BS.KEY_XRAY_STATUS, BS.KEY_XRAY_DEPTH,
         BS.KEY_XRAY_TYPE, BS.KEY_XRAY_SPACING, BS.KEY_XRAY_CARRIED }
     local on_xray = opts.section == "xray"
+    -- B395 slice 4: the five privacy values, on their own sub-screen too
+    local on_privacy = opts.section == "privacy"
+    local on_main = not on_xray and not on_privacy
     local function showSection(section)
         closeDialog()
         local o = {}
@@ -414,7 +454,7 @@ function GroupSettings.show(opts)
         o.section = section
         GroupSettings.show(o)
     end
-    if not on_xray then
+    if on_main then
     row(T(_("Domain: %1"), value(BS.KEY_DOMAIN)), picker(BS.showDomainResearch))
     -- Research shares the domain picker (its lower section), as in Book Settings
     row(T(_("Research mode: %1"), value(BS.KEY_RESEARCH)), picker(BS.showDomainResearch))
@@ -426,6 +466,20 @@ function GroupSettings.show(opts)
     end
     row(xray_set > 0 and T(_("X-Ray (%1 set) ▸"), xray_set) or _("X-Ray ▸"),
         function() showSection("xray") end)
+    local privacy_set = 0
+    for _idx, kind in ipairs(PRIVACY_KINDS) do
+        if facade:has(BS.PRIVACY_KEY_OF_KIND[kind]) then privacy_set = privacy_set + 1 end
+    end
+    row(privacy_set > 0 and T(_("Privacy (%1 set) ▸"), privacy_set) or _("Privacy ▸"),
+        function() showSection("privacy") end)
+    elseif on_privacy then
+    -- The shared picker on the facade: "For this group" holds Allow or Never
+    -- (Not set = the books follow the value for all books)
+    for _idx, kind in ipairs(PRIVACY_KINDS) do
+        local key = BS.PRIVACY_KEY_OF_KIND[kind]
+        row(T(_("%1: %2"), GroupSettings.keyLabel(key), value(key)),
+            picker(BS.showPrivacyPicker, { kind = kind }))
+    end
     else
     row(T(_("Automatic X-Ray: %1"), value(BS.KEY_XRAY_AUTO)),
         picker(BS.showXrayAutoPicker, { on_change = reopen, on_cancel = reopen }))
@@ -471,7 +525,7 @@ function GroupSettings.show(opts)
     -- entries inside the categories for every member
     row(T(_("Carried entries: %1"), value(BS.KEY_XRAY_CARRIED)), picker(BS.showXrayCarriedPicker))
     end
-    if not on_xray then
+    if on_main then
     local langs = 0
     for _idx, key in ipairs({ BS.KEY_RESPONSE_LANG, BS.KEY_TRANSLATION_LANG, BS.KEY_DICTIONARY_LANG, BS.KEY_TEXT_LANG }) do
         if facade:has(key) then langs = langs + 1 end
@@ -480,7 +534,7 @@ function GroupSettings.show(opts)
     end
 
     local n_set = GroupSettings.setCount(group_id)
-    local out = on_xray and {} or GroupSettings.outOfSync(group_id)
+    local out = on_main and GroupSettings.outOfSync(group_id) or {}
     if #out > 0 then
         local names = {}
         for i, e in ipairs(out) do
@@ -505,7 +559,7 @@ function GroupSettings.show(opts)
             })
         end)
     end
-    if n_set > 0 and not on_xray then
+    if n_set > 0 and on_main then
         row(_("Clear all group settings…"), function()
             UIManager:show(require("ui/widget/confirmbox"):new{
                 text = _("Clear every setting this group sets? Books that follow the group go back to following the global settings."),
@@ -520,7 +574,7 @@ function GroupSettings.show(opts)
             })
         end)
     end
-    if on_xray then
+    if not on_main then
         rows[#rows + 1] = {{ text = _("Back"), id = "close", callback = function() showSection(nil) end }}
     else
         rows[#rows + 1] = {{ text = _("Close"), id = "close", callback = function()
@@ -530,6 +584,7 @@ function GroupSettings.show(opts)
     end
 
     local title = on_xray and T(_("%1: X-Ray settings of the group"), displayName(group))
+        or on_privacy and T(_("%1: privacy values of the group"), displayName(group))
         or T(_("%1: group settings"), displayName(group))
     if #group.books == 0 then
         title = title .. "\n" .. _("No books in the group yet. Values set here apply to books as they join.")
@@ -542,7 +597,7 @@ function GroupSettings.show(opts)
         -- A tap outside is Back on the sub-screen, Close on the main one (B360)
         tap_close_callback = function()
             dialog = nil
-            if on_xray then showSection(nil) elseif opts.on_close then opts.on_close() end
+            if not on_main then showSection(nil) elseif opts.on_close then opts.on_close() end
         end,
     }
     UIManager:show(dialog)

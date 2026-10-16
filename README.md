@@ -96,7 +96,7 @@ Restart KOReader after editing the file (it is read once per session); keys ente
 
 ### 4. Privacy settings
 
-Every kind of reading data is asked for the first time an action wants it. **Settings → Privacy & Data** holds one value per kind (Ask, Allow or Never); **Preset: Allow everything** sends everything without a question, book text included. See [Privacy at a glance](#privacy-at-a-glance).
+Every kind of reading data is asked for the first time an action wants it. **Settings → Privacy & Data** holds one value per kind (Ask, Allow or Never); its **Allow everything** preset sends everything without a question, book text included. See [Privacy at a glance](#privacy-at-a-glance).
 
 ## First steps
 
@@ -118,16 +118,16 @@ Everything about the panels, gestures and shortcuts: [Setup, Gestures and Panels
 KOAssistant sends data to AI providers to generate answers. The threat model is simple: you may include sensitive data (annotations, notes, book content) by accident. Pick providers thoughtfully; local or self-hosted models (Ollama and the local presets) keep everything on your own hardware.
 
 - **Always sent:** your question, and the selected text for highlight actions.
-- **Sent by default:** the book's title and author, the enabled system content (languages, domain, behavior), your reading position (progress, chapter, time since last opened), the text around what you tap (a few sentences or one page), and a per-book Background note if you wrote one.
+- **Sent by default:** the book's title and author (Book info, which None turns off so nothing names the book), the enabled system content (languages, domain, behavior), your reading position (progress, chapter, time since last opened), the text around what you tap (a few sentences or one page), and a per-book Background note if you wrote one.
 - **Asked the first time:** highlights, annotation notes, the notebook, the book's text (for X-Ray, Recap and the like), the book list, reading habits (curated groups with rounded hours and days; the raw statistics stay on the device). The question names the action, the provider and the amount; **Allow once** covers that run, **Allow for this book** keeps your answer.
 
 | Preset | What it does |
 |---|---|
 | **Default (Ask)** | Every value as it ships: the kinds above are asked for the first time an action wants them. |
 | **Allow everything** | Every kind goes without a question, book text included. |
-| **Block everything** | Only your question, the selected text and the book's title and author. |
+| **Block everything** | Only your question, the selected text and the book info. |
 
-**Book text** (**Settings → Privacy & Data → Text Extraction**) raises token costs, so the question says how much would go (up to your position, the whole book, a section); most actions that would use it answer from AI knowledge without it, while X-Ray, Document Summary and Document Analysis need it. **Trusted providers** (a local Ollama, say) follow their own column of values, Allow unless you change it. **Per-book values** in Book Settings → Privacy allow or refuse book text, highlights, annotation notes, the notebook and the text around what you tap for one book; a book's Never beats everything, trusted providers included.
+**Book text** (**Settings → Privacy & Data → Text Extraction**) raises token costs, so the question says how much would go (up to your position, the whole book, a section); most actions that would use it answer from AI knowledge without it, while X-Ray, Document Summary and Document Analysis need it. **Trusted providers** (a local Ollama, say) follow their own column of values, Allow unless you change it. **Per-book values** in Book Settings → Privacy (or a group's, in Group Settings) allow or refuse book text, highlights, annotation notes, the notebook and the text around what you tap for one book; a book's Never beats everything, trusted providers included. The input dialog's **Data** chip shows what a chat may send and can leave a kind, or the book info, out of that chat.
 
 The full model, the double-gating of book text, what each action accesses, and the design choices: [Privacy and Data](https://github.com/zeeyado/koassistant.koplugin/wiki/Privacy-and-Data).
 
