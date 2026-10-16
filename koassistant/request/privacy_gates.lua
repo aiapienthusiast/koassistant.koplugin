@@ -403,4 +403,28 @@ function Gates.dispatchProvider(features, action, base_provider, quick_model_fn)
     return base_provider
 end
 
+--- A privacy preset written onto a features table (ruling 10 of 2026-10-14;
+--- the Privacy & Data rows in main.lua): "full" = Allow for every kind,
+--- "minimal" = Never for every kind and reading position off, "default" =
+--- every value cleared, so each reads the default it ships with (Ask; reading
+--- position on, the text around what you tap Allow) and a later change of a
+--- default reaches the reader (B498). Per-book values and the trusted column
+--- are untouched; an unknown preset changes nothing. Pure.
+function Gates.applyPreset(features, preset)
+    if preset ~= "full" and preset ~= "minimal" and preset ~= "default" then return features end
+    for _idx, kind in ipairs(Gates.KINDS) do
+        local key = Gates.GLOBAL_KEY[kind]
+        if preset == "default" then
+            features[key] = nil
+        elseif kind == "position" then
+            features[key] = preset == "full"
+        elseif kind == "nearby_text" then
+            features[key] = preset == "full" and "allow" or "never"
+        else
+            features[key] = preset == "full" or "never"
+        end
+    end
+    return features
+end
+
 return Gates

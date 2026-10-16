@@ -12583,8 +12583,9 @@ local function handleLocalXrayLookup(ui, query, document_path, book_metadata, co
 end
 
 -- Dispatch a local (non-AI) action handler. opts (optional): run_variant (a
--- hold menu's run option: { image_note = true } asks Generate Image's note),
--- note (the text typed in the input dialog: Generate Image's note)
+-- hold menu's run option: { image_note = true } asks Generate Image's note,
+-- { image_settings = true } opens the image settings panel first), note (the
+-- text typed in the input dialog: Generate Image's note)
 local function handleLocalAction(handler_name, ui, highlighted_text, document_path, book_metadata, config, plugin, opts)
     local logger = require("koassistant.core.logger")
 
@@ -12643,11 +12644,25 @@ local function handleLocalAction(handler_name, ui, highlighted_text, document_pa
                 ImageGenerator.generate(highlighted_text, config, plugin and plugin.settings, book_info, gen_opts)
             end)
         end
-        if opts and type(opts.run_variant) == "table" and opts.run_variant.image_note then
+        local function runWithNote()
             ImageGenerator.askNote(gen_opts.note, function(text)
                 gen_opts.note = text
                 run()
             end)
+        end
+        local variant = opts and type(opts.run_variant) == "table" and opts.run_variant or {}
+        if variant.image_note then
+            runWithNote()
+        elseif variant.image_settings and plugin and plugin.settings then
+            -- the image settings panel (S9): a pick is the setting, then the
+            -- picture from the selection taken at the start
+            require("koassistant.images.image_options").show(plugin, {
+                writer = true,
+                actions = {
+                    { text = _("Generate"), callback = run },
+                    { text = _("Generate with a note…"), callback = runWithNote },
+                },
+            })
         else
             run()
         end

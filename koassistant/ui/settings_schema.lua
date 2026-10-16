@@ -2186,7 +2186,7 @@ local SettingsSchema = {
                     id = "privacy_preset_default",
                     type = "action",
                     text = _("Preset: Ask about everything"),
-                    help_text = _("The default. Each kind of data is asked for the first time an action wants it, and your answer can be kept for the book. Reading position is sent."),
+                    help_text = _("The default. Each kind of data is asked for the first time an action wants it, and your answer can be kept for the book. Reading position and the text around what you tap are sent. Every value here goes back to the one it ships with."),
                     callback = "applyPrivacyPresetDefault",
                     keep_menu_open = true,
                 },
@@ -3128,7 +3128,7 @@ local SettingsSchema = {
                                 local f = plugin.settings:readSetting("features") or {}
                                 return T(_("OpenRouter model: %1"), imageModelLabel("openrouter", f.image_gen_model_openrouter))
                             end,
-                            help_text = _("OpenRouter draws with many makers' models through one key. GPT Image 2.5 Flare is fast and the cheapest (about half a cent at Draft); Nano Banana 2.1 is Google's everyday model; FLUX 3 (Black Forest Labs, about 5 cents) and Seedream 5.0 Flash (ByteDance, about 2 cents) are other makers'; Recraft v4.1 Flash (under a cent) leans to illustration.\n\nMore models… lists OpenRouter's whole image catalog. Shape and Detail adapt to what the picked model takes."),
+                            help_text = _("OpenRouter draws with many makers' models through one key. GPT Image 2.5 Flare is fast and the cheapest (about half a cent at Draft); Nano Banana 2.1 is Google's everyday model; FLUX 3 (Black Forest Labs, about 5 cents), its small model FLUX 3 Klein (about a cent, and quick) and Seedream 5.0 Flash (ByteDance, about 2 cents) are other makers'; Recraft v4.1 Flash (under a cent) leans to illustration.\n\nMore models… lists OpenRouter's whole image catalog. Shape and Detail adapt to what the picked model takes."),
                             enabled_func = function(plugin) return imageRowsProvider(plugin) == "openrouter" end,
                             separator = true,
                         },
@@ -3216,7 +3216,7 @@ local SettingsSchema = {
                             text = _("Generated images…"),
                             callback = "showImageBrowser",
                             keep_menu_open = true,
-                            help_text = _("The images generated so far, as thumbnails, by book: tap one to view it; hold it to read its prompt, draw that prompt again (as it stands or edited), or delete it."),
+                            help_text = _("The images generated so far, as thumbnails, by book: tap one to view it; hold it to read its prompt, draw that prompt again (as it stands or edited, in the Style now in effect, beside the old picture or in its place), change the image settings on the spot, or delete it."),
                         },
                     },
                 },

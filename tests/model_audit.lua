@@ -3817,6 +3817,24 @@ function ModelAudit.diffImageLists(curated, retired, skips, served, aliases)
     return out
 end
 
+--- OpenRouter's image catalog entries that arrived lately (B497): the ids on
+--- no list here whose `created` falls within `days` of `now`, newest first.
+--- The rest of the catalog is More models…'s and is only counted. Pure.
+function ModelAudit.recentImageModels(data, curated, now, days)
+    local listed = {}
+    for _i, id in ipairs(curated or {}) do listed[id] = true end
+    local cutoff = now - days * 86400
+    local out = {}
+    for _i, m in ipairs(type(data) == "table" and type(data.data) == "table" and data.data or {}) do
+        local created = type(m) == "table" and tonumber(m.created)
+        if created and type(m.id) == "string" and not listed[m.id] and created >= cutoff then
+            out[#out + 1] = { id = m.id, created = created }
+        end
+    end
+    table.sort(out, function(a, b) return a.created > b.created end)
+    return out
+end
+
 local IMAGE_LISTS = {
     openai = { url = "https://api.openai.com/v1/models",
                headers = function(key) return bearerHeaders(key) end },
@@ -3872,7 +3890,20 @@ local function runImageDiscovery(providers, apikeys, verbose)
                             problems = problems + 1
                         end
                     end
-                    printf("  %sothers in the catalog: %d (More models… reaches them)%s", C.dim, #d.new, C.off)
+                    -- the catalog's arrivals of the last 30 days are named (FLUX 3
+                    -- Image Klein went by as a count, 2026-10-16)
+                    local recent = ModelAudit.recentImageModels(data, ModelLists.getImageModels(provider), os.time(), 30)
+                    local named = {}
+                    for _j, m in ipairs(recent) do
+                        named[m.id] = true
+                        printf("  %sNEW         %s%s (in the catalog since %s; --image-probe it)", C.yellow, m.id,
+                            C.off, os.date("%Y-%m-%d", m.created))
+                    end
+                    local others = 0
+                    for _j, id in ipairs(d.new) do
+                        if not named[id] then others = others + 1 end
+                    end
+                    printf("  %sothers in the catalog: %d (More models… reaches them)%s", C.dim, others, C.off)
                     d.new = {}
                 end
                 for _j, id in ipairs(d.new) do
@@ -3943,6 +3974,27 @@ local function runImageProbe(provider, model, api_key, shape, detail)
     end
     local ImageGenerator = require("koassistant.images.image_generator")
     local features = { image_gen_shape = shape, image_gen_detail = detail }
+    if provider == "openrouter" then
+        local listed = false
+        for _i, id in ipairs(ModelLists.getImageModels(provider) or {}) do
+            if id == model then listed = true end
+        end
+        if not listed then
+            -- a model on no list here goes as a More models… pick sends it:
+            -- with the facts its catalog entry lists (B497; without them the
+            -- request carries no ratio and no resolution)
+            local text = httpGet(IMAGE_LISTS.openrouter.url, IMAGE_LISTS.openrouter.headers())
+            for _i, m in ipairs(ImageGenerator.parseOpenRouterCatalog(text) or {}) do
+                if m.id == model then
+                    m.facts.model = model
+                    features.image_gen_openrouter_caps = m.facts
+                end
+            end
+            printf("  %s%s%s", C.dim, features.image_gen_openrouter_caps
+                and "not listed here: the facts from OpenRouter's catalog, as a More models… pick stores them"
+                or "not in OpenRouter's catalog: sent without a ratio or a resolution", C.off)
+        end
+    end
     local prompt = ImageGenerator.buildPrompt(IMAGE_PROBE_PASSAGE, {
         book_metadata = { title = "The Lighthouse Keeper", author = "A. Writer" } }, features)
     local request = ImageGenerator.buildRequest(provider, model, prompt, features, PROBE_SCREEN)

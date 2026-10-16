@@ -50,7 +50,7 @@ It names the action, the provider the request goes to, and every kind of data th
 - **More…**: opens the book's Privacy screen (or the settings), and asks again when you come back.
 - **Cancel**: nothing is sent.
 
-Generate Image with its prompt writer on (and Illustrate… on an X-Ray entry) sends the text around the passage and X-Ray descriptions to two providers: the one that writes the prompt and the one that draws it, which receives a prompt made from them. Each kind must be allowed for both, and the question names both ("Generate Image will send to Anthropic, to write the prompt, and to OpenAI, to draw it"). Its **Continue without** (in place of Not for this book) makes this picture without them and stores nothing, since a Never for the book's text would also stop its X-Ray updates; see [Image Generation](Image-Generation#the-prompt-writer). A kept image remembers what its prompt carried: drawing that prompt again from the gallery (**Regenerate** or **Edit prompt…**) asks the same way for the provider drawing now, without Continue without (what a written prompt took from them cannot be taken out), and a Never refuses it ([Image Generation](Image-Generation#the-gallery)).
+Generate Image with its prompt writer on (and Illustrate… on an X-Ray entry) sends the text around the passage and X-Ray descriptions to two providers: the one that writes the prompt and the one that draws it, which receives a prompt made from them. Each kind must be allowed for both, and the question names both ("Generate Image will send to Anthropic, to write the prompt, and to OpenAI, to draw it"). Its **Continue without** (in place of Not for this book) makes this picture without them and stores nothing, since a Never for the book's text would also stop its X-Ray updates; see [Image Generation](Image-Generation#the-prompt-writer). A kept image remembers what its prompt carried: drawing that prompt again from the gallery (**Regenerate**, **Regenerate and replace** or **Edit prompt…**) asks the same way for the provider drawing now, and for the prompt writer's provider too when a new Style has it restyle the prompt ("Regenerate will send to Anthropic, to restyle the prompt, and to OpenAI, to draw it"), without Continue without (what a written prompt took from them cannot be taken out), and a Never refuses it ([Image Generation](Image-Generation#the-gallery)).
 
 A required kind (X-Ray's book text, say) on Never is a short refusal that names where the value comes from (this book, all books, or trusted providers) with one button to that screen. A request over several picked books asks once for the set; each book's own value still decides for its data, and books set to Never stay out.
 
@@ -70,7 +70,7 @@ Automatic X-Ray and checkpoint builds have no moment to ask while you read, so t
 
 | Preset | What it does |
 |--------|--------------|
-| **Preset: Ask about everything** | The default. Each kind is asked for the first time an action wants it; reading position is sent. |
+| **Preset: Ask about everything** | The default. Each kind is asked for the first time an action wants it; reading position and the text around what you tap are sent. Every value goes back to the one it ships with. |
 | **Preset: Allow everything** | Every kind goes without a question, book text included (it raises token costs). |
 | **Preset: Never send anything extra** | Nothing but your question, the selected text and the book's title and author; reading position off too. Actions that need more are refused until you allow it. |
 

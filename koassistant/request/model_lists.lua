@@ -1108,6 +1108,7 @@ ModelLists._image_models = {
         "openai/gpt-image-2.5-flare",         -- default: about $0.005 at Draft (priced per token)
         "google/gemini-nano-banana-2.1",      -- priced per token, about $0.04
         "black-forest-labs/flux-3-image",     -- $0.048 at 1K
+        "black-forest-labs/flux-3-image-klein", -- FLUX 3's small open-weights model: $0.009 at 1K, 6 s (2026-10-16)
         "bytedance-seed/seedream-5-0-flash",  -- $0.018
         "recraft/recraft-v4.1-flash",         -- $0.007, leans to illustration
     },

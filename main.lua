@@ -6827,8 +6827,9 @@ end
 -- listed models, a model picked from OpenRouter's catalog, then More models…,
 -- which fetches the catalog when asked. A catalog pick stores the parameters
 -- its model takes beside it (image_gen_openrouter_caps), so Shape and Detail
--- fit any model (ImageGenerator.pictureFacts).
-function AskGPT:openRouterImageModelItems()
+-- fit any model (ImageGenerator.pictureFacts). after (the image settings
+-- panel, S9): More models… then runs it whatever the catalog's exit.
+function AskGPT:openRouterImageModelItems(after)
   local self_ref = self
   local ModelLists = require("koassistant.request.model_lists")
   local function current()
@@ -6867,13 +6868,15 @@ function AskGPT:openRouterImageModelItems()
   items[#items + 1] = {
     text = _("More models…"),
     keep_menu_open = true,
+    opens_dialog = true,
     callback = function(touchmenu_instance)
       self_ref:showOpenRouterImageCatalog(function(model, caps)
         pick(model, caps)
         self_ref:refreshTouchMenu(touchmenu_instance, function()
           return self_ref:openRouterImageModelItems()
         end)
-      end)
+        if after then after() end
+      end, after)
     end,
   }
   return items
@@ -6881,8 +6884,9 @@ end
 
 -- The Style row's submenu (image round S6): the styles, then Custom…, which
 -- asks for the reader's own words (image_gen_style = "custom" +
--- image_gen_style_custom)
-function AskGPT:imageStyleItems()
+-- image_gen_style_custom). after (the image settings panel, S9): Custom…
+-- then runs it on Save and on Cancel.
+function AskGPT:imageStyleItems(after)
   local self_ref = self
   local PromptWriter = require("koassistant.images.prompt_writer")
   local function features() return self_ref.settings:readSetting("features") or {} end
@@ -6920,6 +6924,7 @@ function AskGPT:imageStyleItems()
     radio = true,
     checked_func = function() return current() == "custom" end,
     keep_menu_open = true,
+    opens_dialog = true,
     callback = function(touchmenu_instance)
       local InputDialog = require("ui/widget/inputdialog")
       local dialog
@@ -6931,7 +6936,10 @@ function AskGPT:imageStyleItems()
           {
             text = _("Cancel"),
             id = "close",
-            callback = function() UIManager:close(dialog) end,
+            callback = function()
+              UIManager:close(dialog)
+              if after then after() end
+            end,
           },
           {
             text = _("Save"),
@@ -6943,6 +6951,7 @@ function AskGPT:imageStyleItems()
                 save("custom", text)
                 if touchmenu_instance and touchmenu_instance.updateItems then touchmenu_instance:updateItems() end
               end
+              if after then after() end
             end,
           },
         }},
@@ -6956,8 +6965,9 @@ end
 
 -- OpenRouter's image catalog (no key needed), fetched in the background,
 -- then a filterable list like the chat models' Fetch models. on_pick(model,
--- caps) with the parameters the model takes.
-function AskGPT:showOpenRouterImageCatalog(on_pick)
+-- caps) with the parameters the model takes; on_close() on every exit
+-- without a pick (the image settings panel comes back, S9).
+function AskGPT:showOpenRouterImageCatalog(on_pick, on_close)
   local self_ref = self
   NetworkMgr:runWhenConnected(function()
     local note = InfoMessage:new{ text = _("Fetching OpenRouter's image models…") }
@@ -6967,15 +6977,16 @@ function AskGPT:showOpenRouterImageCatalog(on_pick)
       if not models then
         UIManager:show(InfoMessage:new{
           text = T(_("Could not fetch models: %1"), err or _("unknown error")),
+          dismiss_callback = on_close,
         })
         return
       end
-      self_ref:showOpenRouterImagePicker(models, nil, on_pick)
+      self_ref:showOpenRouterImagePicker(models, nil, on_pick, on_close)
     end)
   end)
 end
 
-function AskGPT:showOpenRouterImagePicker(models, filter, on_pick)
+function AskGPT:showOpenRouterImagePicker(models, filter, on_pick, on_close)
   local self_ref = self
   local ButtonDialog = require("ui/widget/buttondialog")
   local f = self.settings:readSetting("features") or {}
@@ -7003,7 +7014,7 @@ function AskGPT:showOpenRouterImagePicker(models, filter, on_pick)
             id = "close",
             callback = function()
               UIManager:close(input)
-              self_ref:showOpenRouterImagePicker(models, filter, on_pick)
+              self_ref:showOpenRouterImagePicker(models, filter, on_pick, on_close)
             end,
           },
           {
@@ -7013,7 +7024,7 @@ function AskGPT:showOpenRouterImagePicker(models, filter, on_pick)
               local new_filter = input:getInputText()
               UIManager:close(input)
               if new_filter == "" then new_filter = nil end
-              self_ref:showOpenRouterImagePicker(models, new_filter, on_pick)
+              self_ref:showOpenRouterImagePicker(models, new_filter, on_pick, on_close)
             end,
           },
         }},
@@ -7038,13 +7049,21 @@ function AskGPT:showOpenRouterImagePicker(models, filter, on_pick)
   buttons[#buttons + 1] = {{
     text = _("Close"),
     id = "close",
-    callback = function() UIManager:close(dialog) end,
+    callback = function()
+      UIManager:close(dialog)
+      if on_close then on_close() end
+    end,
   }}
   local title = T(_("OpenRouter: %1 image models"), #shown)
   if #shown > 30 then
     title = title .. "\n" .. _("Showing the first 30 - use the filter to narrow")
   end
-  dialog = ButtonDialog:new{ title = title, buttons = buttons }
+  dialog = ButtonDialog:new{
+    title = title,
+    buttons = buttons,
+    -- a tap outside is Close (B360)
+    tap_close_callback = function() if on_close then on_close() end end,
+  }
   UIManager:show(dialog)
 end
 
@@ -9344,8 +9363,17 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
       { text = extract_text, provider = "full_text", checked = state.source == "full_text", enabled = text_extraction_enabled },
     })
 
-    -- Summary row(s): varies by scope and availability
-    if state.scope == "read_so_far" or state.scope == "chapter_so_far"
+    -- Summary row(s): varies by scope and availability. An action that can't use a
+    -- summary at all says why first, so its row reads the same in every scope
+    if requires_book_text then
+      table.insert(source_radio_buttons, {
+        { text = _("Use summary") .. "  (" .. _("this action requires text extraction") .. ")", provider = "summary", checked = false, enabled = false },
+      })
+    elseif not supports_summary then
+      table.insert(source_radio_buttons, {
+        { text = _("Use summary") .. "  (" .. _("not available for this action") .. ")", provider = "summary", checked = false, enabled = false },
+      })
+    elseif state.scope == "read_so_far" or state.scope == "chapter_so_far"
         or state.scope == "from_section" or state.scope == "range" then
       -- A whole-document summary isn't chronological, so it can't be bounded to a position, a
       -- start→now span, or a two-section range. ("chapter" is NOT here: it's an auto-filled
@@ -9353,14 +9381,6 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
       -- keeps the row height stable across scope switches.
       table.insert(source_radio_buttons, {
         { text = _("Use summary"), provider = "summary", checked = false, enabled = false },
-      })
-    elseif requires_book_text then
-      table.insert(source_radio_buttons, {
-        { text = _("Use summary") .. "  (" .. _("this action requires text extraction") .. ")", provider = "summary", checked = false, enabled = false },
-      })
-    elseif not supports_summary then
-      table.insert(source_radio_buttons, {
-        { text = _("Use summary") .. "  (" .. _("not available for this action") .. ")", provider = "summary", checked = false, enabled = false },
       })
     elseif (state.scope == "section" or state.scope == "chapter") and state.section_entry then
       -- Section scope (incl. "chapter" auto-filled pick): show section-specific summary options
@@ -21667,21 +21687,11 @@ function AskGPT:quickResetFreshStart()
   })
 end
 
--- The three privacy presets (ruling 10 of 2026-10-14): one value for every
--- kind of data for all books, reading position apart (on, as it is sent or
--- not, never asked). Per-book values and trusted providers are untouched.
-local function applyPrivacyPreset(self, value, position_on, touchmenu_instance, message)
+-- The three privacy presets (ruling 10 of 2026-10-14): what each writes is
+-- privacy_gates.lua's applyPreset ("default" clears every value, B498).
+local function applyPrivacyPreset(self, preset, touchmenu_instance, message)
   local f = self.settings:readSetting("features") or {}
-  local Gates = require("koassistant.request.privacy_gates")
-  for _idx, kind in ipairs(Gates.KINDS) do
-    if kind == "position" then
-      f.enable_basic_stats = position_on
-    elseif kind == "nearby_text" then
-      f.nearby_text_sharing = value == true and "allow" or value == "never" and "never" or "ask"
-    else
-      f[Gates.GLOBAL_KEY[kind]] = value
-    end
-  end
+  require("koassistant.request.privacy_gates").applyPreset(f, preset)
   self.settings:saveSetting("features", f)
   self.settings:flush()
   self:updateConfigFromSettings()
@@ -21693,19 +21703,19 @@ end
 
 -- Privacy preset: Ask about everything (the default)
 function AskGPT:applyPrivacyPresetDefault(touchmenu_instance)
-  applyPrivacyPreset(self, nil, true, touchmenu_instance,
-    _("Ask about everything: each kind of data is asked for the first time an action wants it. Reading position is sent."))
+  applyPrivacyPreset(self, "default", touchmenu_instance,
+    _("Ask about everything: each kind of data is asked for the first time an action wants it. Reading position and the text around what you tap are sent, as by default."))
 end
 
 -- Privacy preset: Never send anything extra
 function AskGPT:applyPrivacyPresetMinimal(touchmenu_instance)
-  applyPrivacyPreset(self, "never", false, touchmenu_instance,
+  applyPrivacyPreset(self, "minimal", touchmenu_instance,
     _("Never send anything extra: only your question, the selected text and the book's title and author go out."))
 end
 
 -- Privacy preset: Allow everything, book text included
 function AskGPT:applyPrivacyPresetFull(touchmenu_instance)
-  applyPrivacyPreset(self, true, true, touchmenu_instance,
+  applyPrivacyPreset(self, "full", touchmenu_instance,
     _("Allow everything: every kind of data goes without a question, book text included. Per-book values still apply."))
 end
 

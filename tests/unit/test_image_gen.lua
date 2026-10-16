@@ -486,7 +486,7 @@ local function runAll()
     print("  [OpenRouter (S3)]")
     TestRunner:test("OpenRouter's list and the default; it draws under Follow main provider", function()
         TestRunner:assertEquals(ModelLists.getDefaultImageModel("openrouter"), "openai/gpt-image-2.5-flare")
-        TestRunner:assertEquals(#ModelLists.getImageModels("openrouter"), 5)
+        TestRunner:assertEquals(#ModelLists.getImageModels("openrouter"), 6)
         withApikeys({ openrouter = "sk-or-real-key" }, function()
             local settings = mockSettings({})
             TestRunner:assertEquals(ImageGenerator.effectiveProvider({}, "openrouter", settings), "openrouter")
@@ -518,6 +518,11 @@ local function runAll()
         TestRunner:assertEquals(flux.quality, nil)
         TestRunner:assertEquals(flux.output_format, nil, "FLUX 3 refuses output_format (probed)")
         TestRunner:assertEquals(body("black-forest-labs/flux-3-image", "best").resolution, "2K")
+        local klein = body("black-forest-labs/flux-3-image-klein", "draft")
+        TestRunner:assertEquals(klein.resolution, "1K", "Klein: as probed (6 s, $0.009)")
+        TestRunner:assertEquals(klein.aspect_ratio, "3:4")
+        TestRunner:assertEquals(klein.output_format, nil)
+        TestRunner:assertEquals(body("black-forest-labs/flux-3-image-klein", "best").resolution, "2K")
         TestRunner:assertEquals(body("bytedance-seed/seedream-5-0-flash", "best").resolution, "2K")
         local recraft = body("recraft/recraft-v4.1-flash", "best", "landscape")
         TestRunner:assertEquals(recraft.resolution, nil)
@@ -1128,11 +1133,148 @@ local function runAll()
         ImageGenerator._run = real_run
         if not ok then error(err, 0) end
         TestRunner:assertEquals(got.fixed_prompt, "A lamp at night.")
-        TestRunner:assertEquals(got.fixed_provenance, "Drawn from your edit of an earlier picture's prompt. Prompt written by W.")
+        TestRunner:assertEquals(ImageGenerator.regeneratedProvenance(got.fixed_head, nil, got.fixed_source),
+            "Drawn from your edit of an earlier picture's prompt. Prompt written by W.")
         TestRunner:assertEquals(got.book_info.file, "/books/b.epub")
         TestRunner:assertEquals(got.description, "lighthouse keeper", "recorded before S7: the subject from its name")
         TestRunner:assertEquals(got.writer_on, false)
         TestRunner:assertEquals(list(got.kinds), "")
+    end)
+    print("  [Regenerate in the Style now in effect, and Replace (S9)]")
+    local PromptWriterT = require("koassistant.images.prompt_writer")
+    TestRunner:test("restyleFramed: the style line swapped, added or dropped; the note kept", function()
+        local framed = "Create an illustration.\n\nPassage to illustrate: Mara ran.\n\nThe passage is from the book \"T\"."
+        TestRunner:assertEquals(ImageGenerator.restyleFramed(framed .. "\n\nStyle: an ink drawing.", "a watercolor painting", false),
+            framed .. "\n\nStyle: a watercolor painting.")
+        TestRunner:assertEquals(ImageGenerator.restyleFramed(framed, "a woodcut print", false),
+            framed .. "\n\nStyle: a woodcut print.", "no line yet: added")
+        TestRunner:assertEquals(ImageGenerator.restyleFramed(framed .. "\n\nStyle: an ink drawing.\nThe reader's note: at dusk",
+            "a book illustration", true), framed .. "\n\nThe reader's note: at dusk", "the default needs no line; the note stays")
+        TestRunner:assertEquals(ImageGenerator.restyleFramed("Mara ran.\n\nStyle: an ink drawing.", "a photograph", false),
+            "Mara ran.\n\nStyle: a photograph.", "an unframed prompt")
+        local written = "A girl on black rocks. " .. PromptWriterT.NO_TEXT
+        TestRunner:assertEquals(ImageGenerator.restyleFramed(written, "a comic-book panel", false),
+            written .. "\n\nStyle: a comic-book panel.", "a written prompt gets the line")
+    end)
+    TestRunner:test("promptWritten and recordedStyle: the record, else what the prompt shows", function()
+        TestRunner:assertEquals(ImageGenerator.promptWritten({ written = false, prompt = "x " .. PromptWriterT.NO_TEXT }), false)
+        TestRunner:assertEquals(ImageGenerator.promptWritten({ prompt = "A girl. " .. PromptWriterT.NO_TEXT }), true)
+        TestRunner:assertEquals(ImageGenerator.promptWritten({ prompt = "Create an illustration of a lamp." }), false)
+        TestRunner:assertEquals(ImageGenerator.recordedStyle({ style = "an ink drawing" }), "an ink drawing")
+        TestRunner:assertEquals(ImageGenerator.recordedStyle({}), "a book illustration", "before S9: the default")
+        TestRunner:assertEquals(PromptWriterT.restyleMaterial("A girl. " .. PromptWriterT.NO_TEXT), "A girl.")
+    end)
+    TestRunner:test("a picture records its style and whether the writer wrote its prompt", function()
+        withImageIndex(function()
+            ImageGenerator.recordImage("a.png", nil, "p", nil, { style = "an ink drawing", written = true })
+            ImageGenerator.recordImage("b.png", nil, "p", nil, { style = 7, written = "yes" })
+            local index = ImageGenerator.readIndex()
+            TestRunner:assertEquals(index["a.png"].style, "an ink drawing")
+            TestRunner:assertEquals(index["a.png"].written, true)
+            TestRunner:assertEquals(index["b.png"].style, nil, "only a string")
+            TestRunner:assertEquals(index["b.png"].written, nil, "only a boolean")
+        end)
+    end)
+    TestRunner:test("Regenerate in another style: a framed prompt's line swapped, no request", function()
+        withApikeys({ openai = "sk-real-key" }, function()
+            withRun("unused", function(cap)
+                local prompt = "Mara ran.\n\nStyle: an ink drawing."
+                ImageGenerator._regenerateImpl({ name = "x.jpg", prompt = prompt,
+                    entry = { prompt = prompt, kinds = {}, style = "an ink drawing", written = false } },
+                    config({ image_gen_provider = "openai", image_gen_style = "watercolor" }), mockSettings({}))
+                TestRunner:assertEquals(cap.writer, nil, "no request")
+                TestRunner:assertEquals(cap.image.prompt, "Mara ran.\n\nStyle: a watercolor painting.")
+            end)
+            withRun("unused", function(cap)
+                local prompt = "Mara ran.\n\nStyle: a watercolor painting."
+                ImageGenerator._regenerateImpl({ name = "x.jpg", prompt = prompt,
+                    entry = { prompt = prompt, kinds = {}, style = "a watercolor painting" } },
+                    config({ image_gen_provider = "openai", image_gen_style = "watercolor" }), mockSettings({}))
+                TestRunner:assertEquals(cap.image.prompt, prompt, "the same style: as it stands")
+            end)
+        end)
+    end)
+    TestRunner:test("Regenerate in another style: the writer restyles a written prompt; a failure adds a line", function()
+        local prompt = "A girl on black rocks. " .. PromptWriterT.NO_TEXT
+        withApikeys({ openai = "sk-real-key" }, function()
+            withRun("A watercolor of a girl on black rocks.", function(cap)
+                ImageGenerator._regenerateImpl({ name = "x.jpg", prompt = prompt,
+                    entry = { prompt = prompt, kinds = {}, written = true } },
+                    config({ image_gen_provider = "openai", image_gen_style = "watercolor" }), mockSettings({}))
+                local w = cap.writer
+                TestRunner:assert(w, "the writer was asked")
+                TestRunner:assertEquals(w.cfg.provider, "anthropic", "the chat provider's fast model")
+                TestRunner:assert(w.cfg.system.text:find("drawn as a watercolor painting", 1, true), w.cfg.system.text)
+                TestRunner:assertEquals(w.messages[#w.messages].content, "A girl on black rocks.", "without the no-text line")
+                TestRunner:assertEquals(cap.image.prompt, "A watercolor of a girl on black rocks. " .. PromptWriterT.NO_TEXT)
+            end)
+            withRun(false, function(cap)
+                ImageGenerator._regenerateImpl({ name = "x.jpg", prompt = prompt,
+                    entry = { prompt = prompt, kinds = {}, written = true } },
+                    config({ image_gen_provider = "openai", image_gen_style = "watercolor" }), mockSettings({}))
+                TestRunner:assertEquals(cap.image.prompt, prompt .. "\n\nStyle: a watercolor painting.", "the writer failed")
+                TestRunner:assert(cap.status_text:find("the style is added as a line", 1, true), cap.status_text)
+            end)
+        end)
+    end)
+    TestRunner:test("Regenerate in another style: the writer off adds a line; an edit is drawn as written", function()
+        local prompt = "A girl on black rocks. " .. PromptWriterT.NO_TEXT
+        withApikeys({ openai = "sk-real-key" }, function()
+            withRun("unused", function(cap)
+                ImageGenerator._regenerateImpl({ name = "x.jpg", prompt = prompt, entry = { prompt = prompt, kinds = {} } },
+                    config({ image_gen_provider = "openai", image_gen_style = "ink", image_gen_writer = false }), mockSettings({}))
+                TestRunner:assertEquals(cap.writer, nil)
+                TestRunner:assertEquals(cap.image.prompt, prompt .. "\n\nStyle: an ink drawing.")
+            end)
+            withRun("unused", function(cap)
+                ImageGenerator._regenerateImpl({ name = "x.jpg", prompt = "My own words.", edited = true,
+                    entry = { prompt = prompt, kinds = {} } },
+                    config({ image_gen_provider = "openai", image_gen_style = "ink" }), mockSettings({}))
+                TestRunner:assertEquals(cap.writer, nil, "an edit is not restyled")
+                TestRunner:assertEquals(cap.image.prompt, "My own words.")
+            end)
+        end)
+    end)
+    TestRunner:test("Regenerate in another style: the question names the writer's provider too", function()
+        local prompt = "A girl on black rocks. " .. PromptWriterT.NO_TEXT
+        withApikeys({ openai = "sk-real-key" }, function()
+            withRun("A watercolor of the rocks.", function(cap)
+                local plugin = { getProviderDisplayName = function(_self, id) return id == "anthropic" and "Anthropic" or id end }
+                ImageGenerator._regenerateImpl({ name = "x.jpg", prompt = prompt, plugin = plugin,
+                    entry = { prompt = prompt, kinds = { "nearby_text" }, written = true } },
+                    config({ image_gen_provider = "openai", image_gen_style = "watercolor", nearby_text_sharing = "ask" }),
+                    mockSettings({}))
+                TestRunner:assertEquals(cap.writer, nil, "nothing sent before the answer")
+                local q = cap.shown[1]
+                TestRunner:assert(q and q.title:find(
+                    "Regenerate will send to Anthropic, to restyle the prompt, and to OpenAI, to draw it:", 1, true), q and q.title)
+                q.buttons[1][1].callback()
+                TestRunner:assert(cap.writer, "after Allow once: the restyle")
+            end)
+        end)
+    end)
+    TestRunner:test("Regenerate and replace: the old picture goes only once the new one is saved", function()
+        local real_run, real_delete = ImageGenerator._run, ImageGenerator.deleteImages
+        local got, deleted
+        ImageGenerator._run = function(st) got = st end
+        ImageGenerator.deleteImages = function(names) deleted = names end
+        local ok, err = pcall(function()
+            withApikeys({ openai = "sk-real-key" }, function()
+                ImageGenerator._regenerateImpl({ name = "old.jpg", replace = true, prompt = "A lamp.",
+                    entry = { prompt = "A lamp.", kinds = {} } }, config({ image_gen_provider = "openai" }), mockSettings({}))
+                TestRunner:assertEquals(deleted, nil, "nothing deleted before the new picture")
+                got.opts.on_saved("/images/new.jpg")
+                TestRunner:assertEquals(deleted and deleted[1], "old.jpg", "deleted after the save")
+                got = nil
+                ImageGenerator._regenerateImpl({ name = "old.jpg", prompt = "A lamp.", entry = { prompt = "A lamp.", kinds = {} } },
+                    config({ image_gen_provider = "openai" }), mockSettings({}))
+                TestRunner:assertEquals(got.opts.on_saved, nil, "Regenerate keeps both")
+            end)
+        end)
+        ImageGenerator._run, ImageGenerator.deleteImages = real_run, real_delete
+        if not ok then error(err, 0) end
+        TestRunner:assertEquals(ImageGenerator.regeneratedProvenance("Head.", "Restyled.", "Source."),
+            "Head. Restyled. Source.")
     end)
     TestRunner:test("Regenerate: the text around on Ask asks (required: no Continue without); Allow once draws", function()
         withApikeys({ openai = "sk-real-key" }, function()
@@ -1247,6 +1389,76 @@ local function runAll()
         TestRunner:assertEquals(B.holdText({ prompt = "P", provenance = "Written by W.", provider = "openai", model = "m1" }),
             "Drawn by OpenAI / m1.\nWritten by W.\n\nP")
         TestRunner:assertEquals(B.holdText({ prompt = "P" }), "P", "before S7: the prompt alone")
+    end)
+
+    print("  [The image settings panel (S9)]")
+    local ImageOptions = require("koassistant.images.image_options")
+    TestRunner:test("rowIds: Provider, the drawing provider's model, Style, Shape, Detail; the writer row on request", function()
+        TestRunner:assertEquals(table.concat(ImageOptions.rowIds("openai", true), ","),
+            "image_gen_provider,image_gen_model_openai,image_gen_style,image_gen_shape,image_gen_detail,image_gen_writer")
+        TestRunner:assertEquals(table.concat(ImageOptions.rowIds(nil, false), ","),
+            "image_gen_provider,image_gen_style,image_gen_shape,image_gen_detail", "nothing draws: no model row")
+        local items = ImageOptions.popupItems({ { text_func = function() return "Custom…" end, callback = function() end } })
+        TestRunner:assertEquals(items[1].text, "Custom…", "a computed label reaches the popup")
+        local SettingsSchema = require("koassistant.ui.settings_schema")
+        for _idx, id in ipairs(ImageOptions.rowIds("openrouter", true)) do
+            TestRunner:assert(SettingsSchema:getItemById(id), "a Settings row: " .. id)
+        end
+        for _idx, p in ipairs({ "openai", "xai", "gemini" }) do
+            TestRunner:assert(SettingsSchema:getItemById(ImageOptions.rowIds(p, false)[2]), "a model row: " .. p)
+        end
+    end)
+    TestRunner:test("the panel: the settings' own rows and values, a picker that comes back, the action", function()
+        local UIManager = require("ui/uimanager")
+        local shown, popup = {}, nil
+        local real_show = UIManager.show
+        UIManager.show = function(_self, w) shown[#shown + 1] = w end
+        local features = { image_gen_provider = "openai", image_gen_style = "ink" }
+        local plugin = {
+            settings = { data = { features = features }, readSetting = function(_self, k) return k == "features" and features or nil end },
+            updateConfigFromSettings = function() end,
+            imageStyleItems = function(_self, after) return { { text = "Watercolor", callback = function() end, after = after } } end,
+            showQuickSettingsPopup = function(_self, title, items, _close, on_close)
+                popup = { title = title, items = items, on_close = on_close }
+            end,
+        }
+        local function texts(d)
+            local out = {}
+            for _i, row in ipairs(d.buttons) do for _j, b in ipairs(row) do out[#out + 1] = b.text end end
+            return table.concat(out, " | ")
+        end
+        local function tap(d, pattern)
+            for _i, row in ipairs(d.buttons) do
+                for _j, b in ipairs(row) do if b.text:find(pattern) then b.callback(); return true end end
+            end
+            return false
+        end
+        local ok, err = pcall(function()
+            withApikeys({ openai = "sk-real-key" }, function()
+                local drew = false
+                ImageOptions.show(plugin, { writer = true, actions = { { text = "Generate", callback = function() drew = true end } } })
+                local all = texts(shown[#shown])
+                TestRunner:assert(all:find("OpenAI model: Default (gpt-image-2.5-flare)", 1, true), all)
+                TestRunner:assert(all:find("Style: Ink drawing", 1, true), all)
+                TestRunner:assert(all:find("Write the prompt with AI: On", 1, true), all)
+                TestRunner:assert(all:find("Generate", 1, true) and all:find("Close", 1, true), all)
+                TestRunner:assert(tap(shown[#shown], "^Style:"), "the Style row")
+                TestRunner:assert(popup and popup.items[1].text == "Watercolor", "the Style picker")
+                TestRunner:assert(popup.items[1].after ~= nil, "handed the panel's reopen")
+                local before = #shown
+                popup.on_close()
+                TestRunner:assert(#shown == before + 1, "the panel comes back after the pick")
+                TestRunner:assert(tap(shown[#shown], "^Generate$"), "the action button")
+                TestRunner:assert(drew, "the action ran")
+                features.image_gen_provider = "auto"
+                features.provider = "anthropic"
+                ImageOptions.show(plugin, {})
+                TestRunner:assert(not texts(shown[#shown]):find("model:", 1, true),
+                    "a chat provider that cannot draw: no model row")
+            end)
+        end)
+        UIManager.show = real_show
+        if not ok then error(err, 0) end
     end)
 
     print("  [The main provider (B462)]")

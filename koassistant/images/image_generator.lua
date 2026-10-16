@@ -353,7 +353,8 @@ end
 --- prompt sent, the provenance line (who wrote the prompt, from what, nil
 --- without it), and meta = { description (the picture's subject), provider,
 --- model (who drew it), kinds (the kinds of the reader's data its prompt
---- carries, S7) }.
+--- carries, S7), style (the style as the prompt says it) and written (the
+--- prompt writer wrote it), S9 }.
 function ImageGenerator.recordImage(filename, book_info, prompt, provenance, meta)
     meta = meta or {}
     local index = ImageGenerator.readIndex()
@@ -368,6 +369,8 @@ function ImageGenerator.recordImage(filename, book_info, prompt, provenance, met
         provider = meta.provider,
         model = meta.model,
         kinds = meta.kinds,
+        style = type(meta.style) == "string" and meta.style or nil,
+        written = type(meta.written) == "boolean" and meta.written or nil,
         created = os.time(),
     }
     writeIndex(index)
@@ -662,13 +665,19 @@ end
 --- `description` stays the raw selection — it drives filename + viewer title.
 --- provenance = the prompt writer's line, recorded and shown before the prompt.
 --- meta = { provider, model, kinds } for the index (S7).
-local function showImage(image_data, description, on_close, book_info, full_prompt, provenance, meta)
+local function showImage(image_data, description, on_close, book_info, full_prompt, provenance, meta, on_saved)
     local UIManager  = require("ui/uimanager")
 
     local path, bb = ImageGenerator.saveImage(image_data, description, book_info, full_prompt, provenance, meta)
     if not path then
         showNotice(_("Failed to save generated image to disk."))
         return
+    end
+    -- the new picture is on disk: a replace may delete the old one now (S9),
+    -- never before
+    if on_saved then
+        local ok_s, err_s = pcall(on_saved, path)
+        if not ok_s then logger.warn("KOAssistant: after saving an image:", err_s) end
     end
 
     -- Try to load KOReader's ImageViewer
@@ -942,6 +951,60 @@ function ImageGenerator.extraLines(opts, features)
     return "\n\n" .. table.concat(lines, "\n")
 end
 
+--- A recorded prompt in another style without a request (S9): a framed
+--- prompt's closing lines (extraLines: the style, the reader's note) with the
+--- style line swapped, or the line added (a written prompt with the writer
+--- off); the default style is the frame's own word and needs no line. Pure.
+function ImageGenerator.restyleFramed(prompt, style_text, is_default)
+    prompt = type(prompt) == "string" and prompt or ""
+    local body, tail = prompt, ""
+    local last = prompt:match(".*()\n\n")
+    if last then
+        local block = prompt:sub(last + 2)
+        local closing = block ~= ""
+        for line in (block .. "\n"):gmatch("(.-)\n") do
+            if not (line:find("^Style: ") or line:find("^The reader's note: ")) then closing = false end
+        end
+        if closing then body, tail = prompt:sub(1, last - 1), block end
+    end
+    local lines = {}
+    if not is_default then lines[#lines + 1] = "Style: " .. tostring(style_text) .. "." end
+    for line in (tail .. "\n"):gmatch("(.-)\n") do
+        if line:find("^The reader's note: ") then lines[#lines + 1] = line end
+    end
+    if #lines == 0 then return body end
+    return body .. "\n\n" .. table.concat(lines, "\n")
+end
+
+--- A picture drawn again, in its provenance line (S7, S9): how it was drawn
+--- (head), what happened to the prompt on the way (line: the restyle, or
+--- nil), then its source's own line. Pure.
+function ImageGenerator.regeneratedProvenance(head, line, source)
+    local parts = { head }
+    if line then parts[#parts + 1] = line end
+    if source then parts[#parts + 1] = source end
+    return table.concat(parts, " ")
+end
+
+--- Whether the prompt writer wrote a recorded prompt (S9): what the record
+--- says, else the no-text line every written prompt ends with. Pure.
+function ImageGenerator.promptWritten(entry)
+    if type(entry) ~= "table" then return false end
+    if type(entry.written) == "boolean" then return entry.written end
+    local prompt = type(entry.prompt) == "string" and entry.prompt or ""
+    local tail = require("koassistant.images.prompt_writer").NO_TEXT
+    return prompt:sub(-#tail) == tail
+end
+
+--- The style a recorded picture was drawn in, as the prompt says it (S9): its
+--- record, else the default (pictures from before styles were drawn without
+--- one, which is the default's look). Pure.
+function ImageGenerator.recordedStyle(entry)
+    local s = type(entry) == "table" and entry.style
+    if type(s) == "string" and s ~= "" then return s end
+    return (require("koassistant.images.prompt_writer").styleText({}))
+end
+
 --- The framed prompt for an X-Ray entry (Illustrate from X-Ray with the
 --- writer off, or its fallback): the entry's name and description, the title
 --- and author per the Book info level, the style and the note. Pure.
@@ -1063,6 +1126,12 @@ local OPENROUTER_FACTS = {
         resolutions = { "1K", "2K", "4K" },
     },
     ["black-forest-labs/flux-3-image"] = {
+        ratios = { "21:9", "2:1", "16:9", "3:2", "7:5", "4:3", "5:4", "1:1", "4:5", "3:4", "5:7", "2:3",
+            "9:16", "1:2", "9:21", "auto" },
+        resolutions = { "768", "1K", "1.5K", "2K", "4K" },
+    },
+    -- (the catalog, 2026-10-16: the same lists as FLUX 3 Image)
+    ["black-forest-labs/flux-3-image-klein"] = {
         ratios = { "21:9", "2:1", "16:9", "3:2", "7:5", "4:3", "5:4", "1:1", "4:5", "3:4", "5:7", "2:3",
             "9:16", "1:2", "9:21", "auto" },
         resolutions = { "768", "1K", "1.5K", "2K", "4K" },
@@ -1521,12 +1590,17 @@ end
 
 --- Draw a recorded prompt again (S7), or the reader's edit of it: the image
 --- provider and model now in effect, Shape and Detail now in effect, no
---- prompt writer (the prompt is final). The new picture is saved beside the
---- source, never in its place. The prompt is stored material: the kinds it
---- carries (promptKinds) are judged for the provider it goes to, required
---- (a written prompt cannot go without what is in it), so Ask asks and Never
+--- prompt writer (the prompt is final). The Style now in effect too (S9): a
+--- picture drawn in another style (recordedStyle) is restyled first, a
+--- framed prompt by swapping its style line, a written one by the prompt
+--- writer (one request; with the writer off, the style as a line); an edit
+--- is drawn as the reader wrote it. The new picture is saved beside the
+--- source, or in its place with spec.replace (the old one deleted once the
+--- new one is saved). The prompt is stored material: the kinds it carries
+--- (promptKinds) are judged for every provider it goes to, required (a
+--- written prompt cannot go without what is in it), so Ask asks and Never
 --- refuses. spec = { name (the source's file name), entry (its index entry),
---- prompt (the text to draw), edited, plugin, ui, on_viewer_close }.
+--- prompt (the text to draw), edited, replace, plugin, ui, on_viewer_close }.
 function ImageGenerator.regenerate(spec, config_table, settings)
     local ok, err = pcall(ImageGenerator._regenerateImpl, spec, config_table, settings)
     if not ok then
@@ -1542,9 +1616,14 @@ function ImageGenerator._regenerateImpl(spec, config_table, settings)
         return
     end
     local opts = { plugin = spec.plugin, ui = spec.ui, on_viewer_close = spec.on_viewer_close }
+    if spec.replace then
+        local old = spec.name
+        opts.on_saved = function() ImageGenerator.deleteImages({ old }) end
+    end
     withImageProvider(config_table, settings, opts, function()
         ImageGenerator.regenerate(spec, config_table, settings)
     end, function(provider)
+        local PromptWriter = require("koassistant.images.prompt_writer")
         local features = (config_table and config_table.features) or {}
         local entry = type(spec.entry) == "table" and spec.entry or {}
         local path = type(entry.book_file) == "string" and entry.book_file or nil
@@ -1554,28 +1633,58 @@ function ImageGenerator._regenerateImpl(spec, config_table, settings)
         local kinds = ImageGenerator.promptKinds(entry)
         local description = type(entry.description) == "string" and entry.description:match("%S") and entry.description
             or ImageGenerator.subjectFromName(spec.name)
-        local head = spec.edited and _("Drawn from your edit of an earlier picture's prompt.")
-            or _("Drawn again from an earlier picture's prompt.")
-        local source_line = type(entry.provenance) == "string" and entry.provenance:match("%S") and entry.provenance or nil
+        -- The Style now in effect (S9): a picture drawn in another one is
+        -- restyled first; an edit is drawn as the reader wrote it
+        local style_text, style_default = PromptWriter.styleText(features)
+        local written = ImageGenerator.promptWritten(entry)
+        local restyle = not spec.edited and style_text ~= ImageGenerator.recordedStyle(entry)
+        local writer_provider, writer_model
+        if restyle and written and features.image_gen_writer ~= false then
+            writer_provider, writer_model = PromptWriter.target(features,
+                (config_table and config_table.provider) or require("koassistant.core.config_helper").mainProvider(features))
+        end
+        local head
+        if spec.edited then
+            head = _("Drawn from your edit of an earlier picture's prompt.")
+        elseif restyle then
+            head = T(_("Drawn again in another style (%1) from an earlier picture's prompt."),
+                PromptWriter.styleLabel(features))
+        else
+            head = _("Drawn again from an earlier picture's prompt.")
+        end
+        local recipients = { provider }
+        if writer_provider and writer_provider ~= provider then recipients = { writer_provider, provider } end
         local run_features = {}
         for k, v in pairs(features) do run_features[k] = v end
         run_features._data_once = nil
         local st = {
             provider = provider, description = description, config_table = config_table, settings = settings,
             book_info = path and { file = path, title = entry.book_title } or nil, opts = opts,
-            features = run_features, writer_on = false, recipients = { provider }, entries = {}, path = path,
-            fixed_prompt = prompt, fixed_provenance = source_line and (head .. " " .. source_line) or head,
+            features = run_features, writer_on = false, recipients = recipients, entries = {}, path = path,
+            fixed_prompt = (restyle and not writer_provider) and ImageGenerator.restyleFramed(prompt, style_text, style_default)
+                or prompt,
+            fixed_head = head,
+            fixed_source = type(entry.provenance) == "string" and entry.provenance:match("%S") and entry.provenance or nil,
+            fixed_written = written,
+            fixed_style = restyle and style_text or ImageGenerator.recordedStyle(entry),
+            restyle = writer_provider and { provider = writer_provider, model = writer_model,
+                style = style_text, default = style_default } or nil,
             kinds = kinds,
         }
         if #kinds == 0 then
             ImageGenerator._run(st)
             return
         end
+        local who = ImageGenerator.providerName(provider, opts.plugin)
+        if #recipients == 2 then
+            who = T(_("%1, to restyle the prompt, and to %2, to draw it"),
+                ImageGenerator.providerName(writer_provider, opts.plugin), who)
+        end
         require("koassistant.ui.data_access").withAccess(opts.plugin, nil, {
-            features = run_features, kinds = kinds, providers = { provider }, required = true,
+            features = run_features, kinds = kinds, providers = recipients, required = true,
             path = path, ui = opts.ui,
             action_name = _("Regenerate"),
-            provider_name = ImageGenerator.providerName(provider, opts.plugin),
+            provider_name = who,
             amounts = {
                 nearby_text = _("the text around the passage, in this picture's prompt"),
                 book_text = _("what X-Ray descriptions made from the book's text gave this picture's prompt"),
@@ -1725,12 +1834,15 @@ function ImageGenerator._run(st)
     local book_values = st.path and Gates.bookOverrides(st.path, opts.ui) or opts.book_privacy
     if st.fixed_prompt then
         -- a recorded prompt drawn again (S7): the kinds it carries, each
-        -- allowed for the image provider, or nothing goes
+        -- allowed for every provider it goes to (the image provider, and the
+        -- writer's when it restyles, S9), or nothing goes
         for _idx, kind in ipairs(st.kinds or {}) do
-            if not Gates.allows(kind, { features = features, provider = provider, book = book_values,
-                    once = Gates.onceFor(features, st.path) }) then
-                showNotice(_("This picture's prompt can't be sent: it carries data your privacy settings keep from this provider."))
-                return
+            for _p, p in ipairs(st.recipients or { provider }) do
+                if not Gates.allows(kind, { features = features, provider = p, book = book_values,
+                        once = Gates.onceFor(features, st.path) }) then
+                    showNotice(_("This picture's prompt can't be sent: it carries data your privacy settings keep from this provider."))
+                    return
+                end
             end
         end
     end
@@ -1852,9 +1964,10 @@ function ImageGenerator._run(st)
     -- The picture: the request as the provider takes it (OpenAI-style images
     -- API, or Gemini's generateContent with image output); Fit my screen fits
     -- the screen as it is held now. note = a line above the phase (the
-    -- writer's failure); kinds = what the prompt carries, for the index
-    local function draw(final_prompt, provenance, note, kinds)
-        local meta = { provider = provider, model = resolved_model, kinds = kinds }
+    -- writer's failure); kinds = what the prompt carries, written = the
+    -- writer wrote it, style = its style in the prompt's words, for the index
+    local function draw(final_prompt, provenance, note, kinds, written, style)
+        local meta = { provider = provider, model = resolved_model, kinds = kinds, written = written, style = style }
         local request = ImageGenerator.buildRequest(provider, resolved_model, final_prompt, features, screen)
         local request_body_str = BaseHandler.encodeBody(request.body)
         setPhase((note and (note .. "\n\n") or "")
@@ -1894,7 +2007,7 @@ function ImageGenerator._run(st)
             if result.bytes then
                 stopTicker()
                 status.close()
-                showImage(result.bytes, description, opts.on_viewer_close, book_info, final_prompt, provenance, meta)
+                showImage(result.bytes, description, opts.on_viewer_close, book_info, final_prompt, provenance, meta, opts.on_saved)
                 return
             end
             -- Download phase: same window, same elapsed clock
@@ -1918,17 +2031,76 @@ function ImageGenerator._run(st)
                 -- "OK:" prefix + binary
                 stopTicker()
                 status.close()
-                showImage(dl_raw:sub(4), description, opts.on_viewer_close, book_info, final_prompt, provenance, meta)
+                showImage(dl_raw:sub(4), description, opts.on_viewer_close, book_info, final_prompt, provenance, meta, opts.on_saved)
             end))
         end))
     end
 
+    -- One request to the prompt writer (S5, and S9's restyle): its own
+    -- system text and material, the phase naming it; on_done(prompt, failure,
+    -- model) once (the answer made a prompt by finish(), or the failure)
+    local function askWriter(w_provider, w_model, system, material, phase_fmt, on_done)
+        local cfg, model_id = ImageGenerator.writerConfig(st.config_table, w_provider, w_model, system)
+        cfg._register_cancel = function(fn) writer_cancel = fn end
+        setPhase(T(phase_fmt, ImageGenerator.providerName(w_provider, opts.plugin), model_id or "?"))
+        logger.dbg("KOAssistant: image prompt writer:", w_provider, model_id, "material", #material, "bytes")
+        local history = require("koassistant.request.message_history"):new()
+        history:addUserMessage(material)
+        -- OpenCode wants its session header, OpenRouter a session id: the
+        -- writer's request is a conversation of its own
+        cfg.conversation_id = history.conversation_id
+        local settled = false
+        local function settle(prompt, failure)
+            if settled then return end
+            settled = true
+            writer_cancel = nil
+            if cancelled then return end
+            on_done(prompt, failure, model_id)
+        end
+        local ok_query, query_err = pcall(require("koassistant.request.gpt_query").query, history:getMessages(), cfg,
+            guarded(function(success, answer, err)
+                if success and type(answer) == "string" and not answer:match("^Error:") then
+                    settle(PromptWriter.finish(answer))
+                else
+                    local msg = err or answer
+                    settle(nil, type(msg) == "string" and msg:gsub("%s+", " "):sub(1, 120) or nil)
+                end
+            end), settings)
+        if not ok_query then settle(nil, tostring(query_err):sub(1, 120)) end
+    end
+
+    -- The style a new picture is drawn in, as the prompt says it (recorded, S9)
+    local style_now = (PromptWriter.styleText(features))
+
     if st.fixed_prompt then
-        draw(st.fixed_prompt, st.fixed_provenance, nil, kindsSent())
+        local function provenanceWith(line)
+            return ImageGenerator.regeneratedProvenance(st.fixed_head, line, st.fixed_source)
+        end
+        local r = st.restyle
+        if not r then
+            draw(st.fixed_prompt, provenanceWith(nil), nil, kindsSent(), st.fixed_written, st.fixed_style)
+            return
+        end
+        -- a written prompt in another style: the writer rewrites its look (S9)
+        askWriter(r.provider, r.model, PromptWriter.restyleSystemText(r.style),
+            PromptWriter.restyleMaterial(st.fixed_prompt), _("Restyling the prompt with %1 / %2…"),
+            function(prompt, failure, model_id)
+                if prompt then
+                    draw(prompt, provenanceWith(T(_("Prompt restyled by %1."), model_id or "?")), nil, kindsSent(),
+                        true, r.style)
+                    return
+                end
+                local why = PromptWriter.failureText(failure)
+                logger.warn("KOAssistant: image prompt restyle failed:", tostring(failure))
+                draw(ImageGenerator.restyleFramed(st.fixed_prompt, r.style, r.default),
+                    provenanceWith(T(_("The prompt writer failed (%1), so the style was added as a line."), why)),
+                    T(_("The prompt writer failed (%1); the style is added as a line."), why),
+                    kindsSent(), true, r.style)
+            end)
         return
     end
     if not st.writer_on then
-        draw(framedPrompt(), nil, nil, kindsSent(false))
+        draw(framedPrompt(), nil, nil, kindsSent(false), false, style_now)
         return
     end
 
@@ -1960,50 +2132,27 @@ function ImageGenerator._run(st)
         entries = entries,
         book = book,
         background = background,
-        style = (PromptWriter.styleText(features)),
+        style = style_now,
         shape = PromptWriter.shapeLine(shape, ImageGenerator.shapeRatio(shape, screen), grayscale),
     })
-    local system = PromptWriter.systemText({ subject = opts.entry and "entry" or "passage", spoiler = opts.spoiler })
-    local cfg, writer_model = ImageGenerator.writerConfig(st.config_table, st.writer_provider, st.writer_model, system)
-    cfg._register_cancel = function(fn) writer_cancel = fn end
-    setPhase(T(_("Writing the prompt with %1 / %2…"),
-        ImageGenerator.providerName(st.writer_provider, opts.plugin), writer_model or "?"))
-    logger.dbg("KOAssistant: image prompt writer:", st.writer_provider, writer_model, "material", #material, "bytes")
-    local history = require("koassistant.request.message_history"):new()
-    history:addUserMessage(material)
-    -- OpenCode wants its session header, OpenRouter a session id: the
-    -- writer's request is a conversation of its own
-    cfg.conversation_id = history.conversation_id
-    local writer_done = false
-    local function written(prompt, failure)
-        if writer_done then return end
-        writer_done = true
-        writer_cancel = nil
-        if cancelled then return end
-        if prompt then
-            draw(prompt, PromptWriter.provenance({
-                model = writer_model, entry = opts.entry, around = around ~= nil, entries = entries,
-                book = book_said, background = background ~= nil, note = note ~= nil, left_out = left_out,
-            }), nil, kindsSent(true))
-            return
-        end
-        local why = PromptWriter.failureText(failure)
-        logger.warn("KOAssistant: image prompt writer failed:", tostring(failure))
-        draw(framedPrompt(), PromptWriter.provenance({ failed = why, entry = opts.entry, left_out = left_out }),
-            opts.entry and T(_("The prompt writer failed (%1); drawing from the entry's description."), why)
-                or T(_("The prompt writer failed (%1); drawing from the passage as framed."), why),
-            kindsSent(false))
-    end
-    local ok_query, query_err = pcall(require("koassistant.request.gpt_query").query, history:getMessages(), cfg,
-        guarded(function(success, answer, err)
-            if success and type(answer) == "string" and not answer:match("^Error:") then
-                written(PromptWriter.finish(answer))
-            else
-                local msg = err or answer
-                written(nil, type(msg) == "string" and msg:gsub("%s+", " "):sub(1, 120) or nil)
+    askWriter(st.writer_provider, st.writer_model,
+        PromptWriter.systemText({ subject = opts.entry and "entry" or "passage", spoiler = opts.spoiler }),
+        material, _("Writing the prompt with %1 / %2…"),
+        function(prompt, failure, writer_model)
+            if prompt then
+                draw(prompt, PromptWriter.provenance({
+                    model = writer_model, entry = opts.entry, around = around ~= nil, entries = entries,
+                    book = book_said, background = background ~= nil, note = note ~= nil, left_out = left_out,
+                }), nil, kindsSent(true), true, style_now)
+                return
             end
-        end), settings)
-    if not ok_query then written(nil, tostring(query_err):sub(1, 120)) end
+            local why = PromptWriter.failureText(failure)
+            logger.warn("KOAssistant: image prompt writer failed:", tostring(failure))
+            draw(framedPrompt(), PromptWriter.provenance({ failed = why, entry = opts.entry, left_out = left_out }),
+                opts.entry and T(_("The prompt writer failed (%1); drawing from the entry's description."), why)
+                    or T(_("The prompt writer failed (%1); drawing from the passage as framed."), why),
+                kindsSent(false), false, style_now)
+        end)
 end
 
 --- The request config for the prompt writer: a copy of the configuration on

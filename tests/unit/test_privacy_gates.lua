@@ -271,6 +271,34 @@ TestRunner:test("overridesOf and bookOverrides never throw and read as none when
     TestRunner:assertTrue(Gates.bookOverrides("/nowhere/such.epub", nil) == nil, "no such book")
 end)
 
+print("\n  [the presets]")
+
+TestRunner:test("the default preset clears every value: each kind reads the default it ships with (B498)", function()
+    local f = { enable_book_text_extraction = true, enable_highlights_sharing = "never", nearby_text_sharing = "ask",
+        enable_basic_stats = false, enable_library_scanning = true, trusted_book_text = "never" }
+    Gates.applyPreset(f, "default")
+    for _idx, kind in ipairs(Gates.KINDS) do
+        eq(f[Gates.GLOBAL_KEY[kind]], nil, kind .. " cleared")
+        local want = (kind == "position" or kind == "nearby_text") and "allow" or "ask"
+        eq(Gates.resolve(kind, { features = f, provider = "openai" }), want, kind .. " reads its default")
+    end
+    eq(f.trusted_book_text, "never", "the trusted column is untouched")
+end)
+
+TestRunner:test("Allow everything and Never send anything extra set every kind; an unknown preset nothing", function()
+    local f = Gates.applyPreset({}, "full")
+    for _idx, kind in ipairs(Gates.KINDS) do
+        eq(Gates.resolve(kind, { features = f, provider = "openai" }), "allow", "full: " .. kind)
+    end
+    f = Gates.applyPreset({}, "minimal")
+    for _idx, kind in ipairs(Gates.KINDS) do
+        eq(Gates.resolve(kind, { features = f, provider = "openai" }), "never", "minimal: " .. kind)
+    end
+    eq(f.enable_basic_stats, false, "minimal: reading position off")
+    f = Gates.applyPreset({ enable_book_text_extraction = true }, "everything")
+    eq(f.enable_book_text_extraction, true, "an unknown preset changes nothing")
+end)
+
 print("\n  [the guard]")
 
 TestRunner:test("no other file compares a privacy switch or walks trusted_providers itself", function()

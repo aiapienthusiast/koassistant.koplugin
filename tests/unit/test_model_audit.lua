@@ -949,6 +949,21 @@ TestRunner:check("image diff: new ids, a dated snapshot of a listed one is not n
 TestRunner:check("image diff: retired and skipped ids still listed are reported apart",
     d.retired_listed[1] == "old-image" and d.skipped[1] == "gpt-image-1")
 
+-- OpenRouter's catalog: the arrivals of the last 30 days are named (B497)
+local inow = os.time({ year = 2026, month = 10, day = 16, hour = 12 })
+local recent = ModelAudit.recentImageModels({ data = {
+    { id = "black-forest-labs/flux-3-image-klein", created = inow - 86400 },
+    { id = "black-forest-labs/flux-3-image", created = inow - 15 * 86400 },   -- listed
+    { id = "somevendor/new-image", created = inow - 3 * 86400 },
+    { id = "somevendor/old-image", created = inow - 90 * 86400 },              -- too old
+    { id = "somevendor/undated" },
+} }, { "black-forest-labs/flux-3-image" }, inow, 30)
+TestRunner:check("recent image models: unlisted arrivals within 30 days, newest first",
+    #recent == 2 and recent[1].id == "black-forest-labs/flux-3-image-klein"
+        and recent[2].id == "somevendor/new-image")
+TestRunner:check("recent image models: nothing from an answer that is not a catalog",
+    #ModelAudit.recentImageModels(nil, {}, inow, 30) == 0)
+
 -- The probe's pixel size (S2): PNG's IHDR, a JPEG's frame marker after an APP0
 local png = "\137PNG\r\n\26\n\0\0\0\13IHDR\0\0\4\128\0\0\6\0rest"
 local pw, ph = ModelAudit.imageDimensions(png)

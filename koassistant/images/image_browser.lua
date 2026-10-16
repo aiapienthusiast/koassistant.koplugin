@@ -10,7 +10,9 @@ come from more than one place (All images, each book with the newest
 picture first, Without a book), else on the pictures themselves: a grid of
 thumbnails (koassistant/images/image_grid.lua; a device without a
 touchscreen keeps the list of names). Tap = the picture with its prompt as
-the caption; hold = the prompt with Regenerate, Edit prompt… and Delete
+the caption; hold = the prompt with Regenerate (beside the old picture, or
+in its place), Edit prompt…, Image settings… (koassistant/images/
+image_options.lua: the settings rows, then Regenerate; S9) and Delete
 image…; ☰ = delete all of the set shown. Thumbnails the grid lacks are made
 when their page is first shown.
 
@@ -247,7 +249,7 @@ local function showSet(set, on_close)
         })
     end
 
-    local function regenerate(item, prompt, edited)
+    local function regenerate(item, prompt, edited, replace)
         local plugin = pluginInstance()
         if not plugin then
             UIManager:show(InfoMessage:new{ text = _("Image generation is not available here.") })
@@ -257,7 +259,7 @@ local function showSet(set, on_close)
         require("ui/network/manager"):runWhenConnected(function()
             if plugin.updateConfigFromSettings then plugin:updateConfigFromSettings() end
             ImageGenerator.regenerate({
-                name = item.name, entry = item.entry, prompt = prompt, edited = edited,
+                name = item.name, entry = item.entry, prompt = prompt, edited = edited, replace = replace,
                 plugin = plugin, ui = readerFor(book_file),
                 -- the new picture leads the set once its viewer closes
                 on_viewer_close = function() reload(1) end,
@@ -273,8 +275,10 @@ local function showSet(set, on_close)
     end
 
     -- Hold = the prompt, scrollable (InfoMessage truncated — device
-    -- 2026-08-13), with Regenerate, Edit prompt… and Delete; a picture with
-    -- no recorded prompt (made before the index) gets the delete confirm
+    -- 2026-08-13), with Regenerate (beside the old picture, or in its place),
+    -- Edit prompt…, Image settings… (S9: the panel, then the same two) and
+    -- Delete; a picture with no recorded prompt (made before the index) gets
+    -- the delete confirm
     local function onHold(item)
         local entry = item.entry
         if not (entry and type(entry.prompt) == "string" and entry.prompt ~= "") then
@@ -283,6 +287,10 @@ local function showSet(set, on_close)
         end
         local TextViewer = require("ui/widget/textviewer")
         local tv
+        local function again(replace)
+            UIManager:close(tv)
+            regenerate(item, entry.prompt, false, replace)
+        end
         tv = TextViewer:new{
             title = item.display,
             title_multilines = true,
@@ -290,15 +298,29 @@ local function showSet(set, on_close)
             add_default_buttons = true,
             buttons_table = {
                 {
-                    { text = _("Regenerate"), callback = function()
-                        UIManager:close(tv)
-                        regenerate(item, entry.prompt, false)
-                    end },
+                    { text = _("Regenerate"), callback = function() again(false) end },
+                    { text = _("Regenerate and replace"), callback = function() again(true) end },
+                },
+                {
                     { text = _("Edit prompt…"), callback = function()
                         editPrompt(entry.prompt, function(text)
                             UIManager:close(tv)
                             regenerate(item, text, true)
                         end)
+                    end },
+                    { text = _("Image settings…"), callback = function()
+                        local plugin = pluginInstance()
+                        if not (plugin and plugin.settings) then
+                            UIManager:show(InfoMessage:new{ text = _("Image generation is not available here.") })
+                            return
+                        end
+                        -- over the hold view: Close comes back to it
+                        require("koassistant.images.image_options").show(plugin, {
+                            actions = {
+                                { text = _("Regenerate"), callback = function() again(false) end },
+                                { text = _("Regenerate and replace"), callback = function() again(true) end },
+                            },
+                        })
                     end },
                 },
                 {

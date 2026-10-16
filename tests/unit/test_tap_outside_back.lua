@@ -135,6 +135,8 @@ local SITES = {
     { "koassistant/ui/dialogs.lua", 'items selected: tap to remove"), #books)', 1, "refreshInputDialog()" },
     { "koassistant/ui/dialogs.lua", '.. (total_pages > 1 and ("  (" .. page .. "/" .. total_pages .. ")") or ""),', 1, "show_category_pick()" },
     { "koassistant/ui/dialogs.lua", '.. (total_pages > 1 and ("  (" .. page .. "/" .. total_pages .. ")") or ""),', 2, "show_category_pick()" },
+    -- OpenRouter's image catalog: the image settings panel comes back (S9)
+    { "main.lua", "-- a tap outside is Close (B360)", 1, "on_close()" },
     -- Action wizard and editors
     { "koassistant/ui/prompts_manager.lua", 'title = _("Select Context"),', 1, "self:showStep1_NameAndContext(state)" },
     { "koassistant/ui/prompts_manager.lua", "self.wizard_behavior_dialog = ButtonDialog:new{", 1, "self:showStep3_Settings(state)" },
