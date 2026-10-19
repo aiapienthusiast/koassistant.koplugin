@@ -688,6 +688,14 @@ local SettingsSchema = {
                             help_text = _("Leave the per-book Background note out of Quick Answer chats. Off by default: the Background frames how you read this book, and costs almost nothing in speed."),
                         },
                         {
+                            id = "quick_preset_book_info_off",
+                            type = "toggle",
+                            text = _("Leave Book Info Out"),
+                            path = "features.quick_preset_book_info_off",
+                            default = false,
+                            help_text = _("Send nothing that names the book in Quick Answer chats: no book line, and an action's own prompt says \"this book\" instead of the title (what Book info set to None does, for Quick chats only). Off by default: the title helps a short answer. Actions that answer only from what the AI knows about the book cannot run without it."),
+                        },
+                        {
                             id = "quick_preset_behavior",
                             type = "action",
                             text_func = function(plugin)
@@ -2284,7 +2292,7 @@ local SettingsSchema = {
                         { value = "basic", label = _("Title & author") },
                         { value = "full", label = _("Title, author & position") },
                     },
-                    help_text = _("What the AI is told about the book with every request: the title, the author, and with \"Title, author & position\" your reading progress, chapter and page (when Reading position is on). Never asked, and the presets leave it alone. None sends nothing that names the book: no book line, and an action's own prompt says \"this book\" where it would name the title; actions that answer from what the AI knows about the book (About, Find Similar, Reviews…) cannot run then, and say so. Image prompts follow it too. Override per book in Book Settings → Privacy & Data; for one chat, the Data chip."),
+                    help_text = _("What the AI is told about the book with every request: the title, the author, and with \"Title, author & position\" your reading progress, chapter and page (when Reading position is on). Never asked, and the presets leave it alone. None sends nothing that names the book: no book line, and an action's own prompt says \"this book\" where it would name the title; actions that answer from what the AI knows about the book (About, Find Similar, Reviews…) cannot run then, and say so. Image prompts follow it too. Override per book in Book Settings → Privacy & Data; a Quick Answer chat can leave it out (the preset's Leave Book Info Out)."),
                     separator = true,
                 },
                 -- Text Extraction settings (moved from Advanced)
@@ -2660,14 +2668,6 @@ local SettingsSchema = {
                     text = _("Gestures"),
                 },
                 {
-                    id = "shortcuts_screen",
-                    type = "action",
-                    text = _("Shortcuts"),
-                    callback = "showShortcutsScreen",
-                    keep_menu_open = true,
-                    help_text = _("See and change the gestures bound to KOAssistant's panels and actions. Assignments apply immediately, no restart needed."),
-                },
-                {
                     id = "show_in_gesture_menu",
                     type = "toggle",
                     text = _("Register gesture actions"),
@@ -2711,6 +2711,24 @@ local SettingsSchema = {
             },
         },
 
+        -- Gestures (B489, 2026-10-19): the Gestures screen, a top-level row
+        {
+            id = "gestures_screen",
+            type = "action",
+            text = _("Gestures"),
+            callback = "showGesturesScreen",
+            keep_menu_open = true,
+            help_text = _("Every KOAssistant gesture action with the gestures it has now. Tap one to give it any KOReader gesture (a gesture in use shows what holds it and can be replaced) or to remove one. Changes apply at once while KOReader's gesture plugin is loaded."),
+        },
+        -- The Setup Wizard by topic (its two faces run at the first interaction)
+        {
+            id = "setup_wizard",
+            type = "action",
+            text = _("Setup Wizard"),
+            callback = "rerunSetupWizard",
+            keep_menu_open = true,
+            help_text = _("Re-run any part of the setup: the provider, privacy, your language, the emoji icons and their font, the panels' gestures. Each topic shows whether it is set up."),
+        },
         -- Backup & Reset submenu
         {
             id = "backup_and_reset",
@@ -2796,15 +2814,6 @@ local SettingsSchema = {
                     type = "submenu",
                     text = _("Reset Settings..."),
                     items = {
-                        -- Re-run setup wizard
-                        {
-                            id = "rerun_setup_wizard",
-                            type = "action",
-                            text = _("Re-run Setup Wizard"),
-                            help_text = _("Run the initial setup wizard again to reconfigure language, emoji settings, and gesture assignments."),
-                            callback = "rerunSetupWizard",
-                            separator = true,
-                        },
                         -- Quick: Settings only
                         {
                             id = "quick_reset_settings",
@@ -3485,12 +3494,11 @@ local SettingsSchema = {
                     keep_menu_open = true,
                 },
                 {
-                    -- Setup Wizard v2 (2026-08-11): INERT until the release
-                    -- flip — this debug-gated row is its ONLY entry; the old
-                    -- wizard still serves first-run and Re-run.
+                    -- The wizard's dev tools (2026-08-11; live since
+                    -- 2026-10-19): the probes, the stamps, the faces by hand
                     id = "setup_wizard_dev",
                     type = "action",
-                    text = _("Setup Wizard v2 (dev)"),
+                    text = _("Setup Wizard (dev tools)"),
                     callback = "showSetupWizardDev",
                     depends_on = { id = "debug", value = true },
                 },

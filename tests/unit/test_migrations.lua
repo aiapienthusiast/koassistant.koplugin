@@ -252,15 +252,20 @@ end)
 TestRunner:test("a chip added after the registry move is never seeded as dismissed", function()
     local f = v020Fixture()
     Migrations.run(f)
+    -- the migration's list is frozen at the seven ids of its time: a chip
+    -- appended to SESSION_CHIP_IDS later is injected for an upgrader, never
+    -- seeded as dismissed (the id list is the guard; today's list is the same seven)
     local dismissed = {}
     for _idx, id in ipairs(f._dismissed_session_chips or {}) do dismissed[id] = true end
-    TestRunner:assertEqual(dismissed.data, nil, "the Data chip reaches upgraders")
+    TestRunner:assertEqual(next(dismissed), nil, "nothing seeded as dismissed")
     local Constants = require("koassistant.core.constants")
     local shown = {}
     for _idx, id in ipairs(Constants.resolveSessionChips(f.session_chips, f._dismissed_session_chips)) do
         shown[id] = true
     end
-    TestRunner:assertTrue(shown.data, "rendered for an upgrader")
+    for _idx, id in ipairs(Constants.SESSION_CHIP_IDS) do
+        TestRunner:assertTrue(shown[id], id .. " rendered for an upgrader")
+    end
 end)
 
 TestRunner:test("web_search_max_uses maps to the effort dial and is removed", function()

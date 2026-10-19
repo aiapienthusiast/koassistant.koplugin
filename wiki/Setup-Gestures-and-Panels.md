@@ -4,15 +4,22 @@ The Setup Wizard, a checklist for your first ten minutes, the two quick-access p
 
 ## Setup Wizard
 
-The first time you open KOAssistant after installing it (its menu, or one of its actions), a five-step wizard walks you through setup:
+The wizard has two faces, chosen the first time you open KOAssistant (its menu, or one of its actions) after installing or updating it:
 
-1. **Welcome**: a brief introduction.
-2. **Language**: detects your KOReader UI language and asks whether to use it as your AI language. For a non-English UI it confirms the detected language (for example "Use Français?"); for English it offers to keep English or choose a different language. You can also pick from the full list of 47 supported languages. This sets your primary language for all AI responses, translations and dictionary lookups.
-3. **Emoji display test**: shows the emoji icons used throughout the plugin. If they render correctly on your device, tap **Yes, enable** to turn on all emoji features (menu icons, panel icons, data access indicators). If you see blank boxes or question marks, tap **No, skip**; after the wizard, **Settings → Display Settings → Emoji → Emoji Font** installs the bundled emoji font ([Troubleshooting](Troubleshooting#emoji-font-setup)).
-4. **Gesture setup**: offers to assign the Quick Settings and Quick Actions panels to **tap bottom-right corner** ([Automatic setup](#automatic-setup)). If that corner is already taken, in the reader or the file browser, or KOReader has no gesture settings yet, it shows a tip instead.
-5. **Getting started tips**: pointers to **Settings → Privacy & Data** (each kind of data is on Ask: the first action that wants it asks, and your answer can be kept for the book; a book's Never always wins) and to **Settings → Actions & Prompts → Manage Actions**.
+**On a fresh install**, a welcome chain:
 
-The wizard runs once and won't appear again. **Settings → Backup & Reset → Reset Settings... → Re-run Setup Wizard** runs it again; a re-run skips the language step if you have already configured a language. A **Quick: Fresh start** reset (same menu) also brings it back the next time you open KOAssistant. Everything the wizard sets can be changed later: languages in **Settings → AI Language Settings**, emoji in **Settings → Display Settings → Emoji**, gestures as described [below](#gestures).
+1. **Welcome**: what the next steps set up.
+2. **Restore from backup**: offered only when a KOAssistant backup is found; **Set up fresh** goes on.
+3. **Connect a provider**: pick a provider and paste its API key (or sign in with an OpenAI subscription, or pick Ollama), then test the connection with one small request. **Skip for now** leaves nothing working until a key is added in **Settings → API Keys & Auth**.
+4. **Privacy**: the three presets of [Privacy and Data](Privacy-and-Data): **Default (Ask)**, **Allow everything**, **Block everything**, or **Decide later**.
+5. **Language**: detects your KOReader UI language and asks whether to use it as your AI language; for English it offers to keep English or choose another ([Languages](Languages)).
+6. **Icons**: installs the bundled emoji font when KOReader has none (a restart follows), then a display test that turns the emoji icons on if they render.
+7. **Open it fast**: one row per panel, **Quick Actions** (reader) and **Quick Settings** (file browser), each reading its gesture or "not set"; tap a row to pick any KOReader gesture ([The wizard's gesture step](#the-wizards-gesture-step)). When the bottom-right corner is free in both modes, **Assign both to tap bottom-right corner** does it in one tap.
+8. **Finish**: what was set, a restart note when the font or a gesture needs one, and **Open a chat**.
+
+**After an update**, an update check: a note names what this version changed or added, with **Check now** and **Later**. Check now walks only those steps, each showing the current state with a choice to keep or change it, plus anything not set up yet (a provider, say). In this version: **Privacy** (redone: every kind of data is Ask now, your books' own values and trusted providers kept; **Keep Ask** or pick a preset), **Icons** (with icons on, the display test, or the font offer when KOReader has none; with icons off, an offer to turn them on, the font installing with them) and **Open it fast** (your two panels' gestures, **Keep as they are** or tap one to change it). The check runs once per version; Later never asks again, and **Settings → Setup Wizard** runs it any time.
+
+**Settings → Setup Wizard** lists the topics (Connection, Privacy, Language, Icons, Gestures) with whether each is set up; a tap re-runs that step, **Run everything** the whole chain. A **Quick: Fresh start** reset (**Settings → Backup & Reset → Reset Settings...**) brings the welcome chain back the next time you open KOAssistant. Everything the wizard sets can be changed later in Settings.
 
 ## Getting Started Checklist
 
@@ -86,9 +93,9 @@ You can add any book action to Quick Actions from Manage Actions (hold the actio
 
 ## Gestures
 
-### Automatic Setup
+### The wizard's gesture step
 
-The Setup Wizard offers to assign both panels to **tap bottom-right corner**: Quick Settings in the file browser and Quick Actions in the reader. Accept to set up both gestures automatically (requires a KOReader restart). If the bottom-right corner is already assigned to another action, you get an informational tip instead.
+The Setup Wizard's **Open it fast** step shows the two panels with the gesture each has, Quick Actions in the reader and Quick Settings in the file browser, and lets you pick any KOReader gesture for either ([The gesture picker](#the-gesture-picker)). When the bottom-right corner is free in both modes, one button assigns both to **tap bottom-right corner**. After an update the same step shows what you have and offers to keep it.
 
 ### Manual Setup
 
@@ -103,15 +110,17 @@ Now the same tap gives you Quick Settings in the file browser and Quick Actions 
 >
 > - **File browser gestures:** set them from the file browser (KOReader's gear menu → Taps and gestures → Gesture manager).
 > - **Reader gestures:** set them while a book or document is open (same path).
-> - KOAssistant's own [Shortcuts screen](#the-shortcuts-screen) shows the gestures of both and can assign either.
+> - KOAssistant's own [Gestures screen](#the-gestures-screen) shows the gestures of both and can assign either.
 >
 > Set up gestures in **both places** if you want access from both. Reader-only actions (such as Quick Actions, Translate Page and Book Chat/Action) appear grayed out if you try to add them to file browser gestures; this is expected. General actions (such as Quick Settings and Chat History) work in both contexts and can be added to either or both.
 
-### The Shortcuts Screen
+### The Gestures Screen
 
-**Settings → Menus & Buttons → Shortcuts** (under the Gestures heading) lists KOAssistant's gesture actions with the gestures each one has now, whether they were set there or in KOReader's gesture manager: the built-in ones ([Available Gesture Actions](#available-gesture-actions)) and any action you added to the gesture menu.
+**Settings → Gestures** lists KOAssistant's gesture actions with the gestures each one has now, whether they were set there or in KOReader's gesture manager: the built-in ones ([Available Gesture Actions](#available-gesture-actions)) and any action you added to the gesture menu. Tap an action for its own dialog: a **Remove** row per gesture it has, and **Add a gesture (reader)…** or **Add a gesture (file browser)…** for the modes it works in, which opens the gesture picker. Changes apply at once while KOReader's gesture plugin is loaded; otherwise they take effect after a restart, and the screen says so.
 
-Tap an action to remove one of its gestures or to give it a free one: Tap bottom-right corner, Tap bottom-left corner, Double-tap bottom-right corner, Double-tap bottom-left corner or Short diagonal swipe. The picker offers the reader's gestures and, for actions that work there, the file browser's; a gesture already in use shows what holds it. Changes apply immediately, with no restart. If KOReader's gesture data is not ready, the screen only lists the gestures; assign them in KOReader's gesture manager instead.
+### The gesture picker
+
+The picker lists KOReader's gesture sections with their free counts: Tap corner, Long-press on corner, One-finger swipe (the edge swipes and the short diagonal swipe), Double tap, Two-finger tap corner, Two-finger swipe, Spread and pinch, Two-finger rotation, and Multiswipes (offered while KOReader's multiswipes are on). A section lists its gestures; one in use shows what holds it ("Tap top-left corner: Toggle frontlight") and can still be picked: a confirm names the replacement, and the gesture then does only this (KOReader's own gesture manager can stack several actions on one gesture; the picker gives a gesture one). A gesture that already opens this action reads "(this one)" and offers to remove it. The corner long-presses carry a note while KOReader's "Ignore long-press on corners" setting is on.
 
 ### Build a KOReader QuickMenu
 
@@ -162,7 +171,7 @@ You can add any **book** or **general** action to KOReader's gesture menu:
 2. Hold a book or general action to see its details.
 3. Tap **+ Gesture Menu**.
 4. **Restart KOReader** for the change to take effect.
-5. Bind it in **Settings → Menus & Buttons → Shortcuts**, which applies changes immediately ([The Shortcuts Screen](#the-shortcuts-screen)). KOReader's own gesture screen works too: KOReader's gear menu → Taps and gestures → Gesture manager.
+5. Bind it in **Settings → Gestures**, which applies changes immediately ([The Gestures Screen](#the-gestures-screen)). KOReader's own gesture screen works too: KOReader's gear menu → Taps and gestures → Gesture manager.
 
 Actions in the gesture menu show a `[gesture]` indicator in the Manage Actions list.
 
@@ -243,7 +252,7 @@ A **shorter long-press interval** makes text selection easier. Go to KOReader's 
 
 After the basic setup, these pages show what else KOAssistant can do. For tips on getting better answers (models, behavior styles, domains), see [Prompts, Behaviors and Domains](Prompts-Behaviors-and-Domains).
 
-- [Contexts and Chat](Contexts-and-Chat): the chips row under the input field (Domain, Web, Tools, Quick, Scope, Attach, Spoiler, Data) sets up one chat, and a long press opens the per-book or global default behind a chip; the ⚡ Quick chip gets a fast, brief reply.
+- [Contexts and Chat](Contexts-and-Chat): the chips row under the input field (Domain, Web, Tools, Quick, Scope, Attach, Spoiler) sets up one chat, and a long press opens the per-book or global default behind a chip; the ⚡ Quick chip gets a fast, brief reply.
 - [Chat Windows](Chat-Windows): short answers (Translate, Quick Define and Quick Explain by default) land in a small Minimal Popup at your selection; tap it to expand.
 - [Using X-Ray](Using-X-Ray): a browsable guide to the book, with section X-Rays, AI Wiki, checkpoints and version history; names are underlined as you read, and a tap opens a short card.
 - [Spoiler Protection](Spoiler-Protection): on by default; replies and X-Ray checkpoint installs stay within your reading position.

@@ -2830,11 +2830,6 @@ local function runNearbyTextTests()
         local note = table.concat(data._unavailable_data or {}, "; ")
         TestRunner:assertContains(note, "current page (set to Never)")
     end)
-    TestRunner:test("{page_text}: left out of this chat by the Data chip", function()
-        local data = withPage({ _chat_data = { never = { nearby_text = true } } })
-            :extractForAction({ prompt = "Explain {page_text_section}" })
-        TestRunner:assertEquals(data.page_text, "")
-    end)
     TestRunner:test("{page_text}: Ask unanswered sends nothing; Allow once sends", function()
         local data = withPage({ nearby_text_sharing = "ask" }):extractForAction({ prompt = "{page_text}" })
         TestRunner:assertEquals(data.page_text, "")
@@ -2856,16 +2851,13 @@ local function runNearbyTextTests()
             "the freeform Send gates and asks for its ambient context")
         TestRunner:assert(dialogs:find("if not is_xray_chat then\n                configuration.features._data_once = nil", 1, true) ~= nil,
             "a new dialog starts without the last chat's allowance (the X-Ray chat keeps its own)")
-        -- The chat's own choices (the Data chip) reach its requests and end with it
-        TestRunner:assert(dialogs:find("tf._chat_data = nil", 1, true) == nil,
-            "a dialog launch looks like a direct entry with the default chips: its choices must survive")
-        TestRunner:assert(dialogs:find("shared_features._chat_data = nil\n                        shared_features._data_once = nil", 1, true) ~= nil,
-            "the Send's private copy takes the chat's choices; the shared table drops them")
-        local _n, closes = dialogs:gsub("configuration.features._chat_data = nil\n            configuration.features._data_once = nil", "")
-        TestRunner:assertEquals(closes, 2, "both user exits of the dialog end the chat's choices")
-        TestRunner:assert(dialogs:find('{ kind = "book_list", required = false }', 1, true) ~= nil
-            and dialogs:find('.chatNever(configuration.features, "book_list")', 1, true) ~= nil,
-            "a library chat's book list can be left out of the chat")
+        -- The chat's allowance ends with it
+        TestRunner:assert(dialogs:find("shared_features._data_once = nil", 1, true) ~= nil,
+            "the Send's private copy takes the chat's allowance; the shared table drops it")
+        local _n, closes = dialogs:gsub("configuration.features._data_once = nil\n        end\n", "")
+        TestRunner:assertEquals(closes, 2, "both user exits of the dialog end the chat's allowance")
+        TestRunner:assert(dialogs:find('{ kind = "book_list", required = false }', 1, true) ~= nil,
+            "a library chat's book list is optional at Send")
         TestRunner:assert(dialogs:find("resolveBookInfoLevel(\n        artifact_ds, configuration.features)", 1, true) ~= nil,
             "the artifact chat's book line follows Book info")
         local main = read("main.lua")

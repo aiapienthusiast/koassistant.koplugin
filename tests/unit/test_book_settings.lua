@@ -354,12 +354,14 @@ TestRunner:test("none + custom title: nothing names the book, the custom title i
     TestRunner:assertNotContains(result, "Real Title", "original never appears")
 end)
 
-TestRunner:test("the Data chip's book info switch: none for this chat (B500)", function()
+TestRunner:test("the Quick Answer preset's Leave Book Info Out: none for a Quick chat (B502)", function()
     local ds = makeDocSettings({ koassistant_book_info_level = "full" })
     TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
-        { book_info_in_chat = "basic", _chat_data = { book_info_off = true } }), "none")
+        { book_info_in_chat = "basic", quick_preset_book_info_off = true }, true), "none", "Quick on, the switch on")
     TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
-        { book_info_in_chat = "basic", _chat_data = {} }), "full")
+        { book_info_in_chat = "basic", quick_preset_book_info_off = true }), "full", "not a Quick request: the book's level")
+    TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
+        { book_info_in_chat = "basic" }, true), "full", "Quick on, the switch off (the default)")
 end)
 
 -- Per-book quiz overrides: per-book field > global > built-in default

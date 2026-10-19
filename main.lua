@@ -1523,7 +1523,6 @@ function AskGPT:initSettings()
   do
     local f = self.settings:readSetting("features")
     if type(f) == "table" then
-      f._chat_data = nil
       f._data_once = nil
     end
   end
@@ -9807,7 +9806,6 @@ function AskGPT:_generateSummaryAndContinue(on_done, section_scope, data_once)
   config_copy.features.is_book_context = true
   -- The popup's allowance covers the summary generated on the way (B395)
   config_copy.features._data_once = nil
-  config_copy.features._chat_data = nil  -- a chat's own choices (the Data chip) are that chat's
   if data_once then
     require("koassistant.request.privacy_gates").grantOnce(config_copy.features,
       self.ui and self.ui.document and self.ui.document.file, data_once)
@@ -15017,7 +15015,6 @@ function AskGPT:_fireXrayAutoUpdate(opts)
   config_copy.features = {}
   for k, v in pairs((configuration or {}).features or {}) do config_copy.features[k] = v end
   config_copy.features._data_once = nil
-  config_copy.features._chat_data = nil  -- a chat's own choices (the Data chip) are that chat's
   if opts.data_once then
     require("koassistant.request.privacy_gates").grantOnce(config_copy.features, file, opts.data_once)
   end
@@ -16107,7 +16104,6 @@ function AskGPT:_fireXrayLadderRung()
   end
   -- The build's allowance (Allow once at its start, B395) rides every rung
   config_copy.features._data_once = nil
-  config_copy.features._chat_data = nil  -- a chat's own choices (the Data chip) are that chat's
   if build.data_once then
     require("koassistant.request.privacy_gates").grantOnce(config_copy.features, file, build.data_once)
   end
@@ -17109,7 +17105,6 @@ function AskGPT:_executeBookLevelActionDirect(action, action_id, opts)
   -- popup's question handed over (opts.data_once, the kinds): a record left on
   -- the shared table by a chat is that chat's and never rides a book-level run
   config_copy.features._data_once = nil
-  config_copy.features._chat_data = nil  -- a chat's own choices (the Data chip) are that chat's
   if opts and opts.data_once then
     require("koassistant.request.privacy_gates").grantOnce(config_copy.features,
       self.ui and self.ui.document and self.ui.document.file, opts.data_once)
@@ -17234,8 +17229,7 @@ function AskGPT:executeFileBrowserAction(file, title, authors, book_props, actio
     end
     -- A chat's run allowance (B395) never rides a book-level run
     config_copy.features._data_once = nil
-    config_copy.features._chat_data = nil  -- a chat's own choices (the Data chip) are that chat's
-
+  
     -- Signal synthetic book metadata (same as _executeBookLevelActionDirect)
     config_copy.features._is_book_level_action = true
 
@@ -20879,9 +20873,6 @@ function AskGPT:_scrubContextFeatures(features)
   -- An allowance for one run (Allow once, B395) is the request's, consumed at
   -- its dispatch; a stray on the shared table would let data out unasked
   features._data_once = nil
-  -- A chat's own data choices (the Data chip) are that dialog's and its chat's;
-  -- a stray would leave kinds or the book info out of unrelated requests
-  features._chat_data = nil
 end
 
 function AskGPT:executeHighlightBypassAction(action, selected_text, highlight_instance)
@@ -21580,51 +21571,14 @@ function AskGPT:_resetFeatureSettingsInternal()
 end
 
 -- Re-run setup wizard
+-- Settings → Setup Wizard: the topic menu (each topic with its state, a
+-- tap re-runs that step, "Run everything" the whole chain)
 function AskGPT:rerunSetupWizard()
-  self.settings:delSetting("setup_wizard_completed")
-  self.settings:flush()
-  self:showSetupWizard()
+  require("koassistant.ui.setup_wizard").showTopicMenu(self)
 end
 
--- Setup Wizard v2 dev entry (koassistant/ui/setup_wizard.lua) — INERT for
--- users until the release flip: the only route here is the debug-gated
--- Settings > Advanced row. At release, checkSetupWizard/rerunSetupWizard
--- switch to the new module and this row retires.
--- Settings ▸ X-Ray ▸ "Categories for New X-Rays": the global default every
--- book without its own pick follows (presets v0.21; schema action row).
-function AskGPT:showXrayDefaultCategoriesPicker()
-  local BookSettings = require("koassistant.books.book_settings")
-  BookSettings.showXrayCategoriesPicker({ target = "global", plugin = self })
-end
-
--- Settings ▸ X-Ray ▸ "Depth of New X-Rays": the global depth rung (depth axis
--- 2026-08-25; the shared two-layer picker opened on its Global tab).
-function AskGPT:showXrayDefaultDepthPicker()
-  local BookSettings = require("koassistant.books.book_settings")
-  BookSettings.showXrayDepthPicker({ plugin = self, ui = self.ui, target_override = "global" })
-end
-
---- Global default type for new X-Rays (B337c); settings menu row
-function AskGPT:showXrayDefaultTypePicker()
-  local BookSettings = require("koassistant.books.book_settings")
-  BookSettings.showXrayTypePicker({ plugin = self, ui = self.ui, target_override = "global",
-    no_rebuild_offer = true })
-end
-
---- Global preset for new X-Rays (B383): sets the three global dials below
---- it in one tap; settings menu row
-function AskGPT:showXrayDefaultPresetPicker()
-  local BookSettings = require("koassistant.books.book_settings")
-  BookSettings.showXrayPresetPicker({ plugin = self, ui = self.ui, target_override = "global" })
-end
-
---- Global default for where carried entries are listed (#116, B393);
---- settings menu row
-function AskGPT:showXrayDefaultCarriedPicker()
-  local BookSettings = require("koassistant.books.book_settings")
-  BookSettings.showXrayCarriedPicker({ plugin = self, ui = self.ui, target_override = "global" })
-end
-
+-- Settings ▸ Advanced ▸ "Setup Wizard (dev tools)", debug-gated: the probes,
+-- the stamps, the faces run by hand (koassistant/ui/setup_wizard.lua)
 function AskGPT:showSetupWizardDev()
   require("koassistant.ui.setup_wizard").showDevMenu(self)
 end
@@ -23478,12 +23432,16 @@ function AskGPT:ensureInitialized()
   -- Check migration first (may show dialog if old chats exist)
   self:checkChatMigrationStatus()
 
-  -- Setup wizard: welcome → language → emoji test → gesture setup → tips
-  -- Shows once for new users (v2+ storage, not yet completed)
-  self:checkSetupWizard()
+  -- The Setup Wizard (two faces: the welcome chain, the update check); when
+  -- one opened, the one-time prompts below wait for the next start, and the
+  -- update check carries the privacy notice and the font offer itself
+  if self:checkSetupWizard() then
+    return
+  end
 
   -- One-time notice after the upgrade that made Ask the default for every
-  -- sharing switch (B395 slice 2): before the other prompts, never on top of them
+  -- sharing switch (B395 slice 2): before the other prompts, never on top of
+  -- them (the update check clears it when it ran)
   if require("koassistant.ui.data_access").maybeShowUpgradeNotice(self) then
     return
   end
@@ -23499,54 +23457,20 @@ function AskGPT:ensureInitialized()
 end
 
 --[[
-    Setup Wizard
-    Sequential first-run setup: welcome → emoji test → gesture setup → tips.
-    Shows once for new users. Replaces the old separate welcome + gesture dialogs.
+    Setup Wizard (koassistant/ui/setup_wizard.lua): two faces at the first
+    interaction, a fresh install's welcome chain and a configured install's
+    update check (checkSetupWizard); the topic menu from Settings → Setup
+    Wizard (rerunSetupWizard). The language step below is shared.
 --]]
 
--- Scan gestures data for every slot holding the given dispatcher action.
--- Returns an array of { section = "gesture_reader"|"gesture_fm", slot = id },
--- sorted for a steady display (pairs order is unstable).
-local function _scanGesturesForAction(gestures_data, action_id)
-  local found = {}
-  for _idx, section_name in ipairs({"gesture_reader", "gesture_fm"}) do
-    local section = gestures_data[section_name]
-    if type(section) == "table" then
-      for slot, gesture_entry in pairs(section) do
-        if type(gesture_entry) == "table" and gesture_entry[action_id] then
-          table.insert(found, { section = section_name, slot = slot })
-        end
-      end
-    end
-  end
-  table.sort(found, function(a, b)
-    if a.section ~= b.section then return a.section < b.section end
-    return a.slot < b.slot
-  end)
-  return found
-end
-
 -- Check if a gesture slot is empty (nil or empty table)
-local function _isGestureSlotEmpty(gesture_entry)
-  if gesture_entry == nil then
-    return true
-  end
-  if type(gesture_entry) == "table" and next(gesture_entry) == nil then
-    return true
-  end
-  return false
-end
-
 --[[
-    Shortcuts screen (release prep A7, decided 2026-08-12): every KOA
-    dispatcher action with its CURRENT gesture binding, editable in place.
-    Assignment goes through the LIVE Gestures plugin instance — its settings
-    object is class-level and its gestureAction() reads the shared table at
-    fire time, with every zone registered unconditionally at init, so a write
-    takes effect immediately, no restart (verified against
-    plugins/gestures.koplugin 2026-08-12). The file fallback is READ-ONLY
-    display: writing gestures.lua behind the plugin's back is the issue-#72
-    class of bug — its next flush would clobber the write.
+    The Gestures screen (Settings → Gestures; the Shortcuts screen until
+    B489, 2026-10-19): every KOAssistant dispatcher action with its current
+    gesture bindings, each action opening its own dialog (Remove rows, Add a
+    gesture per mode) on the one gesture picker (koassistant/ui/gesture_picker.lua),
+    which writes through the live Gestures plugin when it is loaded (applies
+    at once) and through gestures.lua's own settings object otherwise.
 --]]
 
 -- The static dispatcher registrations from onDispatcherRegisterActions, in
@@ -23594,87 +23518,22 @@ function AskGPT:_shortcutActionList()
   return list
 end
 
--- Live-first gestures access. Returns data, live_instance (nil = file
--- fallback, display only).
-function AskGPT:_gesturesAccess()
-  local ges = self.ui and self.ui.gestures
-  if ges and ges.settings and ges.settings.data then
-    return ges.settings.data, ges
-  end
-  local settings = LuaSettings:open(DataStorage:getSettingsDir() .. "/gestures.lua")
-  return settings.data or {}, nil
-end
-
--- Friendly name for a gesture slot: our candidate labels, else the raw id
--- prettified (bindings made through KOReader's own gesture manager).
-function AskGPT:_gestureSlotLabel(slot)
-  local SetupWizard = require("koassistant.ui.setup_wizard")
-  for _idx, cand in ipairs(SetupWizard.GESTURE_CANDIDATES) do
-    if cand.id == slot then return cand.label end
-  end
-  return (slot:gsub("_", " "))
-end
-
-function AskGPT:_gestureSectionLabel(section)
-  return section == "gesture_fm" and _("file browser") or _("reader")
-end
-
--- Bind action_id to a free slot through the live instance. Single-action
--- entry, the wizard's write shape; no order bookkeeping needed for one action.
-function AskGPT:_assignShortcut(live, section, slot, action_id)
-  local data = live.settings.data
-  data[section] = data[section] or {}
-  data[section][slot] = { [action_id] = true }
-  -- Re-point the fire-time lookup table in case the section table was
-  -- created fresh (normally the same table ref, so this is a no-op).
-  if live.ges_mode then live.gestures = data[live.ges_mode] end
-  live.settings:flush()
-end
-
--- Remove action_id from a slot, mirroring Dispatcher's native uncheck path
--- (setValue → _removeFromOrder). A slot left with nothing actionable goes
--- back to nil ("pass through"), so a tap that used to fall through — e.g. to
--- page turn — falls through again.
-function AskGPT:_removeShortcut(live, section, slot, action_id)
-  local data = live.settings.data
-  local sec = data[section]
-  local entry = sec and sec[slot]
-  if type(entry) ~= "table" then return end
-  entry[action_id] = nil
-  Dispatcher._removeFromOrder(sec, slot, action_id)
-  local remaining = 0
-  for k in pairs(entry) do
-    if k ~= "settings" then remaining = remaining + 1 end
-  end
-  if remaining == 0 then sec[slot] = nil end
-  if live.ges_mode then live.gestures = data[live.ges_mode] end
-  live.settings:flush()
-end
-
-function AskGPT:showShortcutsScreen()
-  local data, live = self:_gesturesAccess()
+-- Settings → Gestures (B489): every KOAssistant gesture action with the
+-- gestures it has now, set here or in KOReader's gesture manager; a tap
+-- opens the action's own dialog.
+function AskGPT:showGesturesScreen()
+  local GesturePicker = require("koassistant.ui.gesture_picker")
+  local data, live = GesturePicker.access(self)
   local self_ref = self
   local dialog
   local buttons = {}
   for _idx, act in ipairs(self:_shortcutActionList()) do
-    local bindings = _scanGesturesForAction(data, act.id)
-    local label
-    if #bindings == 0 then
-      label = T(_("%1: %2"), act.title, _("not set"))
-    else
-      local parts = {}
-      for _b, b in ipairs(bindings) do
-        table.insert(parts, T(_("%1 (%2)"),
-          self:_gestureSlotLabel(b.slot), self:_gestureSectionLabel(b.section)))
-      end
-      label = T(_("%1: %2"), act.title, table.concat(parts, ", "))
-    end
+    local action = act
     table.insert(buttons, { {
-      text = label,
-      enabled = live ~= nil,
+      text = T(_("%1: %2"), action.title, GesturePicker.bindingsText(data, action.id) or _("not set")),
       callback = function()
         UIManager:close(dialog)
-        self_ref:showShortcutSlotPicker(act)
+        self_ref:showGestureActionDialog(action)
       end,
     } })
   end
@@ -23682,105 +23541,96 @@ function AskGPT:showShortcutsScreen()
     text = _("Close"), id = "close",
     callback = function() UIManager:close(dialog) end,
   } })
-  local title = _("Shortcuts")
+  local title = _("Gestures") .. "\n"
   if live then
-    title = title .. "\n" .. _("Tap an action to assign or remove a gesture. Changes apply immediately.")
+    title = title .. _("Tap an action to give it a gesture or remove one. Changes apply at once.")
   else
-    title = title .. "\n" .. _("KOReader's gesture data isn't ready, so assignment is unavailable here — use KOReader Settings > Taps and gestures.")
+    title = title .. _("Tap an action to give it a gesture or remove one. KOReader's gesture plugin is not loaded here, so a change takes effect after a restart.")
   end
   dialog = ButtonDialog:new{ title = title, buttons = buttons }
   UIManager:show(dialog)
 end
 
-function AskGPT:showShortcutSlotPicker(act)
-  local data, live = self:_gesturesAccess()
-  if not live then return self:showShortcutsScreen() end
+-- One action's gestures: a Remove row per binding, then Add a gesture per
+-- mode the action works in, on the one picker
+function AskGPT:showGestureActionDialog(act)
+  local GesturePicker = require("koassistant.ui.gesture_picker")
+  local data = GesturePicker.access(self)
   local self_ref = self
   local dialog
-  local function done()
+  local function back()
     if dialog then UIManager:close(dialog); dialog = nil end
-    self_ref:showShortcutsScreen()
+    self_ref:showGesturesScreen()
   end
-
   local buttons = {}
-  local bindings = _scanGesturesForAction(data, act.id)
-  for _b, b in ipairs(bindings) do
+  for _b, b in ipairs(GesturePicker.bindingsFor(data, act.id)) do
+    local binding = b
     table.insert(buttons, { {
-      text = T(_("Remove: %1 (%2)"),
-        self:_gestureSlotLabel(b.slot), self:_gestureSectionLabel(b.section)),
+      text = T(_("Remove: %1 (%2)"), GesturePicker.slotLabel(binding.slot), GesturePicker.modeLabel(binding.section)),
       callback = function()
-        self_ref:_removeShortcut(live, b.section, b.slot, act.id)
-        UIManager:show(Notification:new{ text = _("Gesture removed."), timeout = 2 })
-        done()
+        local how = GesturePicker.remove(self_ref, binding.section, binding.slot, act.id)
+        UIManager:show(Notification:new{
+          text = how == "live" and _("Gesture removed.") or _("Gesture removed (after a restart)."), timeout = 2 })
+        back()
       end,
     } })
   end
-
-  local SetupWizard = require("koassistant.ui.setup_wizard")
-  local sections = {}
-  if act.reader then table.insert(sections, { key = "gesture_reader", header = _("— Reader —") }) end
-  if act.fm then table.insert(sections, { key = "gesture_fm", header = _("— File browser —") }) end
-  for _s, s in ipairs(sections) do
-    if #sections > 1 then
-      table.insert(buttons, { { text = s.header, enabled = false } })
-    end
-    for _c, cand in ipairs(SetupWizard.GESTURE_CANDIDATES) do
-      local entry = (data[s.key] or {})[cand.id]
-      local state = SetupWizard.slotState(entry)
-      if state == "free" then
-        table.insert(buttons, { {
-          text = cand.label,
-          callback = function()
-            self_ref:_assignShortcut(live, s.key, cand.id, act.id)
-            UIManager:show(Notification:new{
-              text = T(_("Gesture assigned: %1"), cand.label), timeout = 2 })
-            done()
+  local modes = {}
+  if act.reader then table.insert(modes, "gesture_reader") end
+  if act.fm then table.insert(modes, "gesture_fm") end
+  for _m, section_key in ipairs(modes) do
+    local key = section_key
+    table.insert(buttons, { {
+      text = T(_("Add a gesture (%1)…"), GesturePicker.modeLabel(key)),
+      callback = function()
+        if dialog then UIManager:close(dialog); dialog = nil end
+        GesturePicker.show({
+          plugin = self_ref, action_id = act.id, action_label = act.title, section_key = key,
+          on_done = function(slot, how)
+            if slot then
+              UIManager:show(Notification:new{
+                text = how == "live" and T(_("Gesture assigned: %1"), GesturePicker.slotLabel(slot))
+                  or T(_("Gesture assigned: %1 (after a restart)"), GesturePicker.slotLabel(slot)),
+                timeout = 2 })
+            end
+            self_ref:showGesturesScreen()
           end,
-        } })
-      else
-        -- Show what holds the slot (pcall: gestures.lua can hold ids the
-        -- Dispatcher doesn't know this session, e.g. from removed plugins)
-        local ok, holder = pcall(function() return Dispatcher:menuTextFunc(entry) end)
-        table.insert(buttons, { {
-          text = T(_("%1 — %2"), cand.label, ok and holder or _("taken")),
-          enabled = false,
-        } })
-      end
-    end
+          on_cancel = function() self_ref:showGestureActionDialog(act) end,
+        })
+      end,
+    } })
   end
-
-  table.insert(buttons, { {
-    text = _("Cancel"), id = "close",
-    callback = done,
-  } })
+  table.insert(buttons, { { text = _("Back"), id = "close", callback = back } })
   dialog = ButtonDialog:new{
-    title = T(_("Shortcut for: %1"), act.title) .. "\n"
-      .. _("Pick a gesture — it starts working right away:"),
+    title = T(_("Gestures for: %1"), act.title),
     buttons = buttons,
-    -- Outside-tap = Cancel (plugin tenet); the widget already closed itself,
-    -- so only the reopen runs.
-    tap_close_callback = function()
-      dialog = nil
-      self_ref:showShortcutsScreen()
-    end,
+    tap_close_callback = back,
   }
   UIManager:show(dialog)
 end
 
--- Check if setup wizard should be shown
+-- Live-first gestures access. Returns data, live_instance (nil = file
+-- fallback, display only).
+-- The Setup Wizard at the first interaction: a fresh install gets the
+-- welcome chain, a configured install the update check of a release that
+-- lists one, once (SetupWizard.face). Returns true when a wizard dialog
+-- opened: the other one-time prompts wait for the next start then.
 function AskGPT:checkSetupWizard()
-  -- Skip if already completed
-  if self.settings:readSetting("setup_wizard_completed") then
-    return
-  end
-
-  -- Only show for v2+ users (skips users mid-migration to avoid dialog collision)
+  -- Only for v2+ users (skips users mid-migration to avoid dialog collision)
   local storage_version = G_reader_settings:readSetting("chat_storage_version", 1)
   if storage_version < 2 then
-    return
+    return false
   end
-
-  self:showSetupWizard()
+  local SetupWizard = require("koassistant.ui.setup_wizard")
+  local face = SetupWizard.face(self)
+  if face == "fresh" then
+    SetupWizard.runChain(self, { mark_complete = true })
+    return true
+  elseif face == "update" then
+    SetupWizard.runUpdate(self)
+    return true
+  end
+  return false
 end
 
 -- One-time language prompt for existing users who completed wizard
@@ -23849,46 +23699,6 @@ function AskGPT:checkLanguagePrompt()
     end,
   })
   return true
-end
-
--- Orchestrate the setup wizard steps
-function AskGPT:showSetupWizard()
-  -- Pre-load gesture data for step 3
-  local gestures_path = DataStorage:getSettingsDir() .. "/gestures.lua"
-  local gestures_settings = LuaSettings:open(gestures_path)
-  local gestures_data = gestures_settings.data
-
-  -- Determine gesture slot availability
-  local gestures_available = gestures_data and next(gestures_data) ~= nil
-  local both_free = false
-  if gestures_available then
-    local reader_gestures = gestures_data.gesture_reader or {}
-    local fm_gestures = gestures_data.gesture_fm or {}
-    both_free = _isGestureSlotEmpty(reader_gestures.tap_right_bottom_corner)
-      and _isGestureSlotEmpty(fm_gestures.tap_right_bottom_corner)
-  end
-
-  -- Chain: Step 1 → Step 2 → Step 3 → Step 4 → Step 5
-  self:showSetupStep1Welcome(function()
-    self:showSetupStep2Language(function()
-      self:showSetupStep3EmojiTest(function()
-        self:showSetupStep4Gestures(gestures_settings, gestures_available, both_free, function(gestures_applied)
-          self:showSetupStep5Tips(gestures_applied)
-        end)
-      end)
-    end)
-  end)
-end
-
--- Step 1: Welcome
-function AskGPT:showSetupStep1Welcome(next_step)
-  local text = _("Welcome to KOAssistant!") .. "\n\n" ..
-    _("Your AI reading assistant is ready. Let's set up a few things. Tap the screen to continue.")
-
-  UIManager:show(InfoMessage:new{
-    text = text,
-    dismiss_callback = next_step,
-  })
 end
 
 -- Step 2: Language selection
@@ -24016,141 +23826,6 @@ function AskGPT:showWizardLanguagePicker(next_step)
     end,
   }
   UIManager:show(picker_dialog)
-end
-
--- Step 3: Emoji display test
-function AskGPT:showSetupStep3EmojiTest(next_step)
-  local ConfirmBox = require("ui/widget/confirmbox")
-  local text = _("EMOJI DISPLAY TEST") .. "\n\n" ..
-    _("Do these icons display correctly on your device?") .. "\n\n" ..
-    "📄 Document  📝 Notes  📓 Notebook\n" ..
-    "🔍 Search  🌐 Web  🎭 Behavior\n" ..
-    "📜 History  🔖 Bookmark  📖 Book" .. "\n\n" ..
-    _("If not, Settings → Display Settings → Emoji → Emoji Font installs the bundled emoji font once the wizard is done.") .. "\n\n" ..
-    _("If you see blank boxes or question marks, choose \"No\".")
-
-  local wizard_advancing = false
-  UIManager:show(ConfirmBox:new{
-    icon = "notice-info",
-    text = text,
-    ok_text = _("Yes, enable"),
-    cancel_text = _("No, skip"),
-    ok_callback = function()
-      -- Enable all three emoji settings
-      local features = self.settings:readSetting("features") or {}
-      features.enable_emoji_icons = true
-      features.enable_emoji_panel_icons = true
-      features.enable_data_access_indicators = true
-      self.settings:saveSetting("features", features)
-      self.settings:flush()
-      self:updateConfigFromSettings()
-      wizard_advancing = true
-      next_step()
-    end,
-    cancel_callback = function()
-      -- ConfirmBox calls cancel_callback on both "No" tap and dismiss.
-      -- Guard against advancing twice.
-      if not wizard_advancing then
-        wizard_advancing = true
-        next_step()
-      end
-    end,
-  })
-end
-
--- Step 4: Gesture setup
-function AskGPT:showSetupStep4Gestures(gestures_settings, gestures_available, both_free, next_step)
-  local ConfirmBox = require("ui/widget/confirmbox")
-
-  if gestures_available and both_free then
-    -- Offer to auto-assign both gestures
-    local text = _("GESTURE SETUP") .. "\n\n" ..
-      _("KOAssistant has two quick-access panels:") .. "\n\n" ..
-      _("Quick Actions: book actions, artifacts, and utilities (reader mode)") .. "\n" ..
-      _("Quick Settings: change provider, model, behavior, and more (file browser)") .. "\n\n" ..
-      _("Assign both to \"tap bottom right corner\"?") .. "\n\n" ..
-      _("You can change these anytime in KOReader Settings (Gear icon) → Taps and Gestures.") .. "\n\n" ..
-      _("Requires KOReader restart to take effect.")
-
-    local wizard_advancing = false
-    UIManager:show(ConfirmBox:new{
-      text = text,
-      ok_text = _("Set up"),
-      cancel_text = _("No thanks"),
-      ok_callback = function()
-        self:applyGestureSetup(gestures_settings)
-        wizard_advancing = true
-        next_step(true) -- true = gestures were set up
-      end,
-      cancel_callback = function()
-        if not wizard_advancing then
-          wizard_advancing = true
-          next_step()
-        end
-      end,
-    })
-  else
-    -- Info-only: gesture slots already occupied or gestures.lua not ready
-    local text = _("GESTURE TIP") .. "\n\n" ..
-      _("KOAssistant has two quick-access panels you can assign to gestures:") .. "\n\n" ..
-      _("Quick Actions: book actions, artifacts, and utilities (assign in reader mode)") .. "\n" ..
-      _("Quick Settings: change provider, model, behavior, and more (assign in file browser mode)") .. "\n\n" ..
-      _("Set them up in KOReader Settings (Gear icon) → Taps and Gestures.")
-
-    UIManager:show(InfoMessage:new{
-      text = text,
-      dismiss_callback = next_step,
-    })
-  end
-end
-
--- Step 5: Getting started tips
-function AskGPT:showSetupStep5Tips(gestures_applied)
-  local text = _("GETTING STARTED") .. "\n\n" ..
-    _("Privacy & Data") .. "\n" ..
-    _("Some features need document text access. Enable in: Settings → Privacy & Data") .. "\n" ..
-    _("Tip: keep a toggle off globally and allow it per book — or on globally and deny it for sensitive books. A per-book deny always wins.") .. "\n\n" ..
-    _("Actions & Prompts") .. "\n" ..
-    _("Create or edit prompts: Settings → Actions & Prompts → Manage Actions (or from Quick Settings panel)")
-
-  if gestures_applied then
-    text = text .. "\n\n" ..
-      _("Gestures assigned. Please restart KOReader for changes to take effect.")
-  end
-
-  text = text .. "\n\n" .. _("Enjoy your reading!")
-
-  UIManager:show(InfoMessage:new{
-    text = text,
-  })
-
-  -- Mark wizard as completed
-  self.settings:saveSetting("setup_wizard_completed", true)
-  self.settings:flush()
-end
-
--- Apply gesture assignments to gestures.lua
-function AskGPT:applyGestureSetup(gestures_settings)
-  -- Ensure sections exist
-  if not gestures_settings.data.gesture_reader then
-    gestures_settings.data.gesture_reader = {}
-  end
-  if not gestures_settings.data.gesture_fm then
-    gestures_settings.data.gesture_fm = {}
-  end
-
-  -- Assign QA to tap bottom right in reader mode
-  gestures_settings.data.gesture_reader.tap_right_bottom_corner = {
-    koassistant_quick_actions = true,
-  }
-
-  -- Assign QS to tap bottom right in file browser mode
-  gestures_settings.data.gesture_fm.tap_right_bottom_corner = {
-    koassistant_ai_settings = true,
-  }
-
-  -- Persist to gestures.lua
-  gestures_settings:flush()
 end
 
 -- Patch TextViewer and DictQuickLookup for unified text selection behavior:

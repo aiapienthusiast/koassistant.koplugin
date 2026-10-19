@@ -272,7 +272,7 @@ See `custom_actions.lua.sample` for more examples.
 | Input dialogs | Each context its own list | **+ Input Dialog** (**+ General Input** for a general action), a long-press in the dialog, or its gear → **Choose and Sort Actions…** | Settings → Menus & Buttons → Input Dialog Actions |
 | Quick Actions panel | Book actions | **+ Quick Actions**, or a long-press on the panel | Settings → Menus & Buttons → Panel Actions, or the panel's gear |
 | File browser long-press menu | Book actions that need no open book | **+ File Browser**, or a long-press in that menu | Settings → Menus & Buttons → File Browser Items |
-| Gesture menu | Book and general actions | **+ Gesture Menu**, then restart KOReader | bind it in Settings → Menus & Buttons → Shortcuts |
+| Gesture menu | Book and general actions | **+ Gesture Menu**, then restart KOReader | bind it in Settings → Gestures |
 
 - The **+** buttons are on the action's [details screen](#the-details-screen). Except for the highlight menu and the dictionary popup, they show only for an action that is turned on.
 - An action whose prompt needs typed input (`{user_input}`) can't go in the highlight menu or the dictionary popup.

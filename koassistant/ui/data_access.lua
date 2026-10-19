@@ -68,7 +68,6 @@ end
 --- Where a value comes from, in words.
 function DataAccess.layerLabel(layer)
     if layer == "book" then return _("this book") end
-    if layer == "chat" then return _("this chat") end
     if layer == "trusted" then return _("trusted providers") end
     if layer == "once" then return _("this run") end
     return _("all books")
@@ -189,9 +188,6 @@ function DataAccess.refuse(plugin, spec)
     if spec.layer == "book" then
         text = T(_("%1 needs %2, which is set to Never for this book (Book Settings → Privacy & Data)."),
             spec.action_name or _("This action"), name:lower())
-    elseif spec.layer == "chat" then
-        text = T(_("%1 needs %2, which you left out of this chat (the Data chip)."),
-            spec.action_name or _("This action"), name:lower())
     elseif spec.layer == "trusted" then
         text = T(_("%1 needs %2, which is set to Never for trusted providers (Settings → Privacy & Data → What trusted providers may use)."),
             spec.action_name or _("This action"), name:lower())
@@ -207,8 +203,7 @@ function DataAccess.refuse(plugin, spec)
             UIManager:close(dialog)
             openBookPrivacy(plugin, spec.path, spec.ui, nil)
         end } }
-    -- (a kind left out of this chat: the Data chip that did it is the door)
-    elseif spec.layer ~= "chat" and plugin and plugin.onKOAssistantSettings then
+    elseif plugin and plugin.onKOAssistantSettings then
         rows[#rows + 1] = { { text = _("Open Settings"), callback = function()
             UIManager:close(dialog)
             plugin:onKOAssistantSettings()
@@ -565,11 +560,11 @@ function DataAccess.needsTitle(action, source)
 end
 
 --- The refusal for an action that needs the title while Book info is None.
---- spec: action_name, layer ("chat" | "book" | "global"), path, ui.
+--- spec: action_name, layer ("quick" | "book" | "global"), path, ui.
 function DataAccess.refuseNoTitle(plugin, spec)
     local where
-    if spec.layer == "chat" then
-        where = _("for this chat (the Data chip)")
+    if spec.layer == "quick" then
+        where = _("for Quick Answer chats (Settings → Chat & Export Settings → Quick Answer Preset → Leave Book Info Out); turn Quick off for this chat to run it")
     elseif spec.layer == "book" then
         where = _("for this book (Book Settings → Privacy & Data)")
     else
@@ -622,10 +617,9 @@ function DataAccess.askForDispatch(plugin, action, features, ui, config, run_fn)
         cf, action, action.provider or (config and config.provider))
     local sm = cf._source_mode
     -- A refusal or a Cancel: the chat this run would have opened never starts
-    -- (an input dialog closes before its action dispatches), so the chat's own
-    -- data choices and its allowance end here, never reaching a later request
+    -- (an input dialog closes before its action dispatches), so the chat's
+    -- allowance ends here, never reaching a later request
     local function drop()
-        cf._chat_data = nil
         cf._data_once = nil
     end
     -- Book info None (B500): an action with nothing of the book to go on but
@@ -633,11 +627,13 @@ function DataAccess.askForDispatch(plugin, action, features, ui, config, run_fn)
     if cf.is_book_context and DataAccess.needsTitle(action, sm) then
         local BookSettings = require("koassistant.books.book_settings")
         local ds = path and require("koassistant.storage.doc_settings").resolve(path, ui) or nil
-        if BookSettings.resolveBookInfoLevel(ds, cf) == "none" then
-            local cd = Gates.chatData(cf)
+        -- A dialog launch carries the chat's Quick state on the source config
+        -- (_quick_answer_active); a direct entry seeds it later, accept-gated,
+        -- and no AI-knowledge action accepts Quick
+        if BookSettings.resolveBookInfoLevel(ds, cf, cf._quick_answer_active) == "none" then
             local layer = "global"
-            if cd and cd.book_info_off then
-                layer = "chat"
+            if BookSettings.resolveBookInfoLevel(ds, cf) ~= "none" then
+                layer = "quick"
             elseif ds and ds:readSetting(BookSettings.KEY_BOOK_INFO) == "none" then
                 layer = "book"
             end

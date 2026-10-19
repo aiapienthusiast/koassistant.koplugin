@@ -1775,8 +1775,6 @@ function ContextExtractor:extractForAction(action)
         if state == "never" then
             if layer == "book" then
                 why = _("set to Never for this book")
-            elseif layer == "chat" then
-                why = _("left out of this chat")
             elseif layer == "trusted" then
                 why = _("set to Never for trusted providers")
             else

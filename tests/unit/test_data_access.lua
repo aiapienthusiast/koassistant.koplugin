@@ -159,26 +159,8 @@ TestRunner:test("artifactAllowed and forProvider judge a text-built artifact for
     TestRunner:assertEqual(#A.forProvider({ e, note }, { enable_book_text_extraction = true }, "openai", nil), 2, "Allow: both ride")
 end)
 
--- B395 slice 3 and B500: the Data chip's pure parts, the no-title rule, the
--- presets' names, the group's privacy keys
-
-TestRunner:test("the Data chip lists a chat's kinds with their states and counts the asks", function()
-    local DataChip = require("koassistant.ui.data_chip")
-    TestRunner:assertEqual(#DataChip.kindsFor("book"), 5, "a book or highlight chat: the five book kinds")
-    TestRunner:assertEqual(DataChip.kindsFor("library")[1], "book_list", "a library chat: the book list first")
-    local rows, n_ask = DataChip.rows(DataChip.kindsFor("book"),
-        { features = { enable_highlights_sharing = true, _chat_data = { never = { notebook = true } } },
-          provider = "openai", once = { book_text = true } })
-    TestRunner:assertEqual(n_ask, 1, "notes still ask")
-    local by = {}
-    for _idx, r in ipairs(rows) do by[r.kind] = r end
-    TestRunner:assertEqual(by.book_text.layer, "once", "allowed for this chat")
-    TestRunner:assertEqual(by.notebook.layer, "chat", "left out of this chat")
-    TestRunner:assertEqual(by.nearby_text.state, "allow", "the text around: Allow by default")
-    TestRunner:assertEqual(DataChip.label(0, false, false), "Data")
-    TestRunner:assertEqual(DataChip.label(2, false, false), "Data: 2 ask")
-    TestRunner:assertEqual(DataChip.label(2, true, false), "Data: this chat", "the chat's own choice first")
-end)
+-- B395 slice 3 and B500: the no-title rule, the presets' names, the group's
+-- privacy keys
 
 TestRunner:test("needsTitle: an action with nothing of the book but its title (B500)", function()
     TestRunner:assertTrue(DataAccess.needsTitle({ prompt = 'Tell me about "{title}"{author_clause}.' }, nil),
@@ -196,7 +178,7 @@ end)
 TestRunner:test("the presets' names and the layers' words", function()
     TestRunner:assertEqual(DataAccess.presetLabel("default"), "Default (Ask)")
     TestRunner:assertEqual(DataAccess.presetLabel(nil), "Custom")
-    TestRunner:assertEqual(DataAccess.layerLabel("chat"), "this chat")
+    TestRunner:assertEqual(DataAccess.layerLabel("once"), "this run")
 end)
 
 TestRunner:test("a group can hold the five privacy values (B395 slice 4)", function()

@@ -59,16 +59,14 @@ SetupWizard.PROVIDER_CHOICES = {
     { id = "ollama",     name = "Ollama (local)" },
 }
 
--- Gesture candidates offered per mode. Deliberately excludes hold-corner
--- slots (the ignore_hold_corners setting silently disables those) and
--- anything a stock KOReader ships bound. Ids verified against the Gestures
--- plugin's gestures_list 2026-08-11.
-SetupWizard.GESTURE_CANDIDATES = {
-    { id = "tap_right_bottom_corner",       label = _("Tap bottom-right corner") },
-    { id = "tap_left_bottom_corner",        label = _("Tap bottom-left corner") },
-    { id = "double_tap_bottom_right_corner", label = _("Double-tap bottom-right corner") },
-    { id = "double_tap_bottom_left_corner", label = _("Double-tap bottom-left corner") },
-    { id = "short_diagonal_swipe",          label = _("Short diagonal swipe") },
+-- The update check (the wizard's second face, 2026-10-19): the steps a
+-- release asks an existing install to look at, by version (the base version,
+-- "-dev" dropped). A version with no entry runs no check; the stamp
+-- features._wizard_version is written anyway, so a later release with one
+-- fires once. Adding a step to a release = one function in CHAIN, its probe,
+-- its key here and a line in NOTES (runUpdate).
+SetupWizard.UPDATE_STEPS = {
+    ["0.24.0"] = { "privacy", "icons", "gestures" },
 }
 
 --========================================================================--
@@ -225,6 +223,51 @@ function SetupWizard.slotState(entry)
     return "taken", n
 end
 
+--- "0.24.0-dev" and "0.24.0" are one version here.
+function SetupWizard.baseVersion(v)
+    return (tostring(v or ""):gsub("%-.*$", ""))
+end
+
+--- Which face an install gets at the first interaction (pure): "fresh"
+--- (nothing set up: the welcome chain), "update" (a configured install, this
+--- version lists update steps and the stamp is older) or "none". completed =
+--- the completion stamp of either wizard, configured = the provider probe,
+--- last_version = features._wizard_version (the old wizard wrote none).
+function SetupWizard.faceFor(completed, configured, last_version, this_version, update_steps)
+    if not completed and not configured then return "fresh" end
+    local base = SetupWizard.baseVersion(this_version)
+    local steps = update_steps and update_steps[base]
+    if steps and #steps > 0 and SetupWizard.baseVersion(last_version) ~= base then return "update" end
+    return "none"
+end
+
+--- The icons step's branch in the update check (pure): icons_on = any icon
+--- switch on, font_state from readFontState. "test" = the glyph test,
+--- "install" = the font offer, "restart" = the restart ask, "offer" = ask to
+--- turn the icons on (the font installs with them).
+function SetupWizard.iconsPlan(icons_on, font_state)
+    if not icons_on then return "offer" end
+    if font_state == "installed" then return "test" end
+    if font_state == "restart" then return "restart" end
+    return "install"
+end
+
+--- Whether the chain runs a step (pure). In an update check the listed
+--- steps run, forced, plus any CONFIGURE step its probe says is not set;
+--- welcome and restore belong to the fresh face; finish always runs. In the
+--- fresh chain every step runs and decides for itself (its probe, or force).
+--- @return boolean run, boolean forced
+function SetupWizard.shouldRun(key, opts, configured)
+    opts = opts or {}
+    if key == "finish" then return true, opts.force or false end
+    if opts.update then
+        if key == "welcome" or key == "restore" then return false, false end
+        if opts.only and opts.only[key] then return true, true end
+        return not configured, false
+    end
+    return true, opts.force or false
+end
+
 --========================================================================--
 --  Live state readers
 --========================================================================--
@@ -349,6 +392,20 @@ function SetupWizard.probe(plugin, name)
         return false
     end
     return probeRaw(plugin, name)
+end
+
+--- This plugin's version, from its own _meta.lua.
+function SetupWizard.thisVersion()
+    local ok, meta = pcall(function() return require("koassistant.core.paths").meta() end)
+    return ok and type(meta) == "table" and meta.version or "0"
+end
+
+--- The face this install gets now (SetupWizard.faceFor over the live state).
+function SetupWizard.face(plugin)
+    local completed = plugin.settings:readSetting("setup_wizard_completed") and true or false
+    local configured = probeRaw(plugin, "provider") and true or false
+    return SetupWizard.faceFor(completed, configured, feats(plugin)._wizard_version,
+        SetupWizard.thisVersion(), SetupWizard.UPDATE_STEPS)
 end
 
 --========================================================================--
@@ -590,7 +647,7 @@ end
 --========================================================================--
 
 function SetupWizard.stepWelcome(plugin, ctx, next_step)
-    if ctx.single then return next_step() end
+    if ctx.single or ctx.update then return next_step() end
     local UIManager = require("ui/uimanager")
     local InfoMessage = require("ui/widget/infomessage")
     UIManager:show(InfoMessage:new{
@@ -604,7 +661,7 @@ end
 function SetupWizard.stepRestore(plugin, ctx, next_step)
     -- Only meaningful on a fresh-looking install (no provider configured)
     -- with a backup archive present — the reinstall / new-device story.
-    if not ctx.force and SetupWizard.probe(plugin, "provider") then
+    if ctx.update or (not ctx.force and SetupWizard.probe(plugin, "provider")) then
         return next_step()
     end
     local BackupManager = require("koassistant.storage.backup_manager")
@@ -782,15 +839,38 @@ function SetupWizard.stepPrivacy(plugin, ctx, next_step)
         advanceOnce()
     end
 
+    -- The update check: this version redid privacy (every switch became
+    -- Ask at the upgrade, the books' own values and the trusted list kept);
+    -- the step is the notice, and Keep Ask is the first answer
+    local head, first_row
+    if ctx.update then
+        local f = feats(plugin)
+        if f._privacy_notice_pending then
+            f._privacy_notice_pending = nil
+            saveFeats(plugin, f)
+        end
+        head = _("PRIVACY & DATA (redone in this version)") .. "\n" ..
+            _("Every kind of data is Ask now: the first action that wants your highlights, notes, notebook, book text, book list or reading habits asks you, and your answer can be kept for the book. Your books' own values and your trusted providers were kept.")
+        first_row = {
+            { text = _("Keep Ask"), callback = function()
+                UIManager:close(dialog)
+                table.insert(ctx.results, _("Privacy: Ask"))
+                advanceOnce()
+            end },
+        }
+    else
+        head = _("PRIVACY & DATA") .. "\n" ..
+            _("What may KOAssistant send to your AI provider? Your highlights, notes, notebook, book text, book list and reading habits each have one value: Ask, Allow or Never.")
+        first_row = {
+            { text = _("Default (Ask)"), callback = function() applyPreset("applyPrivacyPresetDefault", _("Default (Ask)")) end },
+        }
+    end
     dialog = ButtonDialog:new{
-        title = _("PRIVACY & DATA") .. "\n" ..
-            _("What may KOAssistant send to your AI provider? Your highlights, notes, notebook, book text, book list and reading habits each have one value: Ask, Allow or Never.") .. "\n" ..
+        title = head .. "\n" ..
             _("Ask, the default, means the first action that wants a kind of data asks you, and your answer can be kept for the book. A book can also have its own values (Book Settings > Privacy & Data); a book's Never always wins.") .. "\n" ..
             _("Spoiler protection is separate and ON by default: responses respect your reading position."),
         buttons = {
-            {
-                { text = _("Default (Ask)"), callback = function() applyPreset("applyPrivacyPresetDefault", _("Default (Ask)")) end },
-            },
+            first_row,
             {
                 { text = _("Allow everything"), callback = function() applyPreset("applyPrivacyPresetFull", _("Allow everything")) end },
                 { text = _("Block everything"), callback = function() applyPreset("applyPrivacyPresetMinimal", _("Block everything")) end },
@@ -829,6 +909,71 @@ function SetupWizard.stepIcons(plugin, ctx, next_step)
         -- Post-restart continuation of an earlier install.
         return showGlyphTest(plugin, ctx, next_step)
     end
+    if ctx.update then
+        -- The update check (the maintainer, 2026-10-19: "verify emoji if
+        -- enabled, ask to enable if not, check and install font"): by the
+        -- state of the icons and the font. The start-time offer (maybeOfferFont)
+        -- is this step's job now, so its stamp is written here.
+        local UIManager = require("ui/uimanager")
+        local ConfirmBox = require("ui/widget/confirmbox")
+        if not f._emoji_font_offered then
+            f._emoji_font_offered = true
+            saveFeats(plugin, f)
+        end
+        local icons_on = (f.enable_emoji_icons or f.enable_emoji_panel_icons or f.enable_data_access_indicators) and true or false
+        local font_state = SetupWizard.readFontState()
+        local plan = SetupWizard.iconsPlan(icons_on, font_state)
+        if plan == "test" then
+            return showGlyphTest(plugin, ctx, next_step)
+        elseif plan == "install" then
+            return SetupWizard.offerFontInstall(plugin, { wizard = ctx, done = next_step,
+                intro = _("Emoji icons are on, but KOReader has no emoji font, so they show as empty boxes. Install the bundled Noto Emoji font (about 860 KB) into KOReader now?") })
+        end
+        local advancing = false
+        local function advanceOnce()
+            if advancing then return end
+            advancing = true
+            next_step()
+        end
+        if plan == "restart" then
+            UIManager:show(ConfirmBox:new{
+                text = _("ICONS") .. "\n\n" .. _("The emoji font is installed, but KOReader loads fonts at startup. Restart KOReader now? The icons show after it."),
+                ok_text = _("Restart"),
+                cancel_text = _("Later"),
+                ok_callback = function()
+                    advancing = true
+                    ctx.restart_needed = true
+                    UIManager:askForRestart()
+                end,
+                cancel_callback = advanceOnce,
+            })
+            return
+        end
+        -- "offer": the icons are off
+        UIManager:show(ConfirmBox:new{
+            text = _("ICONS") .. "\n\n" .. _("Emoji icons are off. Turn them on? They mark the plugin's menus, buttons and panels (never the chat view), and the emoji font installs with them when KOReader has none."),
+            ok_text = _("Turn on"),
+            cancel_text = _("Keep off"),
+            ok_callback = function()
+                advancing = true
+                if font_state == "installed" then
+                    local ff = feats(plugin)
+                    ff.enable_emoji_icons = true
+                    ff.enable_emoji_panel_icons = true
+                    ff.enable_data_access_indicators = true
+                    saveFeats(plugin, ff)
+                    plugin:updateConfigFromSettings()
+                    table.insert(ctx.results, _("Emoji icons enabled"))
+                    next_step()
+                else
+                    -- the glyph test after the restart turns them on
+                    SetupWizard.offerFontInstall(plugin, { wizard = ctx, done = next_step })
+                end
+            end,
+            cancel_callback = advanceOnce,
+        })
+        return
+    end
     if not ctx.force and SetupWizard.probe(plugin, "icons") then
         return next_step()
     end
@@ -841,112 +986,106 @@ function SetupWizard.stepIcons(plugin, ctx, next_step)
 end
 
 
+-- The two panels, each in its own mode (the Quick Actions panel is a reader
+-- gesture, the Quick Settings panel a file-browser one)
+local PANELS = {
+    { id = "koassistant_quick_actions", label = _("Quick Actions"), section_key = "gesture_reader" },
+    { id = "koassistant_ai_settings", label = _("Quick Settings"), section_key = "gesture_fm" },
+}
+
+--- Open it fast (B489): one row per panel with its gesture or "not set", a
+--- tap opening the gesture picker (every KOReader gesture, a taken one
+--- replaceable after a confirm); on a fresh install with the default corner
+--- free in both modes, one button binds both to it. The update check shows
+--- the same rows with "Keep as they are".
 function SetupWizard.stepGestures(plugin, ctx, next_step)
     if not ctx.force and SetupWizard.probe(plugin, "gestures") then
         return next_step()
     end
     local UIManager = require("ui/uimanager")
     local ButtonDialog = require("ui/widget/buttondialog")
+    local GesturePicker = require("koassistant.ui.gesture_picker")
 
-    local data, settings = readGesturesData(plugin)
-    if not data or (not data.gesture_reader and not data.gesture_fm and next(data) == nil) then
+    local data = GesturePicker.access(plugin)
+    if not GesturePicker.ready(data) then
         -- gestures.lua not initialized yet (Gestures plugin never ran?) —
         -- don't invent its file shape; point at the manual route.
         local InfoMessage = require("ui/widget/infomessage")
         UIManager:show(InfoMessage:new{
             text = _("GESTURES") .. "\n\n" ..
-                _("KOAssistant's panels can be bound to gestures in KOReader Settings (gear icon) > Taps and gestures. KOReader's gesture data isn't ready yet, so set them up there."),
+                _("KOAssistant's panels can be bound to gestures in KOReader Settings (gear icon) > Taps and gestures. KOReader's gesture data isn't ready yet, so set them up there, or from Settings > Gestures later."),
             dismiss_callback = next_step,
         })
         return
     end
 
-    local assignments = {}
-
-    local function commit()
-        if #assignments == 0 then return next_step() end
-        for _idx, a in ipairs(assignments) do
-            data[a.section] = data[a.section] or {}
-            data[a.section][a.slot] = { [a.action] = true }
+    local changed = {}
+    local advancing = false
+    local function finish()
+        if advancing then return end
+        advancing = true
+        if #changed > 0 then
+            table.insert(ctx.results, T(_("Gestures: %1"), table.concat(changed, "; ")))
         end
-        -- Write through the SAME settings object the Gestures plugin
-        -- flushes (issue-#72 class: a divergent LuaSettings instance would
-        -- be silently overwritten by its next onFlushSettings).
-        settings:flush()
-        -- Record for precise undo / the full-reset audit.
-        local f = feats(plugin)
-        f._wizard_gesture_writes = f._wizard_gesture_writes or {}
-        for _idx, a in ipairs(assignments) do
-            table.insert(f._wizard_gesture_writes,
-                { section = a.section, slot = a.slot, action = a.action })
-        end
-        saveFeats(plugin, f)
-        local names = {}
-        for _idx, a in ipairs(assignments) do table.insert(names, a.label) end
-        table.insert(ctx.results,
-            T(_("Gestures assigned: %1 (restart pending)"), table.concat(names, ", ")))
-        ctx.restart_needed = true
         next_step()
     end
+    local function note(panel, slot, how)
+        table.insert(changed, T(_("%1 on %2"), panel.label, GesturePicker.slotLabel(slot)))
+        if how == "restart" then ctx.restart_needed = true end
+    end
 
-    -- One picker per panel; slots marked free/taken, taken rows disabled
-    -- (the wizard never overwrites an existing binding).
-    local function pickSlot(section, action_id, panel_title, panel_blurb, done)
-        local dialog
-        local picked = false
-        local function doneOnce()
-            if picked then return end
-            picked = true
-            done()
-        end
+    local dialog
+    local function render()
+        if dialog then UIManager:close(dialog); dialog = nil end
+        data = GesturePicker.access(plugin)
         local buttons = {}
-        for _idx, cand in ipairs(SetupWizard.GESTURE_CANDIDATES) do
-            local state = SetupWizard.slotState((data[section] or {})[cand.id])
-            local free = state == "free"
-            table.insert(buttons, {
-                {
-                    text = free and cand.label or (cand.label .. " — " .. _("taken")),
-                    enabled = free,
-                    callback = function()
-                        picked = true
-                        UIManager:close(dialog)
-                        table.insert(assignments, {
-                            section = section, slot = cand.id,
-                            action = action_id, label = cand.label,
-                        })
-                        done()
-                    end,
-                },
-            })
+        local default_free = GesturePicker.plan((data.gesture_reader or {}).tap_right_bottom_corner, PANELS[1].id) == "free"
+            and GesturePicker.plan((data.gesture_fm or {}).tap_right_bottom_corner, PANELS[2].id) == "free"
+        if default_free then
+            buttons[#buttons + 1] = {{ text = _("Assign both to tap bottom-right corner"), callback = function()
+                for _idx, panel in ipairs(PANELS) do
+                    note(panel, "tap_right_bottom_corner",
+                        GesturePicker.assign(plugin, panel.section_key, "tap_right_bottom_corner", panel.id, { wizard = ctx }))
+                end
+                render()
+            end }}
         end
-        table.insert(buttons, {
-            {
-                text = _("Skip this panel"),
+        for _idx, p in ipairs(PANELS) do
+            local panel = p
+            buttons[#buttons + 1] = {{
+                text = T(_("%1: %2"), panel.label, GesturePicker.bindingsText(data, panel.id) or _("not set")),
                 callback = function()
-                    picked = true
-                    UIManager:close(dialog)
-                    done()
+                    if dialog then UIManager:close(dialog); dialog = nil end
+                    GesturePicker.show({
+                        plugin = plugin, action_id = panel.id, action_label = panel.label,
+                        section_key = panel.section_key, wizard = ctx,
+                        on_done = function(slot, how)
+                            if slot then note(panel, slot, how) end
+                            render()
+                        end,
+                        on_cancel = render,
+                    })
                 end,
-            },
-        })
+            }}
+        end
+        buttons[#buttons + 1] = {{ text = ctx.update and _("Keep as they are") or _("Done"), id = "close", callback = function()
+            if dialog then UIManager:close(dialog); dialog = nil end
+            finish()
+        end }}
+        local lines = { _("OPEN IT FAST") }
+        if ctx.update then
+            table.insert(lines, _("Your two panels have these gestures. Keep them, or tap one to change it: every KOReader gesture is on offer, and a gesture in use can be replaced."))
+        else
+            table.insert(lines, _("KOAssistant has two panels: Quick Actions while reading (book actions, artifacts and utilities) and Quick Settings in the file browser (provider, model, behavior and more). Give each a gesture; a gesture in use can be replaced."))
+        end
         dialog = ButtonDialog:new{
-            title = panel_title .. "\n" .. panel_blurb .. "\n" ..
-                _("Pick a gesture (restart required to take effect):"),
+            title = table.concat(lines, "\n"),
             buttons = buttons,
-            tap_close_callback = doneOnce,
+            tap_close_callback = function() dialog = nil; finish() end,
         }
         UIManager:show(dialog)
     end
-
-    pickSlot("gesture_reader", "koassistant_quick_actions",
-        _("OPEN IT FAST — Quick Actions (reader)"),
-        _("Book actions, artifacts and utilities while reading."),
-        function()
-            pickSlot("gesture_fm", "koassistant_ai_settings",
-                _("OPEN IT FAST — Quick Settings (file browser)"),
-                _("Provider, model, behavior and more from the file browser."),
-                commit)
-        end)
+    render()
 end
 
 function SetupWizard.stepFinish(plugin, ctx, next_step)
@@ -957,7 +1096,7 @@ function SetupWizard.stepFinish(plugin, ctx, next_step)
     local UIManager = require("ui/uimanager")
     local ButtonDialog = require("ui/widget/buttondialog")
 
-    local lines = { _("SETUP COMPLETE") }
+    local lines = { ctx.update and _("UPDATE CHECK COMPLETE") or _("SETUP COMPLETE") }
     if #ctx.results > 0 then
         table.insert(lines, "")
         for _idx, r in ipairs(ctx.results) do
@@ -971,8 +1110,13 @@ function SetupWizard.stepFinish(plugin, ctx, next_step)
         table.insert(lines, _("Restart KOReader to finish (font and gesture changes need it)."))
     end
     table.insert(lines, "")
-    table.insert(lines, _("Re-run any part of this from the setup topics anytime."))
+    table.insert(lines, _("Settings → Setup Wizard runs any part of this again."))
 
+    -- The stamps: this version's check is done (either face), and the
+    -- completion flag the release passes
+    local f = feats(plugin)
+    f._wizard_version = SetupWizard.baseVersion(SetupWizard.thisVersion())
+    saveFeats(plugin, f)
     if ctx.mark_complete then
         plugin.settings:saveSetting("setup_wizard_completed", true)
         plugin.settings:flush()
@@ -1017,12 +1161,23 @@ local CHAIN = {
     { key = "finish",   fn = function(...) return SetupWizard.stepFinish(...) end },
 }
 
+local PROBED = { provider = true, privacy = true, language = true, icons = true, gestures = true }
+
 -- opts: force (run every step), mark_complete (write the completion flag at
--- the finish step — the release flip passes this; dev runs never do).
+-- the finish step: the first interaction passes this; dev runs never do),
+-- update (the update check: only this version's listed steps, forced, plus
+-- whatever is not set up yet; SetupWizard.shouldRun).
 function SetupWizard.runChain(plugin, opts)
     opts = opts or {}
+    local only
+    if opts.update then
+        only = {}
+        local keys = SetupWizard.UPDATE_STEPS[SetupWizard.baseVersion(SetupWizard.thisVersion())] or {}
+        for _idx, k in ipairs(keys) do only[k] = true end
+    end
     local ctx = {
         force = opts.force or false,
+        update = opts.update or false,
         mark_complete = opts.mark_complete or false,
         results = {},
         restart_needed = false,
@@ -1032,6 +1187,10 @@ function SetupWizard.runChain(plugin, opts)
         i = i + 1
         local step = CHAIN[i]
         if not step then return end
+        local configured = PROBED[step.key] and SetupWizard.probe(plugin, step.key) or false
+        local run, forced = SetupWizard.shouldRun(step.key, { update = ctx.update, only = only, force = opts.force }, configured)
+        if not run then return advance() end
+        ctx.force = forced
         local ok, err = pcall(step.fn, plugin, ctx, advance)
         if not ok then
             logger.warn("KOAssistant wizard: step", step.key, "failed:", err)
@@ -1079,15 +1238,76 @@ function SetupWizard.showTopicMenu(plugin)
             },
         })
     end
+    table.insert(buttons, {
+        {
+            text = _("Run everything"),
+            callback = function()
+                UIManager:close(dialog)
+                SetupWizard.runChain(plugin, { force = true })
+            end,
+        },
+    })
+    table.insert(buttons, {{ text = _("Close"), id = "close", callback = function() UIManager:close(dialog) end }})
     dialog = ButtonDialog:new{
-        title = _("KOAssistant setup"),
+        title = _("Setup Wizard") .. "\n" .. _("Each topic shows whether it is set up. Tap one to set it up again."),
         buttons = buttons,
     }
     UIManager:show(dialog)
 end
 
+--- The update check's opening note (the second face): what this version
+--- changed, Check now or Later. Both write the stamp (once per release,
+--- never nagging) and clear the privacy notice, which the note carries.
+function SetupWizard.runUpdate(plugin)
+    local UIManager = require("ui/uimanager")
+    local ButtonDialog = require("ui/widget/buttondialog")
+    local InfoMessage = require("ui/widget/infomessage")
+    local version = SetupWizard.baseVersion(SetupWizard.thisVersion())
+    local NOTES = {
+        privacy = _("Privacy was redone: every kind of data is Ask now, so the first action that wants one asks you (your books' own values and trusted providers were kept)."),
+        icons = _("Emoji icons: a check that they show, and the emoji font installed when KOReader has none."),
+        gestures = _("The panels' gestures: every KOReader gesture on offer, a gesture in use replaceable."),
+    }
+    local lines = {
+        T(_("KOAssistant was updated to v%1."), version),
+        _("A few things are new or changed since your last setup. Check them now?"),
+    }
+    for _idx, key in ipairs(SetupWizard.UPDATE_STEPS[version] or {}) do
+        if NOTES[key] then table.insert(lines, "• " .. NOTES[key]) end
+    end
+    local function stamp()
+        local f = feats(plugin)
+        f._wizard_version = version
+        f._privacy_notice_pending = nil
+        saveFeats(plugin, f)
+    end
+    local dialog
+    local acted = false
+    dialog = ButtonDialog:new{
+        title = table.concat(lines, "\n"),
+        buttons = {
+            {
+                { text = _("Check now"), callback = function()
+                    acted = true
+                    UIManager:close(dialog)
+                    stamp()
+                    SetupWizard.runChain(plugin, { update = true, mark_complete = true })
+                end },
+                { text = _("Later"), callback = function()
+                    acted = true
+                    UIManager:close(dialog)
+                    stamp()
+                    UIManager:show(InfoMessage:new{ text = _("Settings → Setup Wizard runs this check any time."), timeout = 3 })
+                end },
+            },
+        },
+        tap_close_callback = function() if not acted then stamp() end end,
+    }
+    UIManager:show(dialog)
+end
+
 --========================================================================--
---  Dev menu (the ONLY entry until the release flip)
+--  Dev menu (Settings ▸ Advanced, debug-gated: the probes and the stamps)
 --========================================================================--
 
 function SetupWizard.showDevMenu(plugin)
@@ -1141,6 +1361,8 @@ function SetupWizard.showDevMenu(plugin)
                     table.insert(lines, "")
                     table.insert(lines, "setup_wizard_completed: "
                         .. tostring(plugin.settings:readSetting("setup_wizard_completed") or false))
+                    table.insert(lines, "_wizard_version: " .. tostring(ff._wizard_version) .. " (this: "
+                        .. SetupWizard.baseVersion(SetupWizard.thisVersion()) .. ")")
                     table.insert(lines, "font pending confirm: "
                         .. tostring(ff._wizard_font_pending_confirm or false))
                     table.insert(lines, "pretend unconfigured: "
@@ -1168,16 +1390,38 @@ function SetupWizard.showDevMenu(plugin)
                     plugin.settings:delSetting("setup_wizard_completed")
                     plugin.settings:flush()
                     UIManager:show(InfoMessage:new{
-                        text = _("Completion flag cleared — the (old) wizard fires on the next first interaction."),
+                        text = _("Completion flag cleared: with no provider set up, the welcome chain fires on the next first interaction."),
                         timeout = 3,
                     })
                 end,
             },
         },
+        {
+            {
+                text = _("Clear the version stamp (the update check fires again)"),
+                callback = function()
+                    UIManager:close(dialog)
+                    local ff = feats(plugin)
+                    ff._wizard_version = nil
+                    saveFeats(plugin, ff)
+                    UIManager:show(InfoMessage:new{
+                        text = T(_("Stamp cleared: face now \"%1\"."), SetupWizard.face(plugin)),
+                        timeout = 3,
+                    })
+                end,
+            },
+            {
+                text = _("Run the update check"),
+                callback = function()
+                    UIManager:close(dialog)
+                    SetupWizard.runUpdate(plugin)
+                end,
+            },
+        },
     }
     dialog = ButtonDialog:new{
-        title = _("Setup Wizard v2 (dev preview)") .. "\n" ..
-            _("Inert for users until the release flip — the old wizard still serves first-run."),
+        title = _("Setup Wizard (dev tools)") .. "\n" ..
+            T(_("Face now: %1"), SetupWizard.face(plugin)),
         buttons = buttons,
     }
     UIManager:show(dialog)

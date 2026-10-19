@@ -45,13 +45,16 @@ BookSettings.KEY_BOOK_INFO = "koassistant_book_info_level"
 --   count, difficulty, mc, sa, essay, chapter_depth, min_pages, min_minutes.
 BookSettings.KEY_QUIZ = "koassistant_book_quiz"
 
---- Resolve the effective book-info level for a book: this chat's switch (the
--- Data chip, features._chat_data.book_info_off) > per-book override > global
--- default ("basic").
+--- Resolve the effective book-info level for a book: per-book override >
+-- global default ("basic"). quick_on = this request or chat runs under the
+-- Quick Answer preset, whose "Leave Book Info Out" switch then makes it none
+-- (THE facet rule, Dialogs.quickPresetForces; B502). A caller resolving a
+-- standing value (a chat's framing at launch, the image frame) passes nothing.
 -- @return "none" | "title" | "basic" | "full"
-function BookSettings.resolveBookInfoLevel(doc_settings, features)
-    local cd = features and features._chat_data
-    if type(cd) == "table" and cd.book_info_off then return "none" end
+function BookSettings.resolveBookInfoLevel(doc_settings, features, quick_on)
+    if quick_on and require("koassistant.ui.dialogs").quickPresetForces("book_info", true, features) then
+        return "none"
+    end
     doc_settings = BookStore.wrap(doc_settings)
     local per_book = doc_settings and doc_settings:readSetting(BookSettings.KEY_BOOK_INFO)
     if per_book ~= nil then return per_book end

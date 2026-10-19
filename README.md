@@ -75,7 +75,7 @@ The folder must be named exactly `koassistant.koplugin` (remove a "-main" suffix
 
 ### 2. Restart KOReader
 
-KOAssistant's menu is at **Tools → KOAssistant**, the first row of KOReader's Tools menu. The Setup Wizard runs the first time you open it: language, emoji, gestures.
+KOAssistant's menu is at **Tools → KOAssistant**, the first row of KOReader's Tools menu. The Setup Wizard runs the first time you open it: a provider, privacy, language, emoji icons, gestures; after an update it checks only what changed.
 
 ### 3. Add an API key
 
@@ -100,9 +100,9 @@ Every kind of reading data is asked for the first time an action wants it. **Set
 
 ## First steps
 
-**The Setup Wizard** detects your UI language and offers it as the AI language, tests whether emoji render on your device, offers to assign the two quick panels to a corner tap, and points you to the privacy settings. It runs once; re-run it from **Settings → Backup & Reset → Reset Settings... → Re-run Setup Wizard**.
+**The Setup Wizard** connects a provider, sets the privacy preset, detects your UI language and offers it as the AI language, installs the emoji font and tests the icons, and gives the two quick panels their gestures (any KOReader gesture). After an update it shows only what changed, with a choice to keep or change each. **Settings → Setup Wizard** re-runs any topic.
 
-**Two quick panels, one gesture.** Quick Settings (everywhere) and Quick Actions (while reading) hold most of what you need, and in the reader each has a button to open the other. The wizard assigns both to "tap bottom-right corner"; by hand: KOReader's gear menu → Taps and gestures → Gesture manager, pick a gesture, choose **KOAssistant: Quick Settings** in the file browser and **KOAssistant: Quick Actions** in a book. Without a gesture, both are the first rows of the KOAssistant menu.
+**Two quick panels, one gesture.** Quick Settings (everywhere) and Quick Actions (while reading) hold most of what you need, and in the reader each has a button to open the other. The wizard gives each its gesture (one tap assigns both to "tap bottom-right corner" when it is free), **Settings → Gestures** changes them any time; by hand: KOReader's gear menu → Taps and gestures → Gesture manager, pick a gesture, choose **KOAssistant: Quick Settings** in the file browser and **KOAssistant: Quick Actions** in a book. Without a gesture, both are the first rows of the KOAssistant menu.
 
 **Then:**
 - Answer the question the first time an action wants your data, or set a kind to Allow or Never for all books: **Settings → Privacy & Data**. [Privacy and Data](https://github.com/zeeyado/koassistant.koplugin/wiki/Privacy-and-Data)

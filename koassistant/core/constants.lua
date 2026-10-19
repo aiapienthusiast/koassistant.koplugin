@@ -198,7 +198,7 @@ Constants.QS_DYNAMIC_ITEMS = { quick_actions = true }
 -- which is exactly the bug this registry removes: three hand-written migrations were needed
 -- for scope/attach/quick, and forgetting one silently hid the chip forever).
 Constants.SESSION_CHIP_IDS = {
-    "domain", "web_search", "book_tools", "quick", "scope", "attach", "spoiler", "data",
+    "domain", "web_search", "book_tools", "quick", "scope", "attach", "spoiler",
 }
 
 --- Reconcile a saved session-chip membership list against the canonical registry.

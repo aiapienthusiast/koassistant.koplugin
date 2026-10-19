@@ -632,9 +632,6 @@ local function runSidecarUnavailableDataTests()
         end
         TestRunner:assertContains(items({ enable_highlights_sharing = "never" },
             { use_highlights = true, prompt = "{highlights_section}" }), "highlights (set to Never)")
-        TestRunner:assertContains(items({ enable_highlights_sharing = true,
-            _chat_data = { never = { highlights = true } } },
-            { use_highlights = true, prompt = "{highlights_section}" }), "highlights (left out of this chat)")
         TestRunner:assertContains(items({ enable_notebook_sharing = "never" }, { use_notebook = true }),
             "notebook (set to Never)")
     end)

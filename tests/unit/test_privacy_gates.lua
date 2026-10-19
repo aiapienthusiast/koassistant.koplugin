@@ -300,19 +300,6 @@ TestRunner:test("presetOf names the preset the values match, or nil for Custom (
     eq(Gates.presetOf({ enable_book_text_extraction = true }), nil, "one kind allowed: Custom")
 end)
 
-TestRunner:test("a kind left out of this chat is Never at the chat layer, below the book's own Never", function()
-    local f = { enable_highlights_sharing = true, enable_book_text_extraction = true,
-        _chat_data = { never = { highlights = true } } }
-    eq(Gates.resolve("highlights", { features = f, provider = "openai" }), "never", "left out")
-    eq(select(2, Gates.resolve("highlights", { features = f, provider = "openai" })), "chat", "layer chat")
-    eq(Gates.resolve("annotations", { features = f, provider = "openai" }), "never", "the notes go with their highlights")
-    eq(select(2, Gates.resolve("book_text", { features = f, provider = "openai",
-        book = { book_text = false } })), "book", "the book's own Never still names the book")
-    eq(Gates.resolve("highlights", { features = f, provider = "openai", once = { highlights = true } }),
-        "never", "an allowance for one run does not beat the chat's no")
-    eq(Gates.copyPrivacy(f, {})._chat_data, f._chat_data, "the extractor's copy carries it")
-end)
-
 TestRunner:test("a stored summary is asked for only where the run sends it", function()
     local action = { use_book_text = true, use_summary_cache = true, prompt = "{document_context_section}" }
     local stamps = { summary = { used_book_text = true } }

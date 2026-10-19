@@ -13,8 +13,7 @@ switch or walks `trusted_providers` itself (`-- raw-gate: <reason>` escapes).
 The model (slice 2, rulings 1, 19 to 22 of 2026-10-14): every kind has one of
 three states, "allow", "ask" or "never", and the answer carries the layer
 that gave it:
-  1. the book's own Never (Book Settings > Privacy & Data)               "book"
-     a kind left out of this chat (the Data chip)                  "chat"
+  1. the book's own Never (Book Settings > Privacy & Data)       "book"
   2. an allowance given for this run (Allow once)                  "once"
   3. the book's own Allow                                          "book"
   4. the column of the provider the request goes to: a trusted
@@ -177,25 +176,6 @@ function Gates.grantOnce(features, path, kinds)
     end
 end
 
---- The chat's own choices, set by the Data chip on the dialog's config and
---- carried by the request's copy for the chat's replies: `never` = the kinds
---- left out of this chat, `book_info_off` = this chat goes without the book's
---- title and author. nil when the chat set nothing.
-function Gates.chatData(features)
-    local cd = type(features) == "table" and features._chat_data
-    if type(cd) ~= "table" then return nil end
-    return cd
-end
-
---- Whether a kind was left out of this chat. Leaving highlights out leaves
---- the notes out too (the pairing).
-function Gates.chatNever(features, kind)
-    local cd = Gates.chatData(features)
-    if not (cd and type(cd.never) == "table") then return false end
-    if cd.never[kind] then return true end
-    return kind == "annotations" and cd.never.highlights == true
-end
-
 --- Whether a kind may go into the request, and which layer said so.
 --- ctx.features  the settings the request runs under (configuration.features,
 ---               or the extractor's own settings table)
@@ -204,17 +184,12 @@ end
 ---               (nil = none known); its Never beats everything, its Allow
 ---               needs no switch
 --- ctx.once      the kinds allowed for this run (Gates.onceFor), nil = none
---- The kinds left out of this chat (the Data chip) ride the request's own
---- features as `_chat_data.never`, so every context carries them.
---- @return string state "allow" | "ask" | "never"; string layer "book" | "chat" | "once" | "trusted" | "global"
+--- @return string state "allow" | "ask" | "never"; string layer "book" | "once" | "trusted" | "global"
 function Gates.resolve(kind, ctx)
     ctx = ctx or {}
     local book = ctx.book
     if type(book) == "table" and book[kind] == false then
         return "never", "book"
-    end
-    if Gates.chatNever(ctx.features, kind) then
-        return "never", "chat"
     end
     if type(ctx.once) == "table" and ctx.once[kind] then
         return "allow", "once"
@@ -313,7 +288,6 @@ function Gates.copyPrivacy(from, to)
     for _kind, key in pairs(Gates.TRUSTED_KEY) do to[key] = from[key] end
     to.trusted_providers = from.trusted_providers
     to._data_once = from._data_once
-    to._chat_data = from._chat_data
     return to
 end
 

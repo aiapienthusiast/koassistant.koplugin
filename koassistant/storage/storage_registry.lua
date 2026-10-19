@@ -143,6 +143,7 @@ Registry.SETTINGS_SUBKEYS = {
         -- reads these; do not clear them while the installed state remains.
         "_wizard_pretend_unconfigured", "_wizard_font_pending_confirm",
         "_wizard_font_install", "_wizard_gesture_writes",
+        "_wizard_version",  -- the plugin version whose setup or update check ran (SetupWizard.face; 2026-10-19)
         "_emoji_font_offered",  -- the one-time font offer when icons are on without a font (B397, setup_wizard.lua maybeOfferFont)
         "_privacy_ask_migrated",   -- the sharing switches reset to Ask (B395 slice 2, migrations.lua)
         "_privacy_notice_pending", -- the one-time notice of that reset, cleared when shown (data_access.lua)

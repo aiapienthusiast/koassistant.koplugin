@@ -264,14 +264,49 @@ TestRunner:test("provider choices: unique non-empty ids", function()
     TestRunner:assertTrue(seen.anthropic and seen.openai and seen.ollama)
 end)
 
-TestRunner:test("gesture candidates: unique ids, labels present", function()
-    local seen = {}
-    for _idx, cand in ipairs(SetupWizard.GESTURE_CANDIDATES) do
-        TestRunner:assertTrue(type(cand.id) == "string" and cand.id ~= "")
-        TestRunner:assertTrue(type(cand.label) == "string" and cand.label ~= "")
-        TestRunner:assertFalse(seen[cand.id], "duplicate slot id " .. cand.id)
-        seen[cand.id] = true
-    end
+TestRunner:suite("the two faces (2026-10-19)")
+
+TestRunner:test("baseVersion drops the -dev suffix", function()
+    TestRunner:assertEqual(SetupWizard.baseVersion("0.24.0-dev"), "0.24.0")
+    TestRunner:assertEqual(SetupWizard.baseVersion("0.24.0"), "0.24.0")
+    TestRunner:assertEqual(SetupWizard.baseVersion(nil), "")
+end)
+
+TestRunner:test("faceFor: fresh, the update check once per listed release, else none", function()
+    local steps = { ["0.24.0"] = { "privacy" } }
+    TestRunner:assertEqual(SetupWizard.faceFor(false, false, nil, "0.24.0-dev", steps), "fresh", "nothing set up")
+    TestRunner:assertEqual(SetupWizard.faceFor(true, false, nil, "0.24.0", steps), "update", "the old wizard's completion, no stamp")
+    TestRunner:assertEqual(SetupWizard.faceFor(false, true, nil, "0.24.0", steps), "update", "a provider set up without any wizard")
+    TestRunner:assertEqual(SetupWizard.faceFor(true, true, "0.24.0", "0.24.0-dev", steps), "none", "stamped: once per release")
+    TestRunner:assertEqual(SetupWizard.faceFor(true, true, "0.23.0", "0.25.0", steps), "none", "a release without update steps")
+    TestRunner:assertEqual(SetupWizard.faceFor(true, true, "0.23.0", "0.24.0", {}), "none", "no steps at all")
+    TestRunner:assertEqual(#(SetupWizard.UPDATE_STEPS["0.24.0"] or {}), 3, "this release lists three steps")
+end)
+
+TestRunner:test("iconsPlan: by the icons and the font", function()
+    TestRunner:assertEqual(SetupWizard.iconsPlan(false, "missing"), "offer")
+    TestRunner:assertEqual(SetupWizard.iconsPlan(false, "installed"), "offer")
+    TestRunner:assertEqual(SetupWizard.iconsPlan(true, "installed"), "test")
+    TestRunner:assertEqual(SetupWizard.iconsPlan(true, "restart"), "restart")
+    TestRunner:assertEqual(SetupWizard.iconsPlan(true, "missing"), "install")
+end)
+
+TestRunner:test("shouldRun: the update check runs the listed steps forced and the unset ones", function()
+    local upd = { update = true, only = { privacy = true } }
+    local run, forced = SetupWizard.shouldRun("privacy", upd, true)
+    TestRunner:assertTrue(run and forced, "listed: forced")
+    run, forced = SetupWizard.shouldRun("provider", upd, false)
+    TestRunner:assertTrue(run and not forced, "not set: runs on its own probe")
+    run = SetupWizard.shouldRun("language", upd, true)
+    TestRunner:assertFalse(run, "set and unlisted: skipped")
+    run = SetupWizard.shouldRun("welcome", upd, false)
+    TestRunner:assertFalse(run, "the welcome is the fresh face's")
+    run = SetupWizard.shouldRun("finish", upd, false)
+    TestRunner:assertTrue(run, "finish always")
+    run, forced = SetupWizard.shouldRun("privacy", { force = true }, true)
+    TestRunner:assertTrue(run and forced, "a forced chain")
+    run, forced = SetupWizard.shouldRun("privacy", {}, true)
+    TestRunner:assertTrue(run and not forced, "the fresh chain: the step decides")
 end)
 
 --=== the Emoji Font row (B397) ===--

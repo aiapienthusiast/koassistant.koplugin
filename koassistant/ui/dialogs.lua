@@ -427,7 +427,7 @@ local REASONING_HEADROOM_FLOOR = 16384
 -- The ⚡ Quick preset's facet-off rule, ONE implementation (six-pack [1] —
 -- this was hand-duplicated at ~12 dispatch/label/toast sites and the copies
 -- could drift silently). Returns true when the preset forces `facet`
--- ("web" | "tools") OFF. `quick_on` is passed by the site because two signals
+-- ("web" | "tools" | "book_info") OFF. `quick_on` is passed by the site because two signals
 -- exist: the bake reads the dispatch consumable _quick_answer_active, chip
 -- labels and the reply window read the session state. Pin-beats-preset: a
 -- facet TOUCHED while Quick is on keeps its own value. Web exempts an action
@@ -444,6 +444,11 @@ local function quickPresetForces(facet, quick_on, features, action)
     if facet == "tools" then
         return features.quick_preset_tools_off ~= false
             and not features._session_tools_touched
+    end
+    -- Book info (B502, 2026-10-19): opt-in, no chip to pin it; a Quick chat
+    -- then sends nothing that names the book (BookSettings.resolveBookInfoLevel)
+    if facet == "book_info" then
+        return features.quick_preset_book_info_off == true
     end
     return false
 end
@@ -1590,6 +1595,7 @@ showQuickPresetEditor = function(opts)
             toggleRow(_("Book tools off"), "quick_preset_tools_off"),
             toggleRow(_("Skip domain lens"), "quick_preset_skip_domain", true),
             toggleRow(_("Skip book background"), "quick_preset_skip_background", true),
+            toggleRow(_("Leave book info out"), "quick_preset_book_info_off", true),
             {{
                 text = T(_("Behavior: %1"), quickPresetBehaviorLabel(f)),
                 callback = function()
@@ -3680,9 +3686,6 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
         -- the chat's, for its replies; the source must not carry it into the
         -- next request
         config.features._data_once = nil
-        -- The chat's own data choices (the Data chip): same rule, the copy is
-        -- the chat's
-        config.features._chat_data = nil
         -- Quick controls: consume the dispatch consumables AND the chip state from
         -- the SOURCE config (same staleness rule — the copies already rode into
         -- temp_config for dialog launches, where they are the chat's live state).
@@ -4379,12 +4382,16 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
         end
     end
 
-    -- Resolve the "book info" level (this chat's Data chip > per-book > global) on the
-    -- request's own config: the chat's choice was consumed from the source at the
-    -- dispatch entry. "none" drops the book line and neutralizes the {title}/{author}
+    -- Resolve the "book info" level (per-book > global, and none under the Quick
+    -- Answer preset's "Leave Book Info Out") on the request's own config, whose
+    -- _quick_answer_active says whether this request runs under the preset.
+    -- "none" drops the book line and neutralizes the {title}/{author}
     -- placeholders (B500, message_builder).
-    message_data._book_info_level = require("koassistant.books.book_settings").resolveBookInfoLevel(
-        per_book_ds, temp_config.features or config.features)
+    do
+        local rf = temp_config.features or config.features
+        message_data._book_info_level = require("koassistant.books.book_settings").resolveBookInfoLevel(
+            per_book_ds, rf, rf._quick_answer_active)
+    end
 
     -- Resolve effective research mode
     -- Priority: action override > per-book setting > DOI auto-detection > global setting
@@ -7036,11 +7043,8 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
             configuration.features._session_ctx_paragraphs = nil
             configuration.features._session_ctx_spoiler_limit = nil
             configuration.features._session_ctx_label_stale = nil
-            -- The Data chip's choices for this chat (B395 slice 3): same
-            -- config-resident lifecycle as the scope pick
-            configuration.features._chat_data = nil
-            -- An allowance for one chat (the Send's question, the chip's
-            -- "Allow for this chat") is that chat's: a new dialog starts
+            -- An allowance for one chat (the Send's question) is that chat's: a
+            -- new dialog starts
             -- without it. The X-Ray chat grants its own right before it opens
             -- this dialog, on a config of its own, and keeps it
             if not is_xray_chat then
@@ -9429,26 +9433,6 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                     end,
                 }
             end,
-            data = function()
-                -- Data chip (B395 slice 3): what this chat may send, the chat's
-                -- own choices, Book info for this chat. Hidden in a general
-                -- chat (no book, no book list). Inline require (60-upvalue cap).
-                if is_general_context then return nil end
-                local DataChip = require("koassistant.ui.data_chip")
-                local o = {
-                    configuration = configuration, plugin = plugin,
-                    ui = chips_book_or_highlight and ui_instance or nil,
-                    document_path = chips_book_or_highlight and document_path or nil,
-                    chat = chips_book_or_highlight and "book" or "library",
-                    enable_emoji = enable_emoji,
-                    on_change = refreshInputDialog,
-                }
-                return {
-                    text = DataChip.chipText(o),
-                    callback = function() DataChip.open(o) end,
-                    hold_callback = function() DataChip.hold(o) end,
-                }
-            end,
         }
         local session_chips = {}
         for _idx, chip_id in ipairs(getSessionChips(configuration and configuration.features)) do
@@ -9766,10 +9750,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         -- ⚡ pick can re-point it after the dialog opened (B396 c).
                         local lib_features = plugin and plugin.settings and plugin.settings:readSetting("features") or {}
                         local scan_folders_to_use
-                        -- Left out of this chat by its Data chip: no list, no notice
-                        local lib_chat_out = require("koassistant.request.privacy_gates")
-                            .chatNever(configuration.features, "book_list")
-                        if not lib_chat_out and require("koassistant.request.privacy_gates").allows("book_list",
+                        if require("koassistant.request.privacy_gates").allows("book_list",
                                 { features = lib_features,
                                   provider = send_rv and send_rv.provider
                                       or require("koassistant.ui.dialogs").effectiveDispatchProvider(
@@ -9782,7 +9763,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                                     scan_folders_to_use = lib_features.library_scan_folders
                                 end
                             end
-                        elseif library_toggle_on and not lib_chat_out then
+                        elseif library_toggle_on then
                             -- The dialog offered the list for its own provider; say why
                             -- this Send goes without it rather than drop it silently
                             UIManager:show(require("ui/widget/notification"):new{
@@ -9809,7 +9790,8 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         -- For book context (file browser or gesture action), include book metadata
                         -- unless the per-book "Book info" level is None.
                         local book_info_level = require("koassistant.books.book_settings")
-                            .resolveBookInfoLevel(doc_settings, configuration.features)
+                            .resolveBookInfoLevel(doc_settings, configuration.features,
+                                configuration.features._session_quick_answer)
                         if book_info_level ~= "none" then
                             table.insert(parts, "[Context]")
                             if ai_book_metadata then
@@ -9842,7 +9824,8 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         -- For highlighted text context - include book info unless the per-book
                         -- "Book info" level is None (the selected text is always included).
                         local book_info_level = require("koassistant.books.book_settings")
-                            .resolveBookInfoLevel(doc_settings, configuration.features)
+                            .resolveBookInfoLevel(doc_settings, configuration.features,
+                                configuration.features._session_quick_answer)
                         table.insert(parts, "[Context]")
                         if ai_book_metadata and ai_book_metadata.title and book_info_level ~= "none" then
                             local show_author = book_info_level ~= "title"
@@ -10034,10 +10017,9 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                             end
                         end
                         configuration = copy
-                        -- The chat's own data choices and its allowance ride the
-                        -- private copy for the replies; the shared table drops them
-                        -- so no later request inherits them (B395)
-                        shared_features._chat_data = nil
+                        -- The chat's allowance rides the private copy for the
+                        -- replies; the shared table drops it so no later request
+                        -- inherits it (B395)
                         shared_features._data_once = nil
                         -- Per-chat conversation id on the private copy (B285 / #107)
                         configuration.conversation_id = history.conversation_id
@@ -10776,7 +10758,6 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
             spoiler = _("Spoiler protection"),
             scope = _("Scope & context"),
             attach = _("Attach"),
-            data = _("Data"),
         }
         -- Membership is GLOBAL (any view can edit it), but chips with a
         -- structural hide won't appear in THIS view — say so instead of
@@ -10794,7 +10775,6 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
             book_tools = (m_book_or_hl and m_has_book) or false,
             scope = (m_book_or_hl and m_has_book and not mf._xray_chat_context) or false,
             spoiler = m_book_or_hl,
-            data = not mf.is_general_context,
         }
         local enabled = {}
         for _idx, id in ipairs(getSessionChips(configuration and configuration.features)) do
@@ -11062,8 +11042,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
         end
         if configuration and configuration.features then
             configuration.features._session_library = nil
-            -- The chat's own data choices and its allowance end with it (B395)
-            configuration.features._chat_data = nil
+            -- The chat's allowance ends with it (B395)
             configuration.features._data_once = nil
         end
     end
@@ -11084,8 +11063,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
         end
         if configuration and configuration.features then
             configuration.features._session_library = nil
-            -- The chat's own data choices and its allowance end with it (B395)
-            configuration.features._chat_data = nil
+            -- The chat's allowance ends with it (B395)
             configuration.features._data_once = nil
         end
         return true

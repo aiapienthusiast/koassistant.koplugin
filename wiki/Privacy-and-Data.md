@@ -15,7 +15,7 @@ This is not privacy theater: the "threat model" is simply users including sensit
 
 ### Sent by default (for actions that use it)
 
-- **Book info**: what the AI is told about the book, set in **Settings → Privacy & Data → Book info**: None, Title only, Title & author (the default), or Title, author & position (adds your reading progress, chapter and page when Reading position is on). It is never asked and the presets leave it alone. **None sends nothing that names the book**: no book line, and an action's own prompt says "this book" where it would name the title and leaves out the author and any DOI. Book actions that answer from what the AI knows about the book (About, About Author, Find Similar, Historical Context, Related Thinkers, Reviews, Suggest from Library, X-Ray (Simple), and any book action run with the AI-knowledge source) cannot work without the title, so they say so instead of running. A book can have its own level in **Book Settings → Privacy & Data**, and one chat can go without it ([the Data chip](#the-data-chip)). A highlight action leaves the book line out when you uncheck **Include book info** in its settings in the action manager, and Book Settings → Identity can change or blank the title and author the AI is told (see [Book Settings and Book Hub](Book-Settings-and-Book-Hub)).
+- **Book info**: what the AI is told about the book, set in **Settings → Privacy & Data → Book info**: None, Title only, Title & author (the default), or Title, author & position (adds your reading progress, chapter and page when Reading position is on). It is never asked and the presets leave it alone. **None sends nothing that names the book**: no book line, and an action's own prompt says "this book" where it would name the title and leaves out the author and any DOI. Book actions that answer from what the AI knows about the book (About, About Author, Find Similar, Historical Context, Related Thinkers, Reviews, Suggest from Library, X-Ray (Simple), and any book action run with the AI-knowledge source) cannot work without the title, so they say so instead of running. A book can have its own level in **Book Settings → Privacy & Data**, and a Quick Answer chat can go without it (the preset's **Leave Book Info Out** switch, [Contexts and Chat](Contexts-and-Chat#quick-answer-and-its-preset)). A highlight action leaves the book line out when you uncheck **Include book info** in its settings in the action manager, and Book Settings → Identity can change or blank the title and author the AI is told (see [Book Settings and Book Hub](Book-Settings-and-Book-Hub)).
 - **Enabled system content**, like your languages, domain and behavior.
 - **Reading position**: reading progress (percentage), chapter title, chapters read count, how long ago you last read the book, and the print page number when the book carries a page list. The data used to calculate them (the exact date and time you last read, from KOReader's reading statistics, and so on) stays local. It is on by default because spoiler protection relies on it, and it is the one kind that is never asked: **Settings → Privacy & Data → Reading position** turns it on or off.
 - **The text around what you tap**: the bounded text around a selection (the context of a highlight or of a dictionary lookup), your current page (page translate, the Scope chip's "Current page") and the text around an image prompt. A few sentences or one page, never more; it has its own value (Allow by default), independent of the book's text.
@@ -52,7 +52,7 @@ It names the action, the provider the request goes to, and every kind of data th
 
 Generate Image with its prompt writer on (and Illustrate… on an X-Ray entry) sends the text around the passage and X-Ray descriptions to two providers: the one that writes the prompt and the one that draws it, which receives a prompt made from them. Each kind must be allowed for both, and the question names both ("Generate Image will send to Anthropic, to write the prompt, and to OpenAI, to draw it"). Its **Continue without** (in place of Not for this book) makes this picture without them and stores nothing, since a Never for the book's text would also stop its X-Ray updates; see [Image Generation](Image-Generation#the-prompt-writer). A kept image remembers what its prompt carried: drawing that prompt again from the gallery (**Regenerate**, **Regenerate and replace** or **Edit prompt…**) asks the same way for the provider drawing now, and for the prompt writer's provider too when a new Style has it restyle the prompt ("Regenerate will send to Anthropic, to restyle the prompt, and to OpenAI, to draw it"), without Continue without (what a written prompt took from them cannot be taken out), and a Never refuses it ([Image Generation](Image-Generation#the-gallery)).
 
-A required kind (X-Ray's book text, say) on Never is a short refusal that names where the value comes from (this book, all books, trusted providers, or this chat's [Data chip](#the-data-chip)): **Change for this book…** opens the book's Privacy screen, **Open Settings** the settings, and a kind left out of this chat is changed on the chip. A request over several picked books asks once for the set; each book's own value still decides for its data, and books set to Never stay out.
+A required kind (X-Ray's book text, say) on Never is a short refusal that names where the value comes from (this book, all books or trusted providers): **Change for this book…** opens the book's Privacy & Data screen, **Open Settings** the settings. A request over several picked books asks once for the set; each book's own value still decides for its data, and books set to Never stay out.
 
 ### Where it is asked
 
@@ -104,7 +104,7 @@ A library action needs three things: the book list's value (Ask asks the first t
 
 ### Graceful Degradation
 
-When a kind of data is not allowed, actions adapt automatically. Section placeholders like `{highlights_section}` simply disappear from prompts, so you don't need to modify your actions. For book text, most actions fall back to the AI's training knowledge; see [Text Extraction and Double-gating](#text-extraction-and-double-gating). When an action asked for data it did not get, its response starts with a line that says why, such as *Response generated without: highlights (not allowed for this request)*: "set to Never", "set to Never for this book", "left out of this chat" or "set to Never for trusted providers" when a value said no, "none found" when there was nothing to send.
+When a kind of data is not allowed, actions adapt automatically. Section placeholders like `{highlights_section}` simply disappear from prompts, so you don't need to modify your actions. For book text, most actions fall back to the AI's training knowledge; see [Text Extraction and Double-gating](#text-extraction-and-double-gating). When an action asked for data it did not get, its response starts with a line that says why, such as *Response generated without: highlights (not allowed for this request)*: "set to Never", "set to Never for this book" or "set to Never for trusted providers" when a value said no, "none found" when there was nothing to send.
 
 Attaching your notebook with the Attach chip in a chat follows the notebook's value like the `{notebook}` placeholder does: on Ask it asks when you pick it, and it will not attach under Never.
 
@@ -139,17 +139,6 @@ A group can hold the same five values in **Group Settings → Privacy & Data** (
 A book that is not open is judged by its own values: an action on it from the file browser, or from a chat about that book (opened from its Book Hub, for example), reads its highlights, annotations and notebook from disk under the same gates, and checks that book's settings before it starts. A library action on several selected books applies each book's own values and asks once for the set.
 
 The Quick Settings panel's **Privacy & Data** tile opens this same screen: a tap on the book's tab (the values for all books when no book is open), a hold on the Global tab (see [Setup, Gestures and Panels](Setup-Gestures-and-Panels)).
-
-### The Data chip
-
-The input dialog's **Data** chip shows what this chat may send. Tap it for one row per kind (book text, highlights, annotation notes, notebook and the text around what you tap in a book or highlight chat; the book list and reading habits in a library chat), each with its value and where it comes from, then **Book info** (in a book or highlight chat) and a row to the Privacy & Data screen. A kind's row offers:
-
-- **Allow for this chat**: the question's Allow once, for this chat and its replies.
-- **Leave out of this chat**: the kind is Never for this chat only. An action that needs it is refused, one that can do without runs without it.
-- **Back to the usual value**, once you changed it here.
-- **Change for this book…**: the kind's picker, on the book's tab.
-
-**Book info** can be turned off for this chat: nothing in its requests names the book. Holding the chip opens the book's Privacy & Data screen (in a library chat, the values for all books). The chip reads **Data**, **Data: 2 ask** when kinds this chat may send would be asked, or **Data: this chat** once you changed something for this chat; a new chat starts from the usual values. A book's own Never cannot be lifted for this chat alone: **Change for this book…** changes the book's value. The chip is hidden in a general chat.
 
 ## Trusted Providers
 
@@ -240,7 +229,7 @@ Which flags each data type needs (relevant when you create custom actions from s
 
 ### When an Action Is Blocked
 
-Built-in actions that cannot work without a kind of data check before anything is sent. On Ask they ask; on Never they stop with a short refusal that names where the value comes from (this book, all books, trusted providers, or this chat) and a way to change it (**Change for this book…**, **Open Settings**, or the chat's Data chip):
+Built-in actions that cannot work without a kind of data check before anything is sent. On Ask they ask; on Never they stop with a short refusal that names where the value comes from (this book, all books or trusted providers) and a way to change it (**Change for this book…** or **Open Settings**):
 
 | Needs | Actions |
 |-------|---------|

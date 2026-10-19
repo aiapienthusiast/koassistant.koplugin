@@ -41,7 +41,7 @@ koreader
 
 KOReader loads plugins when it starts, so restart it once. KOAssistant's menu is then the first row of KOReader's Tools menu: **Tools → KOAssistant**. In this wiki, "Settings" means this menu, so **Settings → API Keys & Auth** is the API Keys & Auth row of Tools → KOAssistant.
 
-The first time you open KOAssistant (its menu, or one of its actions), the [Setup Wizard](Setup-Gestures-and-Panels#setup-wizard) walks you through language, emoji and gesture setup.
+The first time you open KOAssistant (its menu, or one of its actions), the [Setup Wizard](Setup-Gestures-and-Panels#setup-wizard) walks you through a provider, privacy, language, the emoji icons and the panels' gestures; after an update it checks only what changed.
 
 ## 3. Get an API Key
 

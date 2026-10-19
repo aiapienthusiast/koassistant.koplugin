@@ -178,7 +178,7 @@ Translations are not auto-saved by default: like dictionary lookups, they are me
 
 **KOAssistant: Translate Page** translates all the text on the page you see: it extracts the visible page's text, sends it to the Translate action, and opens the result in the translate window. It works with PDF, EPUB, DjVu and the other document formats KOReader opens.
 
-- Run it from a gesture (reader only; the gesture can be bound on **Settings → Menus & Buttons → Shortcuts**) or from the **Translate Page** button of the Quick Actions panel ([Setup, Gestures and Panels](Setup-Gestures-and-Panels)).
+- Run it from a gesture (reader only; the gesture can be bound on **Settings → Gestures**) or from the **Translate Page** button of the Quick Actions panel ([Setup, Gestures and Panels](Setup-Gestures-and-Panels)).
 - The original text is hidden (**Hide for Full Page Translate**, on by default).
 - No surrounding context is added, the Minimal Popup is never used, and **Save to Note** is grayed out, since there is no highlight.
 - Good for academic reading and foreign-language texts.

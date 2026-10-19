@@ -116,7 +116,7 @@ After a problematic update, or for a fresh start: **Settings → Backup & Reset 
 - **Action problems?** **Quick: Actions only** resets every action setting, keeps everything else.
 - **Strange behaviour after an update?** **Quick: Settings only** is the safest first step.
 - **Many things broken?** **Quick: Fresh start** resets everything except API keys, languages, gesture registrations and chats, and the setup wizard runs again the next time KOAssistant starts.
-- **Want to redo language, gestures or emoji?** **Re-run Setup Wizard**.
+- **Want to redo the provider, privacy, language, icons or gestures?** **Settings → Setup Wizard** lists each topic with its state; a tap re-runs that step.
 - **Exact control?** **Custom reset...** lists what to reset.
 
 A long press on any reset row shows exactly what it resets and keeps. The options are described on [Backups and Updates](Backups-and-Updates#reset-settings).
