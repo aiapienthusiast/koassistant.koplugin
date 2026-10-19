@@ -7031,7 +7031,6 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
     local session_spoiler_free = ((configuration or {}).features or {})._session_spoiler_free
     local session_book_tools = ((configuration or {}).features or {})._session_book_tools
     local session_web_search = ((configuration or {}).features or {})._session_web_search
-    local session_book_info = ((configuration or {}).features or {})._session_book_info
     -- NOTE: the _selection_context_window transient (pre-extracted selection window,
     -- surrounding context) deliberately STAYS on configuration.features — no dialog
     -- local. It is consumed at its two read points (handlePredefinedPrompt + freeform
@@ -7047,7 +7046,6 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
         configuration.features._session_spoiler_free = nil
         configuration.features._session_book_tools = nil
         configuration.features._session_web_search = nil
-        configuration.features._session_book_info = nil
         -- Stale-request hygiene: a per-chat web value from an earlier session must not
         -- outlive its dialog (it is normally consumed at bake/dispatch).
         configuration.features._web_search_active = nil
@@ -10774,8 +10772,6 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
             if session_book_tools ~= nil then configuration.features._session_book_tools = session_book_tools end
             -- Web: same explicit-false preservation as tools.
             if session_web_search ~= nil then configuration.features._session_web_search = session_web_search end
-            -- Send book info (the gear menu): explicit false preserved too
-            if session_book_info ~= nil then configuration.features._session_book_info = session_book_info end
             -- Scope-chip state is config-resident; this marker keeps it across the reopen
             -- (a fresh open clears it — see the consume block at the dialog top).
             configuration.features._session_keep_scope = true
@@ -11043,8 +11039,11 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                 end }})
                 -- Send book info (2026-10-19): a check mark when the Book info in
                 -- effect goes with this chat's messages and actions; a tap switches
-                -- it for this chat alone (_session_book_info), a hold opens the
-                -- setting (For this book / Global). Inline requires (upvalue cap).
+                -- it for this chat alone (_session_book_info, which lives on the
+                -- config through the dialog's life like _session_quick_answer:
+                -- consumed at the dispatch, scrubbed at the other entries), a hold
+                -- opens the setting (For this book / Global). Inline requires
+                -- (upvalue cap).
                 local bi_ds = require("koassistant.storage.doc_settings").resolve(document_path, ui_instance)
                 local bi_on = BookSettings.resolveBookInfoLevel(bi_ds, configuration.features,
                     configuration.features._session_quick_answer) ~= "none"
