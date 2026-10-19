@@ -20544,6 +20544,7 @@ function AskGPT:openXrayCard(query, opts)
     -- parse hiccup): the old path handles it — incl. its no-result flows
     return self:_openXrayEntityDirect(query, opts)
   end
+  logger.dbg("KOAssistant: X-Ray card resolved for a query of", #tostring(query), "characters")
   local self_ref = self
   local function openFull(h)
     if h.source == "carried" then

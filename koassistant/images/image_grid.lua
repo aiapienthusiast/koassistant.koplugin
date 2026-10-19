@@ -11,6 +11,7 @@ setItems(items) after a change keeps the page where it can.
 ]]
 
 local Blitbuffer = require("ffi/blitbuffer")
+local logger = require("koassistant.core.logger")
 local BD = require("ui/bidi")
 local BottomContainer = require("ui/widget/container/bottomcontainer")
 local Button = require("ui/widget/button")
@@ -193,6 +194,7 @@ function ImageGrid:update()
         page_items[#page_items + 1] = self.items[i]
     end
     if self.before_page then self.before_page(page_items) end
+    logger.dbg("KOAssistant images: grid page", self.page, "of", self:pageCount(), cols .. "x" .. rows, #page_items, "pictures")
 
     local page_text = TextWidget:new{
         text = T(_("Page %1 of %2"), self.page, count),

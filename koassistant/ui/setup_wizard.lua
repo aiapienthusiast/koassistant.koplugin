@@ -524,6 +524,7 @@ function SetupWizard.installFont(plugin, opts)
     -- "full reset actually resets" audit reads this).
     local f = feats(plugin)
     f._wizard_font_install = { path = dest, fallback_added = fallback_added }
+    logger.info("KOAssistant: emoji font installed at", dest, fallback_added and "and registered" or "(the fallback list is full)")
     if ctx then
         f._wizard_font_pending_confirm = true
     end
