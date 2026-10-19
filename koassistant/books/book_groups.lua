@@ -526,6 +526,35 @@ function BookGroups.updateForMove(old_path, new_path, copy)
     end
 end
 
+--- A folder moved or renamed in KOReader's file browser (B507): every member
+--- inside it follows, in its place in the order. A member whose new path is
+--- already in the group drops its old slot, as a book's move does.
+--- @return number members re-keyed
+function BookGroups.updateForFolderMove(old_dir, new_dir)
+    local movedPath = require("koassistant.storage.doc_settings").movedPath
+    local data = load()
+    local count = 0
+    for _idx, group in ipairs(data.groups) do
+        local books = group.books or {}
+        for i = #books, 1, -1 do
+            local new_path = movedPath(books[i], old_dir, new_dir)
+            if new_path then
+                if indexOf(group, new_path) then
+                    table.remove(books, i)
+                else
+                    books[i] = new_path
+                end
+                count = count + 1
+            end
+        end
+    end
+    if count > 0 then
+        save(data)
+        logger.info("KOAssistant BookGroups: re-keyed", count, "member(s) of a moved folder")
+    end
+    return count
+end
+
 --- Does the file exist on disk? (Missing members stay listed, marked.)
 function BookGroups.fileExists(path)
     local ok, lfs = pcall(require, "libs/libkoreader-lfs")

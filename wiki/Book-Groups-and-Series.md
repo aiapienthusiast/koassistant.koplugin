@@ -232,7 +232,7 @@ The input dialog of a grouped book has a **Group** button that lists the group's
 
 ## Where groups are kept
 
-Groups are stored in KOAssistant's settings folder, not inside the books, and are part of a backup (see [Backups and Updates](Backups-and-Updates)). They survive a book moved in KOReader's file browser, and so do the links the group's X-Rays keep to it (what was AI merged from it, its carried entries), updated a few seconds after the move; a folder moved or renamed as a whole is not followed. A copy of a book file joins no group. Deleting a book never silently edits a group: the missing book stays listed as "(missing)", so a book on a removed SD card keeps its place in the series, and removing it is up to you.
+Groups are stored in KOAssistant's settings folder, not inside the books, and are part of a backup (see [Backups and Updates](Backups-and-Updates)). They survive a book, or a folder of books, moved or renamed in KOReader's file browser, and so do the links the group's X-Rays keep to them (what was AI merged from them, their carried entries), updated a few seconds after the move. A move made outside KOReader (on a computer, say) is not followed. A copy of a book file joins no group. Deleting a book never silently edits a group: the missing book stays listed as "(missing)", so a book on a removed SD card keeps its place in the series, and removing it is up to you.
 
 A book in several groups takes its earlier books, its carried list and its lookups from the first of them in the Groups list. Keep a series above the other groups its books are in: a plain group listed first switches off, for that book, the carry and the lookups of its series.
 

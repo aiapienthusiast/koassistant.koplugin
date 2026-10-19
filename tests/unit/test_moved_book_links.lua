@@ -5,7 +5,8 @@
 -- lost its source, and a book set to Never was judged at a path where it no
 -- longer is. XrayMerge.noteMoved queues the move; one sweep rewrites the
 -- quoted paths in every book that names them, in one pass, with nothing else
--- changed. Real files in a temp folder.
+-- changed. B507: a folder's move or rename queues the folder, and every book
+-- inside it follows the same way. Real files in a temp folder.
 --
 -- Run: lua tests/unit/test_moved_book_links.lua  (or lua tests/run_tests.lua --unit)
 
@@ -66,6 +67,7 @@ package.loaded["luasettings"] = {
 }
 local groups = {}
 package.loaded["koassistant.books.book_groups"] = {
+    all = function() return groups end,
     groupsFor = function(path)
         local out = {}
         for _idx, g in ipairs(groups) do
@@ -229,6 +231,66 @@ TestRunner:test("two books trading places in one batch: each link moves once, by
     TestRunner:assertEqual(data.__dormant[2].file, V3, "Vol 2's link is Vol 3 now")
     TestRunner:assertEqual(entry.merged_from[1].file, V2, "ledger: Vol 1")
     TestRunner:assertEqual(entry.merged_from[2].file, V3, "ledger: Vol 2")
+end)
+
+print("\n  [a folder moved or renamed (B507)]")
+TestRunner:test("every book inside follows: links from outside, siblings' links, pins; a folder named alike stays", function()
+    local OLD_DIR, NEW_DIR = TMP .. "/fold/Saga", TMP .. "/fold/Saga (complete)"
+    local V1, V2 = OLD_DIR .. "/Vol 1.epub", OLD_DIR .. "/Vol 2.epub"
+    local ALIKE = TMP .. "/fold/Saga 2/Other.epub"
+    local READER = TMP .. "/Reader.epub"
+    os.execute(string.format("mkdir -p %q %q", OLD_DIR, TMP .. "/fold/Saga 2"))
+    -- Vol 2 names its sibling; the reader outside names Vol 1 (once escaped,
+    -- as KOReader's encoder writes it) and the book in the folder named alike
+    assert(ActionCache.set(V2, "xray", xrayNaming(V1), 0.5, { timestamp = 701,
+        merged_from = { { title = "Vol 1", file = V1 } } }))
+    local reader_json = '{"__dormant":[{"name":"Ann","file":"' .. esc(V1) .. '"},'
+        .. '{"name":"Cy","file":"' .. ALIKE .. '"}],"characters":[]}'
+    assert(ActionCache.set(READER, "xray", reader_json, 0.5, { timestamp = 702,
+        merged_from = { { title = "Vol 1", file = V1 }, { title = "Other", file = ALIKE } } }))
+    assert(PinnedManager.addPin(V1, { id = "p3", result = "pin in the folder", document_path = V1, timestamp = 3 }))
+    groups = {}
+    -- KOReader moves the folder whole (each .sdr inside it goes along), and
+    -- the plugin's indexes are re-keyed first (StorageRegistry.followFolderMove)
+    assert(os.rename(OLD_DIR, NEW_DIR))
+    local N1, N2 = NEW_DIR .. "/Vol 1.epub", NEW_DIR .. "/Vol 2.epub"
+    G_reader_settings._store.koassistant_artifact_index = {
+        [READER] = { count = 1, modified = 702 }, [N2] = { count = 1, modified = 701 },
+    }
+    G_reader_settings._store.koassistant_pinned_index = { [N1] = { count = 1 } }
+    XrayMerge.noteMoved(OLD_DIR, NEW_DIR, true)
+    XrayMerge._sweepMoves(true)
+    local reader = ActionCache.get(READER, "xray")
+    local data = json.decode(reader.result)
+    TestRunner:assertEqual(data.__dormant[1].file, N1, "a link from outside the folder")
+    TestRunner:assertTrue(reader.result:find('"' .. esc(N1) .. '"', 1, true) ~= nil, "written back escaped")
+    TestRunner:assertEqual(data.__dormant[2].file, ALIKE, "the folder named alike is another folder")
+    TestRunner:assertEqual(reader.merged_from[1].file, N1, "ledger: the moved book")
+    TestRunner:assertEqual(reader.merged_from[2].file, ALIKE, "ledger: the other one as it was")
+    local sibling = ActionCache.get(N2, "xray")
+    TestRunner:assertEqual(json.decode(sibling.result).__dormant[1].file, N1, "a sibling's link inside the folder")
+    TestRunner:assertEqual(sibling.merged_from[1].file, N1, "its ledger")
+    TestRunner:assertEqual(sibling.timestamp, 701, "identity kept")
+    local own = dofile(PinnedManager.getPath(N1))
+    TestRunner:assertEqual(own[1].document_path, N1, "a pin of a book inside the folder")
+end)
+TestRunner:test("a book moved, then its folder renamed, before the sweep: the link ends under the new name", function()
+    local P_OLD, MID_DIR, END_DIR = TMP .. "/c1/P.epub", TMP .. "/c2", TMP .. "/c3"
+    local Q_OLD, Q_END = TMP .. "/d1/Q.epub", TMP .. "/e/Q.epub"
+    local LINKS = TMP .. "/Links.epub"
+    assert(ActionCache.set(LINKS, "xray", json.encode({ __dormant = {
+        { name = "P", file = P_OLD }, { name = "Q", file = Q_OLD },
+    } }), 0.5, { timestamp = 801 }))
+    G_reader_settings._store.koassistant_artifact_index = { [LINKS] = { count = 1, modified = 801 } }
+    groups = {}
+    XrayMerge.noteMoved(P_OLD, MID_DIR .. "/P.epub")     -- the book
+    XrayMerge.noteMoved(MID_DIR, END_DIR, true)           -- then its folder
+    XrayMerge.noteMoved(TMP .. "/d1", TMP .. "/d2", true) -- a folder
+    XrayMerge.noteMoved(TMP .. "/d2/Q.epub", Q_END)       -- then a book out of it
+    XrayMerge._sweepMoves(true)
+    local data = json.decode(ActionCache.get(LINKS, "xray").result)
+    TestRunner:assertEqual(data.__dormant[1].file, END_DIR .. "/P.epub", "book, then folder")
+    TestRunner:assertEqual(data.__dormant[2].file, Q_END, "folder, then book")
 end)
 
 -- Restore what this file replaced (one Lua process runs every suite)

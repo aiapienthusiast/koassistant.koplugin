@@ -584,18 +584,26 @@ end
 --- the DocSettings.updateLocation patch in main.lua). Move rewrites
 --- book_file; delete drops the association (images are kept, with their
 --- prompts, as pictures without a book); copy leaves images with the
---- original book.
-function ImageGenerator.updateIndexForMove(old_path, new_path, copy)
+--- original book. `folder`: old_path and new_path are a folder's, moved or
+--- renamed (B507), and every picture of a book inside it follows.
+function ImageGenerator.updateIndexForMove(old_path, new_path, copy, folder)
     if copy then return end
     -- Cheap stat guard: this runs on EVERY file-manager move/delete
     local lfs = require("libs/libkoreader-lfs")
     if not lfs.attributes(ImageGenerator.getImagesDir() .. "/" .. INDEX_FILENAME, "mode") then
         return
     end
+    local movedPath = folder and require("koassistant.storage.doc_settings").movedPath
     local index = ImageGenerator.readIndex()
     local changed = false
     for filename, entry in pairs(index) do
-        if type(entry) == "table" and entry.book_file == old_path then
+        if movedPath then
+            local moved = type(entry) == "table" and movedPath(entry.book_file, old_path, new_path)
+            if moved then
+                entry.book_file = moved
+                changed = true
+            end
+        elseif type(entry) == "table" and entry.book_file == old_path then
             if new_path then
                 entry.book_file = new_path
             else

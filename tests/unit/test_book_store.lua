@@ -310,6 +310,17 @@ TestRunner:test("one store per book: two facades see the same value; invalidate 
     eq(f2:readSetting("koassistant_book_spoiler_free"), true, "re-read after invalidate")
 end)
 
+TestRunner:test("invalidateUnder drops the stores inside a moved folder only (B507)", function()
+    bookFile(BOOK)
+    local f = BookStore.wrap(MockDS:open(BOOK), BOOK)
+    f:saveSetting("koassistant_book_spoiler_free", false)
+    files[SFILE].data.settings.koassistant_book_spoiler_free = true  -- external write
+    BookStore.invalidateUnder("/book")  -- "/books/a.epub" is not inside "/book"
+    eq(f:readSetting("koassistant_book_spoiler_free"), false, "a folder named alike keeps the store")
+    BookStore.invalidateUnder("/books")
+    eq(f:readSetting("koassistant_book_spoiler_free"), true, "re-read after the folder's move")
+end)
+
 -- ============================================================
 print("\n  -- chats file --")
 

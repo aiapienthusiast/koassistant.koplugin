@@ -91,7 +91,7 @@ A prompt drawn again goes to the image provider in effect with what it carries (
 
 An image generated while reading is recorded as that book's, in a small index inside the images folder. That gives you a per-book gallery filtered to the book's images, and a **Generated Images (N)** entry on every View Artifacts surface: the file browser's long-press menu, the open book's artifact viewer, the input dialog's View Artifacts, the Book Hub, the chat window's Artifacts switcher, the X-Ray browser's Other Artifacts, and the cross-book artifact browser, where a book that only has images still shows up ([Artifacts and Caching](Artifacts-and-Caching)).
 
-Images follow their book: moving the book in the file manager moves its associations; deleting the book keeps the images and their prompts, which then appear under **Without a book**. Deleting an image from the gallery removes its thumbnail and keeps the index in step.
+Images follow their book: moving the book, or a folder it is in, in the file manager moves its associations; deleting the book keeps the images and their prompts, which then appear under **Without a book**. Deleting an image from the gallery removes its thumbnail and keeps the index in step.
 
 ## Showing or hiding the button
 

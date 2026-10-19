@@ -339,6 +339,18 @@ local function runAll()
             TestRunner:assertEquals(ImageGenerator.readIndex()["a.png"].book_file, "/moved/b1.epub", "other book untouched")
         end)
     end)
+    TestRunner:test("updateIndexForMove: a folder's move takes the pictures of every book inside (B507)", function()
+        withImageIndex(function()
+            ImageGenerator.recordImage("a.png", { file = "/books/Saga/b1.epub" }, "p1")
+            ImageGenerator.recordImage("b.png", { file = "/books/Saga 2/b2.epub" }, "p2")
+            ImageGenerator.recordImage("c.png", nil, "p3")
+            ImageGenerator.updateIndexForMove("/books/Saga", "/books/Done", false, true)
+            local index = ImageGenerator.readIndex()
+            TestRunner:assertEquals(index["a.png"].book_file, "/books/Done/b1.epub", "inside: follows")
+            TestRunner:assertEquals(index["b.png"].book_file, "/books/Saga 2/b2.epub", "a folder named alike: stays")
+            TestRunner:assertEquals(index["c.png"].book_file, nil, "a picture without a book: stays so")
+        end)
+    end)
 
     -- The image round's S1 (docs/image_round_plan.md, 2026-10-14) ------------
 

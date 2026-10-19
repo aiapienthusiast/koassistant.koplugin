@@ -36,6 +36,27 @@ function SafeDocSettings.samePath(a, b)
     return ra ~= nil and ra == ffiutil.realpath(b)
 end
 
+--- Is a path inside a folder, at any depth? "Series 2/x" is not inside
+--- "Series".
+--- @return boolean
+function SafeDocSettings.inFolder(path, dir)
+    return type(path) == "string" and type(dir) == "string" and dir ~= ""
+        and path:sub(1, #dir + 1) == dir .. "/"
+end
+
+--- The path a folder's move or rename gives a path: the folder itself and
+--- everything inside it follow (as KOReader's History, Collections and folder
+--- settings do, B507); nil for a path outside the folder.
+--- @return string|nil
+function SafeDocSettings.movedPath(path, old_dir, new_dir)
+    if type(path) ~= "string" or type(new_dir) ~= "string" then return nil end
+    if path == old_dir then return new_dir end
+    if SafeDocSettings.inFolder(path, old_dir) then
+        return new_dir .. path:sub(#old_dir + 1)
+    end
+    return nil
+end
+
 --- Resolve the RAW DocSettings instance for a document (KOReader's object,
 --- no plugin-key routing). Only the migration and the facade itself need
 --- this; every other caller wants resolve().

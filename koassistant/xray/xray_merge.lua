@@ -39,6 +39,7 @@ main coverage also warns. The series axis reuses this input shape later
 -- mock_koreader, which does not stub the dialog widgets.
 local UIManager = require("ui/uimanager")
 local logger = require("koassistant.core.logger")
+local SafeDocSettings = require("koassistant.storage.doc_settings")
 local T = require("ffi/util").template
 local _ = require("koassistant.core.gettext")
 
@@ -3967,10 +3968,11 @@ end
 -- ============================ Moved books (B504) ============================
 -- Cross-book X-Ray data names books by path: the fold ledger (merged_from),
 -- carried entries and background lines. A move inside KOReader re-keys the
--- indexes, the images and the groups (main.lua's updateLocation patch); these
--- links are re-keyed here, in one background sweep after the moves settle.
--- Another device's paths are not this: they need an identity that does not
--- depend on the folder (docs/cross_device_plan.md section 2).
+-- indexes, the images and the groups (main.lua's updateLocation patch for a
+-- book, StorageRegistry.followFolderMove for a folder, B507); these links are
+-- re-keyed here, in one background sweep after the moves settle. Another
+-- device's paths are not this: they need an identity that does not depend on
+-- the folder (docs/cross_device_plan.md section 2).
 
 -- A path-shaped quoted string: an opening quote, then "/" (or "\/", as
 -- KOReader's JSON encoder writes it), up to the closing quote (book paths
@@ -4083,24 +4085,69 @@ function XrayMerge.rekeyBook(document_path, moves)
     return rewritten
 end
 
--- Moves waiting for the sweep: { [old_path] = new_path }
+-- Moves waiting for the sweep, in the order they happened:
+-- { old = path, new = path, folder = true for a folder's move }
 local pending_moves = {}
 -- Books one step of a sweep reads: a large library never holds the screen
 local SWEEP_SLICE = 8
 
+-- One move applied to one path: a book's own path, or a folder and
+-- everything inside it; any other path as it was
+local function applyMove(m, path)
+    if m.folder then return SafeDocSettings.movedPath(path, m.old, m.new) or path end
+    return path == m.old and m.new or path
+end
+
+-- Where a path saved before the waiting moves is now: each move applied in
+-- the order it happened (a book moved and then its folder renamed ends under
+-- the folder's new name; two books trading places each take their own move);
+-- nil when the moves leave it where it was
+local function movedPath(list, path)
+    local p = path
+    for _idx, m in ipairs(list) do p = applyMove(m, p) end
+    if p ~= path then return p end
+    return nil
+end
+
 --- @param all_at_once boolean|nil every book in one step (the tests)
 local function sweepMoves(all_at_once)
-    local moves = pending_moves
+    local list = pending_moves
     pending_moves = {}
-    for old, new in pairs(moves) do
-        if old == new then moves[old] = nil end
+    if #list == 0 then return end
+    -- The lookup every rewrite below reads as moves[path]
+    local moves = setmetatable({}, { __index = function(_t, path)
+        if type(path) == "string" then return movedPath(list, path) end
+    end })
+    -- Where each move left what it moved (the later moves applied): a book's
+    -- last path, a folder's
+    local books, folders = {}, {}
+    for i, m in ipairs(list) do
+        local last = m.new
+        for j = i + 1, #list do last = applyMove(list[j], last) end
+        if m.folder then
+            folders[#folders + 1] = last
+        else
+            books[last] = true
+        end
     end
-    if next(moves) == nil then return end
+    local function moved(path)
+        if books[path] then return true end
+        for _idx, dir in ipairs(folders) do
+            if SafeDocSettings.inFolder(path, dir) then return true end
+        end
+        return false
+    end
     -- Pinned items name their book too (a pin's privacy check reads it): the
-    -- general and library stores, and the moved books' own
+    -- general and library stores, and the moved books' own (a moved folder's
+    -- books by the pinned index, which the move re-keyed already)
     local PinnedManager = require("koassistant.artifacts.pinned_manager")
     local pin_stores = { PinnedManager.GENERAL_KEY, PinnedManager.LIBRARY_KEY }
-    for _old, new in pairs(moves) do pin_stores[#pin_stores + 1] = new end
+    for path in pairs(books) do pin_stores[#pin_stores + 1] = path end
+    if #folders > 0 then
+        for path in pairs(G_reader_settings:readSetting("koassistant_pinned_index") or {}) do
+            if not books[path] and moved(path) then pin_stores[#pin_stores + 1] = path end
+        end
+    end
     for _idx, key in ipairs(pin_stores) do
         local ok, err = pcall(PinnedManager.rekeyPaths, key, moves)
         if not ok then logger.warn("KOAssistant XrayMerge: could not update pinned links in", key, ":", tostring(err)) end
@@ -4116,8 +4163,12 @@ local function sweepMoves(all_at_once)
     end
     for path in pairs(G_reader_settings:readSetting("koassistant_artifact_index") or {}) do add(path) end
     local BookGroups = require("koassistant.books.book_groups")
-    for _old, new in pairs(moves) do
-        for _idx, group in ipairs(BookGroups.groupsFor(new)) do
+    for _idx, group in ipairs(BookGroups.all()) do
+        local reached = false
+        for _j, member in ipairs(group.books or {}) do
+            if moved(member) then reached = true; break end
+        end
+        if reached then
             for _j, member in ipairs(group.books or {}) do add(member) end
         end
     end
@@ -4144,18 +4195,17 @@ local function sweepMoves(all_at_once)
     step()
 end
 
---- A book moved inside KOReader (the updateLocation patch, moves only): the
---- links other books' X-Rays keep to it follow, in one sweep a few seconds
---- after the last of a batch of moves. A book moved twice before the sweep
---- maps to its last path.
+--- A book moved inside KOReader (the updateLocation patch, moves only), or a
+--- folder (StorageRegistry.followFolderMove, B507): the links other books'
+--- X-Rays keep to it, or to the books inside it, follow, in one sweep a few
+--- seconds after the last of a batch of moves. Moves before the sweep apply
+--- in their order: a book moved twice maps to its last path.
 --- @param old_path string
 --- @param new_path string
-function XrayMerge.noteMoved(old_path, new_path)
+--- @param folder boolean|nil the paths are a folder's
+function XrayMerge.noteMoved(old_path, new_path, folder)
     if type(old_path) ~= "string" or type(new_path) ~= "string" or old_path == new_path then return end
-    for old, new in pairs(pending_moves) do
-        if new == old_path then pending_moves[old] = new_path end
-    end
-    pending_moves[old_path] = new_path
+    pending_moves[#pending_moves + 1] = { old = old_path, new = new_path, folder = folder or nil }
     UIManager:unschedule(sweepMoves)
     UIManager:scheduleIn(3, sweepMoves)
 end

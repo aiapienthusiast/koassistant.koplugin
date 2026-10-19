@@ -645,4 +645,94 @@ function Registry.resetEntries(preset)
     return out
 end
 
+-- ── Folder moves (B507) ──────────────────────────────────────────────────────
+-- A folder moved or renamed in KOReader's file browser: KOReader moves it
+-- whole (each book's .sdr inside it goes along, the plugin's files with it,
+-- where metadata sits beside the book) and re-keys its own History,
+-- Collections and folder settings through ReadHistory:updateItemsByPath,
+-- which main.lua patches to call this; it never calls
+-- DocSettings.updateLocation for the books inside. Every list of the plugin's
+-- that names a book or a folder by path follows here, by the same folder:
+-- the moves KOReader follows for its own lists, no others.
+
+-- The plugin's settings that name folders (lists, then single paths)
+local FOLDER_LIST_SETTINGS = { "library_scan_folders", "index_scan_folders" }
+local FOLDER_SETTINGS = { "notebook_custom_path", "export_custom_path" }
+
+--- @param old_dir string
+--- @param new_dir string
+--- @param settings table|nil the plugin's LuaSettings: its folder settings follow too
+--- @return number entries re-keyed in the indexes and groups, boolean settings changed
+function Registry.followFolderMove(old_dir, new_dir, settings)
+    if type(old_dir) ~= "string" or type(new_dir) ~= "string" then return 0, false end
+    old_dir = (old_dir:gsub("/+$", ""))
+    new_dir = (new_dir:gsub("/+$", ""))
+    if old_dir == "" or new_dir == "" or old_dir == new_dir then return 0, false end
+    local movedPath = require("koassistant.storage.doc_settings").movedPath
+    local count = 0
+    -- The indexes (chats, notebooks, artifacts, pinned items), keyed by book
+    local flush = false
+    for _, key in ipairs(Registry.indexKeys()) do
+        local index = G_reader_settings:readSetting(key)
+        if type(index) == "table" then
+            local found = {}
+            for path in pairs(index) do
+                found[path] = movedPath(path, old_dir, new_dir)
+            end
+            if next(found) then
+                for path, new_path in pairs(found) do
+                    index[new_path] = index[path]
+                    index[path] = nil
+                    count = count + 1
+                end
+                G_reader_settings:saveSetting(key, index)
+                flush = true
+            end
+        end
+    end
+    if flush then G_reader_settings:flush() end
+    -- Groups and pictures name their books; the per-book store memo knows
+    -- them by the old path
+    count = count + require("koassistant.books.book_groups").updateForFolderMove(old_dir, new_dir)
+    require("koassistant.images.image_generator").updateIndexForMove(old_dir, new_dir, false, true)
+    local BookStore = require("koassistant.storage.book_store")
+    BookStore.invalidateUnder(old_dir)
+    BookStore.invalidateUnder(new_dir)
+    -- The links between books (X-Ray data, pinned items): the moved-book
+    -- sweep, which finds the books by the indexes and groups re-keyed above
+    require("koassistant.xray.xray_merge").noteMoved(old_dir, new_dir, true)
+    -- The folders the settings name follow, as KOReader's home folder does
+    local changed = false
+    local features = settings and settings:readSetting("features")
+    if type(features) == "table" then
+        for _, key in ipairs(FOLDER_LIST_SETTINGS) do
+            if type(features[key]) == "table" then
+                for i, folder in ipairs(features[key]) do
+                    local new_path = movedPath(folder, old_dir, new_dir)
+                    if new_path then
+                        features[key][i] = new_path
+                        changed = true
+                    end
+                end
+            end
+        end
+        for _, key in ipairs(FOLDER_SETTINGS) do
+            local new_path = movedPath(features[key], old_dir, new_dir)
+            if new_path then
+                features[key] = new_path
+                changed = true
+            end
+        end
+        if changed then
+            settings:saveSetting("features", features)
+            settings:flush()
+        end
+    end
+    if count > 0 or changed then
+        require("koassistant.core.logger").info("KOAssistant: followed a folder move:", count,
+            "entries re-keyed", changed and "(folder settings too)" or "")
+    end
+    return count, changed
+end
+
 return Registry

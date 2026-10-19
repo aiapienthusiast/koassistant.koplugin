@@ -124,6 +124,26 @@ TestRunner:test("updateForMove: move re-keys, copy never joins, delete keeps", f
     BookGroups.remove(g.id)
 end)
 
+TestRunner:test("updateForFolderMove: the members inside follow in their places (B507)", function()
+    local g = BookGroups.create("Saga")
+    for _idx, p in ipairs({ "/b/Saga/1.epub", "/b/Saga 2/x.epub", "/b/Saga/sub/2.epub", "/b/other.epub" }) do
+        BookGroups.addBook(g.id, p)
+    end
+    TestRunner:assertEqual(BookGroups.updateForFolderMove("/b/Saga", "/b/Done"), 2, "two re-keyed")
+    local books = BookGroups.byId(g.id).books
+    TestRunner:assertEqual(books[1], "/b/Done/1.epub", "inside: re-keyed, first still")
+    TestRunner:assertEqual(books[2], "/b/Saga 2/x.epub", "a folder named alike is another folder")
+    TestRunner:assertEqual(books[3], "/b/Done/sub/2.epub", "a subfolder follows")
+    TestRunner:assertEqual(books[4], "/b/other.epub", "outside: unchanged")
+    -- A member already at the new path: the old slot goes, no duplicate
+    BookGroups.addBook(g.id, "/b/New/1.epub")
+    BookGroups.updateForFolderMove("/b/Done", "/b/New")
+    books = BookGroups.byId(g.id).books
+    TestRunner:assertEqual(#books, 4, "no duplicate")
+    TestRunner:assertEqual(BookGroups.updateForFolderMove("/b/Elsewhere", "/b/Moved"), 0, "nothing inside")
+    BookGroups.remove(g.id)
+end)
+
 print("")
 print("  [merge picker ordering (earlier feeds later)]")
 

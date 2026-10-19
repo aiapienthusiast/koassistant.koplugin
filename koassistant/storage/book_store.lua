@@ -288,6 +288,14 @@ function BookStore.invalidate(document_path)
     cache[cacheKey(document_path)] = nil
 end
 
+--- Every cached store inside a folder (the folder moved, B507)
+function BookStore.invalidateUnder(dir)
+    local inFolder = require("koassistant.storage.doc_settings").inFolder
+    for key in pairs(cache) do
+        if inFolder(key, dir) then cache[key] = nil end
+    end
+end
+
 function BookStore._resetForTests()
     cache = {}
 end

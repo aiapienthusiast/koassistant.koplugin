@@ -220,6 +220,8 @@ function AskGPT:init()
 
   -- Patch DocSettings for chat index tracking on file moves
   self:patchDocSettingsForChatIndex()
+  -- ... and KOReader's History re-key for a folder's move or rename (B507)
+  self:patchReadHistoryForFolderMoves()
 
   -- Cross-book X-Ray knowledge (S4, ref #90): the lookup direction follows
   -- the current book's spoiler protection; group edits and live X-Ray writes
@@ -24135,6 +24137,32 @@ function AskGPT:patchDocSettingsForChatIndex()
 
   DocSettings._koassistant_patched = true
   logger.dbg("KOAssistant: DocSettings.updateLocation() patched for sidecar file tracking")
+end
+
+-- Patch ReadHistory:updateItemsByPath(), the call KOReader's file browser makes
+-- when a folder is moved or renamed (B507): KOReader re-keys its History,
+-- Collections and folder settings there and calls nothing per book, so the
+-- plugin's own lists follow from here (StorageRegistry.followFolderMove)
+function AskGPT:patchReadHistoryForFolderMoves()
+  local ReadHistory = require("readhistory")
+  if ReadHistory._koassistant_patched then
+    return
+  end
+  local original = ReadHistory.updateItemsByPath
+  ReadHistory.updateItemsByPath = function(history, old_dir, new_dir)
+    original(history, old_dir, new_dir)
+    -- The plugin instance of the file browser the move was made in
+    local live = FileManager.instance and FileManager.instance.koassistant
+    local ok, result, settings_changed = pcall(StorageRegistry.followFolderMove, old_dir, new_dir,
+      live and live.settings)
+    if not ok then
+      logger.warn("KOAssistant: could not follow a folder move:", tostring(result))
+    elseif settings_changed and live then
+      live:updateConfigFromSettings()
+    end
+  end
+  ReadHistory._koassistant_patched = true
+  logger.dbg("KOAssistant: ReadHistory.updateItemsByPath() patched for folder moves")
 end
 
 --- Update notebook index for a document
