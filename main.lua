@@ -6624,9 +6624,11 @@ function AskGPT:executeDictAction(action, word, dict_popup, non_reader_lookup, l
       -- (the word was added/skipped by KOReader's own vocab builder settings).
       -- We just reflect the state for our UI button — don't fire the event again.
       -- The builder is a plugin: its setting outlives disabling it, and then
-      -- nothing took the event ("Added" showed for a word nobody stored)
+      -- nothing took the event ("Added" showed for a word nobody stored). The
+      -- instance sits on the reader under the plugin's FOLDER name
+      -- (ui.vocabbuilder: PluginLoader overwrites the module's own `name`)
       local vocab_settings = G_reader_settings and G_reader_settings:readSetting("vocabulary_builder") or {}
-      if vocab_settings.enabled and self.ui and self.ui.vocabulary_builder then
+      if vocab_settings.enabled and self.ui and self.ui.vocabbuilder then
         dict_config.features.vocab_word_auto_added = true
       end
 
@@ -20266,7 +20268,7 @@ function AskGPT:syncDictionaryBypass()
           -- Vocab builder auto-add in bypass mode:
           -- Only add if both vocab builder is enabled AND the bypass vocab setting allows it
           local vocab_settings = G_reader_settings and G_reader_settings:readSetting("vocabulary_builder") or {}
-          if vocab_settings.enabled and self_ref.ui.vocabulary_builder
+          if vocab_settings.enabled and self_ref.ui.vocabbuilder  -- the plugin, by its folder name
               and features.dictionary_bypass_vocab_add ~= false then
             local book_title = (self_ref.ui.doc_props and self_ref.ui.doc_props.display_title) or _("AI Dictionary lookup")
             local Event = require("ui/event")

@@ -1913,8 +1913,11 @@ function ChatGPTViewer:init()
         if word and word ~= "" then
           local ReaderUI = require("apps/reader/readerui")
           local reader_ui = ReaderUI.instance
-          -- The builder is a plugin: with it disabled nothing takes the event
-          if reader_ui and reader_ui.vocabulary_builder then
+          -- The builder is a plugin: with it disabled nothing takes the event.
+          -- KOReader registers a plugin on the reader under its FOLDER name
+          -- (PluginLoader overwrites the module's own `name`), so the
+          -- Vocabulary builder is ui.vocabbuilder, never ui.vocabulary_builder
+          if reader_ui and reader_ui.vocabbuilder then
             -- KOReader's own lookups clean the word first (edge punctuation, a
             -- possessive 's, an elision); a run from the highlight menu hands
             -- the raw selection over, so clean it before it is stored
