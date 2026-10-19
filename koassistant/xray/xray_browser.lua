@@ -7058,8 +7058,9 @@ function XrayBrowser:_openOtherXrayAtItem(group, result)
     if group.is_section then
         scope = {
             label = group.label,
-            start_page = group.cache_entry.scope_start_page,
-            end_page = group.cache_entry.scope_end_page,
+            -- As the search found it in this layout (B503), else as stored
+            start_page = group.scope_start or group.cache_entry.scope_start_page,
+            end_page = group.scope_end or group.cache_entry.scope_end_page,
             page_summary = group.scope_summary or group.cache_entry.scope_page_summary,
             cache_key = group.key,
         }
@@ -7109,7 +7110,11 @@ function XrayBrowser:_showCrossXrayResults(query)
     })
     local self_ref = self
     UIManager:scheduleIn(0.1, function()
+        -- The open document places sections only when it IS this book
         local doc = self_ref.ui and self_ref.ui.document
+        if doc and not require("koassistant.storage.doc_settings").samePath(doc.file, book_file) then
+            doc = nil
+        end
         local grouped = ActionCache.searchAllXrays(book_file, query, doc)
 
         -- Exclude current X-Ray from results

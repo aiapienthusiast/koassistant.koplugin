@@ -186,7 +186,11 @@ end
 --- entity index when the pick changed. Cheap when nothing moved.
 local function ensureIndex(plugin, pageno)
   local ActionCache = require("koassistant.artifacts.action_cache")
-  local stamps = diskStamps(ActionCache, st.file)
+  -- The page count joins the stamps: a font, margin or rotation change moves
+  -- the section ranges below without touching a file (B503)
+  local layout_doc = plugin.ui and plugin.ui.document
+  local stamps = diskStamps(ActionCache, st.file) .. "|"
+    .. tostring(layout_doc and layout_doc.info and layout_doc.info.number_of_pages)
   if stamps ~= st.stamps then
     st.stamps = stamps
     st.live = ActionCache.getXrayCache(st.file)

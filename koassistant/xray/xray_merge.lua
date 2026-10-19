@@ -2063,7 +2063,12 @@ function XrayMerge.execute(opts)
             -- reconcileXrayMeta on the delta path.
             local input_spans
             for _idx, e in ipairs(input_entries) do
-                input_spans = WriteBack.unionSpans(input_spans, WriteBack.spansFromEntry(e))
+                -- A section's range as it falls in this layout when the book
+                -- is open (B503), else as recorded
+                local sp, ep
+                if opts.section_range then sp, ep = opts.section_range(e) end
+                input_spans = WriteBack.unionSpans(input_spans,
+                    (sp and ep) and (sp .. "-" .. ep) or WriteBack.spansFromEntry(e))
             end
 
             if into_main then
@@ -2117,10 +2122,38 @@ function XrayMerge.execute(opts)
                     return
                 end
                 local scope = XrayMerge.combinedScope(opts.sections)
-                -- Display label in VISIBLE pages when possible (manual-writer
-                -- parity; scope_* fields stay raw for extraction math)
+                -- The range as it falls in this layout when the book is open
+                -- (B503: the inputs may come from other layouts), then the
+                -- label in VISIBLE pages when possible (manual-writer parity;
+                -- scope_* fields stay raw for extraction math)
                 local doc = opts.ui and opts.ui.document
-                if doc and doc.file == file and scope.start_page and scope.end_page
+                if doc and not require("koassistant.storage.doc_settings").samePath(doc.file, file) then
+                    doc = nil
+                end
+                if doc and opts.section_range then
+                    -- The union of the sections' own ranges, each placed in
+                    -- this layout; its bounds keep the positions of the
+                    -- sections they come from (a section saved without
+                    -- positions makes it a range by pages only: a start with
+                    -- no end position would read as "to the end of the book")
+                    local sp, ep, first, last
+                    for _idx, sec in ipairs(opts.sections) do
+                        local s, e = opts.section_range(sec.data)
+                        if s and (not sp or s < sp) then sp, first = s, sec end
+                        if e and (not ep or e > ep) then ep, last = e, sec end
+                    end
+                    if sp and ep and sp <= ep then
+                        scope.start_page, scope.end_page = sp, ep
+                        scope.page_summary = T(_("pp %1–%2"), sp, ep)
+                        if first.data.scope_start_xpointer and last.data.scope_start_xpointer then
+                            scope.start_xpointer = first.data.scope_start_xpointer
+                            scope.end_xpointer = last.data.scope_end_xpointer
+                        else
+                            scope.start_xpointer, scope.end_xpointer = nil, nil
+                        end
+                    end
+                end
+                if doc and scope.start_page and scope.end_page
                     and doc.hasHiddenFlows and doc:hasHiddenFlows() and doc.getPageNumberInFlow then
                     scope.page_summary = T(_("pp %1–%2"),
                         doc:getPageNumberInFlow(scope.start_page) or scope.start_page,
@@ -2241,10 +2274,13 @@ local function pickTargetThenRun(opts)
 
     local scoped = {}
     for _idx, sec in ipairs(sections) do
+        -- The section's pages in this layout when the book is open (B503)
+        local sp, ep
+        if opts.section_range then sp, ep = opts.section_range(sec.data) end
         scoped[#scoped + 1] = {
             label = sec.label,
-            start_page = sec.data.scope_start_page,
-            end_page = sec.data.scope_end_page,
+            start_page = sp or sec.data.scope_start_page,
+            end_page = ep or sec.data.scope_end_page,
         }
     end
     local coverage = WriteBack.coverageFromInputs(scoped)
@@ -2316,14 +2352,14 @@ local function pickTargetThenRun(opts)
 
     -- Into-main coverage requirements:
     -- DELTA: the floor holds the main's claim, so a missing ratio is safe when
-    -- the main already covers every selected section (or is complete-track).
+    -- the main is complete-track. Whether it covers every selected section is
+    -- only known with the book open (B503): stored pages may come from
+    -- different layouts, and a wrong yes would keep a claim below the text
+    -- the merge adds.
     -- REPLACE/CREATE: the result's claim IS the ratio — never write a guess.
     local main_possible
     if delta_mode then
-        main_possible = coverage_ratio ~= nil
-            or opts.main_entry.full_document
-            or (tonumber(opts.main_entry.progress_page)
-                and (coverage.end_page or math.huge) <= tonumber(opts.main_entry.progress_page))
+        main_possible = coverage_ratio ~= nil or opts.main_entry.full_document
     else
         main_possible = coverage_ratio ~= nil
     end
@@ -2432,12 +2468,25 @@ function XrayMerge.startFlow(opts)
 
     -- Coverage context: a raw-page → flow-aware-ratio mapper (hidden-flow books
     -- would misclaim on raw ÷ raw-total math) + the reading position
-    local page_ratio_fn, reading_decimal
-    if opts.ui and opts.ui.document and opts.ui.document.file == opts.file then
+    local page_ratio_fn, reading_decimal, section_range, open_doc
+    if opts.ui and opts.ui.document
+            and require("koassistant.storage.doc_settings").samePath(opts.ui.document.file, opts.file) then
         local doc = opts.ui.document
         local total = doc.info and doc.info.number_of_pages
         if total and total > 0 then
             local ContextExtractor = require("koassistant.request.context_extractor")
+            -- Saved pages as they fall in this layout (B503): the main's
+            -- coverage and the sections' ranges, wherever they were built,
+            -- and the sections in this layout's text order (their stored
+            -- pages may come from layouts that sort them otherwise)
+            open_doc = doc
+            main_entry = ContextExtractor.entryInLayout(doc, main_entry)
+            section_range = function(data) return ActionCache.getSectionPageRange(data, doc) end
+            local starts = {}
+            for _idx, sec in ipairs(sections) do
+                starts[sec] = section_range(sec.data) or sec.data.scope_start_page or 0
+            end
+            table.sort(sections, function(a, b) return starts[a] < starts[b] end)
             local visible_total = ContextExtractor.getFlowFingerprint(doc)
             if visible_total and visible_total > 0 then
                 page_ratio_fn = function(page)
@@ -2483,6 +2532,9 @@ function XrayMerge.startFlow(opts)
             local captured = sec
             local detail_parts = {}
             local pages = sec.data.scope_page_summary
+            if open_doc and sec.data.scope_start_xpointer then
+                pages = ActionCache.reconvertPageSummary(sec.data, open_doc) or pages
+            end
             if pages and pages ~= "" then detail_parts[#detail_parts + 1] = pages end
             if sec.data.merged_to_main then detail_parts[#detail_parts + 1] = _("merged") end
             local detail = #detail_parts > 0
@@ -2514,6 +2566,7 @@ function XrayMerge.startFlow(opts)
                     sections = picked,
                     main_entry = main_entry,
                     page_ratio_fn = page_ratio_fn,
+                    section_range = section_range,
                     reading_decimal = reading_decimal,
                     title = opts.title,
                     author = opts.author,
@@ -3910,5 +3963,204 @@ function XrayMerge.startCrossBookFlow(opts)
     UIManager:show(picker)
     logger.dbg("KOAssistant XrayMerge: cross-book picker with", #candidates, "candidates for", opts.file)
 end
+
+-- ============================ Moved books (B504) ============================
+-- Cross-book X-Ray data names books by path: the fold ledger (merged_from),
+-- carried entries and background lines. A move inside KOReader re-keys the
+-- indexes, the images and the groups (main.lua's updateLocation patch); these
+-- links are re-keyed here, in one background sweep after the moves settle.
+-- Another device's paths are not this: they need an identity that does not
+-- depend on the folder (docs/cross_device_plan.md section 2).
+
+-- A path-shaped quoted string: an opening quote, then "/" (or "\/", as
+-- KOReader's JSON encoder writes it), up to the closing quote (book paths
+-- hold no quote: FAT forbids it). Found by pattern, so a sweep costs the
+-- same for one move or a hundred, and each occurrence is replaced once, by
+-- its own move, whatever order the moves came in
+local QUOTED_PATH = '"(\\?/[^"]*)"'
+
+-- The quoted replacement for a quoted path that names a moved book, written
+-- the way the old one was (JSON-escaped or plain); nil for any other string
+local function movedQuote(inner, moves)
+    if inner:sub(1, 2) == "\\/" then
+        local new = moves[(inner:gsub("\\/", "/"))]
+        return new and ('"' .. (new:gsub("/", "\\/")) .. '"') or nil
+    end
+    local new = moves[inner]
+    return new and ('"' .. new .. '"') or nil
+end
+
+local function replacePaths(s, moves)
+    local changed = false
+    local out = s:gsub(QUOTED_PATH, function(inner)
+        local repl = movedQuote(inner, moves)
+        if repl then changed = true end
+        return repl
+    end)
+    return out, changed
+end
+
+-- A record's own path (merged_from rows): exact equality
+local function rekeyRecords(list, moves)
+    local changed = false
+    if type(list) ~= "table" then return false end
+    for _idx, rec in ipairs(list) do
+        if type(rec) == "table" and type(rec.file) == "string" and moves[rec.file] then
+            rec.file = moves[rec.file]
+            changed = true
+        end
+    end
+    return changed
+end
+
+-- One saved X-Ray (cache entry, checkpoint or archived version): its result
+-- text and its fold ledger. Timestamps, progress and the rest stay as read.
+local function rekeyEntry(entry, moves)
+    local changed = false
+    if type(entry.result) == "string" then
+        local out, ch = replacePaths(entry.result, moves)
+        if ch then entry.result = out; changed = true end
+    end
+    if rekeyRecords(entry.merged_from, moves) then changed = true end
+    return changed
+end
+
+-- Does a store file name a moved book? Read raw: the results' JSON and the
+-- Lua-quoted fold ledgers both show their paths as quoted strings. A store
+-- left at another sidecar location (KOReader's metadata location changed
+-- since the book was last opened) moves here first, as any read moves it.
+local function storeNames(path, moves, load)
+    if not path then return false end
+    local lfs = require("libs/libkoreader-lfs")
+    if lfs.attributes(path, "mode") ~= "file" then pcall(load) end
+    local f = io.open(path, "rb")
+    if not f then return false end
+    local text = f:read("*a") or ""
+    f:close()
+    for inner in text:gmatch(QUOTED_PATH) do
+        if movedQuote(inner, moves) then return true end
+    end
+    return false
+end
+
+--- Re-key one book's links to moved books: its cache, built checkpoints and
+--- archived versions, each file read first and rewritten only when it names
+--- an old path. Only the quoted paths change: nothing is re-encoded, so an
+--- installed checkpoint and the live X-Ray stay byte-identical, and no
+--- timestamp moves (a fold's version check compares them).
+--- @param document_path string The book whose stores are checked
+--- @param moves table { [old_path] = new_path }
+--- @return number stores rewritten
+function XrayMerge.rekeyBook(document_path, moves)
+    local ActionCache = require("koassistant.artifacts.action_cache")
+    local rewritten = 0
+    if storeNames(ActionCache.getPath(document_path), moves,
+            function() ActionCache.getXrayCache(document_path) end) then
+        if ActionCache.rewriteEntries(document_path, function(_key, entry)
+                return rekeyEntry(entry, moves)
+            end) then
+            rewritten = rewritten + 1
+        end
+    end
+    if storeNames(ActionCache.getXrayLadderPath(document_path), moves,
+            function() ActionCache.getXrayLadder(document_path) end) then
+        local ladder = ActionCache.getXrayLadder(document_path)
+        local changed = false
+        for _idx, rung in ipairs(ladder) do
+            if type(rung) == "table" and rekeyEntry(rung, moves) then changed = true end
+        end
+        if changed and ActionCache.saveXrayLadder(document_path, ladder) then rewritten = rewritten + 1 end
+    end
+    if storeNames(ActionCache.getXrayCheckpointsPath(document_path), moves,
+            function() ActionCache.getXrayCheckpoints(document_path) end) then
+        local ring = ActionCache.getXrayCheckpoints(document_path)
+        local changed = false
+        for _idx, cp in ipairs(ring) do
+            if type(cp) == "table" and rekeyEntry(cp, moves) then changed = true end
+        end
+        if changed and ActionCache.saveXrayCheckpoints(document_path, ring) then rewritten = rewritten + 1 end
+    end
+    return rewritten
+end
+
+-- Moves waiting for the sweep: { [old_path] = new_path }
+local pending_moves = {}
+-- Books one step of a sweep reads: a large library never holds the screen
+local SWEEP_SLICE = 8
+
+--- @param all_at_once boolean|nil every book in one step (the tests)
+local function sweepMoves(all_at_once)
+    local moves = pending_moves
+    pending_moves = {}
+    for old, new in pairs(moves) do
+        if old == new then moves[old] = nil end
+    end
+    if next(moves) == nil then return end
+    -- Pinned items name their book too (a pin's privacy check reads it): the
+    -- general and library stores, and the moved books' own
+    local PinnedManager = require("koassistant.artifacts.pinned_manager")
+    local pin_stores = { PinnedManager.GENERAL_KEY, PinnedManager.LIBRARY_KEY }
+    for _old, new in pairs(moves) do pin_stores[#pin_stores + 1] = new end
+    for _idx, key in ipairs(pin_stores) do
+        local ok, err = pcall(PinnedManager.rekeyPaths, key, moves)
+        if not ok then logger.warn("KOAssistant XrayMerge: could not update pinned links in", key, ":", tostring(err)) end
+    end
+    -- Every book that may hold a link: the books with saved artifacts, and
+    -- the moved books' groups (a group's X-Rays carry its members)
+    local seen, queue = {}, {}
+    local function add(path)
+        if type(path) == "string" and not path:match("^__") and not seen[path] then
+            seen[path] = true
+            queue[#queue + 1] = path
+        end
+    end
+    for path in pairs(G_reader_settings:readSetting("koassistant_artifact_index") or {}) do add(path) end
+    local BookGroups = require("koassistant.books.book_groups")
+    for _old, new in pairs(moves) do
+        for _idx, group in ipairs(BookGroups.groupsFor(new)) do
+            for _j, member in ipairs(group.books or {}) do add(member) end
+        end
+    end
+    local rewritten, touched = 0, 0
+    local function step()
+        local n = 0
+        while #queue > 0 and (all_at_once or n < SWEEP_SLICE) do
+            local path = table.remove(queue)
+            n = n + 1
+            local ok, count = pcall(XrayMerge.rekeyBook, path, moves)
+            if ok and count > 0 then
+                rewritten = rewritten + count
+                touched = touched + 1
+            elseif not ok then
+                logger.warn("KOAssistant XrayMerge: could not update moved-book links in", path, ":", tostring(count))
+            end
+        end
+        if #queue > 0 then
+            UIManager:scheduleIn(0.1, step)
+        elseif touched > 0 then
+            logger.info("KOAssistant XrayMerge: moved book links updated in", touched, "book(s),", rewritten, "file(s)")
+        end
+    end
+    step()
+end
+
+--- A book moved inside KOReader (the updateLocation patch, moves only): the
+--- links other books' X-Rays keep to it follow, in one sweep a few seconds
+--- after the last of a batch of moves. A book moved twice before the sweep
+--- maps to its last path.
+--- @param old_path string
+--- @param new_path string
+function XrayMerge.noteMoved(old_path, new_path)
+    if type(old_path) ~= "string" or type(new_path) ~= "string" or old_path == new_path then return end
+    for old, new in pairs(pending_moves) do
+        if new == old_path then pending_moves[old] = new_path end
+    end
+    pending_moves[old_path] = new_path
+    UIManager:unschedule(sweepMoves)
+    UIManager:scheduleIn(3, sweepMoves)
+end
+
+-- Tests drive the sweep without the scheduler
+XrayMerge._sweepMoves = sweepMoves
 
 return XrayMerge

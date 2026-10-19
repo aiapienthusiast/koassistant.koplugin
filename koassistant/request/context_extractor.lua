@@ -119,6 +119,97 @@ function ContextExtractor.rawPageAt(document, fraction, round_up)
     return total
 end
 
+--- The text position a saved page starts at (B503). A page number belongs to
+--- one layout (screen, font, margins, rotation); the position is the same
+--- text in every layout of the same file. Reflowable documents only: nil for
+--- page-based ones (their pages are the same everywhere) and for page 0.
+--- @param document table KOReader document object
+--- @param page number|nil Raw page
+--- @return string|nil xpointer
+function ContextExtractor.pageXPointer(document, page)
+    page = tonumber(page)
+    local info = document and document.info
+    if not (page and page >= 1 and info and not info.has_pages and document.getPageXPointer) then
+        return nil
+    end
+    if page > (tonumber(info.number_of_pages) or 0) then return nil end
+    local ok, xp = pcall(document.getPageXPointer, document, page)
+    if ok and type(xp) == "string" and xp ~= "" then return xp end
+    return nil
+end
+
+--- A saved entry's page in this document's current layout (B503). The saved
+--- position finds it when there is one. A whole-book claim without one is the
+--- last page of any layout. An entry saved before positions were kept holds
+--- its page while the page sits at or before its saved share of the book (the
+--- same layout; one with more pages; a share an AI merge of sections raised
+--- past its page): the update starts there or earlier, so text may be read
+--- twice, never skipped. A page past its share (fewer pages now) moves back to
+--- the share of the saved page's start, 1% early. Page-based documents keep
+--- their pages.
+--- @param document table KOReader document object
+--- @param entry table A cache entry, ladder rung or archived version
+--- @return number|nil page, boolean moved (the saved page was another layout's), boolean by_position
+function ContextExtractor.savedPageNow(document, entry)
+    local saved = tonumber(type(entry) == "table" and entry.progress_page)
+    local info = document and document.info
+    if not saved or not info or info.has_pages then return saved, false, false end
+    local total = tonumber(info.number_of_pages) or 0
+    if total <= 0 or saved <= 0 then return saved, false, false end
+    local xp = entry.progress_xpointer
+    if type(xp) == "string" and xp ~= "" and document.getPageFromXPointer then
+        local ok, page = pcall(function()
+            if document.isXPointerInDocument and not document:isXPointerInDocument(xp) then
+                return nil
+            end
+            return document:getPageFromXPointer(xp)
+        end)
+        page = ok and tonumber(page)
+        if page and page >= 1 and page <= total then return page, page ~= saved, true end
+    end
+    local decimal = tonumber(entry.progress_decimal)
+    if not decimal then return saved, false, false end
+    if decimal >= 1 then return total, saved ~= total, false end
+    if saved <= total and ContextExtractor.flowFraction(document, saved) <= decimal + 1e-9 then
+        return saved, false, false
+    end
+    -- The share ends with the saved page (a checkpoint's runs up to a page
+    -- further); the text ended where that page starts
+    local from = decimal * (saved - 1) / (saved + 1) - 0.01
+    local page = ContextExtractor.rawPageAt(document, math.max(0, from)) or saved
+    return page, page ~= saved, false
+end
+
+--- A saved entry with its pages in this layout (B503): the entry itself when
+--- they already are, else a shallow copy with progress_page moved to where its
+--- text is now, the position of the moved page when the entry had none, and
+--- its coverage spans scaled by the same move (not a whole-book claim's: its
+--- page says "the end", not where a span ends). Read a base this way before
+--- new work builds on it (an update, a merge into it).
+--- @param document table KOReader document object
+--- @param entry table|nil A cache entry, ladder rung or archived version
+--- @return table|nil entry
+function ContextExtractor.entryInLayout(document, entry)
+    if type(entry) ~= "table" then return entry end
+    local page, moved, by_position = ContextExtractor.savedPageNow(document, entry)
+    if not moved then return entry end
+    local copy = {}
+    for k, v in pairs(entry) do copy[k] = v end
+    local saved = tonumber(entry.progress_page)
+    copy.progress_page = page
+    if not by_position then
+        copy.progress_xpointer = ContextExtractor.pageXPointer(document, page)
+    end
+    local whole = (tonumber(entry.progress_decimal) or 0) >= 1
+    if entry.coverage_spans and saved and saved > 0 and page and page > 0
+            and (by_position or not whole) then
+        copy.coverage_spans = require("koassistant.xray.artifact_writeback")
+            .scaleSpans(entry.coverage_spans, page / saved)
+    end
+    logger.dbg("KOAssistant: saved page", saved, "is page", page, "in this layout")
+    return copy
+end
+
 --- End-of-document xpointer for reflowable documents (parity audit F242, 2026-09-04).
 --- getPageXPointer(N) is the START of page N, so a range that ended on the last
 --- page silently lost that page's text: every whole-document extraction dropped the

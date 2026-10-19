@@ -41,9 +41,10 @@ end
 -- companions — dropping full_document would let a complete-track artifact
 -- slip into the incremental machinery (background updates, ladder promotion),
 -- and dropping progress_page breaks the next incremental extraction under
--- hidden flows. Same field set as CHECKPOINT_COPY_FIELDS / restore / promote.
+-- hidden flows. Same field set as CHECKPOINT_COPY_FIELDS / restore / promote
+-- (progress_page and its position, B503, travel as a pair: see below).
 local BASE_CONTINUITY_FIELDS = {
-    "model", "source_mode", "full_document", "progress_page", "flow_visible_pages",
+    "model", "source_mode", "full_document", "flow_visible_pages",
     -- The artifact still CONTAINS the other books' background after later
     -- updates (item 43 cross-book provenance; the ledger is its dated form —
     -- both inherit or a rebuild would look like it had never been folded into)
@@ -81,6 +82,12 @@ function WriteBack.reconcileXrayMeta(base_entry, new_meta)
     meta.used_book_text = stickyFlag(new_meta and new_meta.used_book_text, base.used_book_text)
     for _idx, field in ipairs(BASE_CONTINUITY_FIELDS) do
         if meta[field] == nil then meta[field] = base[field] end
+    end
+    -- The saved page and its position (B503) travel as a pair: a pass that
+    -- brings either keeps its own, else both come from the base
+    if meta.progress_page == nil and meta.progress_xpointer == nil then
+        meta.progress_page = base.progress_page
+        meta.progress_xpointer = base.progress_xpointer
     end
     -- Coverage spans (timeline slice 1): the merged artifact still CONTAINS
     -- the base's covered content — union, never overwrite. Legacy bases
@@ -212,6 +219,25 @@ function WriteBack.unionSpans(a, b)
         list[#list + 1] = s
     end
     return WriteBack.formatSpans(list)
+end
+
+--- A span set carried into another layout of the same text (B503): every
+--- bound scaled by `ratio` (a saved position's page now over its page then),
+--- starts rounded down and ends up so a span never shrinks. Pure.
+--- @param spans string|table|nil
+--- @param ratio number
+--- @return string|nil Canonical string
+function WriteBack.scaleSpans(spans, ratio)
+    ratio = tonumber(ratio)
+    if not ratio or ratio <= 0 then return WriteBack.formatSpans(spans) end
+    local scaled = {}
+    for _idx, s in ipairs(WriteBack.parseSpans(spans)) do
+        scaled[#scaled + 1] = {
+            from = math.floor((s.from - 1) * ratio + 1e-9) + 1,
+            to = math.max(1, math.ceil(s.to * ratio - 1e-9)),
+        }
+    end
+    return WriteBack.formatSpans(scaled)
 end
 
 --- Pointer eligibility: the end page x when the spans cover a contiguous

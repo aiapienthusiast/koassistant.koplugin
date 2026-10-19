@@ -4940,6 +4940,14 @@ if prune_book_text then
             .rawPageAt(ui.document, lt) or message_data.progress_page
     end
 
+    -- Where the saved page starts in the text (B503): the page number holds in
+    -- this layout only, the position in any (another device, a rotation, a
+    -- font change), so the next update starts where this request's text ends
+    if message_data.progress_page and ui and ui.document and not is_file_browser_target then
+        message_data.progress_xpointer = require("koassistant.request.context_extractor")
+            .pageXPointer(ui.document, message_data.progress_page)
+    end
+
     -- Get domain context if a domain is set (skip if action opts out)
     -- Priority: prompt.domain (locked) > book domain (DocSettings) > global selected_domain
     -- Book domain "_none" = explicit override to no domain (blocks global fallthrough)
@@ -4995,6 +5003,13 @@ if prune_book_text then
         local cached_entry = require("koassistant.xray.xray_auto").updateBaseFor(message_data,
             function() return ActionCache.get(cache_file, prompt.id) end)
         cache_entry_existed = (cached_entry ~= nil and cached_entry.result ~= nil)
+        -- The base's pages in this layout (B503): saved on another device, or
+        -- before a rotation or a font change, its page number points elsewhere
+        -- in the text; the update starts where the base's text ended
+        if cached_entry and ui and ui.document
+                and require("koassistant.storage.doc_settings").samePath(ui.document.file, cache_file) then
+            cached_entry = require("koassistant.request.context_extractor").entryInLayout(ui.document, cached_entry)
+        end
 
         if cached_entry and message_data.progress_decimal then
             local current_progress = tonumber(message_data.progress_decimal) or 0
@@ -5085,9 +5100,15 @@ if prune_book_text then
                     "result withheld from update - permission revoked since cache build")
             end
 
-            -- Use cache if we've progressed by at least 1% since last time
+            -- Use cache if we've progressed by at least 1% since last time.
+            -- The new text is cut from the open document, so only a request
+            -- about the open book updates: a closed book's run (a file browser
+            -- row, a Book Hub beside another book) starts over, where it used to
+            -- fail on the missing document or read the other book's pages
             if not skip_legacy and not skip_incremental and cache_read_allowed
-                    and current_progress > cached_progress + 0.01 and prompt.update_prompt then
+                    and current_progress > cached_progress + 0.01 and prompt.update_prompt
+                    and ui and ui.document
+                    and require("koassistant.storage.doc_settings").samePath(ui.document.file, cache_file) then
                 using_cache = true
                 cached_progress_display = math.floor(cached_progress * 100) .. "%"
                 logger.dbg("KOAssistant: Using cached response from", cached_progress_display, "for", prompt.id)
@@ -5804,6 +5825,7 @@ if prune_book_text then
                       previous_progress_decimal = message_data.cached_progress_decimal,
                       flow_visible_pages = message_data.flow_visible_pages,
                       progress_page = message_data.progress_page,
+                      progress_xpointer = message_data.progress_xpointer,
                       full_document = config.features and config.features._full_document_xray or nil,
                       source_mode = source_mode,
                       coverage_spans = xray_spans,
@@ -5877,6 +5899,7 @@ if prune_book_text then
                         result = cache_answer,
                         progress_decimal = message_data._ladder_intro and 0 or progress,
                         progress_page = message_data._ladder_intro and 0 or message_data.progress_page,
+                        progress_xpointer = (not message_data._ladder_intro) and message_data.progress_xpointer or nil,
                         timestamp = os.time(),
                         model = model_name,
                         used_highlights = rung_used_highlights,
@@ -5924,6 +5947,7 @@ if prune_book_text then
                         previous_progress_decimal = message_data.cached_progress_decimal,
                         flow_visible_pages = message_data.flow_visible_pages,
                         progress_page = message_data.progress_page,
+                        progress_xpointer = message_data.progress_xpointer,
                         full_document = config.features and config.features._full_document_xray or nil,
                         coverage_spans = xray_spans,
                         producer = xray_producer,
@@ -5987,6 +6011,7 @@ if prune_book_text then
                                 result = cache_answer,
                                 progress_decimal = progress,
                                 progress_page = message_data.progress_page,
+                                progress_xpointer = message_data.progress_xpointer,
                                 timestamp = xray_fold_ts,
                                 model = model_name,
                                 used_highlights = used_highlights,

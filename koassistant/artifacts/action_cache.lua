@@ -225,7 +225,11 @@ local function saveCache(document_path, cache)
         util.makePath(dir)
     end
 
-    local file, err = io.open(path, "w")
+    -- Written beside the file, then moved over it: a write cut off (power
+    -- loss, a full card) leaves the old cache whole, never a torn one (the
+    -- move sweep rewrites caches unattended, B504)
+    local tmp = path .. ".tmp"
+    local file, err = io.open(tmp, "w")
     if not file then
         logger.err("KOAssistant ActionCache: Failed to open file for writing:", err)
         return false
@@ -264,6 +268,9 @@ local function saveCache(document_path, cache)
             end
             if entry.progress_page then
                 file:write(string.format("        progress_page = %s,\n", tostring(entry.progress_page)))
+            end
+            if type(entry.progress_xpointer) == "string" then
+                file:write(string.format("        progress_xpointer = %q,\n", entry.progress_xpointer))
             end
             if entry.full_document then
                 file:write(string.format("        full_document = %s,\n", tostring(entry.full_document)))
@@ -399,7 +406,14 @@ local function saveCache(document_path, cache)
         end
     end
     file:write("}\n")
-    file:close()
+    local closed, close_err = file:close()
+    local moved, move_err
+    if closed then moved, move_err = os.rename(tmp, path) end
+    if not moved then
+        os.remove(tmp)
+        logger.warn("KOAssistant ActionCache: cache not saved for", document_path, ":", tostring(close_err or move_err))
+        return false
+    end
 
     logger.dbg("KOAssistant ActionCache: Saved cache for", document_path)
     updateArtifactIndex(document_path, cache)
@@ -456,6 +470,9 @@ function ActionCache.set(document_path, action_id, result, progress_decimal, met
         flow_visible_pages = metadata and metadata.flow_visible_pages,
         -- Raw page number for extraction math (flow-aware progress can't be used for page calculations)
         progress_page = metadata and metadata.progress_page,
+        -- Where that page starts in the text (B503): the page number holds for
+        -- one layout, the position for any (ContextExtractor.savedPageNow)
+        progress_xpointer = metadata and metadata.progress_xpointer,
         -- Full-document X-Ray (entire document, not spoiler-free)
         full_document = metadata and metadata.full_document,
         -- Track reasoning and web search usage
@@ -522,6 +539,22 @@ function ActionCache.set(document_path, action_id, result, progress_decimal, met
         edited_at = metadata and metadata.edited_at,
     }
 
+    return saveCache(document_path, cache)
+end
+
+--- Rewrite a book's entries in place and save once when any changed (B504,
+--- the move sweep): fn(key, entry) returns true when it changed the entry.
+--- Every other entry and field is written back as it was read.
+--- @param document_path string The document file path
+--- @param fn function(key, entry) -> boolean changed
+--- @return boolean saved
+function ActionCache.rewriteEntries(document_path, fn)
+    local cache = loadCache(document_path)
+    local changed = false
+    for key, entry in pairs(cache) do
+        if type(entry) == "table" and fn(key, entry) then changed = true end
+    end
+    if not changed then return false end
     return saveCache(document_path, cache)
 end
 
@@ -1633,7 +1666,7 @@ end
 -- read-gating metadata; pre-metadata checkpoints fall back to the outgoing
 -- live entry's flags (its sticky-true superset — never looser).
 local CHECKPOINT_COPY_FIELDS = {
-    "progress_decimal", "progress_page", "timestamp", "result",
+    "progress_decimal", "progress_page", "progress_xpointer", "timestamp", "result",
     "used_highlights", "used_annotations", "used_book_text",
     "model", "full_document", "flow_visible_pages", "source_mode",
     "chapter_label", "intro",
@@ -1657,7 +1690,10 @@ local function writeCheckpointRing(path, ring)
     if dir then
         util.makePath(dir)
     end
-    local file, err = io.open(path, "w")
+    -- Beside the file, then moved over it, as saveCache: a cut-off write never
+    -- tears the versions
+    local tmp = path .. ".tmp"
+    local file, err = io.open(tmp, "w")
     if not file then
         logger.err("KOAssistant ActionCache: Failed to open X-Ray checkpoints file for writing:", err)
         return false
@@ -1671,6 +1707,9 @@ local function writeCheckpointRing(path, ring)
         file:write(string.format("        progress_decimal = %s,\n", tostring(cp.progress_decimal or 0)))
         if cp.progress_page then
             file:write(string.format("        progress_page = %s,\n", tostring(cp.progress_page)))
+        end
+        if type(cp.progress_xpointer) == "string" then
+            file:write(string.format("        progress_xpointer = %q,\n", cp.progress_xpointer))
         end
         file:write(string.format("        timestamp = %s,\n", tostring(cp.timestamp or 0)))
         file:write(string.format("        archived_at = %s,\n", tostring(cp.archived_at or 0)))
@@ -1743,7 +1782,14 @@ local function writeCheckpointRing(path, ring)
         file:write("    },\n")
     end
     file:write("}\n")
-    file:close()
+    local closed, close_err = file:close()
+    local moved, move_err
+    if closed then moved, move_err = os.rename(tmp, path) end
+    if not moved then
+        os.remove(tmp)
+        logger.warn("KOAssistant ActionCache: X-Ray versions not saved:", path, tostring(close_err or move_err))
+        return false
+    end
     return true
 end
 
@@ -1953,6 +1999,7 @@ function ActionCache.restoreXrayCheckpoint(document_path, index, limit)
         model = entry.model or (live and live.model),
         timestamp = entry.timestamp,
         progress_page = entry.progress_page,
+        progress_xpointer = entry.progress_xpointer,
         full_document = entry.full_document,
         flow_visible_pages = entry.flow_visible_pages,
         source_mode = entry.source_mode or (live and live.source_mode),
@@ -2115,6 +2162,19 @@ function ActionCache.pushXrayLadderRung(document_path, rung)
     return true
 end
 
+--- Persist a loaded-and-modified archived-versions array (the move sweep,
+--- B504, rewrites results and fold ledgers in place). Timestamps and progress
+--- MUST be preserved by the caller.
+--- @param document_path string The document file path
+--- @param ring table getXrayCheckpoints output, possibly modified
+--- @return boolean success
+function ActionCache.saveXrayCheckpoints(document_path, ring)
+    if type(ring) ~= "table" or #ring == 0 then return false end
+    local path = ActionCache.getXrayCheckpointsPath(document_path)
+    if not path then return false end
+    return writeCheckpointRing(path, ring)
+end
+
 --- Persist a loaded-and-modified ladder array (the dedup ladder sweep edits
 --- rung RESULTS in place). Timestamps and progress MUST be preserved by the
 --- caller — promotion and rung identity match on them.
@@ -2268,6 +2328,7 @@ function ActionCache.promoteXrayLadderRung(document_path, rung, limit, opts)
         model = rung.model or (live and live.model),
         timestamp = rung.timestamp,
         progress_page = rung.progress_page,
+        progress_xpointer = rung.progress_xpointer,
         full_document = rung.full_document,
         flow_visible_pages = rung.flow_visible_pages,
         source_mode = rung.source_mode or (live and live.source_mode),
@@ -2507,8 +2568,12 @@ end
 local function getSectionPageRange(data, doc)
     if not data then return nil, nil end
     local start_page, end_page
-    -- Try xpointer-based conversion first (font-size independent)
-    if doc and doc.getPageFromXPointer then
+    -- Try xpointer-based conversion first (font-size independent); a position
+    -- this document does not hold (the file replaced by another edition) reads
+    -- as page 1 in crengine, so such a section keeps its stored pages
+    local valid = not (doc and doc.isXPointerInDocument and data.scope_start_xpointer)
+        or doc:isXPointerInDocument(data.scope_start_xpointer)
+    if doc and doc.getPageFromXPointer and valid then
         if data.scope_start_xpointer then
             start_page = doc:getPageFromXPointer(data.scope_start_xpointer)
         end
@@ -3079,6 +3144,9 @@ function ActionCache.searchAllXrays(document_path, query, doc, opts)
                     label = sec.label,
                     is_section = true,
                     scope_summary = page_summary,
+                    -- The range in this layout (B503), for the browser's scope
+                    scope_start = sp,
+                    scope_end = ep,
                     in_range = in_range,
                     results = results,
                     cache_entry = sec.data,

@@ -197,6 +197,25 @@ local function savePinned(document_path, pinned)
     return true
 end
 
+--- A moved book's path in pinned items (B504, the move sweep): every entry
+--- naming an old path names the new one; nothing else changes.
+--- @param document_path string Document path or special key (the store)
+--- @param moves table { [old_path] = new_path }
+--- @return boolean saved
+function PinnedManager.rekeyPaths(document_path, moves)
+    local pinned = loadPinned(document_path)
+    local changed = false
+    for _idx, entry in ipairs(pinned) do
+        if type(entry) == "table" and type(entry.document_path) == "string"
+                and moves[entry.document_path] then
+            entry.document_path = moves[entry.document_path]
+            changed = true
+        end
+    end
+    if not changed then return false end
+    return savePinned(document_path, pinned)
+end
+
 --- Update the pinned index in G_reader_settings.
 --- Tracks count and last modified timestamp per document.
 --- @param document_path string Document path or special key

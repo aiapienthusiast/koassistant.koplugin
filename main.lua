@@ -24117,6 +24117,13 @@ function AskGPT:patchDocSettingsForChatIndex()
     -- Book groups (item 46): move re-keys memberships; copy never joins a
     -- group; delete keeps the entry (missing-file policy — manual remove only)
     require("koassistant.books.book_groups").updateForMove(old_path, new_path, copy)
+
+    -- The links other books' X-Rays keep to a moved book (merges, carried
+    -- entries, background lines; B504): re-keyed in one background sweep
+    -- once the moves settle
+    if new_path and not copy then
+      require("koassistant.xray.xray_merge").noteMoved(old_path, new_path)
+    end
   end
 
   DocSettings._koassistant_patched = true

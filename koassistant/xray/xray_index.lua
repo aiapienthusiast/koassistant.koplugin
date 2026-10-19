@@ -11,8 +11,9 @@ its checkpoints, section X-Rays, carried and group names share forms, and
 versions get archived and swapped. A form nobody asks for any more is simply
 not read; new forms are found by one pass for all of them together; a
 layout change (font, size, margins, spacing, rotation) renumbers the pages,
-so that layout gets its own entry, found again in the background. Two
-layouts are kept (portrait and landscape readers flip between them).
+so that layout gets its own entry, found again in the background. Four
+layouts are kept (portrait and landscape readers flip between them, and a
+book read on two devices brings the other device's layouts by sync, B505).
 
 File <sidecar>/koassistant_xray_index.lua:
   { version = VERSION, layouts = { { stamp = "<rendering hash>:<pages>:<size>",
@@ -34,7 +35,7 @@ XrayIndex.FILE = "koassistant_xray_index.lua"
 -- Bumped whenever the matcher finds different spans for the same form, so
 -- a stored index is found again (2: Arabic matches start a word, B339)
 local VERSION = 2
-local MAX_LAYOUTS = 2
+local MAX_LAYOUTS = 4
 -- A background request waits this long (debounced) before its pass starts:
 -- the book's own opening work and the first page turns go first
 local START_DELAY_S = 5
@@ -43,9 +44,19 @@ local POLL_S = 1
 -- of a second on an e-reader); longer ranges go through a subprocess
 XrayIndex.IN_PROCESS_PAGES = 120
 
--- path -> { data = table|false } (false = no file). Only this module writes
--- the file, so the memo is authoritative once loaded.
+-- path -> { data = table|false, stamp } (false = no file). Only this module
+-- writes the file on this device, so the memo answers reads once loaded; a
+-- store checks the stamp first, since a sync tool can bring another device's
+-- layouts meanwhile (B505)
 local loaded = {}
+
+-- The file as it is on disk now: time, size and inode (a file a sync tool
+-- replaced in the same second at the same size still has another inode)
+local function fileStamp(path)
+    local attr = lfs.attributes(path)
+    if not attr or attr.mode ~= "file" then return "none" end
+    return tostring(attr.modification) .. ":" .. tostring(attr.size) .. ":" .. tostring(attr.ino)
+end
 -- The pending request for the open book: { file, ui, forms = set, listeners }
 local pending = nil
 -- The one background pass: { file, stamp, forms = set, pid, read_fd, cancelled }
@@ -115,7 +126,7 @@ function XrayIndex.load(file)
             end
         end
     end
-    loaded[path] = { data = data }
+    loaded[path] = { data = data, stamp = fileStamp(path) }
     return data or nil
 end
 
@@ -169,6 +180,10 @@ end
 function XrayIndex.store(file, stamp, results)
     local path = XrayIndex.path(file)
     if not (path and stamp and type(results) == "table") then return nil end
+    -- Changed on disk since it was read (another device's layouts arrived by
+    -- sync): read it again, so this write keeps them
+    local hit = loaded[path]
+    if hit and hit.stamp ~= fileStamp(path) then loaded[path] = nil end
     local data = XrayIndex.load(file) or { version = VERSION, layouts = {} }
     local target
     for i, l in ipairs(data.layouts) do
@@ -191,7 +206,7 @@ function XrayIndex.store(file, stamp, results)
     -- The merged data is the truth for this session even when the write
     -- fails (read-only storage): otherwise every pass would find the same
     -- forms missing and start over
-    loaded[path] = { data = data }
+    loaded[path] = { data = data, stamp = fileStamp(path) }
     local tmp = path .. ".tmp"
     local f = io.open(tmp, "wb")
     if not f then
@@ -204,6 +219,8 @@ function XrayIndex.store(file, stamp, results)
     if not ok then
         logger.warn("KOAssistant XrayIndex: cannot replace index file:", err)
         os.remove(tmp)
+    else
+        loaded[path].stamp = fileStamp(path)
     end
     return target
 end
