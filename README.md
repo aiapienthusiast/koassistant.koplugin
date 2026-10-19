@@ -36,12 +36,12 @@
 - **AI Book Tools** → the AI searches and reads the open book on demand to ground its answers. [Reasoning, Web Search and Book Tools](https://github.com/zeeyado/koassistant.koplugin/wiki/Reasoning-Web-Search-and-Book-Tools)
 - **Reasoning** → thinking configured per model, with a global stance. [Reasoning, Web Search and Book Tools](https://github.com/zeeyado/koassistant.koplugin/wiki/Reasoning-Web-Search-and-Book-Tools)
 - **Multilingual** → chat in any of 47 languages the AI understands; the plugin's UI in 26. [Languages](https://github.com/zeeyado/koassistant.koplugin/wiki/Languages)
-- **Generate images** → a highlight or an X-Ray entry becomes an image (OpenAI, xAI, Gemini or OpenRouter image models), its prompt written by your chat model from the book's context, kept on the device in a gallery. [Image Generation](https://github.com/zeeyado/koassistant.koplugin/wiki/Image-Generation)
+- **Generate images** → a highlight or an X-Ray entry becomes an image (OpenAI, xAI, Gemini or OpenRouter image models) in a style and shape you pick, its prompt written by your chat provider's fast model from the book's context, kept on the device in a thumbnail gallery. [Image Generation](https://github.com/zeeyado/koassistant.koplugin/wiki/Image-Generation)
 - **Customizable** → custom actions, behaviors, domains, per-action models, template variables, and control over every menu the plugin appears in. [Actions and Menus](https://github.com/zeeyado/koassistant.koplugin/wiki/Actions-and-Menus), [Prompts, Behaviors and Domains](https://github.com/zeeyado/koassistant.koplugin/wiki/Prompts-Behaviors-and-Domains)
-- **Private by default** → nothing of yours leaves the device unasked: the first time an action wants your highlights, notes, notebook or the book's text, it shows what it sends and to whom, and your answer can be kept for the book. [Privacy and Data](https://github.com/zeeyado/koassistant.koplugin/wiki/Privacy-and-Data)
+- **Private by default** → your highlights, notes, notebook, the book's text, book list and reading habits stay on the device until you say so: the first time an action wants one, it shows what it sends and to whom, and your answer can be kept for the book. [Privacy and Data](https://github.com/zeeyado/koassistant.koplugin/wiki/Privacy-and-Data)
 - **Keeps itself current** → one-tap updates, backups and restore. [Backups and Updates](https://github.com/zeeyado/koassistant.koplugin/wiki/Backups-and-Updates)
 
-[32 built-in providers](#supported-providers) (Anthropic, OpenAI, Gemini, Ollama and more) plus custom OpenAI-compatible providers. OpenAI can also be used without an API key by signing in with your ChatGPT plan (OpenAI Subscription). Reasoning is configured per model. Personal reading data (highlights, annotations, notebooks) is opt-in and is not sent to the AI unless you enable it.
+[32 built-in providers](#supported-providers) (Anthropic, OpenAI, Gemini, Ollama and more) plus custom OpenAI-compatible providers. OpenAI can also be used without an API key by signing in with your ChatGPT plan (OpenAI Subscription). Reasoning is configured per model. Personal reading data (highlights, annotation notes, notebooks, the book's text) is not sent to the AI until you allow it.
 
 **Status:** Active development. [Issues](https://github.com/zeeyado/koassistant.koplugin/issues), [discussions](https://github.com/zeeyado/koassistant.koplugin/discussions) and [translations](https://hosted.weblate.org/engage/koassistant/) welcome. If you are somewhat technical and do not want to wait for tested releases, you can run off the main branch to get the latest features; breakage may happen, as untested features may be on main. 
 
@@ -75,7 +75,7 @@ The folder must be named exactly `koassistant.koplugin` (remove a "-main" suffix
 
 ### 2. Restart KOReader
 
-KOAssistant's menu is at **Tools → KOAssistant**, the first row of KOReader's Tools menu. The Setup Wizard runs the first time you open it: a provider, privacy, language, emoji icons, gestures; after an update it checks only what changed.
+KOAssistant's menu is at **Tools → KOAssistant**, the first row of KOReader's Tools menu. The Setup Wizard runs the first time you open it: a provider, privacy, language, emoji icons, the (KOA) button mark, gestures; after an update it checks only what changed.
 
 ### 3. Add an API key
 
@@ -96,11 +96,11 @@ Restart KOReader after editing the file (it is read once per session); keys ente
 
 ### 4. Privacy settings
 
-Every kind of reading data is asked for the first time an action wants it. **Settings → Privacy & Data** holds one value per kind (Ask, Allow or Never); its **Allow everything** preset sends everything without a question, book text included. See [Privacy at a glance](#privacy-at-a-glance).
+Your highlights, annotation notes, notebook, the book's text, book list and reading habits are each asked for the first time an action wants them. **Settings → Privacy & Data** holds one value per kind (Ask, Allow or Never) and a **Preset** row that sets them all at once (the Setup Wizard's privacy step offers the same presets); **Allow everything** sends everything without a question, book text included. See [Privacy at a glance](#privacy-at-a-glance).
 
 ## First steps
 
-**The Setup Wizard** connects a provider, sets the privacy preset, detects your UI language and offers it as the AI language, installs the emoji font and tests the icons, and gives the two quick panels their gestures (any KOReader gesture). After an update it shows only what changed, with a choice to keep or change each. **Settings → Setup Wizard** re-runs any topic.
+**The Setup Wizard** connects a provider, sets the privacy preset, detects your UI language and offers it as the AI language, installs the emoji font and tests the icons, asks whether KOAssistant's buttons carry a (KOA) mark, and gives the two quick panels their gestures (any KOReader gesture). After an update it shows only what changed, with a choice to keep or change each. **Settings → Setup Wizard** re-runs any topic.
 
 **Two quick panels, one gesture.** Quick Settings (everywhere) and Quick Actions (while reading) hold most of what you need, and in the reader each has a button to open the other. The wizard gives each its gesture (one tap assigns both to "tap bottom-right corner" when it is free), **Settings → Gestures** changes them any time; by hand: KOReader's gear menu → Taps and gestures → Gesture manager, pick a gesture, choose **KOAssistant: Quick Settings** in the file browser and **KOAssistant: Quick Actions** in a book. Without a gesture, both are the first rows of the KOAssistant menu.
 
@@ -111,14 +111,14 @@ Every kind of reading data is asked for the first time an action wants it. **Set
 - Hold any action button, in the highlight menu, the dictionary popup, Quick Actions or the input dialog, for its description, one-time run options (Quick answer, another model, no reasoning, web search) and its placements.
 - Open a book's X-Ray from Quick Actions (or a gesture, or the book chat dialog) and let checkpoints keep it current. [Using X-Ray](https://github.com/zeeyado/koassistant.koplugin/wiki/Using-X-Ray)
 
-Everything about the panels, gestures and shortcuts: [Setup, Gestures and Panels](https://github.com/zeeyado/koassistant.koplugin/wiki/Setup-Gestures-and-Panels).
+Everything about the wizard, the panels, gestures and bypass modes: [Setup, Gestures and Panels](https://github.com/zeeyado/koassistant.koplugin/wiki/Setup-Gestures-and-Panels).
 
 ## Privacy at a glance
 
 KOAssistant sends data to AI providers to generate answers. The threat model is simple: you may include sensitive data (annotations, notes, book content) by accident. Pick providers thoughtfully; local or self-hosted models (Ollama and the local presets) keep everything on your own hardware.
 
 - **Always sent:** your question, and the selected text for highlight actions.
-- **Sent by default:** the book's title and author (Book info, which None turns off so nothing names the book), the enabled system content (languages, domain, behavior), your reading position (progress, chapter, time since last opened), the text around what you tap (a few sentences or one page), and a per-book Background note if you wrote one.
+- **Sent by default:** the book's title and author (Book info, which None turns off so nothing names the book), the enabled system content (languages, domain, behavior), your reading position (progress, chapter, time since you last read), the text around what you tap (a few sentences or one page), and a per-book Background note if you wrote one.
 - **Asked the first time:** highlights, annotation notes, the notebook, the book's text (for X-Ray, Recap and the like), the book list, reading habits (curated groups with rounded hours and days; the raw statistics stay on the device). The question names the action, the provider and the amount; **Allow once** covers that run, **Allow for this book** keeps your answer.
 
 | Preset | What it does |
@@ -127,7 +127,7 @@ KOAssistant sends data to AI providers to generate answers. The threat model is 
 | **Allow everything** | Every kind goes without a question, book text included. |
 | **Block everything** | Only your question, the selected text and the book info. |
 
-**Book text** (**Settings → Privacy & Data → Text Extraction**) raises token costs, so the question says how much would go (up to your position, the whole book, a section); most actions that would use it answer from AI knowledge without it, while X-Ray, Document Summary and Document Analysis need it. **Trusted providers** (a local Ollama, say) follow their own column of values, Allow unless you change it. **Per-book values** in Book Settings → Privacy & Data (or a group's, in Group Settings) allow or refuse book text, highlights, annotation notes, the notebook and the text around what you tap for one book; a book's Never beats everything, trusted providers included. The input dialog's **Data** chip shows what a chat may send and can leave a kind, or the book info, out of that chat.
+**Book text** (**Settings → Privacy & Data → Text Extraction**) raises token costs, so the question says how much would go (up to your position, the whole book, a section); most actions that would use it answer from AI knowledge without it, while X-Ray, Document Summary and Document Analysis need it. **Trusted providers** (a local Ollama, say) follow their own column of values, Allow unless you change it. **Per-book values** in Book Settings → Privacy & Data (or a group's, in Group Settings) allow or refuse book text, highlights, annotation notes, the notebook and the text around what you tap for one book; a book's Never beats everything, trusted providers included. In a book or highlight chat's input dialog, the gear menu's **Send book info** row switches the book info for that chat, and the Quick Answer preset can leave it out (**Settings → Chat & Export Settings → Quick Answer Preset → Leave Book Info Out**).
 
 The full model, the double-gating of book text, what each action accesses, and the design choices: [Privacy and Data](https://github.com/zeeyado/koassistant.koplugin/wiki/Privacy-and-Data).
 
@@ -181,7 +181,7 @@ Custom providers and local presets (LM Studio, llama.cpp, Jan, vLLM, KoboldCpp, 
 
 ## Updating
 
-When a new version is out, KOAssistant shows its release notes with an **Update Now** button. One tap downloads the release, verifies it, keeps your configuration files (`apikeys.lua`, `configuration.lua`, `custom_actions.lua`, `custom_models.lua`, your `behaviors/` and `domains/`), swaps the plugin folder (the previous version is restored if the swap fails) and asks you to restart KOReader. The list of preserved files comes from the plugin's storage registry, the same list that drives backups and resets. If you installed by cloning the repository, the button does not appear: use `git pull`.
+When a new version is out, KOAssistant shows its release notes with an **Update Now** button. One tap downloads the release, verifies it, keeps your configuration files (`apikeys.lua`, `configuration.lua`, `custom_actions.lua`, `custom_models.lua`, your `behaviors/` and `domains/`), swaps the plugin folder (the previous version is restored if the swap fails) and asks you to restart KOReader, which you should do right away (on Android, close and reopen the app). Since v0.24.0 the plugin's code lives in a `koassistant/` folder inside the plugin folder while your own files stay at its root; if you update by hand, deleting the old folder first (after copying your own files out) leaves only the current files. The list of preserved files comes from the plugin's storage registry, the same list that drives backups and resets. If you installed by cloning the repository, the button does not appear: use `git pull`.
 
 Manual updates, what is safe during an update, update checking, backups, restore and reset: [Backups and Updates](https://github.com/zeeyado/koassistant.koplugin/wiki/Backups-and-Updates).
 
