@@ -374,6 +374,29 @@ TestRunner:test("an artifact built without text, or text allowed, sends without 
     TestRunner:assertEqual(n, 1, "the run's allowance on the chat's config: sent")
 end)
 
+TestRunner:test("the source popup's Allow once rides into every scope's run and never stays on the shared config", function()
+    local info = debug.getinfo(1, "S")
+    local here = info.source:match("@?(.*)"):match("(.+)/[^/]+$") or "."
+    local f = assert(io.open(here .. "/../../main.lua", "r"))
+    local src = f:read("*a")
+    f:close()
+    local a = src:find("local function continueWithAction()", 1, true)
+    local b = src:find("THE FUNNEL", a, true) or src:find("\n    end\n  end\nend\n", a, true)
+    local body = src:sub(a, (src:find("local DA = require(\"koassistant.ui.data_access\")", a, true)))
+    local calls, carried = 0, 0
+    for call in body:gmatch("_executeSectionAction%(.-%)\n") do
+        calls = calls + 1
+        if call:find("data_once = state.data_once", 1, true) then carried = carried + 1 end
+    end
+    TestRunner:assertEqual(calls >= 5, true, "the five scope branches found")
+    TestRunner:assertEqual(carried, calls, "every section-path run carries the popup's allowance")
+    local asker = src:sub(a, b)
+    TestRunner:assertEqual(asker:find("local da_feats = configuration.features", 1, true), nil,
+        "the question's features table is a copy, so its once-grant never lingers on the shared config")
+    TestRunner:assertEqual(asker:find("for k, v in pairs(configuration.features or {}) do da_feats[k] = v end", 1, true) ~= nil, true,
+        "the copy")
+end)
+
 UIManager.show = saved.show
 BTR.queryWith = saved.queryWith
 SDS.resolve = saved.resolve

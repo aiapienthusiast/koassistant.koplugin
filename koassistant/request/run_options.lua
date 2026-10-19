@@ -34,6 +34,8 @@ local RunOptions = {}
 RunOptions.DEFAULTS = {
     { id = "quick_on", quick = true },
     { id = "quick_off", quick = false },
+    { id = "book_info_off", book_info = "none" },
+    { id = "book_info_on", book_info = "on" },
     { id = "fast", tier = "fast" },
     { id = "reasoning_off", reasoning = "off" },
     { id = "web_off", web = false },
@@ -78,7 +80,7 @@ function RunOptions.list(features, opts)
             for _idx2, f in ipairs(RunOptions.favoriteModels(features)) do out[#out + 1] = f end
             for _idx2, r in ipairs(RunOptions.recentModels(features)) do out[#out + 1] = r end
         end
-        if not (send and (e.quick ~= nil or e.web ~= nil)) then
+        if not (send and (e.quick ~= nil or e.web ~= nil or e.book_info ~= nil)) then
             out[#out + 1] = e
         end
     end
@@ -206,6 +208,10 @@ local function labelFor(v, st)
         return withIcon("\u{26A1}", _("Quick answer"), st)
     elseif v.quick == false then
         return withIcon("\u{26A1}", _("Without Quick"), st)
+    elseif v.book_info == "none" then
+        return withIcon("\u{1F512}", _("Without book info"), st)
+    elseif v.book_info == "on" then
+        return withIcon("\u{1F512}", _("With book info"), st)
     elseif v.reasoning == "off" then
         return withIcon("\u{1F9E0}", _("No reasoning"), st)
     elseif v.web == true then
@@ -243,6 +249,13 @@ function RunOptions.button(e, model_only, st)
         local w = st.web
         if w.pinned or not w.capable or (e.web == true) == w.on then return nil end
         v.web = e.web == true
+    elseif e.book_info ~= nil then
+        -- Without / With book info (a stopgap of 2026-10-19 until the presets
+        -- plan settles a chat without the book): the half that changes the
+        -- Book info in effect for this run
+        local b = st.book_info
+        if not b or not b.applies or (e.book_info == "none") == (b.level == "none") then return nil end
+        v.book_info = e.book_info
     else
         return nil
     end
@@ -356,10 +369,21 @@ function RunOptions.stateFor(plugin, action, opts)
         web_on = false
     end
 
+    -- Book info for this run: a book or highlight action with a book in
+    -- scope, never one that cannot run without the title (the AI-knowledge
+    -- actions, DataAccess.needsTitle); the level in effect counts the Quick
+    -- state of this menu
+    local book_info = { applies = false }
+    if ds and not model_only and action.context ~= "general" and action.context ~= "library"
+            and not require("koassistant.ui.data_access").needsTitle(action, nil) then
+        book_info = { applies = true, level = BookSettings.resolveBookInfoLevel(ds, features, quick_on) }
+    end
+
     -- Key filter, as in every quick picker: disarmed while no real key exists
     local filter_on = plugin.hasAnyRealApiKey and plugin:hasAnyRealApiKey()
     return {
         base = base,
+        book_info = book_info,
         tier_base = (opts.base and opts.base.provider) or action.provider or global_provider,
         quick = { receptive = receptive, on = quick_on == true },
         reasoning = {

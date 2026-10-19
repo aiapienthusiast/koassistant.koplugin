@@ -52,13 +52,23 @@ BookSettings.KEY_QUIZ = "koassistant_book_quiz"
 -- standing value (a chat's framing at launch, the image frame) passes nothing.
 -- @return "none" | "title" | "basic" | "full"
 function BookSettings.resolveBookInfoLevel(doc_settings, features, quick_on)
-    if quick_on and require("koassistant.ui.dialogs").quickPresetForces("book_info", true, features) then
+    -- A run option from the hold menu (B345; Without book info / With book
+    -- info, 2026-10-19): on the request's config before the bake consumes
+    -- _run_variant, as _run_book_info after it. "on" means the level in
+    -- effect without Quick, and Title & author where that level is None.
+    local run = features and (features._run_book_info
+        or (type(features._run_variant) == "table" and features._run_variant.book_info)) or nil
+    if run == "none" then return "none" end
+    if quick_on and run ~= "on"
+            and require("koassistant.ui.dialogs").quickPresetForces("book_info", true, features) then
         return "none"
     end
     doc_settings = BookStore.wrap(doc_settings)
     local per_book = doc_settings and doc_settings:readSetting(BookSettings.KEY_BOOK_INFO)
-    if per_book ~= nil then return per_book end
-    return (features and features.book_info_in_chat) or "basic"
+    local level = per_book
+    if level == nil then level = (features and features.book_info_in_chat) or "basic" end
+    if run == "on" and level == "none" then return "basic" end
+    return level
 end
 
 --- THE spoiler-posture resolver (Track 36 / spoiler_posture_plan.md §2): one

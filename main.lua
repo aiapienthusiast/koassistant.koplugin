@@ -9536,6 +9536,7 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
                 -- existing-quiz check dedupes manual runs) — execute directly
                 self_ref:_executeSectionAction(action, action_id, state.section_entry, state.section_label, {
                   source_mode = state.source == "section_summary" and "summary" or state.source,
+                  data_once = state.data_once,
                 })
               elseif state.scope == "read_so_far" and not opts.for_highlight then
                 -- Synthetic section scope: page 1 → current page. Reuses the section path (same as
@@ -9550,7 +9551,7 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
                 local rsf_label = T(_("Up to %1"), reading_progress.formatted)
                 self_ref:_executeSectionAction(action, action_id,
                   { start_page = 1, end_page = current_page }, rsf_label,
-                  { source_mode = state.source, read_so_far = true })
+                  { source_mode = state.source, read_so_far = true, data_once = state.data_once })
               elseif state.scope == "chapter_so_far" then
                 -- Quiz-only preset: current chapter's start → current page, so-far framing.
                 -- The label carries the % so successive positions don't clobber each other.
@@ -9558,7 +9559,7 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
                 self_ref:_executeSectionAction(action, action_id,
                   { start_page = range.start_page, end_page = range.end_page, title = chapter.info.title },
                   T(_("%1 (to %2)"), chapter.info.title, reading_progress.formatted),
-                  { source_mode = state.source,
+                  { source_mode = state.source, data_once = state.data_once,
                     section_so_far = { section = chapter.info.title,
                         position = reading_progress.formatted } })
               elseif state.scope == "from_section" and state.section_entry
@@ -9571,7 +9572,7 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
                   { start_page = state.section_entry.start_page, end_page = chapter.current_page,
                     title = state.section_label },
                   from_label,
-                  { source_mode = state.source,
+                  { source_mode = state.source, data_once = state.data_once,
                     section_so_far = { section = state.section_label,
                         position = reading_progress.formatted } })
               elseif state.scope == "range" and state.section_entry
@@ -9580,7 +9581,7 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
                 -- "start – end" label is the section name for framing and cache.
                 self_ref:_executeSectionAction(action, action_id,
                   state.section_entry, state.section_label,
-                  { source_mode = state.source })
+                  { source_mode = state.source, data_once = state.data_once })
               elseif state.scope == "full" and not opts.for_highlight then
                 -- Check for existing full-document cache and warn before replacing
                 -- Skip for incremental actions (update_prompt) — they handle update/redo downstream
@@ -9674,7 +9675,11 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
             -- allowance rides state.data_once into the dispatch. Inline
             -- requires only (60-upvalue cap).
             local DA = require("koassistant.ui.data_access")
-            local da_feats = configuration.features or {}
+            -- A private copy: the question's Allow once must ride state.data_once
+            -- into the run's own config and never stay on the shared one (it did,
+            -- and later runs passed the gate without a question; 2026-10-19)
+            local da_feats = {}
+            for k, v in pairs(configuration.features or {}) do da_feats[k] = v end
             local da_amount
             if state.scope == "full" and not is_to_position then
               da_amount = _("the whole text of this book")

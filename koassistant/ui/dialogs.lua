@@ -490,6 +490,7 @@ local function buildUnifiedRequestConfig(config, domain_context, action, plugin)
     -- (a viewer's) must not save that chat's pick as this one's
     features._run_model = nil
     features._run_reasoning = nil
+    features._run_book_info = nil
     local run_model, run_web
     if type(run_variant) == "table" then
         local model_only = require("koassistant.request.run_options").isModelOnly(action)
@@ -507,6 +508,10 @@ local function buildUnifiedRequestConfig(config, domain_context, action, plugin)
                         or config.provider or config.default_provider or "anthropic")) then
                     features._run_reasoning = run_variant.reasoning
                 end
+            end
+            -- Without / With book info for this run (resolveBookInfoLevel reads it)
+            if run_variant.book_info == "none" or run_variant.book_info == "on" then
+                features._run_book_info = run_variant.book_info
             end
             run_web = run_variant.web
             if run_web ~= nil then

@@ -33,6 +33,7 @@ local function state(over)
         quick = { receptive = true, on = false },
         reasoning = { pinned = false, mode = "on", can_disable = true },
         web = { pinned = false, on = false, capable = true },
+        book_info = { applies = false },
         configured = function() return true end,
         resolveTier = function(p, tier)
             if TIERS[tier] then return p, TIERS[tier] end
@@ -53,6 +54,23 @@ end
 local PROSE = { id = "explain", accept_quick_answer = true }
 
 -- ---------------------------------------------------------------- buttons
+TestRunner:test("book info: the half that changes the level in effect, only where it applies", function()
+    local b = RunOptions.buttons(RunOptions.DEFAULTS, PROSE, state({ book_info = { applies = true, level = "basic" } }))
+    TestRunner:assertEqual(labels(b), "Quick answer | Without book info | claude-haiku-4-5 | No reasoning | With web search",
+        "the level in effect names the book: offer Without")
+    b = RunOptions.buttons(RunOptions.DEFAULTS, PROSE, state({ book_info = { applies = true, level = "none" } }))
+    TestRunner:assertEqual(labels(b), "Quick answer | With book info | claude-haiku-4-5 | No reasoning | With web search",
+        "None in effect (the book, all books or the Quick switch): offer With")
+    TestRunner:assertEqual(b[2].variant.book_info, "on", "the variant")
+    b = RunOptions.buttons(RunOptions.DEFAULTS, PROSE, state({ book_info = { applies = false } }))
+    TestRunner:assertEqual(labels(b), "Quick answer | claude-haiku-4-5 | No reasoning | With web search",
+        "a general action, or one that cannot run without the title: no button")
+    local send = RunOptions.list({}, { send = true })
+    for _idx, e in ipairs(send) do
+        TestRunner:assertEqual(e.book_info, nil, "Send's menu has no book info entry")
+    end
+end)
+
 
 TestRunner:test("defaults: a receptive prose action gets one button per pair", function()
     local b = RunOptions.buttons(RunOptions.DEFAULTS, PROSE, state())
@@ -159,8 +177,10 @@ TestRunner:test("list(): the defaults with recent picks ahead of Fast; bad entri
     local l = RunOptions.list({})
     TestRunner:assertEqual(#l, #RunOptions.DEFAULTS, "no recents: the defaults")
     l = RunOptions.list({ run_recent_models = { { provider = "openai", model = "gpt-6-luna" }, "junk", { provider = 1 } } })
-    TestRunner:assertEqual(l[3].model, "gpt-6-luna", "recent before Fast")
-    TestRunner:assertEqual(l[4].tier, "fast", "then Fast")
+    local fast_at
+    for i, e in ipairs(l) do if e.tier == "fast" then fast_at = i end end
+    TestRunner:assertEqual(l[fast_at - 1].model, "gpt-6-luna", "recent before Fast")
+    TestRunner:assertEqual(l[fast_at - 2].book_info, "on", "after the Quick and book info pairs")
     TestRunner:assertEqual(#l, #RunOptions.DEFAULTS + 1, "junk dropped")
 end)
 

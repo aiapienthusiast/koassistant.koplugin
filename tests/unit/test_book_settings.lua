@@ -364,6 +364,22 @@ TestRunner:test("the Quick Answer preset's Leave Book Info Out: none for a Quick
         { book_info_in_chat = "basic" }, true), "full", "Quick on, the switch off (the default)")
 end)
 
+TestRunner:test("the hold menu's Without / With book info for one run (B345, 2026-10-19)", function()
+    local ds = makeDocSettings({ koassistant_book_info_level = "full" })
+    TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
+        { book_info_in_chat = "basic", _run_book_info = "none" }), "none", "Without, after the bake")
+    TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
+        { book_info_in_chat = "basic", _run_variant = { book_info = "none" } }), "none", "Without, before the bake (the funnel)")
+    TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
+        { book_info_in_chat = "basic", quick_preset_book_info_off = true, _run_book_info = "on" }, true), "full",
+        "With beats the Quick switch: the level in effect without Quick")
+    local none_ds = makeDocSettings({ koassistant_book_info_level = "none" })
+    TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(none_ds,
+        { book_info_in_chat = "basic", _run_book_info = "on" }), "basic", "With where the book says None: Title & author")
+    TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
+        { book_info_in_chat = "basic", _run_variant = { quick = true } }), "full", "a variant without the facet changes nothing")
+end)
+
 -- Per-book quiz overrides: per-book field > global > built-in default
 TestRunner:suite("resolveQuiz")
 
