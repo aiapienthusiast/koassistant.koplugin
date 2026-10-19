@@ -470,7 +470,7 @@ function GroupSettings.show(opts)
     for _idx, kind in ipairs(PRIVACY_KINDS) do
         if facade:has(BS.PRIVACY_KEY_OF_KIND[kind]) then privacy_set = privacy_set + 1 end
     end
-    row(privacy_set > 0 and T(_("Privacy (%1 set) ▸"), privacy_set) or _("Privacy ▸"),
+    row(privacy_set > 0 and T(_("Privacy & Data (%1 set) ▸"), privacy_set) or _("Privacy & Data ▸"),
         function() showSection("privacy") end)
     elseif on_privacy then
     -- The shared picker on the facade: "For this group" holds Allow or Never

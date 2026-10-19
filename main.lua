@@ -12330,7 +12330,7 @@ function AskGPT:_xrayFollowCatchUp(_decimal, opts)
     lines[#lines + 1] = T(_("Requests needed now: %1. Each covers a bounded slice of the text."), n)
   end
   if data_state == "ask" then
-    lines[#lines + 1] = T(_("Text from this book goes to %1 as you read. Start allows it for this book (Book Settings → Privacy)."),
+    lines[#lines + 1] = T(_("Text from this book goes to %1 as you read. Start allows it for this book (Book Settings → Privacy & Data)."),
       self:getProviderDisplayName(require("koassistant.request.privacy_gates").dispatchProvider(
         self.settings:readSetting("features") or {}, self.action_service:getAction("book", "xray"),
         (self.settings:readSetting("features") or {}).provider)))
@@ -14851,7 +14851,7 @@ function AskGPT:_fireXrayAutoCheckpoints(opts)
       if not self._xray_auto_never_noted[file] then
         self._xray_auto_never_noted[file] = true
         UIManager:show(InfoMessage:new{
-          text = _("Automatic X-Ray is on for this book, but its book text is set to Never (Book Settings → Privacy). Nothing is built until that changes."),
+          text = _("Automatic X-Ray is on for this book, but its book text is set to Never (Book Settings → Privacy & Data). Nothing is built until that changes."),
           timeout = 5,
         })
       end
@@ -18619,22 +18619,12 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
     end,
   }
 
-  -- Data access (B395 slice 3, data_access_picture.md 4.10; the Book Text
-  -- tile's slot and id): the open book's values for the five kinds a book can
-  -- hold, in a few words; tap = the book's Data access screen (Book Settings
-  -- → Privacy), or the values for all books with no book open; hold = the
-  -- values for all books
+  -- Privacy & Data (B395 slice 3, named by B502; the Book Text tile's slot
+  -- and id): tap = the Privacy & Data screen on the open book's tab (the
+  -- values for all books with no book open), hold = the same screen on its
+  -- Global tab
   button_defs["text_extraction"] = {
-    text = (function()
-      local Gates = require("koassistant.request.privacy_gates")
-      local book = has_document and Gates.overridesOf(self:_openBookDS()) or nil
-      local states = {}
-      for _idx, kind in ipairs({ "book_text", "highlights", "annotations", "notebook", "nearby_text" }) do
-        states[#states + 1] = Gates.resolve(kind, { features = features, book = book })  -- standing-only: the tile shows the values, no run
-      end
-      return E("\u{1F512}", T(_("Data access: %1"),
-        require("koassistant.ui.data_access").shortSummary(states)))
-    end)(),
+    text = E("\u{1F512}", _("Privacy & Data")),
     callback = function()
       opening_subdialog = true
       UIManager:close(dialog)
@@ -18648,7 +18638,9 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
       opening_subdialog = true
       UIManager:close(dialog)
       require("koassistant.books.book_settings").showPrivacyConfig({
-        plugin = self_ref, all_books = true, on_close = reopenQuickSettings,
+        plugin = self_ref, ui = has_document and self_ref.ui or nil,
+        all_books = not has_document, target_override = "global",
+        on_close = reopenQuickSettings,
       })
     end,
   }
@@ -21758,7 +21750,7 @@ local function privacyPresetSummary(self, before, after, preset)
     lines[#lines + 1] = T(_("Trusted providers (%1) keep their own values: Settings → Privacy & Data → What trusted providers may use."),
       table.concat(names, ", "))
   end
-  lines[#lines + 1] = _("Books with their own values keep them (Book Settings → Privacy).")
+  lines[#lines + 1] = _("Books with their own values keep them (Book Settings → Privacy & Data).")
   if preset == "minimal" then
     lines[#lines + 1] = T(_("Book info is not part of a preset: %1 still goes with every request."),
       BookSettings.bookInfoLabel(after.book_info_in_chat or "basic"))
@@ -21828,7 +21820,7 @@ end
 -- The per-book values, spelled out (schema privacy tip row)
 function AskGPT:showPrivacyOverridesTip()
   UIManager:show(InfoMessage:new{
-    text = _("Every kind of data here has a value for all books, and a book can have its own (Book Settings → Privacy, or \"Allow for this book\" in the question). A book's Never always wins, even over trusted providers; its Allow sends without asking. A kind on Ask is asked the first time an action wants it."),
+    text = _("Every kind of data here has a value for all books, and a book can have its own (Book Settings → Privacy & Data, or \"Allow for this book\" in the question). A book's Never always wins, even over trusted providers; its Allow sends without asking. A kind on Ask is asked the first time an action wants it."),
   })
 end
 

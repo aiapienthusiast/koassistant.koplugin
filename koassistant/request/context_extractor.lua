@@ -367,7 +367,7 @@ function ContextExtractor:getReadingProgress()
     return result
 end
 
---- Per-book privacy overrides (Book Settings ▸ Privacy). Resolved fresh per call
+--- Per-book privacy overrides (Book Settings ▸ Privacy & Data). Resolved fresh per call
 -- via SafeDocSettings (live instance for the open book, disk otherwise).
 -- Semantics: a per-book DENY beats everything including trusted providers (most
 -- specific intent — "never share this book's data"); a per-book ALLOW satisfies
@@ -1512,12 +1512,12 @@ function ContextExtractor:extractForAction(action)
         data.chapter_title = stats.chapter_title
         data.chapters_read = stats.chapters_read
         -- The statistics database is opened only for a prompt that carries the
-        -- placeholder (the update prompt included: it replaces the prompt on an
-        -- incremental run), and nothing is sent when it holds no record of the
-        -- book (B466)
+        -- placeholder, either form (the update prompt included: it replaces the
+        -- prompt on an incremental run), and nothing is sent when it holds no
+        -- record of the book (B466)
         data.time_since_last_read = ""
         for _idx, template in ipairs({ action.prompt, action.update_prompt }) do
-            if type(template) == "string" and template:find("{time_since_last_read}", 1, true) then
+            if type(template) == "string" and template:find("{time_since_last_read", 1, true) then
                 data.time_since_last_read = self:getTimeSinceLastRead() or ""
                 break
             end

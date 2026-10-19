@@ -48,7 +48,8 @@ local RAW_DATA_PLACEHOLDERS = {
     "{surrounding_context}", "{highlights}", "{annotations}", "{book_text}", "{full_document}",
     "{page_text}", "{notebook}", "{library}", "{xray_cache}", "{analyze_cache}", "{summary_cache}",
     "{previous_results}", "{chapter_title}", "{chapters_read}", "{page_number}", "{reading_progress}",
-    "{progress_decimal}", "{time_since_last_read}", "{cached_result}", "{cached_progress}",
+    "{progress_decimal}", "{time_since_last_read}", "{time_since_last_read_section}", "{cached_result}",
+    "{cached_progress}",
     "{incremental_book_text}", "{entity_index}",
 }
 
@@ -449,6 +450,10 @@ function MessageBuilder.build(params)
     end
     if data.time_since_last_read then
         user_prompt = replace_placeholder(user_prompt, "{time_since_last_read}", data.time_since_last_read)
+        -- {time_since_last_read_section}: "Last read: 3 days ago", nothing when
+        -- the statistics hold no record (Recap's clause, B466)
+        user_prompt = replace_placeholder(user_prompt, "{time_since_last_read_section}",
+            data.time_since_last_read ~= "" and ("Last read: " .. data.time_since_last_read) or "")
     end
     if data.notebook_content ~= nil then
         user_prompt = replace_placeholder(user_prompt, "{notebook}", data.notebook_content)
@@ -897,6 +902,8 @@ function MessageBuilder.substituteVariables(prompt_text, data)
     end
     if data.time_since_last_read then
         result = replace_placeholder(result, "{time_since_last_read}", data.time_since_last_read)
+        result = replace_placeholder(result, "{time_since_last_read_section}",
+            data.time_since_last_read ~= "" and ("Last read: " .. data.time_since_last_read) or "")
     end
     if data.notebook_content ~= nil then
         result = replace_placeholder(result, "{notebook}", data.notebook_content)

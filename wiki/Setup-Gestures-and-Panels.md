@@ -55,7 +55,7 @@ Assign **KOAssistant: Quick Settings** to a gesture for one-tap access to a two-
 - **Minimal Popup:** turn the chrome-less anchored response popup on or off; hold for its mode and action list.
 - **H.Bypass and D.Bypass:** turn Highlight Bypass and Dictionary Bypass on or off; hold to pick the bypass action.
 - **Language, Translate and Dictionary:** your primary response language, translation language and dictionary language. With a book open, hold one for that book's languages.
-- **Data access:** the open book's privacy values in a few words ("Ask", "2 allowed, 3 ask"). A tap opens that book's Data access screen (Book Settings → Privacy), or the values for all books when no book is open; hold for the values for all books. See [Privacy and Data](Privacy-and-Data#per-book-values).
+- **Privacy & Data:** the Privacy & Data screen (Book Settings → Privacy & Data). A tap opens it on the open book's tab, or the values for all books when no book is open; a hold opens its Global tab. See [Privacy and Data](Privacy-and-Data#per-book-values).
 - **Chat History, Browse Notebooks and Browse Artifacts:** quick access to saved chats (all books), notebooks and cached artifacts.
 - **Groups:** the Groups list (every group's hub, settings and management).
 - **Library Chat/Action:** run library actions on books you select from your reading history.
@@ -66,7 +66,7 @@ Assign **KOAssistant: Quick Settings** to a gesture for one-tap access to a two-
 
 In the reader, one more tile appears (the others shift to make room): **Quick Actions...** switches to the Quick Actions panel. Book Chat/Action lives there as a utility; it is no longer a Quick Settings tile.
 
-With a book open, a tile shows that book's own setting when it has one, marked "(book)": Domain, Language, Translate, Dictionary, Book Tools, Quick Answer and Web Search (the Data access tile shows the book's privacy values in its own words). The Spoiler Protection tile names what overrides the global setting for the book ("(book)", "(research mode)" or "(book finished)"). A tap on an on/off tile still changes the global default.
+With a book open, a tile shows that book's own setting when it has one, marked "(book)": Domain, Language, Translate, Dictionary, Book Tools, Quick Answer and Web Search (the Privacy & Data tile opens the book's screen instead of showing a value). The Spoiler Protection tile names what overrides the global setting for the book ("(book)", "(research mode)" or "(book finished)"). A tap on an on/off tile still changes the global default.
 
 The panel's **gear icon** (top-left) opens **Sort Items** (reorder and show or hide the tiles) and **Align Buttons** (left-aligned or centered; Quick Settings starts left-aligned). The same tile manager is **Settings → Menus & Buttons → Quick Settings Items**, and the alignment is also **Settings → Display Settings → Panel Alignment**.
 

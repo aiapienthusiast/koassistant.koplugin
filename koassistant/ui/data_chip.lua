@@ -11,8 +11,8 @@ chat (`features._chat_data.never`, a layer of its own in the gates, below the
 book's Never), or goes back to the usual value; "Change for this book…" opens
 the shared picker. Book info can be turned off for this chat
 (`features._chat_data.book_info_off`, read by BookSettings.resolveBookInfoLevel).
-Hold: the book's Data access screen (Book Settings → Privacy), or the values
-for all books in a library chat.
+Hold: the Privacy & Data screen (Book Settings → Privacy & Data), or the
+values for all books in a library chat.
 
 The chat's choices live on the dialog's config: the dispatch copies them into
 the request's config and consumes them from the source, a fresh dialog clears
@@ -105,7 +105,7 @@ function DataChip.chipText(o)
     return DataChip.label(n_ask, chatChanged(o.configuration.features, o.document_path), o.enable_emoji)
 end
 
---- The hold: the book's Data access screen, or the values for all books.
+--- The hold: the Privacy & Data screen, or the values for all books.
 function DataChip.hold(o)
     require("koassistant.books.book_settings").showPrivacyConfig({
         plugin = o.plugin,
@@ -268,7 +268,7 @@ function DataChip.open(o)
         }}
     end
     buttons[#buttons + 1] = {{
-        text = (o.chat == "library" or not path) and _("Privacy for all books…") or _("Data access for this book…"),
+        text = _("Privacy & Data…"),
         callback = function()
             if dialog then UIManager:close(dialog); dialog = nil end
             DataChip.hold({ plugin = o.plugin, ui = o.ui, document_path = path, chat = o.chat,

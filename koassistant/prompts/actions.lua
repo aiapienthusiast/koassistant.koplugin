@@ -115,6 +115,7 @@ Actions.PLACEHOLDER_TO_FLAG = {
     ["{reading_progress}"] = "use_reading_progress",
     ["{progress_decimal}"] = "use_reading_progress",
     ["{time_since_last_read}"] = "use_reading_progress",
+    ["{time_since_last_read_section}"] = "use_reading_progress",
 
     -- Highlights placeholders (just highlighted text, no notes)
     ["{highlights}"] = "use_highlights",
@@ -1785,7 +1786,8 @@ CRITICAL: Do not reveal ANYTHING beyond {reading_progress}. No foreshadowing, no
         use_reading_progress = true,
         prompt = [[Help me get back into "{title}"{author_clause}.{doi_clause}
 
-I'm at {reading_progress} and last read {time_since_last_read}.
+I'm at {reading_progress}.
+{time_since_last_read_section}
 
 {book_text_section}
 

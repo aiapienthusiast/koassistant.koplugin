@@ -13,7 +13,7 @@ switch or walks `trusted_providers` itself (`-- raw-gate: <reason>` escapes).
 The model (slice 2, rulings 1, 19 to 22 of 2026-10-14): every kind has one of
 three states, "allow", "ask" or "never", and the answer carries the layer
 that gave it:
-  1. the book's own Never (Book Settings > Privacy)               "book"
+  1. the book's own Never (Book Settings > Privacy & Data)               "book"
      a kind left out of this chat (the Data chip)                  "chat"
   2. an allowance given for this run (Allow once)                  "once"
   3. the book's own Allow                                          "book"
@@ -39,7 +39,7 @@ local Gates = {}
 Gates.KINDS = { "book_text", "highlights", "annotations", "notebook", "position",
     "habits", "book_list", "nearby_text" }
 
---- The kinds a book can hold its own value for (Book Settings > Privacy).
+--- The kinds a book can hold its own value for (Book Settings > Privacy & Data).
 Gates.BOOK_KINDS = { book_text = true, highlights = true, annotations = true,
     notebook = true, nearby_text = true }
 

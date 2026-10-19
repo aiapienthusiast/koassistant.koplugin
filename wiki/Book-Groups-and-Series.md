@@ -81,7 +81,7 @@ A group can hold values for many of the settings a book can, so a series is set 
 
 - **Domain**, **Research mode**, **Background** and **Spoiler protection**;
 - under **X-Ray ▸**: **Automatic X-Ray**, **New X-Ray preset**, **New X-Ray categories** (with the status block), **New X-Ray depth**, **New X-Ray type**, **Checkpoint spacing** and **Carried entries**;
-- under **Privacy ▸**: **Book text**, **Highlights**, **Annotation notes**, **Notebook** and **Text around what you tap**, each Not set, Allow or Never. A group's Never keeps that kind of every member out of every request, trusted providers included, as a book's own Never does ([Privacy and Data](Privacy-and-Data#group-values));
+- under **Privacy & Data ▸**: **Book text**, **Highlights**, **Annotation notes**, **Notebook** and **Text around what you tap**, each Not set, Allow or Never. A group's Never keeps that kind of every member out of every request, trusted providers included, as a book's own Never does ([Privacy and Data](Privacy-and-Data#group-values));
 - under **Languages ▸**: the AI response language, translation language, dictionary language and book text language.
 
 Open the screen with the hub's **Group Settings…** row, or **Group settings…** in the Groups list's hold popup. Each row opens the same picker Book Settings uses, with **For this group** in place of **For this book**.

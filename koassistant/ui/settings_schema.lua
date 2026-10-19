@@ -2187,7 +2187,7 @@ local SettingsSchema = {
                     id = "privacy_per_book_tip",
                     type = "action",
                     text = _("Tip: Per-book values"),
-                    help_text = _("Every kind of data here can have its own value for one book (Book Settings → Privacy, or \"Allow for this book\" in the question). A book's Never always wins, even over trusted providers; its Allow sends without asking."),
+                    help_text = _("Every kind of data here can have its own value for one book (Book Settings → Privacy & Data, or \"Allow for this book\" in the question). A book's Never always wins, even over trusted providers; its Allow sends without asking."),
                     callback = "showPrivacyOverridesTip",
                     keep_menu_open = true,
                 },
@@ -2284,7 +2284,7 @@ local SettingsSchema = {
                         { value = "basic", label = _("Title & author") },
                         { value = "full", label = _("Title, author & position") },
                     },
-                    help_text = _("What the AI is told about the book with every request: the title, the author, and with \"Title, author & position\" your reading progress, chapter and page (when Reading position is on). Never asked, and the presets leave it alone. None sends nothing that names the book: no book line, and an action's own prompt says \"this book\" where it would name the title; actions that answer from what the AI knows about the book (About, Find Similar, Reviews…) cannot run then, and say so. Image prompts follow it too. Override per book in Book Settings → Privacy; for one chat, the Data chip."),
+                    help_text = _("What the AI is told about the book with every request: the title, the author, and with \"Title, author & position\" your reading progress, chapter and page (when Reading position is on). Never asked, and the presets leave it alone. None sends nothing that names the book: no book line, and an action's own prompt says \"this book\" where it would name the title; actions that answer from what the AI knows about the book (About, Find Similar, Reviews…) cannot run then, and say so. Image prompts follow it too. Override per book in Book Settings → Privacy & Data; for one chat, the Data chip."),
                     separator = true,
                 },
                 -- Text Extraction settings (moved from Advanced)

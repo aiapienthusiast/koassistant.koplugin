@@ -785,7 +785,7 @@ function SetupWizard.stepPrivacy(plugin, ctx, next_step)
     dialog = ButtonDialog:new{
         title = _("PRIVACY & DATA") .. "\n" ..
             _("What may KOAssistant send to your AI provider? Your highlights, notes, notebook, book text, book list and reading habits each have one value: Ask, Allow or Never.") .. "\n" ..
-            _("Ask, the default, means the first action that wants a kind of data asks you, and your answer can be kept for the book. A book can also have its own values (Book Settings > Privacy); a book's Never always wins.") .. "\n" ..
+            _("Ask, the default, means the first action that wants a kind of data asks you, and your answer can be kept for the book. A book can also have its own values (Book Settings > Privacy & Data); a book's Never always wins.") .. "\n" ..
             _("Spoiler protection is separate and ON by default: responses respect your reading position."),
         buttons = {
             {

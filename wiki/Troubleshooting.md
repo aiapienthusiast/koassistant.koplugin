@@ -4,7 +4,7 @@ What to check when something does not work, in the order people usually need it:
 
 ## Features not working or empty data
 
-If Analyze Notes, Connect (With Notes), X-Ray or Recap seem to ignore your reading data: **every kind of reading data is asked for the first time an action wants it, and a kind set to Never is left out.** Check what you answered (Book Settings → Privacy for the book) and **Settings → Privacy & Data** for all books.
+If Analyze Notes, Connect (With Notes), X-Ray or Recap seem to ignore your reading data: **every kind of reading data is asked for the first time an action wants it, and a kind set to Never is left out.** Check what you answered (Book Settings → Privacy & Data for the book) and **Settings → Privacy & Data** for all books.
 
 | Feature not working | Enable this setting |
 |---|---|
@@ -20,7 +20,7 @@ If Analyze Notes, Connect (With Notes), X-Ray or Recap seem to ignore your readi
 | A custom action with `{notebook}` stays empty | Notebook allowed, and the action's own "Allow notebook use" flag |
 | A custom action with `{book_text}` stays empty | Book text allowed, and the action's own "Allow text extraction" flag |
 
-**Why:** personal data (highlights, annotation notes, notebook, book text) is not shared with AI providers unasked: each kind is on Ask, the first action that wants it asks, and "Not for this book" in that question sets the book's value to Never. Book text, highlights, annotation notes, the notebook and the text around what you tap can each be set for one book in **Book Settings → Privacy**, and a book's Never wins over the value here, even for a trusted provider. The whole model is on [Privacy and Data](Privacy-and-Data).
+**Why:** personal data (highlights, annotation notes, notebook, book text) is not shared with AI providers unasked: each kind is on Ask, the first action that wants it asks, and "Not for this book" in that question sets the book's value to Never. Book text, highlights, annotation notes, the notebook and the text around what you tap can each be set for one book in **Book Settings → Privacy & Data**, and a book's Never wins over the value here, even for a trusted provider. The whole model is on [Privacy and Data](Privacy-and-Data).
 
 Actions that use document text still work without it: they do not fail, the AI is told to use its training knowledge and to be honest about what it does not recognize. For well-known books that often gives reasonable results; for obscure works or papers, allow the book's text. With book text allowed and a provider and model that support tool calls, Explain in Context and Analyze in Context can search the book for the passages they need (**Smart retrieval** in their source popup) instead of sending a full extraction; see [Reasoning, Web Search and Book Tools](Reasoning-Web-Search-and-Book-Tools).
 
@@ -32,7 +32,7 @@ Actions that use document text still work without it: they do not fail, the AI i
 
 If Recap, Explain in Context, Analyze in Context or a custom action with `{book_text}` or `{full_document}` return empty or generic answers based only on the title (X-Ray is refused without it; X-Ray (Simple) is the alternative):
 
-**Book text is asked for the first time an action wants it.** If you answered "Not for this book", the book's value is Never: Book Settings → Privacy → Book text sets it back to Follow all books or Allow. For all books:
+**Book text is asked for the first time an action wants it.** If you answered "Not for this book", the book's value is Never: Book Settings → Privacy & Data → Book text sets it back to Follow global or Allow. For all books:
 
 1. Open **Settings → Privacy & Data → Text Extraction**.
 2. Set **Book text** to Ask (the question comes back) or Allow (no question).

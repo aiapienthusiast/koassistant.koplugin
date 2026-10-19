@@ -242,7 +242,7 @@ local function sidecarExtractor(settings)
     return ContextExtractor:new(nil, settings)
 end
 
-local RECAP_LINE = "I'm at {reading_progress} and last read {time_since_last_read}."
+local RECAP_LINE = "I'm at {reading_progress}.\n{time_since_last_read_section}"
 
 TestRunner:test("a closed book: the time since the statistics last saw it read", function()
     withLastRead(3 * 86400 + 100, function(seen)
@@ -257,6 +257,22 @@ TestRunner:test("minutes ago when the last page view was minutes ago", function(
         local data = sidecarExtractor():extractForAction({ prompt = RECAP_LINE })
         TestRunner:assertEqual(data.time_since_last_read, "5 minutes ago")
     end)
+end)
+
+TestRunner:test("the section form reads Last read: and vanishes without a record", function()
+    local MessageBuilder = require("koassistant.request.message_builder")
+    local with = MessageBuilder.build({
+        prompt = { prompt = RECAP_LINE }, context = "general",
+        data = { reading_progress = "42%", time_since_last_read = "3 days ago" },
+    })
+    TestRunner:assertContains(with, "I'm at 42%.\nLast read: 3 days ago", "the clause with a record")
+    local without = MessageBuilder.build({
+        prompt = { prompt = RECAP_LINE }, context = "general",
+        data = { reading_progress = "42%", time_since_last_read = "" },
+    })
+    TestRunner:assertContains(without, "I'm at 42%.\n", "the position stays")
+    TestRunner:assertEqual(without:find("Last read", 1, true), nil, "no clause without a record")
+    TestRunner:assertEqual(without:find("{time_since_last_read", 1, true), nil, "no placeholder left")
 end)
 
 TestRunner:test("no record of the book sends nothing: not Recently, not Just now", function()

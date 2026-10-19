@@ -279,7 +279,7 @@ function Constants.getQsItemText(id, _)
         dictionary_language = _("Dictionary Language"),
         h_bypass = _("H.Bypass"),
         d_bypass = _("D.Bypass"),
-        text_extraction = _("Data access"),
+        text_extraction = _("Privacy & Data"),
         chat_history = _("Chat History"),
         browse_notebooks = _("Browse Notebooks"),
         browse_artifacts = _("Browse Artifacts"),

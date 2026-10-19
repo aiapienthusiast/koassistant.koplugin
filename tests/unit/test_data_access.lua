@@ -160,7 +160,7 @@ TestRunner:test("artifactAllowed and forProvider judge a text-built artifact for
 end)
 
 -- B395 slice 3 and B500: the Data chip's pure parts, the no-title rule, the
--- tile's words, the presets' names, the group's privacy keys
+-- presets' names, the group's privacy keys
 
 TestRunner:test("the Data chip lists a chat's kinds with their states and counts the asks", function()
     local DataChip = require("koassistant.ui.data_chip")
@@ -193,10 +193,7 @@ TestRunner:test("needsTitle: an action with nothing of the book but its title (B
     TestRunner:assertFalse(DataAccess.needsTitle({ prompt = "Explain this." }, nil), "no title in the prompt")
 end)
 
-TestRunner:test("the tile's words and the presets' names", function()
-    TestRunner:assertEqual(DataAccess.shortSummary({ "ask", "ask" }), "Ask")
-    TestRunner:assertEqual(DataAccess.shortSummary({ "allow", "allow" }), "Allow")
-    TestRunner:assertEqual(DataAccess.shortSummary({ "allow", "ask", "ask", "never" }), "1 allowed, 2 ask, 1 never")
+TestRunner:test("the presets' names and the layers' words", function()
     TestRunner:assertEqual(DataAccess.presetLabel("default"), "Default (Ask)")
     TestRunner:assertEqual(DataAccess.presetLabel(nil), "Custom")
     TestRunner:assertEqual(DataAccess.layerLabel("chat"), "this chat")

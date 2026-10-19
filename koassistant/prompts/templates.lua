@@ -24,6 +24,7 @@
 --   {chapters_read}        - Number of chapters completed (highlight, book contexts)
 --   {page_number}          - EPUB reference page label, e.g. "37" (highlight, book contexts; requires open book with a page map)
 --   {time_since_last_read} - Human-readable time since last read, from KOReader's reading statistics (highlight, book contexts)
+--   {time_since_last_read_section} - "Last read: 3 days ago", or nothing when the statistics have no record (Recap)
 --
 -- Section-aware placeholders (include label, disappear when empty - RECOMMENDED):
 --   {book_text_section}    - "Book content so far:\n[text]" or "" if disabled/empty

@@ -4845,7 +4845,7 @@ if prune_book_text then
             local total_sidecar_chars = 0
             for _idx, book in ipairs(message_data.books_info) do
                 if book.file then
-                    -- Per-book privacy overrides (Book Settings ▸ Privacy): each
+                    -- Per-book privacy overrides (Book Settings ▸ Privacy & Data): each
                     -- scanned book can allow/deny its own channels; deny beats
                     -- trusted — same semantics as the single-book extractor.
                     local b_gate = { features = features, provider = effective_provider,
@@ -8722,7 +8722,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         callback = function()
                             local msg
                             if reason == "consent" then
-                                msg = _("Book tools read this book's text, which is set to Never for this book or for all books (Book Settings → Privacy, Settings → Privacy & Data).")
+                                msg = _("Book tools read this book's text, which is set to Never for this book or for all books (Book Settings → Privacy & Data, Settings → Privacy & Data).")
                             else
                                 msg = T(_("Book tools aren't available for %1.\n\nThey need a provider and model that support tool calls (Test provider shows whether yours does)."),
                                     configuration.provider or _("this provider"))
@@ -8975,7 +8975,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         local dialog
                         local function explainConsent()
                             UIManager:show(InfoMessage:new{
-                                text = _("This scope needs book text, which is set to Never for this book or for all books (Book Settings → Privacy, Settings → Privacy & Data). \"Current page\" works without it."),
+                                text = _("This scope needs book text, which is set to Never for this book or for all books (Book Settings → Privacy & Data, Settings → Privacy & Data). \"Current page\" works without it."),
                             })
                         end
                         local function setPick(new_pick)
@@ -9123,7 +9123,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                                             require("koassistant.request.privacy_gates").context(feats,
                                                 configuration.provider, { path = document_path, ui = ui_instance })) then
                                         UIManager:show(InfoMessage:new{
-                                            text = _("The current page counts as text around what you tap, which is set to Never for this book, for all books or for this chat (Book Settings → Privacy, Settings → Privacy & Data, or the Data chip)."),
+                                            text = _("The current page counts as text around what you tap, which is set to Never for this book, for all books or for this chat (Book Settings → Privacy & Data, Settings → Privacy & Data, or the Data chip)."),
                                         })
                                         return
                                     end
@@ -9582,7 +9582,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                                 { path = document_path, ui = ui_instance }))
                         if not consent then
                             UIManager:show(InfoMessage:new{
-                                text = _("The chosen scope needs book text, which is not allowed for this book. Clear the Scope chip, or allow it in Book Settings → Privacy."),
+                                text = _("The chosen scope needs book text, which is not allowed for this book. Clear the Scope chip, or allow it in Book Settings → Privacy & Data."),
                                 timeout = 5,
                             })
                             return

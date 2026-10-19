@@ -74,22 +74,6 @@ function DataAccess.layerLabel(layer)
     return _("all books")
 end
 
---- A few words for the states of several kinds (the Quick Settings tile):
---- "Ask" (or "Allow", "Never") when all agree, else the counts. Pure.
-function DataAccess.shortSummary(states)
-    local n = { allow = 0, ask = 0, never = 0 }
-    for _idx, st in ipairs(states or {}) do n[st] = (n[st] or 0) + 1 end
-    local total = #(states or {})
-    if total > 0 and n.ask == total then return _("Ask") end
-    if total > 0 and n.allow == total then return _("Allow") end
-    if total > 0 and n.never == total then return _("Never") end
-    local parts = {}
-    if n.allow > 0 then parts[#parts + 1] = T(_("%1 allowed"), n.allow) end
-    if n.ask > 0 then parts[#parts + 1] = T(_("%1 ask"), n.ask) end
-    if n.never > 0 then parts[#parts + 1] = T(_("%1 never"), n.never) end
-    return table.concat(parts, ", ")
-end
-
 --- A privacy preset's name (B499): "default" | "full" | "minimal", nil = Custom.
 function DataAccess.presetLabel(preset)
     if preset == "default" then return _("Default (Ask)") end
@@ -203,7 +187,7 @@ function DataAccess.refuse(plugin, spec)
     local name = DataAccess.kindName(spec.kind)
     local text
     if spec.layer == "book" then
-        text = T(_("%1 needs %2, which is set to Never for this book (Book Settings → Privacy)."),
+        text = T(_("%1 needs %2, which is set to Never for this book (Book Settings → Privacy & Data)."),
             spec.action_name or _("This action"), name:lower())
     elseif spec.layer == "chat" then
         text = T(_("%1 needs %2, which you left out of this chat (the Data chip)."),
@@ -587,7 +571,7 @@ function DataAccess.refuseNoTitle(plugin, spec)
     if spec.layer == "chat" then
         where = _("for this chat (the Data chip)")
     elseif spec.layer == "book" then
-        where = _("for this book (Book Settings → Privacy)")
+        where = _("for this book (Book Settings → Privacy & Data)")
     else
         where = _("for all books (Settings → Privacy & Data)")
     end
