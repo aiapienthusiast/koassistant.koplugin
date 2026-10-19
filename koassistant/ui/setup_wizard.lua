@@ -173,23 +173,43 @@ function SetupWizard.probePrivacyF(features)
     return true, require("koassistant.ui.data_access").presetLabel(Gates.presetOf(features))
 end
 
+--- The providers with a usable key: a GUI key or an apikeys.lua key that is
+--- not the placeholder (a multi-key entry counts when it holds anything),
+--- plus the OpenAI Subscription when its token is present. Sorted. Pure.
+function SetupWizard.keyedProviders(gui_keys, file_keys, has_oauth, is_placeholder)
+    local seen, out = {}, {}
+    local function add(provider, key)
+        if seen[provider] or type(provider) ~= "string" then return end
+        local keyed = (type(key) == "string" and not is_placeholder(key))
+            or (type(key) == "table" and next(key) ~= nil)
+        if keyed then
+            seen[provider] = true
+            out[#out + 1] = provider
+        end
+    end
+    for provider, key in pairs(gui_keys or {}) do add(provider, key) end
+    for provider, key in pairs(file_keys or {}) do add(provider, key) end
+    if has_oauth and not seen.openai_codex then out[#out + 1] = "openai_codex" end
+    table.sort(out)
+    return out
+end
+
 -- gui_keys = features.api_keys, file_keys = decoded apikeys.lua table (or
--- nil), has_oauth = codex token present, is_placeholder = predicate.
-function SetupWizard.probeProviderF(gui_keys, file_keys, has_oauth, is_placeholder)
-    for provider, key in pairs(gui_keys or {}) do
-        if type(key) == "string" and not is_placeholder(key) then
-            return true, T(_("key saved for %1"), provider)
-        end
+-- nil), has_oauth = codex token present, is_placeholder = predicate;
+-- opts.main = the main chat provider's id, opts.name(id) = a display name.
+-- The detail names the main provider when it has a key, else the first keyed
+-- one, and how many more have one ("Anthropic and 2 more").
+function SetupWizard.probeProviderF(gui_keys, file_keys, has_oauth, is_placeholder, opts)
+    local keyed = SetupWizard.keyedProviders(gui_keys, file_keys, has_oauth, is_placeholder)
+    if #keyed == 0 then return false end
+    opts = opts or {}
+    local name = opts.name or function(id) return (id:gsub("^%l", string.upper)) end
+    local first = keyed[1]
+    for _idx, id in ipairs(keyed) do
+        if id == opts.main then first = id end
     end
-    for provider, key in pairs(file_keys or {}) do
-        if type(key) == "string" and not is_placeholder(key) then
-            return true, T(_("apikeys.lua key for %1"), provider)
-        end
-    end
-    if has_oauth then
-        return true, _("OpenAI Subscription connected")
-    end
-    return false
+    if #keyed == 1 then return true, name(first) end
+    return true, T(_("%1 and %2 more"), name(first), #keyed - 1)
 end
 
 -- Any KOAssistant action bound in a gestures table? Returns count + a
@@ -362,7 +382,10 @@ local function probeRaw(plugin, name)
         local has_oauth = type(f.openai_codex_oauth) == "table"
             and next(f.openai_codex_oauth) ~= nil
         return SetupWizard.probeProviderF(f.api_keys, readFileApiKeys(),
-            has_oauth, Base.isPlaceholderKey)
+            has_oauth, Base.isPlaceholderKey, {
+                main = require("koassistant.core.config_helper").mainProvider(f),
+                name = function(id) return plugin:getProviderDisplayName(id) end,
+            })
     elseif name == "privacy" then
         return SetupWizard.probePrivacyF(f)
     elseif name == "icons" then
@@ -411,8 +434,10 @@ end
 function SetupWizard.face(plugin)
     local completed = plugin.settings:readSetting("setup_wizard_completed") and true or false
     local configured = probeRaw(plugin, "provider") and true or false
-    return SetupWizard.faceFor(completed, configured, feats(plugin)._wizard_version,
+    local face = SetupWizard.faceFor(completed, configured, feats(plugin)._wizard_version,
         SetupWizard.thisVersion(), SetupWizard.UPDATE_STEPS)
+    logger.dbg("KOAssistant wizard: face", face)
+    return face
 end
 
 --========================================================================--
@@ -571,11 +596,14 @@ local function showGlyphTest(plugin, ctx, next_step)
             saveFeats(plugin, f)
         end
     end
+    -- Icons already on (the topic menu, the test after a reinstall): the
+    -- test confirms them or reinstalls the font; off: it enables them
+    local already_on = feats(plugin).enable_emoji_icons == true
     UIManager:show(ConfirmBox:new{
         icon = "notice-info",
         text = text,
-        ok_text = _("Yes, enable"),
-        cancel_text = _("No, skip"),
+        ok_text = already_on and _("Yes, looks good") or _("Yes, enable"),
+        cancel_text = already_on and _("No, reinstall the font") or _("No, skip"),
         ok_callback = function()
             advancing = true
             local f = feats(plugin)
@@ -585,13 +613,18 @@ local function showGlyphTest(plugin, ctx, next_step)
             f._wizard_font_pending_confirm = nil
             saveFeats(plugin, f)
             plugin:updateConfigFromSettings()
-            table.insert(ctx.results, _("Emoji icons enabled"))
+            if not already_on then table.insert(ctx.results, _("Emoji icons enabled")) end
             next_step()
         end,
         cancel_callback = function()
             if not advancing then
                 advancing = true
                 clearPending()
+                if already_on then
+                    -- the bundled font copied again, then the restart ask
+                    os.remove(fontInstallDir() .. "/" .. SetupWizard.FONT_FILE)
+                    return SetupWizard.installFont(plugin, { wizard = ctx, done = next_step })
+                end
                 next_step()
             end
         end,
@@ -706,6 +739,10 @@ function SetupWizard.stepRestore(plugin, ctx, next_step)
     })
 end
 
+--- Connect a provider. A fresh install: the ten common providers, every
+--- other built-in one behind "Other providers…", the OpenAI Subscription,
+--- Skip for now. Re-run with a provider connected (the topic menu): the
+--- connected ones named, "Keep as it is" first, the same list to add another.
 function SetupWizard.stepProvider(plugin, ctx, next_step)
     if not ctx.force and SetupWizard.probe(plugin, "provider") then
         return next_step()
@@ -714,12 +751,15 @@ function SetupWizard.stepProvider(plugin, ctx, next_step)
     local ButtonDialog = require("ui/widget/buttondialog")
     local InfoMessage = require("ui/widget/infomessage")
 
-    local dialog
+    local dialog   -- whichever of the step's dialogs is open
     local advancing = false
     local function advanceOnce()
         if advancing then return end
         advancing = true
         next_step()
+    end
+    local function closeDialog()
+        if dialog then UIManager:close(dialog); dialog = nil end
     end
 
     -- After a key is saved: offer the inline connectivity test.
@@ -751,7 +791,7 @@ function SetupWizard.stepProvider(plugin, ctx, next_step)
     end
 
     local function pickProvider(choice)
-        UIManager:close(dialog)
+        closeDialog()
         if choice.id == "ollama" then
             -- Keyless local default: select it and explain the endpoint.
             local f = feats(plugin)
@@ -761,7 +801,7 @@ function SetupWizard.stepProvider(plugin, ctx, next_step)
             plugin:updateConfigFromSettings()
             table.insert(ctx.results, _("Provider: Ollama (local)"))
             UIManager:show(InfoMessage:new{
-                text = _("Ollama selected — no API key needed. It expects a local server at localhost:11434 (change the endpoint in Settings > Provider)."),
+                text = _("Ollama selected, no API key needed. It expects a local server at localhost:11434 (change the endpoint in Settings > Provider)."),
                 dismiss_callback = function() offerTest("ollama", "Ollama") end,
             })
             return
@@ -774,51 +814,103 @@ function SetupWizard.stepProvider(plugin, ctx, next_step)
         end)
     end
 
-    local buttons = {}
-    local row = {}
-    for _idx, choice in ipairs(SetupWizard.PROVIDER_CHOICES) do
-        table.insert(row, {
-            text = choice.name,
-            callback = function() pickProvider(choice) end,
-        })
-        if #row == 2 then
-            table.insert(buttons, row)
-            row = {}
-        end
+    local function keyedNow()
+        local f = feats(plugin)
+        local has_oauth = type(f.openai_codex_oauth) == "table" and next(f.openai_codex_oauth) ~= nil
+        return SetupWizard.keyedProviders(f.api_keys, readFileApiKeys(), has_oauth,
+            require("koassistant.api.base").isPlaceholderKey)
     end
-    if #row > 0 then table.insert(buttons, row) end
-    table.insert(buttons, {
-        {
+
+    local render
+
+    -- Every other built-in provider, by display name, two per row
+    local function showOthers()
+        closeDialog()
+        local common = {}
+        for _idx, choice in ipairs(SetupWizard.PROVIDER_CHOICES) do common[choice.id] = true end
+        local others = {}
+        for _idx, id in ipairs(require("koassistant.request.model_lists").getAllProviders()) do
+            if not common[id] and id ~= "openai_codex" then
+                others[#others + 1] = { id = id, name = plugin:getProviderDisplayName(id) }
+            end
+        end
+        table.sort(others, function(x, y) return x.name:lower() < y.name:lower() end)
+        local rows, row = {}, {}
+        for _idx, choice in ipairs(others) do
+            local c = choice
+            row[#row + 1] = { text = c.name, callback = function() pickProvider(c) end }
+            if #row == 2 then rows[#rows + 1] = row; row = {} end
+        end
+        if #row > 0 then rows[#rows + 1] = row end
+        rows[#rows + 1] = {{ text = _("Back"), id = "close", callback = function() closeDialog(); render() end }}
+        dialog = ButtonDialog:new{
+            title = _("OTHER PROVIDERS") .. "\n" ..
+                _("Every other built-in provider. A custom OpenAI-compatible provider is added in Settings > Model."),
+            buttons = rows,
+            tap_close_callback = function() dialog = nil; render() end,
+        }
+        UIManager:show(dialog)
+    end
+
+    render = function()
+        local keyed = keyedNow()
+        local connected = #keyed > 0
+        local buttons = {}
+        if connected then
+            buttons[#buttons + 1] = {{ text = _("Keep as it is"), callback = function()
+                closeDialog()
+                advanceOnce()
+            end }}
+        end
+        local row = {}
+        for _idx, choice in ipairs(SetupWizard.PROVIDER_CHOICES) do
+            local c = choice
+            row[#row + 1] = { text = c.name, callback = function() pickProvider(c) end }
+            if #row == 2 then buttons[#buttons + 1] = row; row = {} end
+        end
+        if #row > 0 then buttons[#buttons + 1] = row end
+        buttons[#buttons + 1] = {{ text = _("Other providers…"), callback = showOthers }}
+        buttons[#buttons + 1] = {{
             text = _("OpenAI Subscription (no API key)"),
             callback = function()
-                UIManager:close(dialog)
+                closeDialog()
                 -- The OAuth connect flow owns the screen from here (its
                 -- dialog is modal); finish setup later via the topic menu.
                 local OAuth = require("koassistant.api.openai_codex_oauth")
                 OAuth.startInteractiveConnect(plugin)
             end,
-        },
-    })
-    table.insert(buttons, {
-        {
-            text = _("Skip for now"),
-            callback = function()
-                UIManager:close(dialog)
-                UIManager:show(InfoMessage:new{
-                    text = _("No provider configured. Nothing will work until one is: add a key anytime in Settings > API Keys & Auth."),
-                    dismiss_callback = advanceOnce,
-                })
-            end,
-        },
-    })
-
-    dialog = ButtonDialog:new{
-        title = _("CONNECT A PROVIDER") .. "\n" ..
-            _("KOAssistant needs an AI provider account. Pick yours — you'll paste its API key next:"),
-        buttons = buttons,
-        tap_close_callback = advanceOnce,
-    }
-    UIManager:show(dialog)
+        }}
+        if not connected then
+            buttons[#buttons + 1] = {{
+                text = _("Skip for now"),
+                callback = function()
+                    closeDialog()
+                    UIManager:show(InfoMessage:new{
+                        text = _("No provider configured. Nothing will work until one is: add a key anytime in Settings > API Keys & Auth."),
+                        dismiss_callback = advanceOnce,
+                    })
+                end,
+            }}
+        end
+        local title
+        if connected then
+            local names = {}
+            for _idx, id in ipairs(keyed) do names[#names + 1] = plugin:getProviderDisplayName(id) end
+            title = _("CONNECTION") .. "\n" ..
+                T(_("Connected: %1."), table.concat(names, ", ")) .. "\n" ..
+                _("Keep it as it is, or add another provider: pick one and paste its API key next.")
+        else
+            title = _("CONNECT A PROVIDER") .. "\n" ..
+                _("KOAssistant sends your questions to an AI provider of your choice. Pick yours and paste its API key next. Ollama runs on your own computer and needs no key.")
+        end
+        dialog = ButtonDialog:new{
+            title = title,
+            buttons = buttons,
+            tap_close_callback = function() dialog = nil; advanceOnce() end,
+        }
+        UIManager:show(dialog)
+    end
+    render()
 end
 
 function SetupWizard.stepPrivacy(plugin, ctx, next_step)
@@ -859,13 +951,13 @@ function SetupWizard.stepPrivacy(plugin, ctx, next_step)
         head = _("PRIVACY & DATA (redone in this version)") .. "\n" ..
             _("Every kind of data is Ask now: the first action that wants your highlights, notes, notebook, book text, book list or reading habits asks you, and your answer can be kept for the book. Your books' own values and your trusted providers were kept.")
         first_row = {
-            { text = _("Keep Ask"), callback = function()
+            { text = _("Keep Default (Ask)"), callback = function()
                 UIManager:close(dialog)
                 -- a decision: the topic menu reads it as set (the probe)
                 local ff = feats(plugin)
                 ff._privacy_decided = true
                 saveFeats(plugin, ff)
-                table.insert(ctx.results, _("Privacy: Ask"))
+                table.insert(ctx.results, _("Privacy: Default (Ask)"))
                 advanceOnce()
             end },
         }
@@ -935,7 +1027,10 @@ function SetupWizard.stepIcons(plugin, ctx, next_step)
         local font_state = SetupWizard.readFontState()
         local plan = SetupWizard.iconsPlan(icons_on, font_state)
         if plan == "test" then
-            return showGlyphTest(plugin, ctx, next_step)
+            -- icons on and the font installed: nothing to check (the
+            -- maintainer, 2026-10-19: no display test in the update check)
+            logger.dbg("KOAssistant wizard: icons on and the font installed, nothing to do")
+            return next_step()
         elseif plan == "install" then
             return SetupWizard.offerFontInstall(plugin, { wizard = ctx, done = next_step,
                 intro = _("Emoji icons are on, but KOReader has no emoji font, so they show as empty boxes. Install the bundled Noto Emoji font (about 860 KB) into KOReader now?") })
@@ -1200,6 +1295,7 @@ function SetupWizard.runChain(plugin, opts)
         if not step then return end
         local configured = PROBED[step.key] and SetupWizard.probe(plugin, step.key) or false
         local run, forced = SetupWizard.shouldRun(step.key, { update = ctx.update, only = only, force = opts.force }, configured)
+        logger.dbg("KOAssistant wizard: step", step.key, run and (forced and "run, forced" or "run") or "skip")
         if not run then return advance() end
         ctx.force = forced
         local ok, err = pcall(step.fn, plugin, ctx, advance)
@@ -1291,6 +1387,7 @@ function SetupWizard.runUpdate(plugin)
         f._wizard_version = version
         f._privacy_notice_pending = nil
         saveFeats(plugin, f)
+        logger.dbg("KOAssistant wizard: update check stamped", version)
     end
     local dialog
     local acted = false

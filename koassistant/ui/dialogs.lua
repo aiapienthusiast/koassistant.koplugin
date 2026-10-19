@@ -4391,6 +4391,8 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
         local rf = temp_config.features or config.features
         message_data._book_info_level = require("koassistant.books.book_settings").resolveBookInfoLevel(
             per_book_ds, rf, rf._quick_answer_active)
+        logger.dbg("KOAssistant: book info level", message_data._book_info_level,
+            rf._quick_answer_active and "with Quick on" or "with Quick off")
     end
 
     -- Resolve effective research mode

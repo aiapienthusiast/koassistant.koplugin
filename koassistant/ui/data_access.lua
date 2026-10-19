@@ -136,6 +136,9 @@ function DataAccess.ask(plugin, spec, on_answer)
         if answered then return end
         answered = true
         if dialog then UIManager:close(dialog) end
+        local kinds = {}
+        for _idx, need in ipairs((spec.plan and spec.plan.asked) or spec.asked or {}) do kinds[#kinds + 1] = need.kind end
+        logger.dbg("KOAssistant data access: asked", table.concat(kinds, ","), "for", spec.action_name or "?", "answer", choice)
         on_answer(choice)
     end
     local plan = spec.plan or { asked = spec.asked or {}, optional_only = false, per_book = true }
@@ -183,6 +186,7 @@ end
 --- the screen that holds the value. spec: kind, layer, action_name, path, ui,
 --- hint (the action's blocked_hint).
 function DataAccess.refuse(plugin, spec)
+    logger.dbg("KOAssistant data access: refused", spec.kind, "layer", spec.layer, "for", spec.action_name or "?")
     local name = DataAccess.kindName(spec.kind)
     local text
     if spec.layer == "book" then
@@ -562,6 +566,7 @@ end
 --- The refusal for an action that needs the title while Book info is None.
 --- spec: action_name, layer ("quick" | "book" | "global"), path, ui.
 function DataAccess.refuseNoTitle(plugin, spec)
+    logger.dbg("KOAssistant data access: refused, no title, layer", spec.layer, "for", spec.action_name or "?")
     local where
     if spec.layer == "quick" then
         where = _("for Quick Answer chats (Settings → Chat & Export Settings → Quick Answer Preset → Leave Book Info Out); turn Quick off for this chat to run it")

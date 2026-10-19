@@ -233,6 +233,23 @@ TestRunner:test("provider: GUI key / file key / oauth each satisfy", function()
     TestRunner:assertFalse(SetupWizard.probeProviderF(nil, nil, false, fakePlaceholder))
 end)
 
+TestRunner:test("provider: the keyed list and the detail name the main provider, then how many more", function()
+    local names = { anthropic = "Anthropic", deepseek = "DeepSeek", openai_codex = "OpenAI Subscription" }
+    local function name(id) return names[id] or id end
+    TestRunner:assertEqual(#SetupWizard.keyedProviders({ anthropic = "YOUR_KEY" }, nil, false, fakePlaceholder), 0)
+    local keyed = SetupWizard.keyedProviders({ deepseek = "sk-d", anthropic = { "sk-a", "sk-b" } }, { deepseek = "sk-file" }, true, fakePlaceholder)
+    TestRunner:assertEqual(table.concat(keyed, ","), "anthropic,deepseek,openai_codex", "sorted, deduped, a multi-key entry counts, the subscription too")
+    local ok, detail = SetupWizard.probeProviderF({ anthropic = "sk-real" }, nil, false, fakePlaceholder, { main = "anthropic", name = name })
+    TestRunner:assertTrue(ok)
+    TestRunner:assertEqual(detail, "Anthropic")
+    ok, detail = SetupWizard.probeProviderF({ anthropic = "sk-a", deepseek = "sk-d" }, nil, false, fakePlaceholder, { main = "deepseek", name = name })
+    TestRunner:assertEqual(detail, "DeepSeek and 1 more", "the main provider first when it has a key")
+    ok, detail = SetupWizard.probeProviderF({ anthropic = "sk-a", deepseek = "sk-d" }, nil, true, fakePlaceholder, { main = "gemini", name = name })
+    TestRunner:assertEqual(detail, "Anthropic and 2 more", "the main provider without a key: the first keyed")
+    ok, detail = SetupWizard.probeProviderF(nil, nil, true, fakePlaceholder)
+    TestRunner:assertEqual(detail, "Openai_codex", "without a name function the id, capitalized")
+end)
+
 TestRunner:test("scanGestures: finds koassistant bindings in both sections", function()
     local count, first = SetupWizard.scanGestures({
         gesture_reader = {

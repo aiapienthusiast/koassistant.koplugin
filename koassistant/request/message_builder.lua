@@ -449,6 +449,7 @@ function MessageBuilder.build(params)
         user_prompt = replace_placeholder(user_prompt, "{page_number}", data.page_number)
     end
     if data.time_since_last_read then
+        logger.dbg("MessageBuilder: last read clause", data.time_since_last_read ~= "" and data.time_since_last_read or "none")
         user_prompt = replace_placeholder(user_prompt, "{time_since_last_read}", data.time_since_last_read)
         -- {time_since_last_read_section}: "Last read: 3 days ago", nothing when
         -- the statistics hold no record (Recap's clause, B466)
@@ -687,6 +688,8 @@ function MessageBuilder.build(params)
         -- Book-info level gates the generic "From ..." line (per-book "Book info" setting);
         -- the selected text + explicit {title} placeholders are unaffected.
         local show_book_line = data.book_title and (data._book_info_level or "basic") ~= "none"
+        logger.dbg("MessageBuilder: book info level", data._book_info_level or "basic",
+            show_book_line and "book line" or "no book line")
 
         if has_context then
             table.insert(parts, "[Context]")

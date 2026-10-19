@@ -19,6 +19,7 @@ plan, holder, bindingsFor.
 
 local _ = require("koassistant.core.gettext")
 local T = require("ffi/util").template
+local logger = require("koassistant.core.logger")
 
 local GesturePicker = {}
 
@@ -272,6 +273,8 @@ function GesturePicker.assign(plugin, section_key, slot, action_id, opts)
         plugin.settings:saveSetting("features", f)
         plugin.settings:flush()
     end
+    logger.dbg("KOAssistant gestures: assigned", action_id, "to", slot, "in", section_key,
+        live and "live" or "after a restart")
     return live and "live" or "restart"
 end
 
@@ -296,6 +299,8 @@ function GesturePicker.remove(plugin, section_key, slot, action_id)
     if remaining == 0 then sec[slot] = nil end
     if live and live.ges_mode then live.gestures = data[live.ges_mode] end
     settings:flush()
+    logger.dbg("KOAssistant gestures: removed", action_id, "from", slot, "in", section_key,
+        live and "live" or "after a restart")
     return live and "live" or "restart"
 end
 

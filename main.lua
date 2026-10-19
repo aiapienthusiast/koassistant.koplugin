@@ -21718,6 +21718,7 @@ local function applyPrivacyPreset(self, preset, touchmenu_instance, timeout)
   local before = {}
   for k, v in pairs(f) do before[k] = v end
   require("koassistant.request.privacy_gates").applyPreset(f, preset)
+  logger.dbg("KOAssistant: privacy preset applied:", preset)
   -- A pick is a decision: the Setup Wizard's privacy probe reads this stamp,
   -- since Default (Ask) leaves no key behind to tell it from a fresh install
   f._privacy_decided = true
@@ -23626,11 +23627,14 @@ function AskGPT:checkSetupWizard()
   end
   local SetupWizard = require("koassistant.ui.setup_wizard")
   local face = SetupWizard.face(self)
+  -- One tick later, so the first dialog lands above whatever the entry
+  -- point shows next (a menu, an input dialog); shown inline it opened
+  -- behind the menu (the maintainer's desktop round, 2026-10-19)
   if face == "fresh" then
-    SetupWizard.runChain(self, { mark_complete = true })
+    UIManager:nextTick(function() SetupWizard.runChain(self, { mark_complete = true }) end)
     return true
   elseif face == "update" then
-    SetupWizard.runUpdate(self)
+    UIManager:nextTick(function() SetupWizard.runUpdate(self) end)
     return true
   end
   return false
