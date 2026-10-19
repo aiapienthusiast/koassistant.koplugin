@@ -64,4 +64,29 @@ function ProviderProbe.request(handler, base, step)
     }
 end
 
+--- What the plugin's own parser makes of the plain step's 200 (B484): a host
+--- that answers in a shape the parser cannot read used to pass "reachable"
+--- and fail on the first real request.
+--- @param handler table  the provider's handler
+--- @param body string  the response body
+--- @param responses boolean  the step went to the Responses endpoint
+--- @return string kind  "text" (an answer) | "empty" (a readable answer with no
+---   text: the 16-token probe starves a model that reasons first) | "unreadable"
+--- @return string|nil text  the answer, for "text"
+function ProviderProbe.answer(handler, body, responses)
+    local json = require("json")
+    local ok, parsed = pcall(json.decode, body)
+    if not ok or type(parsed) ~= "table" then return "unreadable" end
+    local key = responses and "openai_responses"
+        or (handler.getResponseParserKey and handler:getResponseParserKey())
+        or handler.provider_name
+    local ResponseParser = require("koassistant.api.response_parser")
+    local called, success, content = pcall(ResponseParser.parseResponse, ResponseParser, parsed, key)
+    if not called or not success then return "unreadable" end
+    if type(content) == "string" and content:match("%S") then
+        return "text", (content:gsub("%s+", " "))
+    end
+    return "empty"
+end
+
 return ProviderProbe

@@ -641,9 +641,15 @@ function MessageBuilder.build(params)
         if data.book_metadata then
             local metadata = data.book_metadata
             if book_info_level ~= "none" then
-                -- Add book context so AI knows which book we're discussing
+                -- Add book context so AI knows which book we're discussing. A
+                -- book without a title in its metadata is named by its file
+                -- name, AS a file name: told the file name was the title, the
+                -- model answered about whatever the name resembled.
                 table.insert(parts, "[Context]")
-                local book_info = string.format('Book: "%s"', metadata.title or "Unknown")
+                local book_info = metadata.title_from_filename
+                    and string.format('Book: no title in its metadata (file name "%s", not the title)',
+                        metadata.title or "")
+                    or string.format('Book: "%s"', metadata.title or "Unknown")
                 if book_info_level ~= "title" and metadata.author and metadata.author ~= "" then
                     book_info = book_info .. " by " .. metadata.author
                 end
@@ -656,6 +662,12 @@ function MessageBuilder.build(params)
                 logger.dbg("MessageBuilder: BOOK CONTEXT - substituting {title}, book info level", book_info_level)
             end
             if book_info_level == "none" then user_prompt = neutralBookPlaceholders(user_prompt) end
+            -- A file name standing in for the title reads "this book" in the
+            -- action's own words (the context line above names the file)
+            if metadata.title_from_filename then
+                user_prompt = replace_placeholder(user_prompt, '"{title}"', "this book")
+                user_prompt = replace_placeholder(user_prompt, "{title}", "this book")
+            end
             user_prompt = replace_placeholder(user_prompt, "{title}", metadata.title or "Unknown")
             user_prompt = replace_placeholder(user_prompt, "{author}", metadata.author or "")
             user_prompt = replace_placeholder(user_prompt, "{author_clause}", metadata.author_clause or "")
@@ -698,9 +710,10 @@ function MessageBuilder.build(params)
             if show_book_line then
                 local show_author = (data._book_info_level or "basic") ~= "title"
                     and data.book_author and data.book_author ~= ""
-                table.insert(parts, string.format('From "%s"%s',
-                    data.book_title,
-                    show_author and (" by " .. data.book_author) or ""))
+                local from = data.book_title_from_filename
+                    and string.format('From a book with no title in its metadata (file name "%s")', data.book_title)
+                    or string.format('From "%s"', data.book_title)
+                table.insert(parts, from .. (show_author and (" by " .. data.book_author) or ""))
                 if (data._book_info_level or "basic") == "full" then appendPositionLines(parts, data) end
             end
 
@@ -732,6 +745,10 @@ function MessageBuilder.build(params)
         -- to send these as written (B465). Book info None: "this book" (B500).
         if (data._book_info_level or "basic") == "none" then
             user_prompt = neutralBookPlaceholders(user_prompt)
+        end
+        if data.book_title_from_filename then
+            user_prompt = replace_placeholder(user_prompt, '"{title}"', "this book")
+            user_prompt = replace_placeholder(user_prompt, "{title}", "this book")
         end
         user_prompt = replace_placeholder(user_prompt, "{title}", data.book_title or "")
         user_prompt = replace_placeholder(user_prompt, "{author}", data.book_author or "")

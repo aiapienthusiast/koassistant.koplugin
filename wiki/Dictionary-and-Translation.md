@@ -200,7 +200,7 @@ Dictionary and translate windows handle right-to-left (RTL) languages specially.
 - **Bidirectional alignment:** entries with right-to-left content are aligned correctly, and mixed content (an Arabic headword with an English pronunciation guide) reads in the right order.
 - **Phonetic transcriptions** are anchored to display correctly beside right-to-left headwords.
 
-Plain Text is the better choice for right-to-left rendering; when the language is not right-to-left, your Markdown or Plain Text preference stays as it is. Chat and artifact windows check their content instead (**Auto RTL mode for Chat**): see [Chat Windows](Chat-Windows#markdown-and-plain-text) and [Languages](Languages#right-to-left-scripts). Fonts that do not render at all: [Troubleshooting](Troubleshooting#font-issues-with-arabic-and-other-right-to-left-scripts).
+Plain Text is the better choice for right-to-left rendering; when the language is not right-to-left, your Markdown or Plain Text preference stays as it is. In the Markdown view every paragraph takes its own direction, and in a dictionary window of a right-to-left language a paragraph that starts with a right-to-left word is laid out right-to-left, so a headword followed by a Latin pronunciation guide and an English gloss stays on the right. Chat and artifact windows check their content instead (**Auto RTL mode for Chat**): see [Chat Windows](Chat-Windows#markdown-and-plain-text) and [Languages](Languages#right-to-left-scripts). Fonts that do not render at all: [Troubleshooting](Troubleshooting#font-issues-with-arabic-and-other-right-to-left-scripts).
 
 ## Custom dictionary actions
 
@@ -239,7 +239,7 @@ A duplicate keeps the original's view mode and its model and reasoning settings.
 The dictionary windows (compact and full-size, from the bypass and from the popup's actions) work with KOReader's Vocabulary builder:
 
 - **Auto add on** (KOReader's Vocabulary builder has **Auto add new words** on): a word you look up through the dictionary bypass is added for you, and the window's button reads **Added**, grayed out. A word looked up from KOReader's dictionary popup is handled by KOReader itself, and the button shows the same state.
-- **Auto add off:** the window shows **+Vocab** to add the looked-up word by hand.
+- **Auto add off:** the window shows **+Vocab** to add the looked-up word by hand. The word is stored as KOReader's own lookups store it, the punctuation around the selection removed; both need the Vocabulary builder plugin enabled.
 
 **Settings → Dictionary Settings → Bypass: Follow Vocab Builder Auto-add** (on by default) decides whether the bypass follows KOReader's auto-add. Turn it off if you use the bypass to analyze words you already know and do not want them added; **+Vocab** still adds a word by hand.
 

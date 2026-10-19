@@ -145,6 +145,8 @@ local function extractThinkTags(content)
     end
     return ResponseParser.splitOrphanThink(content)
 end
+-- The stream end runs the same removal on what streamed as answer text
+ResponseParser.extractThinkTags = extractThinkTags
 
 -- Web-search provenance helpers. Transformers that can see source data return a
 -- provenance TABLE in the web_search slot (4th return) instead of bare `true`:

@@ -131,6 +131,23 @@ TestRunner:test("a configuration.lua base_url reaches the probe as it reaches th
     TestRunner:assertEqual(req.url, proxy, "override beats the region")
 end)
 
+TestRunner:test("the parser's verdict on the plain step's 200 (B484)", function()
+    local handler = { getResponseParserKey = function() return "openai" end }
+    local kind, text = ProviderProbe.answer(handler, '{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}]}', false)
+    TestRunner:assertEqual(kind, "text", "an answer")
+    TestRunner:assertEqual(text, "ok", "its text")
+    kind = ProviderProbe.answer(handler, '{"choices":[{"message":{"content":""},"finish_reason":"length"}]}', false)
+    TestRunner:assertEqual(kind, "empty", "a starved reasoning model: readable, no text")
+    kind = ProviderProbe.answer(handler, '{"id":"x","object":"weird"}', false)
+    TestRunner:assertEqual(kind, "unreadable", "a shape the parser cannot read")
+    kind = ProviderProbe.answer(handler, "not json at all", false)
+    TestRunner:assertEqual(kind, "unreadable", "not JSON")
+    kind, text = ProviderProbe.answer(handler,
+        '{"output":[{"type":"message","content":[{"type":"output_text","text":"ok"}]}]}', true)
+    TestRunner:assertEqual(kind, "text", "the Responses shape through its own parser")
+    TestRunner:assertEqual(text, "ok", "its text")
+end)
+
 ModelOverrides._setUserForTests(saved_user)
 ModelOverrides._setDerivedForTests(saved_derived)
 

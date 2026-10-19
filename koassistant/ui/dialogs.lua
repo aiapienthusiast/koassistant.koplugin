@@ -4194,6 +4194,9 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
             -- Try KOReader's merged props first (includes user edits from Book Info dialog)
             if ui and ui.doc_props then
                 message_data.book_title = ui.doc_props.display_title or ui.doc_props.title
+                -- display_title is the file name when the metadata has no title
+                message_data.book_title_from_filename =
+                    not (ui.doc_props.title and ui.doc_props.title ~= "") or nil
                 local raw_author = ui.doc_props.authors
                 if raw_author and raw_author:find("\n") then
                     raw_author = raw_author:gsub("\n", ", ")
@@ -4367,6 +4370,7 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
                 title = title,
                 author = authors,
                 author_clause = (authors ~= "") and (" by " .. authors) or "",
+                title_from_filename = not (props.title and props.title ~= "") or nil,
             }
             logger.dbg("KOAssistant: book_metadata populated from ui.doc_props for book context")
         end
@@ -7203,14 +7207,18 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
 
         book_metadata = {
             title = (doc_title and doc_title ~= "") and doc_title or filename_fallback or "Unknown",
-            author = (doc_author and doc_author ~= "") and doc_author or ""  -- Empty, not "Unknown"
+            author = (doc_author and doc_author ~= "") and doc_author or "",  -- Empty, not "Unknown"
+            -- display_title is the file name when the metadata has no title; the
+            -- prompt says so instead of calling the file name the title
+            title_from_filename = not (ui_doc_props and ui_doc_props.title and ui_doc_props.title ~= "") or nil,
         }
         logger.dbg("KOAssistant: Document context - title: " .. (book_metadata.title or "nil") .. ", author: " .. (book_metadata.author or "nil"))
     elseif configuration and configuration.features and configuration.features.book_metadata then
         -- File browser context, use metadata from configuration
         book_metadata = {
             title = configuration.features.book_metadata.title,
-            author = configuration.features.book_metadata.author
+            author = configuration.features.book_metadata.author,
+            title_from_filename = configuration.features.book_metadata.title_from_filename,
         }
         -- For file browser context, get the document path from configuration
         if configuration.features.book_metadata.file then
@@ -13000,7 +13008,8 @@ local function executeDirectAction(ui, action, highlighted_text, configuration, 
         end
         book_metadata = {
             title = (title and title ~= "") and title or filename_fallback or "Unknown",
-            author = (author and author ~= "") and author or ""  -- Empty, not "Unknown" - less confusing for AI
+            author = (author and author ~= "") and author or "",  -- Empty, not "Unknown" - less confusing for AI
+            title_from_filename = not (props.title and props.title ~= "") or nil,
         }
     end
 
@@ -13018,6 +13027,7 @@ local function executeDirectAction(ui, action, highlighted_text, configuration, 
         book_metadata = {
             title = cfg_metadata.title or "Unknown",
             author = cfg_metadata.author or "",
+            title_from_filename = cfg_metadata.title_from_filename,
         }
     end
     -- Forced path with no matching metadata source: read the book's own
@@ -13036,6 +13046,7 @@ local function executeDirectAction(ui, action, highlighted_text, configuration, 
         book_metadata = {
             title = (props.title and props.title ~= "") and props.title or fname or "Unknown",
             author = (author and author ~= "") and author or "",
+            title_from_filename = not (props.title and props.title ~= "") or nil,
         }
     end
 

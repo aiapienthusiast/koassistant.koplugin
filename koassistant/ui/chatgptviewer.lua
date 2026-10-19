@@ -9,6 +9,7 @@ Displays some text in a scrollable view.
     UIManager:show(chatgptviewer)
 ]]
 local BD = require("ui/bidi")
+local Bidi = require("koassistant.ui.bidi")
 local Blitbuffer = require("ffi/blitbuffer")
 local ButtonDialog = require("ui/widget/buttondialog")
 local ButtonTable = require("ui/widget/buttontable")
@@ -158,15 +159,15 @@ local function stripMarkdown(text, is_rtl)
     -- Without this, lines starting with RTL text get RTL paragraph direction, reversing everything
     -- Skip in RTL mode: para_direction_rtl already sets the correct base direction
     if not is_rtl then
-        -- Add LRM only to truly mixed RTL+Latin lines
-        -- Pure RTL lines (even with numbers/punctuation) should align right naturally
-        local rtl_pattern = "[\216-\219][\128-\191]"
+        -- Add LRM only to truly mixed RTL+Latin lines (right-to-left letters of
+        -- any script, koassistant/ui/bidi.lua). Pure RTL lines (even with
+        -- numbers/punctuation) should align right naturally
         local latin_pattern = "[a-zA-Z]"  -- Latin letters indicate mixed content needing LTR base
         local header_pattern = "^%s*[▉◤◆✿❖·]"  -- Header symbols from header processing above
         local fixed_lines = {}
         for line in result:gmatch("([^\n]*)\n?") do
             -- Add LRM only to mixed RTL+Latin lines (not headers, not pure RTL)
-            if line:match(rtl_pattern) and line:match(latin_pattern) and not line:match(header_pattern) then
+            if Bidi.hasRTL(line) and line:match(latin_pattern) and not line:match(header_pattern) then
                 table.insert(fixed_lines, LRM .. line)
             else
                 table.insert(fixed_lines, line)
@@ -211,28 +212,12 @@ local function fixIPABidi(text)
     return text
 end
 
--- UTF-8 pattern for Arabic script detection (U+0600-U+06FF = bytes 216-219)
-local RTL_PATTERN = "[\216-\219][\128-\191]"
-local LATIN_PATTERN = "[a-zA-Z]"
-
--- Check if text has dominant RTL content (for general chat auto-detection)
--- Returns true only if RTL characters outnumber Latin characters
--- This prevents switching for English text that merely references e.g. Arabic
--- Optional sample_size limits scanning to first N characters (for large content)
-local function hasDominantRTL(text, sample_size)
-    if not text or text == "" then return false end
-    local check_text = sample_size and text:sub(1, sample_size) or text
-    local rtl_count = 0
-    for _ in check_text:gmatch(RTL_PATTERN) do
-        rtl_count = rtl_count + 1
-    end
-    if rtl_count == 0 then return false end
-    local latin_count = 0
-    for _ in check_text:gmatch(LATIN_PATTERN) do
-        latin_count = latin_count + 1
-    end
-    return rtl_count > latin_count
-end
+-- Auto RTL mode's test (the switch to plain text, for chat and artifact
+-- windows): right-to-left letters of any script (Arabic, Hebrew, Persian,
+-- Urdu, Syriac ...) outnumber Latin ones, so English text that merely quotes
+-- Arabic stays as it is. Optional sample_size limits the scan to the first N
+-- bytes (large cached content).
+local hasDominantRTL = Bidi.hasDominantRTL
 
 -- Get the latest assistant response from message history (excludes user input/context)
 local function getLatestResponse(message_history)
@@ -247,8 +232,6 @@ local function getLatestResponse(message_history)
     return ""
 end
 
--- Post-process HTML for RTL support in markdown view
--- Uses inline CSS text-align since MuPDF doesn't support dir attribute
 -- "New page per exchange" (opt-in, 2026-08-12): a CSS page break before each
 -- user turn makes every exchange start at a physical page top in the paginated
 -- HTML view — the landing jump becomes EXACT instead of page-granular. MuPDF's
@@ -528,179 +511,12 @@ local function applyExchangePageBreaks(html_body, configuration, carry_anchor, c
     .. html_body:sub(last_pos)
 end
 
-local function addHtmlBidiAttributes(html, options)
-    if not html then return html end
-    options = options or {}
-    -- When true, use startsWithRTL for paragraphs (for RTL dictionary language)
-    local use_starts_with_rtl = options.use_starts_with_rtl or false
-
-    -- Normalize HTML: collapse whitespace between tags for easier pattern matching
-    local normalized = html:gsub(">%s+<", "><")
-
-    local rtl_pattern = "[\216-\219][\128-\191]"
-    local latin_pattern = "[a-zA-Z]"
-
-    -- Unicode directional marks for BiDi control
-    local RLM = "\226\128\143"  -- U+200F Right-to-Left Mark
-    local RLI = "\226\129\167"  -- U+2067 Right-to-Left Isolate
-    local PDI = "\226\129\169"  -- U+2069 Pop Directional Isolate
-
-    -- Strip HTML tags to get text content for language detection
-    local function stripTags(s)
-        return s:gsub("<[^>]+>", "")
-    end
-
-    -- Check if text is pure RTL (has RTL, no Latin)
-    local function isPureRTL(s)
-        local text = stripTags(s)
-        return text:match(rtl_pattern) and not text:match(latin_pattern)
-    end
-
-    -- Check if text starts with RTL (for bullet list handling)
-    local function startsWithRTL(s)
-        local text = stripTags(s):gsub("^%s+", "")  -- Strip tags and leading whitespace
-        return text:match("^" .. rtl_pattern) ~= nil
-    end
-
-    -- Apply BiDi formatting to pure RTL content
-    local function formatRTLContent(content, addStyle)
-        -- Add RLM before trailing period for correct visual placement
-        local fixed = content:gsub("%.(%s*)$", RLM .. ".%1")
-        -- Also handle period before closing tags
-        fixed = fixed:gsub("(%.)(%s*</[^>]+>%s*)$", RLM .. "%1%2")
-        if addStyle then
-            return string.format('<p style="text-align: right;">%s%s</p>', RLM, fixed)
-        else
-            return RLM .. fixed
-        end
-    end
-
-    -- Convert ordered lists to paragraphs with per-item RTL detection
-    -- MuPDF doesn't support RTL list markers, so we convert to paragraphs
-    -- Uses Western numerals consistently (matches text view behavior)
-    normalized = normalized:gsub("<ol>(.-)</ol>", function(list_content)
-        local items = {}
-        local num = 1
-        for item_content in list_content:gmatch("<li>(.-)</li>") do
-            local item_text = stripTags(item_content)
-            local item_has_rtl = item_text:match(rtl_pattern)
-            local item_has_latin = item_text:match(latin_pattern)
-
-            if item_has_rtl and not item_has_latin then
-                -- Pure RTL item → RLM establishes RTL base direction, number goes on right
-                table.insert(items, string.format(
-                    '<p style="text-align: right;">%s%d. %s</p>',
-                    RLM, num, item_content
-                ))
-            else
-                -- LTR or mixed item → number on left
-                table.insert(items, string.format('<p>%d. %s</p>', num, item_content))
-            end
-            num = num + 1
-        end
-        return table.concat(items, "")
-    end)
-
-    -- Convert unordered lists to paragraphs with per-item RTL detection
-    -- For bullets: RTL if text STARTS with RTL (matches text view behavior)
-    normalized = normalized:gsub("<ul>(.-)</ul>", function(list_content)
-        local items = {}
-        for item_content in list_content:gmatch("<li>(.-)</li>") do
-            if startsWithRTL(item_content) then
-                -- Starts with RTL → use BiDi isolate to maintain proper content ordering
-                -- RLI isolates the content in RTL context, bullet outside isolate goes to visual right
-                table.insert(items, string.format(
-                    '<p style="text-align: right;">%s• %s%s</p>',
-                    RLI, item_content, PDI
-                ))
-            else
-                -- Starts with LTR → bullet on left
-                table.insert(items, string.format('<p>• %s</p>', item_content))
-            end
-        end
-        return table.concat(items, "")
-    end)
-
-    -- Continue processing with normalized HTML
-    html = normalized
-
-    -- Process block-level elements: li, h1-h6 (paragraphs handled earlier)
-    -- Pattern captures: opening tag, content, closing tag
-    local function processBidiElement(tag_open, content, tag_close)
-        if isPureRTL(content) then
-            -- Pure RTL content → apply BiDi formatting
-            local fixed = formatRTLContent(content, false)  -- false = don't wrap in <p>
-            return tag_open:gsub(">$", ' style="text-align: right;">') .. fixed .. tag_close
-        else
-            -- LTR or mixed content → leave as-is (default left alignment works)
-            return tag_open .. content .. tag_close
-        end
-    end
-
-    -- Handle "fake" bullet lists: paragraphs with • at start of lines (AI often generates these)
-    -- Also apply BiDi formatting to ALL paragraphs here (including non-bullet)
-    html = html:gsub("<p>(.-)</p>", function(content)
-        -- Check if this looks like a bullet list (multiple lines starting with •)
-        if content:match("\n") and content:match("^•") then
-            local items = {}
-            for line in content:gmatch("[^\n]+") do
-                if line:match("^•") then
-                    -- Remove leading bullet and space
-                    local item_text = line:gsub("^•%s*", "")
-                    if item_text ~= "" then
-                        -- For bullets: RTL if text STARTS with RTL (matches text view)
-                        if startsWithRTL(item_text) then
-                            -- Use BiDi isolate for proper content ordering
-                            table.insert(items, string.format(
-                                '<p style="text-align: right;">%s• %s%s</p>',
-                                RLI, item_text, PDI
-                            ))
-                        else
-                            -- Starts with LTR → bullet on left
-                            table.insert(items, string.format('<p>• %s</p>', item_text))
-                        end
-                    end
-                else
-                    -- Non-bullet line - apply BiDi formatting based on RTL detection mode
-                    if line ~= "" then
-                        local line_is_rtl = use_starts_with_rtl and startsWithRTL(line) or isPureRTL(line)
-                        if line_is_rtl then
-                            table.insert(items, formatRTLContent(line, true))
-                        else
-                            table.insert(items, "<p>" .. line .. "</p>")
-                        end
-                    end
-                end
-            end
-            return table.concat(items, "")
-        end
-        -- Not a bullet list - apply BiDi formatting based on RTL detection mode
-        -- use_starts_with_rtl: for dictionary popup with RTL language, align if STARTS with RTL
-        -- default: only align if PURE RTL (no Latin characters)
-        local is_rtl = use_starts_with_rtl and startsWithRTL(content) or isPureRTL(content)
-        if is_rtl then
-            return formatRTLContent(content, true)
-        end
-        return "<p>" .. content .. "</p>"
-    end)
-
-    -- Note: Paragraphs are now fully handled above (bullet and non-bullet)
-    -- No additional paragraph processing needed
-
-    -- Process list items (for remaining non-RTL lists)
-    html = html:gsub("(<li>)(.-)(</li>)", processBidiElement)
-
-    -- Process headers h1-h6
-    for i = 1, 6 do
-        local open_tag = "<h" .. i .. ">"
-        local close_tag = "</h" .. i .. ">"
-        html = html:gsub("(" .. open_tag .. ")(.-)" .. close_tag, function(tag_open, content)
-            return processBidiElement(tag_open, content, close_tag)
-        end)
-    end
-
-    return html
-end
+-- The direction pass (koassistant/ui/bidi.lua): every paragraph, heading,
+-- list item, quote and table cell in the Markdown view takes a dir attribute
+-- by the majority of its words, so a chat that mixes directions reads right
+-- paragraph by paragraph; a list with a right-to-left item becomes paragraphs
+-- with a literal marker (MuPDF draws no marker for a list with dir="rtl")
+local addHtmlBidiAttributes = Bidi.addHtmlBidiAttributes
 
 -- Show link options dialog
 -- Delegates to KOReader's ReaderLink when available (gets all registered plugin
@@ -1176,8 +992,10 @@ end
 local function getViewerCSS(text_align)
     text_align = text_align or "auto"
     -- "auto" (recon 2g default, 2026-08-17): no text-align rule — paragraphs
-    -- align to their writing direction via the bidi pass's dir attributes,
-    -- left for LTR and right for RTL
+    -- align to their writing direction via the direction pass's dir attributes
+    -- (koassistant/ui/bidi.lua), left for LTR and right for RTL. An explicit
+    -- left or right is logical under dir="rtl", so the pass swaps it inline on
+    -- right-to-left blocks.
     local align_rule = text_align ~= "auto"
         and ("    text-align: " .. text_align .. ";\n") or ""
     return string.format([[
@@ -1548,6 +1366,8 @@ function ChatGPTViewer:init()
     title_multilines = self.title_multilines,
     title_shrink_font_to_fit = self.title_shrink_font_to_fit,
     close_callback = function() self:onClose() end,
+    -- A long press on X is the one-gesture way back to the page (holdClose)
+    close_hold_callback = function() self:holdClose() end,
     show_parent = self,
     left_icon = "appbar.settings",
     left_icon_tap_callback = function()
@@ -2093,7 +1913,14 @@ function ChatGPTViewer:init()
         if word and word ~= "" then
           local ReaderUI = require("apps/reader/readerui")
           local reader_ui = ReaderUI.instance
-          if reader_ui then
+          -- The builder is a plugin: with it disabled nothing takes the event
+          if reader_ui and reader_ui.vocabulary_builder then
+            -- KOReader's own lookups clean the word first (edge punctuation, a
+            -- possessive 's, an elision); a run from the highlight menu hands
+            -- the raw selection over, so clean it before it is stored
+            if reader_ui.dictionary then
+              word = reader_ui.dictionary:cleanSelection(word)
+            end
             local book_title = (reader_ui.doc_props and reader_ui.doc_props.display_title) or _("AI Dictionary lookup")
             local Event = require("ui/event")
             reader_ui:handleEvent(Event:new("WordLookedUp", word, book_title, true))
@@ -3060,7 +2887,7 @@ function ChatGPTViewer:init()
       html_body = "<pre>" .. (self.text or "Missing text.") .. "</pre>"
     end
     -- For dictionary popup with RTL language, use "starts with RTL" detection
-    local bidi_opts = { use_starts_with_rtl = needs_rtl_fix }
+    local bidi_opts = { use_starts_with_rtl = needs_rtl_fix, text_align = self.text_align }
     html_body = addHtmlBidiAttributes(html_body, bidi_opts)
     -- Page breaks run POST-bidi (2026-08-15): the paragraph splitter copies
     -- the classified opening tag so a split Arabic paragraph keeps direction
@@ -4292,22 +4119,34 @@ function ChatGPTViewer:onForwardingPanRelease(arg, ges)
   return self.movable:onMovablePanRelease(arg, ges)
 end
 
+--- One word opens the dictionary, a selection the popup. The text decides:
+--- the HTML widget passes no indices, and the plain-text widget's are the
+--- word's first and last character (never equal for a word of two letters).
+--- A CJK clause carries no spaces, so one whitespace token was one "word" and
+--- a quick drag over the clause looked the whole clause up: a run of more
+--- than four CJK characters is a selection, not a word.
+function ChatGPTViewer.isSingleWord(text)
+  if not text or text == "" then return false end
+  local tokens = 0
+  for _w in text:gmatch("%S+") do
+    tokens = tokens + 1
+    if tokens > 1 then return false end
+  end
+  local cjk = 0
+  for _c in text:gmatch("[\227-\237][\128-\191][\128-\191]") do
+    cjk = cjk + 1
+    if cjk > 4 then return false end
+  end
+  return tokens == 1
+end
+
 function ChatGPTViewer:handleTextSelection(text, hold_duration, start_idx, end_idx, to_source_index_func)
   if self.text_selection_callback then
     self.text_selection_callback(text, hold_duration, start_idx, end_idx, to_source_index_func)
     return
   end
 
-  -- Count words: 1 word → auto dictionary, 2+ → selection popup
-  local word_count = 0
-  if text then
-    for _w in text:gmatch("%S+") do
-      word_count = word_count + 1
-      if word_count > 1 then break end  -- Early exit, only need to know if >1
-    end
-  end
-
-  if word_count == 1 and not ChatGPTViewer.isLongHold(hold_duration) then
+  if ChatGPTViewer.isSingleWord(text) and not ChatGPTViewer.isLongHold(hold_duration) then
     -- Single word + short hold: auto dictionary lookup (fast path)
     local ui = ChatGPTViewer.liveUI(self._ui or (self.configuration and self.configuration._rerun_ui))
     if ui and ui.dictionary then
@@ -4622,7 +4461,8 @@ function ChatGPTViewer:update(new_text, scroll_to_bottom)
     -- For dictionary popup with RTL language, use "starts with RTL" detection
     local dict_lang = self.configuration and self.configuration.features
         and self.configuration.features.dictionary_language
-    local bidi_opts = { use_starts_with_rtl = (self.compact_view or self.dictionary_view) and Languages.isRTL(dict_lang) }
+    local bidi_opts = { use_starts_with_rtl = (self.compact_view or self.dictionary_view) and Languages.isRTL(dict_lang),
+      text_align = self.text_align }
     html_body = addHtmlBidiAttributes(html_body, bidi_opts)
     -- Page breaks run POST-bidi (2026-08-15): the paragraph splitter copies
     -- the classified opening tag so a split Arabic paragraph keeps direction
@@ -4803,7 +4643,7 @@ function ChatGPTViewer:rebuildScrollWidget()
       html_body = "<pre>" .. (self.text or "Missing text.") .. "</pre>"
     end
     -- For dictionary popup with RTL language, use "starts with RTL" detection
-    local bidi_opts = { use_starts_with_rtl = needs_rtl_fix }
+    local bidi_opts = { use_starts_with_rtl = needs_rtl_fix, text_align = self.text_align }
     html_body = addHtmlBidiAttributes(html_body, bidi_opts)
     -- Page breaks run POST-bidi (2026-08-15): the paragraph splitter copies
     -- the classified opening tag so a split Arabic paragraph keeps direction
@@ -5085,7 +4925,7 @@ function ChatGPTViewer:saveToNotebook(format_override)
     })
   else
     UIManager:show(Notification:new{
-      text = _("Failed to save: ") .. (err or "unknown error"),
+      text = T(_("Failed to save: %1"), err or _("Unknown error")),
       timeout = 3,
     })
   end
@@ -5351,7 +5191,8 @@ function ChatGPTViewer:toggleTranslateQuoteVisibility()
     -- For dictionary popup with RTL language, use "starts with RTL" detection
     local dict_lang = self.configuration and self.configuration.features
         and self.configuration.features.dictionary_language
-    local bidi_opts = { use_starts_with_rtl = (self.compact_view or self.dictionary_view) and Languages.isRTL(dict_lang) }
+    local bidi_opts = { use_starts_with_rtl = (self.compact_view or self.dictionary_view) and Languages.isRTL(dict_lang),
+      text_align = self.text_align }
     html_body = addHtmlBidiAttributes(html_body, bidi_opts)
     -- Page breaks run POST-bidi (2026-08-15): the paragraph splitter copies
     -- the classified opening tag so a split Arabic paragraph keeps direction

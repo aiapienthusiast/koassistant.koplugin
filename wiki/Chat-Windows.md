@@ -31,7 +31,7 @@ The title bar has the gear icon on the left ([the gear menu](#the-gear-menu)) an
 
 Saving, tags, pinning and starring are explained on [Conversations, Notebooks and Export](Conversations-Notebooks-and-Export).
 
-**Hold to close everything:** a long press on **Close** in any KOAssistant window (in the chat window also on **Save**, **⇱** and **⇲**) closes that window, any dictionary windows under it, and the highlight menu, taking you straight back to the page in one gesture.
+**Hold to close everything:** a long press on **Close** or on the title bar's X in any KOAssistant window (in the chat window also on **Save**, **⇱** and **⇲**) closes that window, any dictionary windows under it, and the highlight menu, taking you straight back to the page in one gesture.
 
 **Other ways to close a window:** **×** in the title bar, a tap outside the window, the Back key, or any multiswipe.
 
@@ -44,7 +44,7 @@ Saving, tags, pinning and starring are explained on [Conversations, Notebooks an
 Tap the gear icon in the title bar:
 
 - **Font Size**: 12 to 32 (default 20). It sizes the Markdown view (Plain Text uses a fixed size) and the text of the streaming window.
-- **Alignment**: cycles **Auto → Left → Justify → Right**. Auto, the default, follows the text's own direction (left for LTR, right for RTL) instead of forcing one side, so RTL answers align right.
+- **Alignment**: cycles **Auto → Left → Justify → Right**. Auto, the default, follows each paragraph's own direction (left for LTR, right for RTL) instead of forcing one side, so RTL answers align right; Left and Right put every paragraph on that side, right-to-left ones included.
 - **Reset to Defaults**: font size 20 and Auto alignment.
 - **Window Size**: Standard or Expanded, the same setting as Display Settings ([Window size and rotation](#window-size-and-rotation)). Not offered on compact dictionary popups.
 - **Show Excerpt** (dictionary windows only): the same setting as **Settings → Dictionary Settings → Show Excerpt**; see [Dictionary and Translation](Dictionary-and-Translation).
@@ -160,9 +160,11 @@ Long-pressing **MD ON / TXT ON** opens the **Display** menu: **Default view mode
 
 **Math formulas:** in Markdown view, LaTeX math in responses (`$...$`, `$$...$$`, `\(...\)`, `\[...\]`) is shown as readable formulas: Greek letters and operators as real symbols, superscripts and subscripts, vector arrows and hats, roots, fractions as `a/b`, and `$$` blocks on their own centered line. This is display-only: saved chats, copies, exports and notebook entries keep the original LaTeX, which apps like Obsidian render fully. Plain Text view shows the LaTeX as written. Toggle it under **Settings → Display Settings → Rendering → Render Math Formulas** (on by default; grayed out while Plain Text is your default). True typesetting (stacked fractions, matrices) is not possible in the window's renderer; those flatten to `a/b` and `(a, b; c, d)`.
 
+**Right-to-left text in the Markdown view.** Every paragraph, heading, list item, quote and table cell is laid out in its own direction, decided by the majority of its words (the first word when they tie), so a chat that mixes directions reads right block by block: an Arabic answer with a Latin name in it, an English answer quoting Hebrew, an earlier right-to-left reply above a later English one. Arabic, Hebrew, Persian, Urdu, Syriac and the other right-to-left scripts all count. A right-to-left quote mirrors its border, and the Left and Right alignments keep their side for both directions. Left-to-right lists are real lists (nested ones indented); a list with a right-to-left item is shown as marked lines, since the renderer draws no markers for a right-to-left list.
+
 **Right-to-left text** (all under **Settings → Display Settings → Rendering**):
 
-- **Auto RTL mode for Chat** (on): chat and artifact windows switch to RTL mode (right-aligned text and Plain Text) when the latest response has more RTL than Latin characters. English text referencing Arabic stays in Markdown, and your Markdown or Plain Text preference holds for everything else. Turning it off removes all automatic RTL adjustments. Grayed out while Plain Text is your default.
+- **Auto RTL mode for Chat** (on): chat and artifact windows switch to RTL mode (right-aligned text and Plain Text) when the latest response has more right-to-left letters (of any right-to-left script) than Latin ones. English text referencing Arabic stays in Markdown, and your Markdown or Plain Text preference holds for everything else. Turning it off removes all automatic RTL adjustments. Grayed out while Plain Text is your default.
 - **Text Mode for Dictionary** (off): dictionary windows always use Plain Text, regardless of your view mode, for better font support with non-Latin scripts.
 - **Text Mode for RTL Dictionary** (on): dictionary windows use Plain Text when your dictionary language is RTL (Arabic, Classical Arabic, Persian or Urdu). Grayed out when Text Mode for Dictionary is on.
 - **Text Mode for RTL Translate** (on): the translate window uses Plain Text when your translation language is RTL.
@@ -208,7 +210,7 @@ Text selection works the same in every KOAssistant window: chat, artifact, X-Ray
 | **1 word** | Dictionary lookup | Selection popup |
 | **2+ words** | Selection popup | Selection popup |
 
-**A single word** opens KOReader's built-in offline dictionary, or your KOAssistant dictionary action when the dictionary bypass is on ([Dictionary and Translation](Dictionary-and-Translation)), in artifact windows too. The current window stays open underneath: the dictionary popup opens on top, and you return to your window when you close it. **Long-pressing** a single word shows the selection popup instead, giving access to Copy, Translate and the rest.
+**A single word** opens KOReader's built-in offline dictionary, or your KOAssistant dictionary action when the dictionary bypass is on ([Dictionary and Translation](Dictionary-and-Translation)), in artifact windows too. The current window stays open underneath: the dictionary popup opens on top, and you return to your window when you close it. **Long-pressing** a single word shows the selection popup instead, giving access to Copy, Translate and the rest. A run of more than four Chinese, Japanese or Korean characters counts as a selection, not a word, since such text has no spaces.
 
 A long hold is about three times KOReader's long-press interval: 1.5 seconds with KOReader's default of 500 ms. The interval is set in **KOReader's gear menu → Taps and gestures → Gesture intervals → Long-press interval**.
 

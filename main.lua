@@ -171,6 +171,13 @@ end
 
 local function buildBookMetadata(title, authors, file, doc_props, document, doc_settings)
     local metadata = DOIResolver.buildBookMetadata(title, authors, file, doc_props, document, doc_settings)
+    -- No title in the book's metadata, the reader's edits included: the title
+    -- the callers fell back to is the FILE NAME, and the prompt says so (the
+    -- model used to be told a scan's file name was the book's title)
+    local props = file and require("koassistant.storage.doc_settings").overlayCustomProps(doc_props, file) or doc_props
+    if not (props and type(props.title) == "string" and props.title ~= "") then
+        metadata.title_from_filename = true
+    end
     -- Apply per-book AI title/author override (what the AI sees; never touches library metadata).
     -- Load this book's settings when none were passed but we have a file path.
     local ds = doc_settings
@@ -186,7 +193,9 @@ end
 --- actual book-identity comes from the Book-info-gated [Context] block, which never sends language.
 local function bookContextString(metadata)
     if not metadata then return "" end
-    local s = string.format("Title: %s.", metadata.title or "Unknown")
+    local s = metadata.title_from_filename
+        and string.format('Title: none in the metadata (file name "%s").', metadata.title or "")
+        or string.format("Title: %s.", metadata.title or "Unknown")
     if metadata.author and metadata.author ~= "" then
         s = s .. string.format(" Author: %s.", metadata.author)
     end
@@ -375,7 +384,8 @@ function AskGPT:init()
     logger.dbg("Highlight feature not available, skipping highlight dialog integration")
   end
 
-  -- Sync dictionary bypass setting (override Translator if enabled)
+  -- Install the dictionary wrapper (the X-Ray intercept and the dictionary
+  -- bypass, resolved per lookup)
   self:syncDictionaryBypass()
 
   -- Register dictionary-popup AI buttons on KOReader's new addToDictButtons API
@@ -2865,9 +2875,19 @@ function AskGPT:testProvider(provider_id)
 
   local steps = {
     { label = _("Reachability"), run = function()
-        local code, body = post("plain")
+        local code, body, responses = post("plain")
         local n = tonumber(code)
-        if n == 200 then return true end
+        if n == 200 then
+          -- The parser's verdict on the 200 (B484): an answer in a shape it
+          -- cannot read fails the first real request, so it fails this step
+          local kind, text = ProviderProbe.answer(handler, body, responses)
+          if kind == "unreadable" then
+            return false, _("HTTP 200, but the answer is in a shape KOAssistant cannot read; a real request would fail")
+          elseif kind == "text" then
+            return true, T(_("answered \"%1\""), text:sub(1, 40))
+          end
+          return true, _("answered without text (the 16-token probe starves a model that reasons first)")
+        end
         if n == 401 or n == 403 then
           return false, T(_("auth failed (HTTP %1) - check the API key"), n)
         end
@@ -6603,8 +6623,10 @@ function AskGPT:executeDictAction(action, word, dict_popup, non_reader_lookup, l
       -- In popup mode, KOReader's dictionary already triggered WordLookedUp
       -- (the word was added/skipped by KOReader's own vocab builder settings).
       -- We just reflect the state for our UI button — don't fire the event again.
+      -- The builder is a plugin: its setting outlives disabling it, and then
+      -- nothing took the event ("Added" showed for a word nobody stored)
       local vocab_settings = G_reader_settings and G_reader_settings:readSetting("vocabulary_builder") or {}
-      if vocab_settings.enabled then
+      if vocab_settings.enabled and self.ui and self.ui.vocabulary_builder then
         dict_config.features.vocab_word_auto_added = true
       end
 
@@ -19047,8 +19069,12 @@ function AskGPT:testProviderConnection()
   for k, v in pairs(configuration) do test_config[k] = v end
   test_config.features = {}
   for k, v in pairs(configuration.features or {}) do test_config.features[k] = v end
-  test_config.temperature = 0.1
-  test_config.max_tokens = 50
+  -- A cap the handlers read (api_params; loose fields on the config are read
+  -- by nothing, so the test used to spend the full default budget). 512
+  -- tokens leave room for a model that reasons before it answers.
+  test_config.api_params = {}
+  for k, v in pairs(configuration.api_params or {}) do test_config.api_params[k] = v end
+  test_config.api_params.max_tokens = 512
   test_config.enable_web_search = false
   test_config.features.enable_web_search = false
   test_config.features.enable_streaming = false -- keep the test simple
@@ -19057,25 +19083,23 @@ function AskGPT:testProviderConnection()
   UIManager:scheduleIn(0.1, function()
     queryChatGPT(test_message_history:getMessages(), test_config, function(success, response, err)
       if success and response and type(response) == "string" then
+        -- The result stays until tapped: a 5-second toast hid the reason
         if response:match("^Error:") then
           -- Connection failed
           UIManager:show(InfoMessage:new{
-            text = _("Connection test failed:\n") .. response,
-            timeout = 5,
+            text = T(_("Connection test failed:\n%1"), response),
           })
         else
           -- Connection successful
           UIManager:show(InfoMessage:new{
             text = T(_("Connection test successful!\n\nProvider: %1\nModel: %2\n\nResponse: %3"),
               test_config.provider, test_config.model or "default", response:sub(1, 100)),
-            timeout = 5,
           })
         end
       else
         -- Connection failed with error
         UIManager:show(InfoMessage:new{
-          text = _("Connection test failed: ") .. (err or "Unexpected response format"),
-          timeout = 5,
+          text = T(_("Connection test failed: %1"), err or _("Unexpected response format")),
         })
       end
     end, self.settings)
@@ -20242,7 +20266,8 @@ function AskGPT:syncDictionaryBypass()
           -- Vocab builder auto-add in bypass mode:
           -- Only add if both vocab builder is enabled AND the bypass vocab setting allows it
           local vocab_settings = G_reader_settings and G_reader_settings:readSetting("vocabulary_builder") or {}
-          if vocab_settings.enabled and features.dictionary_bypass_vocab_add ~= false then
+          if vocab_settings.enabled and self_ref.ui.vocabulary_builder
+              and features.dictionary_bypass_vocab_add ~= false then
             local book_title = (self_ref.ui.doc_props and self_ref.ui.doc_props.display_title) or _("AI Dictionary lookup")
             local Event = require("ui/event")
             self_ref.ui:handleEvent(Event:new("WordLookedUp", clean_word, book_title, false))
@@ -23895,15 +23920,8 @@ function AskGPT:patchTextSelectionHandlers()
       return orig_tv_handleTextSelection(self, text, hold_duration, start_idx, end_idx, to_source_index_func)
     end
 
-    local word_count = 0
-    if text then
-      for _w in text:gmatch("%S+") do
-        word_count = word_count + 1
-        if word_count > 1 then break end
-      end
-    end
-
-    if word_count == 1 and not ChatGPTViewer.isLongHold(hold_duration) then
+    -- One word (the viewer's rule: one token, no CJK run longer than a word)
+    if ChatGPTViewer.isSingleWord(text) and not ChatGPTViewer.isLongHold(hold_duration) then
       -- Single word + short hold: dictionary lookup
       reader_ui.dictionary._koassistant_non_reader_lookup = true
       reader_ui.dictionary:onLookupWord(text)
@@ -24401,7 +24419,7 @@ function AskGPT:openNotebookInChatViewer(notebook_path, document_path)
 
   -- Build title from document filename
   local book_name = document_path:match("([^/]+)%.[^%.]+$") or document_path:match("([^/]+)$") or ""
-  local title = _("Notebook") .. " - " .. book_name
+  local title = T(_("Notebook - %1"), book_name)
 
   local features = self.settings:readSetting("features") or {}
   local viewer_config = { features = features }

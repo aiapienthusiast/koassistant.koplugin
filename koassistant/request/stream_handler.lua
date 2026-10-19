@@ -22,30 +22,27 @@ local Constants = require("koassistant.core.constants")
 --- with a regex fallback for truncated/multi-chunk bodies. Returns nil if no error.
 local function extractApiError(text)
     if not text or text == "" then return nil end
-    if not text:find('"error"', 1, true) then return nil end
+    if not (text:find('"error"', 1, true) or text:find('"detail"', 1, true)) then return nil end
     local ok, j = pcall(json.decode, text)
     if ok and type(j) == "table" then
-        local err = j.error or (type(j[1]) == "table" and j[1].error)
-        if type(err) == "table" then
-            local msg = err.message or (err.code and ("API error " .. tostring(err.code))) or err.status
+        -- One reader for every error shape (BaseHandler.errorSentence). Cold
+        -- path: inline requires keep this file's big closures away from the
+        -- 60-upvalue cap.
+        local msg, err = require("koassistant.api.base").errorSentence(j)
+        if type(err) == "table" and type(msg) == "string" and msg ~= "" then
+            -- The provider's machine code (error.code / type / status) says what
+            -- the sentence cannot (OpenAI's insufficient_quota shares Gemini's
+            -- ordinary 429 sentence); mirrors the non-streaming consumer.
+            msg = require("koassistant.request.rate_limits").withErrorCode(msg, err)
             -- A 429 body carries the quota facts (which bucket, what limit, retry delay)
             -- in error.details[] — without them error.message can't tell a per-minute
-            -- speed bump from a daily wall. Cold path: inline require keeps this file's
-            -- big closures away from the 60-upvalue cap.
-            if type(msg) == "string" and msg ~= "" then
-                -- The provider's machine code (error.code / type / status) says what
-                -- the sentence cannot (OpenAI's insufficient_quota shares Gemini's
-                -- ordinary 429 sentence); mirrors the non-streaming consumer.
-                msg = require("koassistant.request.rate_limits").withErrorCode(msg, err)
-                -- Wrap `err` rather than passing `j`: Gemini also answers in the array
-                -- shape ([{"error":{...}}]), where the details live under j[1].error.
-                local detail = require("koassistant.request.model_constraints").formatQuotaDetails({ error = err })
-                if detail then return msg .. "\n\n" .. detail end
-            end
-            return msg
-        elseif type(err) == "string" then
-            return err
+            -- speed bump from a daily wall. Wrap `err` rather than passing `j`: Gemini
+            -- also answers in the array shape ([{"error":{...}}]), where the details
+            -- live under j[1].error.
+            local detail = require("koassistant.request.model_constraints").formatQuotaDetails({ error = err })
+            if detail then return msg .. "\n\n" .. detail end
         end
+        if msg then return msg end
     end
     -- Decode failed (partial body) — fall back to patterns
     local msg = text:match('"message"%s*:%s*"([^"]+)"')
@@ -906,15 +903,17 @@ The provider read about %1% of it (%2 tokens) and answered from that part. The r
             end
         end
 
-        -- Orphan </think> (template-opened reasoning: no opener ever streamed, so
-        -- the think machine never engaged and the reasoning streamed as answer
-        -- text). Split it off before any notice is appended.
+        -- Reasoning the think machine never engaged on, split off before any
+        -- notice is appended: a <think> block that starts mid-text (the machine
+        -- detects a LEADING opener only; the non-stream path removes the block
+        -- wherever it is), or an orphan </think> (template-opened reasoning: no
+        -- opener ever streamed, so the reasoning streamed as answer text).
         if #reasoning_buffer == 0 and not think_tag_active then
-            local answer, orphan_reasoning = require("koassistant.api.response_parser")
-                .splitOrphanThink(result)
+            local answer, late_reasoning = require("koassistant.api.response_parser")
+                .extractThinkTags(result)
             if answer ~= result then
                 result = answer
-                if orphan_reasoning then reasoning_buffer[1] = orphan_reasoning end
+                if late_reasoning then reasoning_buffer[1] = late_reasoning end
             end
         end
 
@@ -1554,10 +1553,13 @@ The provider read about %1% of it (%2 tokens) and answered from that part. The r
     end
     streamDialog._input_widget:setText(getWaitingText(), true)
     local function updateAnimation()
-        if completed then return end
+        -- A Stop before the first token, a failed subprocess start and a Stop
+        -- during hidden streaming end the stream without `completed`: the tick
+        -- used to repaint the closed dialog every 0.4 s until KOReader restarted
+        if completed or stream_finished then return end
         if not first_content_received then
             streamDialog._input_widget:setText(getWaitingText(), true)
-            animation_task = UIManager:scheduleIn(0.4, updateAnimation)
+            UIManager:scheduleIn(0.4, updateAnimation)
         elseif hidden_streaming then
             -- Sole frame owner for the hidden placeholder (B2). Keep ticking even
             -- while the output is revealed (Show pressed) so the dots resume
@@ -1566,10 +1568,14 @@ The provider read about %1% of it (%2 tokens) and answered from that part. The r
             if not hidden_output_visible then
                 streamDialog._input_widget:setText(hiddenDisplay(), true)
             end
-            animation_task = UIManager:scheduleIn(0.4, updateAnimation)
+            UIManager:scheduleIn(0.4, updateAnimation)
         end
     end
-    animation_task = UIManager:scheduleIn(0.4, updateAnimation)
+    -- Holds the FUNCTION (UIManager:scheduleIn returns nothing and unschedule
+    -- takes the action, as for poll_task): cleanup and stopWaitingAnimation
+    -- drop the pending tick through it
+    animation_task = updateAnimation
+    UIManager:scheduleIn(0.4, updateAnimation)
 
     -- Mark streaming as active (for update checker to defer popups)
     _G.KOAssistantStreaming = true
@@ -2128,9 +2134,19 @@ The provider read about %1% of it (%2 tokens) and answered from that part. The r
                         -- in koassistant/request/gpt_query.lua. macOS sends only the marker (no body), so
                         -- error_body_lines is empty and we fall back to the marker text, which is
                         -- already clean ("HTTP <code>: <message>" from BaseHandler.formatNon200).
-                        local marker_text = line:sub(#PROTOCOL_NON_200 + 1)
+                        local marker_text = line:sub(#PROTOCOL_NON_200 + 1):match("^%s*(.-)%s*$")
                         local body = table.concat(error_body_lines):match("^%s*(.-)%s*$") or ""
-                        local clean = (#body > 0 and extractApiError(body)) or marker_text:match("^%s*(.-)%s*$")
+                        local clean = #body > 0 and extractApiError(body) or nil
+                        if clean then
+                            -- The status code is the marker's, the sentence the body's:
+                            -- keep both, as the macOS path does
+                            local code = marker_text:match("^HTTP%s+(%d+)") or marker_text:match("^Error%s+(%d+)")
+                            if code and not clean:match("^HTTP%s+%d+") then
+                                clean = "HTTP " .. code .. ": " .. clean
+                            end
+                        else
+                            clean = marker_text
+                        end
                         if not clean or clean == "" then clean = "Request failed" end
                         -- result_buffer must hold ONLY the clean message. Clear in place
                         -- (closures hold this upvalue by reference).

@@ -117,12 +117,70 @@ function Notebook.generateFilename(document_path, doc_props)
         stem = document_path:match("([^/]+)%.[^%.]+$") or "Notebook"
     end
 
-    -- Length cap
+    -- Length cap, in bytes, on a whole character: a cut inside a CJK character
+    -- made a name the filesystem refuses
     if #stem > 100 then
-        stem = stem:sub(1, 100)
+        stem = (require("koassistant.request.scope_resolver").utf8Head(stem, 100):gsub("%s+$", ""))
     end
 
     return stem .. ".md"
+end
+
+--- The book a vault/central notebook was created for: its front matter's
+--- book_path (nil for a file without one: made by hand, or before front matter)
+local function recordedBookPath(notebook_path)
+    local f = io.open(notebook_path, "r")
+    if not f then return nil end
+    local head = f:read(2048) or ""
+    f:close()
+    if head:sub(1, 3) ~= "---" then return nil end
+    local quoted = head:match("\nbook_path:%s*\"(.-)\"\n")
+    if not quoted then return nil end
+    return (quoted:gsub("\\(.)", "%1"))
+end
+
+--- Whether the file at a generated name may serve this book: created for it,
+--- for a book no longer at its recorded place (moved or re-added, its link
+--- lost with the sidecar), or made by hand. Another book still at its recorded
+--- path keeps its file: two editions with one author and title used to share
+--- one notebook, and Delete Notebook on either removed both.
+local function fileServes(notebook_path, document_path)
+    local recorded = recordedBookPath(notebook_path)
+    if not recorded or recorded == document_path then return true end
+    return lfs.attributes(recorded, "mode") == nil
+end
+
+--- The next free name beside a taken one: "stem (2).md", "stem (3).md", ...
+local function freeName(base_dir, filename)
+    local stem, ext = filename:match("^(.*)(%.md)$")
+    if not stem then stem, ext = filename, "" end
+    for n = 2, 99 do
+        local candidate = string.format("%s (%d)%s", stem, n, ext)
+        if lfs.attributes(base_dir .. "/" .. candidate, "mode") == nil then return candidate end
+    end
+    return string.format("%s (%d)%s", stem, os.time(), ext)
+end
+
+--- The vault/central file name this book is linked to (the index, then the
+--- per-book ref), or nil for a book without a notebook yet
+local function linkedFilename(document_path)
+    local index = G_reader_settings:readSetting("koassistant_notebook_index", {})
+    local entry = index[document_path]
+    if entry and entry.filename then return entry.filename end
+    local doc_settings = SafeDocSettings.resolve(document_path)
+    local ref = doc_settings:readSetting("koassistant_notebook_ref")
+    if ref and ref.filename then return ref.filename end
+    return nil
+end
+
+--- Whether the file getPath names is this book's: always in sidecar mode and
+--- for a linked book; a book without a link owns the file at its generated
+--- name only when that file serves it (see fileServes)
+function Notebook.ownsPath(document_path, path)
+    local features = getFeatures()
+    if (features.notebook_save_location or "sidecar") == "sidecar" then return true end
+    if linkedFilename(document_path) then return true end
+    return fileServes(path, document_path)
 end
 
 --- Generate YAML frontmatter for a notebook file (vault/central mode only)
@@ -239,18 +297,10 @@ function Notebook.getPath(document_path)
     local base_dir = Notebook.getBaseDir(features)
     if not base_dir then return nil end
 
-    -- Fast path: check index for cached filename
-    local index = G_reader_settings:readSetting("koassistant_notebook_index", {})
-    local entry = index[document_path]
-    if entry and entry.filename then
-        return base_dir .. "/" .. entry.filename
-    end
-
-    -- Fallback: check the per-book ref (BookStore facade via SafeDocSettings)
-    local doc_settings = SafeDocSettings.resolve(document_path)
-    local ref = doc_settings:readSetting("koassistant_notebook_ref")
-    if ref and ref.filename then
-        return base_dir .. "/" .. ref.filename
+    -- The index, then the per-book ref (BookStore facade via SafeDocSettings)
+    local linked = linkedFilename(document_path)
+    if linked then
+        return base_dir .. "/" .. linked
     end
 
     -- New notebook: generate filename (collision check happens in create())
@@ -281,7 +331,9 @@ function Notebook.exists(document_path)
     local path = Notebook.getPath(document_path)
     if not path then return false end
     local attr = lfs.attributes(path)
-    if attr and attr.mode == "file" then return true end
+    -- A book without a link whose generated name is another book's file has
+    -- no notebook yet: create() gives it the next free name
+    if attr and attr.mode == "file" then return Notebook.ownsPath(document_path, path) end
     -- Lazy sidecar migration only applies in sidecar mode
     local features = getFeatures()
     if (features.notebook_save_location or "sidecar") == "sidecar" then
@@ -655,7 +707,7 @@ end
 --- @return string|nil content The notebook content or nil if not found
 function Notebook.read(document_path)
     local path = Notebook.getPath(document_path)
-    if not path then return nil end
+    if not path or not Notebook.ownsPath(document_path, path) then return nil end
 
     local file = io.open(path, "r")
     if not file then
@@ -681,7 +733,7 @@ end
 --- @return table|nil stats Table with size, modified, and optional filename
 function Notebook.getStats(document_path)
     local path = Notebook.getPath(document_path)
-    if not path then return nil end
+    if not path or not Notebook.ownsPath(document_path, path) then return nil end
 
     local attr = lfs.attributes(path)
     if not attr or attr.mode ~= "file" then return nil end
@@ -764,15 +816,23 @@ function Notebook.create(document_path)
         if not base_dir then return false, "No notebook directory configured" end
         final_filename = Notebook.generateFilename(document_path, doc_props)
         notebook_path = base_dir .. "/" .. final_filename
-        -- If file already exists, adopt it (likely same book moved/re-added)
+        -- A file of that name already there: adopt it when it may serve this
+        -- book (the same book re-added, or a file made by hand); another book
+        -- still at the path the file records keeps it, and this one takes the
+        -- next free name
         if lfs.attributes(notebook_path, "mode") == "file" then
-            logger.info("KOAssistant Notebook: Adopting existing notebook:", final_filename)
-            doc_settings:saveSetting("koassistant_notebook_ref", {
-                filename = final_filename,
-                created = os.time(),
-            })
-            doc_settings:flush()
-            return true, nil
+            if fileServes(notebook_path, document_path) then
+                logger.info("KOAssistant Notebook: Adopting existing notebook:", final_filename)
+                doc_settings:saveSetting("koassistant_notebook_ref", {
+                    filename = final_filename,
+                    created = os.time(),
+                })
+                doc_settings:flush()
+                return true, nil
+            end
+            final_filename = freeName(base_dir, final_filename)
+            notebook_path = base_dir .. "/" .. final_filename
+            logger.info("KOAssistant Notebook: name taken by another book, using", final_filename)
         end
     end
 

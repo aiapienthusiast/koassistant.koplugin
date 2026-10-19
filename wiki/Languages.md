@@ -51,9 +51,9 @@ The AI response language changes the default reply language for every action; th
 Right-to-left answers are shown in plain text, which renders their fonts properly, aligned to the right:
 
 - **Dictionary and translate windows** switch when your dictionary or translation language is right-to-left: Arabic, Classical Arabic, Persian or Urdu. A custom language you typed counts only when spelled exactly as in this list. The dictionary also keeps mixed entries (an Arabic headword with an English pronunciation guide) in the right order: see [Dictionary and Translation](Dictionary-and-Translation#right-to-left-languages).
-- **Chat and artifact windows** (X-Ray, X-Ray (Simple), Analyze, Summary) check the answer itself and switch to right-to-left mode when Arabic-script letters (Arabic, Persian, Urdu) outnumber Latin ones.
+- **Chat and artifact windows** (X-Ray, X-Ray (Simple), Analyze, Summary) check the answer itself and switch to right-to-left mode when right-to-left letters (Arabic, Hebrew, Persian, Urdu, Syriac and the other right-to-left scripts) outnumber Latin ones.
 
-The switches are **Settings → Display Settings → Rendering → Text Mode for RTL Dictionary**, **Text Mode for RTL Translate** and **Auto RTL mode for Chat**, all on by default ([Chat Windows](Chat-Windows#markdown-and-plain-text)); your Markdown or plain-text preference is kept when the content is not predominantly right-to-left. Fonts that do not render at all are a KOReader font question: see [Troubleshooting](Troubleshooting#font-issues-with-arabic-and-other-right-to-left-scripts).
+The switches are **Settings → Display Settings → Rendering → Text Mode for RTL Dictionary**, **Text Mode for RTL Translate** and **Auto RTL mode for Chat**, all on by default ([Chat Windows](Chat-Windows#markdown-and-plain-text)); your Markdown or plain-text preference is kept when the content is not predominantly right-to-left. In the Markdown view every paragraph is laid out in its own direction, so a mixed chat reads right block by block ([Chat Windows](Chat-Windows#markdown-and-plain-text)). Fonts that do not render at all are a KOReader font question: see [Troubleshooting](Troubleshooting#font-issues-with-arabic-and-other-right-to-left-scripts).
 
 ## The interface's language
 

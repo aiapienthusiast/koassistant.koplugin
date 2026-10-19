@@ -360,37 +360,42 @@ local function handleNonStreamingBackground(background_fn, provider, on_complete
                 logger.warn("KOAssistant: non-200 raw body:",
                     (body and body ~= "") and body:sub(1, 2000) or "(empty)")
             end
+            -- The marker's status line ("Error 429: Too Many Requests" on the
+            -- device transport, "HTTP 429: <sentence>" on the macOS one)
+            local err_msg = full_response:sub(marker_pos + #PROTOCOL_NON_200)
+            if err_msg then
+                err_msg = err_msg:gsub("^%s*", ""):gsub("%s*$", "")  -- trim
+            end
+            local status_code = err_msg and (err_msg:match("^HTTP%s+(%d+)") or err_msg:match("^Error%s+(%d+)"))
             if body and #body > 0 then
                 local decode_ok, j = pcall(json.decode, body)
                 if decode_ok and type(j) == "table" then
-                    -- Type-checked: luajson decodes JSON null to a truthy sentinel, which
-                    -- would survive the old `or` chain and blow up on concatenation below.
-                    local err = (type(j.error) == "table" and type(j.error.message) == "string"
-                            and j.error.message)
-                        or (type(j.message) == "string" and j.message)
-                        or nil
+                    -- One reader for every error shape (BaseHandler.errorSentence):
+                    -- luajson decodes JSON null to a truthy sentinel, so it type-checks
+                    local err, err_obj = BaseHandler.errorSentence(j)
                     if err and err ~= "" then
                         -- The provider's machine code (error.code / type / status)
                         -- says what the sentence cannot: OpenAI's insufficient_quota
                         -- carries Gemini's ordinary 429 sentence word for word.
-                        err = require("koassistant.request.rate_limits").withErrorCode(err,
-                            type(j.error) == "table" and j.error or nil)
+                        err = require("koassistant.request.rate_limits").withErrorCode(err, err_obj)
                         -- 429 bodies name the exact bucket (per-day vs per-minute, requests
                         -- vs tokens) and the retry delay in error.details[]; error.message
                         -- alone says only "you exceeded your current quota".
                         local detail = ModelConstraints.formatQuotaDetails(j)
                         if detail then err = err .. "\n\n" .. detail end
+                        -- The status code is the marker's, the sentence the body's: keep
+                        -- both, as the macOS path does (the Try-again dialog keys on the
+                        -- code when the wording names no rate limit)
+                        if status_code and not err:match("^HTTP%s+%d+") then
+                            err = "HTTP " .. status_code .. ": " .. err
+                        end
                         finish(false, nil, ModelConstraints.decorateRequestError(
                             err, provider, dispatch_model, config))
                         return
                     end
                 end
             end
-            -- Fallback to status line from marker
-            local err_msg = full_response:sub(marker_pos + #PROTOCOL_NON_200)
-            if err_msg then
-                err_msg = err_msg:gsub("^%s*", ""):gsub("%s*$", "")  -- trim
-            end
+            -- Fallback to the status line from the marker
             finish(false, nil, ModelConstraints.decorateRequestError(
                 err_msg ~= "" and err_msg or "Request failed",
                 provider, dispatch_model, config))

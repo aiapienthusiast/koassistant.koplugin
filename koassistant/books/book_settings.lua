@@ -986,7 +986,8 @@ function BookSettings.applyMetadataOverride(metadata, doc_settings)
     if t == nil and a == nil then return metadata end
     local m = {}
     if metadata then for k, v in pairs(metadata) do m[k] = v end end
-    if t ~= nil then m.title = t end
+    -- An AI title is a title: the file-name mark comes off with it
+    if t ~= nil then m.title = t; m.title_from_filename = nil end
     if a ~= nil then
         m.author = a
         m.author_clause = (a ~= "") and (" by " .. a) or ""

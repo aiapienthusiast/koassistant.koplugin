@@ -129,19 +129,39 @@ end
 --- @param code number|string HTTP status code
 --- @param err_body string Raw response body
 --- @return string Single-line "Error <code>: <message>"
+--- The sentence an error body carries, in the shapes providers use:
+--- {"error":{"message":...}} (OpenAI, Anthropic, Gemini; Gemini also as a
+--- one-element array), {"error":"..."} (Ollama), {"message":"..."}, and
+--- {"detail":"..."} or {"detail":[{"msg":...}]} (FastAPI hosts: NVIDIA, vLLM).
+--- The marker writer and both error consumers (gpt_query, stream_handler) read
+--- through this, so a shape is handled on every transport or on none.
+--- @param j table  the decoded body
+--- @return string|nil sentence
+--- @return table|nil err  the error OBJECT when the body has one (its machine codes)
+function BaseHandler.errorSentence(j)
+    if type(j) ~= "table" then return nil end
+    local function str(v) return type(v) == "string" and v ~= "" and v or nil end
+    local e = j.error
+    if e == nil and type(j[1]) == "table" then e = j[1].error end
+    if type(e) == "table" then
+        return str(e.message) or (e.code and ("API error " .. tostring(e.code))) or str(e.status), e
+    end
+    local detail = j.detail
+    if type(detail) == "table" and type(detail[1]) == "table" then detail = detail[1].msg end
+    return str(e) or str(j.message) or str(detail), nil
+end
+
 function BaseHandler.formatNon200(code, err_body)
     local msg = err_body
     if type(err_body) == "string" and err_body ~= "" then
         local ok, j = pcall(json.decode, err_body)
         if ok and type(j) == "table" then
-            local e = j.error or (type(j[1]) == "table" and j[1].error)
-            if type(e) == "table" then
-                msg = e.message or e.status or err_body
+            local sentence, e = BaseHandler.errorSentence(j)
+            if sentence then
+                msg = sentence
                 -- The machine code rides with the sentence (see RateLimits.withErrorCode):
                 -- this line is what the macOS streaming path shows and classifies.
-                if type(e.message) == "string" then msg = RateLimits.withErrorCode(e.message, e) end
-            elseif type(e) == "string" then
-                msg = e
+                if e and type(e.message) == "string" then msg = RateLimits.withErrorCode(e.message, e) end
             end
         end
     end

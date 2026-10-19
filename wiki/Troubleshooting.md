@@ -73,7 +73,7 @@ Still not working? The font must be Noto Emoji itself (the fallback menu lists n
 
 If text renders wrongly in the Markdown view, switch to plain text: on the fly with the **MD ON / TXT ON** button in the chat window, or for good with **Settings → Display Settings → Rendering → View Mode → Plain Text**. The Markdown view uses KOReader's MuPDF HTML renderer, which lacks per-glyph font fallback; plain text uses KOReader's native text rendering with proper font support, and keeps headers, bold and lists readable ([Chat Windows](Chat-Windows#markdown-and-plain-text)).
 
-Right-to-left answers already switch to plain text on their own (dictionary and translate windows by their language, chat and artifact windows by their content), unless you turned the automatic switches off ([Languages](Languages#right-to-left-scripts)).
+Right-to-left answers already switch to plain text on their own (dictionary and translate windows by their language, chat and artifact windows by their content), unless you turned the automatic switches off ([Languages](Languages#right-to-left-scripts)). Direction itself is not a font question: in the Markdown view every paragraph is laid out in its own direction ([Chat Windows](Chat-Windows#markdown-and-plain-text)).
 
 ## "No API key found"
 

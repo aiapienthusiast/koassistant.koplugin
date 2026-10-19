@@ -616,6 +616,26 @@ TestRunner:test("the plan tip fires once, names the default, and only on the sub
     TestRunner:assertTrue(not api:find(ModelConstraints.HINT_HEADS.plan, 1, true), "not on the API provider")
 end)
 
+TestRunner:suite("every error shape through one reader (BaseHandler.errorSentence)")
+
+TestRunner:test("the shapes providers use, on the marker writer and both consumers", function()
+    local BaseHandler = require("koassistant.api.base")
+    local json = require("json")
+    local function sentence(body) return (BaseHandler.errorSentence(json.decode(body))) end
+    TestRunner:assertEqual(sentence('{"error":{"message":"m"}}'), "m", "object")
+    TestRunner:assertEqual(sentence('[{"error":{"message":"m"}}]'), "m", "Gemini's array")
+    TestRunner:assertEqual(sentence('{"error":"model not found"}'), "model not found", "Ollama's string")
+    TestRunner:assertEqual(sentence('{"message":"m"}'), "m", "bare message")
+    TestRunner:assertEqual(sentence('{"detail":"Not authenticated"}'), "Not authenticated", "FastAPI string")
+    TestRunner:assertEqual(sentence('{"detail":[{"loc":["body"],"msg":"field required"}]}'), "field required", "FastAPI array")
+    TestRunner:assertEqual(sentence('{"error":{"code":429}}'), "API error 429", "code fallback")
+    TestRunner:assertNil(BaseHandler.errorSentence({ choices = {} }), "no error")
+    TestRunner:assertEqual(StreamHandler.extractApiError('{"error":"model not found"}'), "model not found", "stream: Ollama")
+    TestRunner:assertEqual(StreamHandler.extractApiError('{"detail":"Not authenticated"}'), "Not authenticated", "stream: FastAPI")
+    TestRunner:assertEqual(BaseHandler.formatNon200(404, '{"error":"model not found"}'), "HTTP 404: model not found", "marker: Ollama")
+    TestRunner:assertEqual(BaseHandler.formatNon200(401, '{"detail":"Not authenticated"}'), "HTTP 401: Not authenticated", "marker: FastAPI")
+end)
+
 --------------------------------------------------------------------------------
 -- Summary
 --------------------------------------------------------------------------------
