@@ -149,21 +149,28 @@ function SetupWizard.probeLanguageF(features)
     return false
 end
 
--- Privacy counts as configured when ANY of the consent keys is explicitly
--- present — they are nil until a preset or toggle writes them, and an
--- explicit false is as much a decision as a true.
+-- Privacy counts as configured when the reader decided: a preset was picked
+-- or Ask kept (the stamp features._privacy_decided, written by main.lua's
+-- applyPrivacyPreset and the update face's Keep Ask; Default (Ask) clears
+-- every key, so the keys alone cannot tell a decision from a fresh install),
+-- or any of the consent keys is explicitly present (a value set by hand; an
+-- explicit false is as much a decision as a true). The detail is the preset
+-- the values match (Default (Ask), Allow everything, Block everything, Custom).
 local PRIVACY_KEYS = {
     "enable_highlights_sharing", "enable_annotations_sharing",
     "enable_notebook_sharing", "enable_basic_stats", "enable_advanced_stats",
-    "enable_book_text_extraction", "enable_library_scanning",
+    "enable_book_text_extraction", "enable_library_scanning", "nearby_text_sharing",
 }
 function SetupWizard.probePrivacyF(features)
-    for _idx, key in ipairs(PRIVACY_KEYS) do
-        if features[key] ~= nil then
-            return true, key
+    local decided = features._privacy_decided == true
+    if not decided then
+        for _idx, key in ipairs(PRIVACY_KEYS) do
+            if features[key] ~= nil then decided = true; break end
         end
     end
-    return false
+    if not decided then return false end
+    local Gates = require("koassistant.request.privacy_gates")
+    return true, require("koassistant.ui.data_access").presetLabel(Gates.presetOf(features))
 end
 
 -- gui_keys = features.api_keys, file_keys = decoded apikeys.lua table (or
@@ -376,9 +383,9 @@ local function probeRaw(plugin, name)
         return decided, detail
     elseif name == "gestures" then
         local data = readGesturesData(plugin)
-        local count, first = SetupWizard.scanGestures(data)
+        local count = SetupWizard.scanGestures(data)
         if count > 0 then
-            return true, T(_("%1 assigned (%2)"), count, first)
+            return true, T(_("%1 assigned"), count)
         end
         return false
     end
@@ -854,6 +861,10 @@ function SetupWizard.stepPrivacy(plugin, ctx, next_step)
         first_row = {
             { text = _("Keep Ask"), callback = function()
                 UIManager:close(dialog)
+                -- a decision: the topic menu reads it as set (the probe)
+                local ff = feats(plugin)
+                ff._privacy_decided = true
+                saveFeats(plugin, ff)
                 table.insert(ctx.results, _("Privacy: Ask"))
                 advanceOnce()
             end },
@@ -1225,7 +1236,7 @@ function SetupWizard.showTopicMenu(plugin)
         end
         table.insert(buttons, {
             {
-                text = topic.label .. "  —  " .. suffix,
+                text = topic.label .. ": " .. suffix,
                 align = "left",
                 callback = function()
                     UIManager:close(dialog)
@@ -1355,7 +1366,7 @@ function SetupWizard.showDevMenu(plugin)
                         local configured, detail = probeRaw(plugin, name)
                         local state = configured and "✓" or "✗"
                         table.insert(lines, string.format("%s %s%s", state, name,
-                            detail and (" — " .. detail) or ""))
+                            detail and (": " .. detail) or ""))
                     end
                     local ff = feats(plugin)
                     table.insert(lines, "")

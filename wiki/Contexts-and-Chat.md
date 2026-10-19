@@ -289,7 +289,7 @@ Set up the bundle in Settings → Chat & Export Settings → Quick Answer Preset
 - **Turn Reasoning Off** (default on): models that can't disable reasoning drop to their lowest level.
 - **Turn Web Search Off** and **Turn Book Tools Off** (both default on).
 - **Skip Domain Lens** and **Skip Book Background** (both default off): leave the domain, or the book's Background note, out of Quick chats.
-- **Leave Book Info Out** (default off): a Quick chat sends nothing that names the book, as Book info set to None does ([Privacy and Data](Privacy-and-Data#what-gets-sent)); the actions that answer only from what the AI knows about the book then say they cannot run while Quick is on.
+- **Leave Book Info Out** (default off): a Quick chat sends nothing that names the book, as Book info set to None does ([Privacy and Data](Privacy-and-Data#what-gets-sent)). It reaches Quick chats and the actions that take the Quick preset (Explain, Quick Explain, Elaborate, Explain in Context); an action that does not take it, About or Reviews say, keeps the Book info in effect even from a chat with the ⚡ chip on.
 - **Behavior:** keep the current one (default), its Mini variant ("Mini of current style"), a specific behavior (the built-in Terse suits Quick Answer), or none. Actions that pin a behavior are unaffected.
 - **Model override:** Keep current (default), Fastest for provider, a tier of the active provider, or a pinned model; it applies to that chat only, and your default model is untouched. Custom providers keep the current model unless you have given them tier placements.
 

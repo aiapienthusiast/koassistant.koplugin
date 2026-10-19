@@ -21718,6 +21718,9 @@ local function applyPrivacyPreset(self, preset, touchmenu_instance, timeout)
   local before = {}
   for k, v in pairs(f) do before[k] = v end
   require("koassistant.request.privacy_gates").applyPreset(f, preset)
+  -- A pick is a decision: the Setup Wizard's privacy probe reads this stamp,
+  -- since Default (Ask) leaves no key behind to tell it from a fresh install
+  f._privacy_decided = true
   self.settings:saveSetting("features", f)
   self.settings:flush()
   self:updateConfigFromSettings()
