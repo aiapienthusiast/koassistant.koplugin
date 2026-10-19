@@ -10053,8 +10053,11 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         configuration = copy
                         -- The chat's allowance rides the private copy for the
                         -- replies; the shared table drops it so no later request
-                        -- inherits it (B395)
+                        -- inherits it (B395). The dialog's Send book info switch
+                        -- likewise: the chat's own actions keep it on the copy,
+                        -- the next dialog starts on the setting
                         shared_features._data_once = nil
+                        shared_features._session_book_info = nil
                         -- Per-chat conversation id on the private copy (B285 / #107)
                         configuration.conversation_id = history.conversation_id
                         -- Send's long-press pick rides the private copy to the bake
@@ -11037,13 +11040,17 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         on_close = function() refreshInputDialog() end,
                     })
                 end }})
-                -- Send book info (2026-10-19): a check mark when the Book info in
-                -- effect goes with this chat's messages and actions; a tap switches
-                -- it for this chat alone (_session_book_info, which lives on the
-                -- config through the dialog's life like _session_quick_answer:
-                -- consumed at the dispatch, scrubbed at the other entries), a hold
-                -- opens the setting (For this book / Global). Inline requires
-                -- (upvalue cap).
+            end
+            -- Send book info (2026-10-19): a check mark when the Book info in
+            -- effect goes with this chat's messages and actions; a tap switches
+            -- it for this chat alone (_session_book_info, which lives on the
+            -- config through the dialog's life like _session_quick_answer:
+            -- consumed at the dispatch, ended by the dialog's close, scrubbed at
+            -- the other entries), a hold opens the setting (For this book /
+            -- Global). Not in the closed book's dialog, whose actions answer
+            -- from what the AI knows and cannot run without the title (the
+            -- maintainer, 2026-10-19). Inline requires (upvalue cap).
+            if document_path and input_context ~= "book_filebrowser" then
                 local bi_ds = require("koassistant.storage.doc_settings").resolve(document_path, ui_instance)
                 local bi_on = BookSettings.resolveBookInfoLevel(bi_ds, configuration.features,
                     configuration.features._session_quick_answer) ~= "none"
@@ -11107,7 +11114,9 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
         end
         if configuration and configuration.features then
             configuration.features._session_library = nil
-            -- The chat's allowance ends with it (B395)
+            -- The dialog's Send book info switch ends with it, and the chat's
+            -- allowance (B395)
+            configuration.features._session_book_info = nil
             configuration.features._data_once = nil
         end
     end
@@ -11128,7 +11137,9 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
         end
         if configuration and configuration.features then
             configuration.features._session_library = nil
-            -- The chat's allowance ends with it (B395)
+            -- The dialog's Send book info switch ends with it, and the chat's
+            -- allowance (B395)
+            configuration.features._session_book_info = nil
             configuration.features._data_once = nil
         end
         return true

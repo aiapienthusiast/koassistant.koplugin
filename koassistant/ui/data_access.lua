@@ -568,7 +568,9 @@ end
 function DataAccess.refuseNoTitle(plugin, spec)
     logger.dbg("KOAssistant data access: refused, no title, layer", spec.layer, "for", spec.action_name or "?")
     local where
-    if spec.layer == "quick" then
+    if spec.layer == "chat" then
+        where = _("for this chat (the gear menu's Send book info is off); turn it on there to run it")
+    elseif spec.layer == "quick" then
         where = _("for Quick Answer chats (Settings → Chat & Export Settings → Quick Answer Preset → Leave Book Info Out); turn Quick off for this chat to run it")
     elseif spec.layer == "book" then
         where = _("for this book (Book Settings → Privacy & Data)")
@@ -637,7 +639,9 @@ function DataAccess.askForDispatch(plugin, action, features, ui, config, run_fn)
         -- and no AI-knowledge action accepts Quick
         if BookSettings.resolveBookInfoLevel(ds, cf, cf._quick_answer_active) == "none" then
             local layer = "global"
-            if BookSettings.resolveBookInfoLevel(ds, cf) ~= "none" then
+            if cf._session_book_info == false then
+                layer = "chat"   -- the dialog's Send book info switch (over Quick and the setting)
+            elseif BookSettings.resolveBookInfoLevel(ds, cf) ~= "none" then
                 layer = "quick"
             elseif ds and ds:readSetting(BookSettings.KEY_BOOK_INFO) == "none" then
                 layer = "book"
