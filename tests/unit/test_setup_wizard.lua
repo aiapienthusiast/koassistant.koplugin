@@ -27,7 +27,7 @@ local function setupPaths()
     return plugin_dir, tests_dir
 end
 
-setupPaths()
+local PLUGIN_DIR = setupPaths()
 
 require("mock_koreader")
 
@@ -373,6 +373,38 @@ TestRunner:test("every state has its own label, all under the static head", func
         TestRunner:assertFalse(seen[label], "label reused for " .. state)
         seen[label] = true
     end
+end)
+
+--------------------------------------------------------------------------
+-- Button marks (B511): the (KOA) mark's probe and its place in the wizard
+--------------------------------------------------------------------------
+
+TestRunner:test("marks: untouched boxes are shown but not decided; any explicit key decides; the detail says where", function()
+    local ok, detail = SetupWizard.probeMarksF({})
+    TestRunner:assertFalse(ok, "untouched boxes are not a decision")
+    TestRunner:assertEqual(detail, "shown", "the default shows the mark everywhere")
+    local ok2, detail2 = SetupWizard.probeMarksF({ show_koa_suffix_in_highlight = true,
+        show_koa_suffix_in_dictionary = true, show_koa_suffix_in_file_browser = true })
+    TestRunner:assertTrue(ok2, "Show the mark writes true: a kept default reads as decided")
+    TestRunner:assertEqual(detail2, "shown")
+    local ok3, detail3 = SetupWizard.probeMarksF({ show_koa_suffix_in_highlight = false,
+        show_koa_suffix_in_dictionary = false, show_koa_suffix_in_file_browser = false })
+    TestRunner:assertTrue(ok3)
+    TestRunner:assertEqual(detail3, "hidden")
+    local ok4, detail4 = SetupWizard.probeMarksF({ show_koa_suffix_in_file_browser = false })
+    TestRunner:assertTrue(ok4, "one box unticked by hand is a decision")
+    TestRunner:assertEqual(detail4, "shown in 2 of 3 menus")
+end)
+
+TestRunner:test("marks: the step sits in the chain, the topic menu, the probes and the inspector", function()
+    local f = assert(io.open(PLUGIN_DIR .. "/koassistant/ui/setup_wizard.lua", "r"))
+    local src = f:read("*a")
+    f:close()
+    local n = select(2, src:gsub('key = "marks"', ""))
+    TestRunner:assertEqual(n, 2, "CHAIN and the topic menu list the step")
+    TestRunner:assertTrue(src:find("marks = true", 1, true) ~= nil, "PROBED lists it")
+    TestRunner:assertTrue(src:find('"icons", "marks", "gestures"', 1, true) ~= nil, "the probe inspector lists it")
+    TestRunner:assertTrue(src:find('elseif name == "marks" then', 1, true) ~= nil, "probeRaw answers it")
 end)
 
 return TestRunner:summary()

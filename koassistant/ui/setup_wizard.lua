@@ -173,6 +173,29 @@ function SetupWizard.probePrivacyF(features)
     return true, require("koassistant.ui.data_access").presetLabel(Gates.presetOf(features))
 end
 
+-- The (KOA) mark on KOAssistant's buttons (B511): three per-surface keys
+-- (Constants.KOA_SUFFIX_KEYS, shown unless false). Decided when any of them
+-- is explicitly present; Show the mark writes true, so a kept default reads
+-- as a decision (the privacy stamp's lesson). The detail says where it shows.
+function SetupWizard.probeMarksF(features)
+    local Constants = require("koassistant.core.constants")
+    local decided, shown, total = false, 0, 0
+    for _surface, key in pairs(Constants.KOA_SUFFIX_KEYS) do
+        total = total + 1
+        if features[key] ~= nil then decided = true end
+        if features[key] ~= false then shown = shown + 1 end
+    end
+    local detail
+    if shown == total then
+        detail = _("shown")
+    elseif shown == 0 then
+        detail = _("hidden")
+    else
+        detail = T(_("shown in %1 of %2 menus"), shown, total)
+    end
+    return decided, detail
+end
+
 --- The providers with a usable key: a GUI key or an apikeys.lua key that is
 --- not the placeholder (a multi-key entry counts when it holds anything),
 --- plus the OpenAI Subscription when its token is present. Sorted. Pure.
@@ -404,6 +427,8 @@ local function probeRaw(plugin, name)
             detail = _("decided without font install")
         end
         return decided, detail
+    elseif name == "marks" then
+        return SetupWizard.probeMarksF(f)
     elseif name == "gestures" then
         local data = readGesturesData(plugin)
         local count = SetupWizard.scanGestures(data)
@@ -1094,6 +1119,57 @@ end
 
 -- The two panels, each in its own mode (the Quick Actions panel is a reader
 -- gesture, the Quick Settings panel a file-browser one)
+-- The (KOA) mark on KOAssistant's buttons (B511; the maintainer 2026-10-19:
+-- "useful if you have many plugins that add buttons"): one answer writes the
+-- three per-surface keys. A CONFIGURE step: the welcome chain, the topic
+-- menu, and the update check once for a reader who never touched the boxes.
+function SetupWizard.stepMarks(plugin, ctx, next_step)
+    if not ctx.force and SetupWizard.probe(plugin, "marks") then
+        return next_step()
+    end
+    local UIManager = require("ui/uimanager")
+    local ButtonDialog = require("ui/widget/buttondialog")
+    local Constants = require("koassistant.core.constants")
+
+    local dialog
+    local advancing = false
+    local function advanceOnce()
+        if advancing then return end
+        advancing = true
+        next_step()
+    end
+    local function pick(shown)
+        UIManager:close(dialog)
+        local f = feats(plugin)
+        for _surface, key in pairs(Constants.KOA_SUFFIX_KEYS) do f[key] = shown end
+        saveFeats(plugin, f)
+        logger.dbg("KOAssistant wizard: button marks", shown and "shown" or "hidden")
+        table.insert(ctx.results, shown and _("Button marks: (KOA) shown") or _("Button marks: (KOA) hidden"))
+        advanceOnce()
+    end
+    local now = select(2, SetupWizard.probeMarksF(feats(plugin)))
+    dialog = ButtonDialog:new{
+        title = _("BUTTON MARKS") .. "\n" ..
+            _("KOAssistant adds buttons to the highlight menu, the dictionary popup and the file browser's long-press menu, beside KOReader's own. A (KOA) mark at the end of their names tells them apart, which helps when several plugins add buttons there.") .. "\n" ..
+            _("For example: Explain (KOA)") .. "\n" ..
+            T(_("The mark is %1 now."), now),
+        buttons = {
+            {
+                { text = _("Show the mark"), callback = function() pick(true) end },
+                { text = _("Hide the mark"), callback = function() pick(false) end },
+            },
+            {
+                { text = _("Decide later"), callback = function()
+                    UIManager:close(dialog)
+                    advanceOnce()
+                end },
+            },
+        },
+        tap_close_callback = advanceOnce,
+    }
+    UIManager:show(dialog)
+end
+
 local PANELS = {
     { id = "koassistant_quick_actions", label = _("Quick Actions"), section_key = "gesture_reader" },
     { id = "koassistant_ai_settings", label = _("Quick Settings"), section_key = "gesture_fm" },
@@ -1263,11 +1339,12 @@ local CHAIN = {
     { key = "privacy",  fn = function(...) return SetupWizard.stepPrivacy(...) end },
     { key = "language", fn = function(...) return SetupWizard.stepLanguage(...) end },
     { key = "icons",    fn = function(...) return SetupWizard.stepIcons(...) end },
+    { key = "marks",    fn = function(...) return SetupWizard.stepMarks(...) end },
     { key = "gestures", fn = function(...) return SetupWizard.stepGestures(...) end },
     { key = "finish",   fn = function(...) return SetupWizard.stepFinish(...) end },
 }
 
-local PROBED = { provider = true, privacy = true, language = true, icons = true, gestures = true }
+local PROBED = { provider = true, privacy = true, language = true, icons = true, marks = true, gestures = true }
 
 -- opts: force (run every step), mark_complete (write the completion flag at
 -- the finish step: the first interaction passes this; dev runs never do),
@@ -1317,6 +1394,7 @@ function SetupWizard.showTopicMenu(plugin)
         { key = "privacy",  label = _("Privacy"),    step = SetupWizard.stepPrivacy },
         { key = "language", label = _("Language"),   step = SetupWizard.stepLanguage },
         { key = "icons",    label = _("Icons"),      step = SetupWizard.stepIcons },
+        { key = "marks",    label = _("Button marks"), step = SetupWizard.stepMarks },
         { key = "gestures", label = _("Gestures"),   step = SetupWizard.stepGestures },
     }
 
@@ -1459,7 +1537,7 @@ function SetupWizard.showDevMenu(plugin)
                 callback = function()
                     UIManager:close(dialog)
                     local lines = { _("Wizard probes (raw state):"), "" }
-                    for _idx, name in ipairs({ "provider", "privacy", "language", "icons", "gestures" }) do
+                    for _idx, name in ipairs({ "provider", "privacy", "language", "icons", "marks", "gestures" }) do
                         local configured, detail = probeRaw(plugin, name)
                         local state = configured and "✓" or "✗"
                         table.insert(lines, string.format("%s %s%s", state, name,
