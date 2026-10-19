@@ -973,8 +973,8 @@ function SetupWizard.stepPrivacy(plugin, ctx, next_step)
             f._privacy_notice_pending = nil
             saveFeats(plugin, f)
         end
-        head = _("PRIVACY & DATA (redone in this version)") .. "\n" ..
-            _("Every kind of data is Ask now: the first action that wants your highlights, notes, notebook, book text, book list or reading habits asks you, and your answer can be kept for the book. Your books' own values and your trusted providers were kept.")
+        head = _("PRIVACY & DATA") .. "\n" ..
+            _("This version changed how privacy works. Every kind of data is now set to Ask: the first action that needs your highlights, notes, notebook, book text, book list or reading habits asks you first. Your books' own settings and your trusted providers were kept.")
         first_row = {
             { text = _("Keep Default (Ask)"), callback = function()
                 UIManager:close(dialog)
@@ -988,15 +988,15 @@ function SetupWizard.stepPrivacy(plugin, ctx, next_step)
         }
     else
         head = _("PRIVACY & DATA") .. "\n" ..
-            _("What may KOAssistant send to your AI provider? Your highlights, notes, notebook, book text, book list and reading habits each have one value: Ask, Allow or Never.")
+            _("What may KOAssistant send to your AI provider? Your highlights, notes, notebook, book text, book list and reading habits each have one setting: Ask, Allow or Never.")
         first_row = {
             { text = _("Default (Ask)"), callback = function() applyPreset("applyPrivacyPresetDefault", _("Default (Ask)")) end },
         }
     end
     dialog = ButtonDialog:new{
         title = head .. "\n" ..
-            _("Ask, the default, means the first action that wants a kind of data asks you, and your answer can be kept for the book. A book can also have its own values (Book Settings > Privacy & Data); a book's Never always wins.") .. "\n" ..
-            _("Spoiler protection is separate and ON by default: responses respect your reading position."),
+            _("With Ask, the first action that needs a kind of data asks you, and your answer can be kept for the book. A book can have its own settings, and a book's Never always wins.") .. "\n" ..
+            _("Spoiler protection is separate and on by default."),
         buttons = {
             first_row,
             {
@@ -1449,7 +1449,7 @@ function SetupWizard.runUpdate(plugin)
     local InfoMessage = require("ui/widget/infomessage")
     local version = SetupWizard.baseVersion(SetupWizard.thisVersion())
     local NOTES = {
-        privacy = _("Privacy was redone: every kind of data is Ask now, so the first action that wants one asks you (your books' own values and trusted providers were kept)."),
+        privacy = _("Privacy: every kind of data is now set to Ask, so the first action that needs it asks you first."),
         icons = _("Emoji icons: a check that they show, and the emoji font installed when KOReader has none."),
         gestures = _("The panels' gestures: every KOReader gesture on offer, a gesture in use replaceable."),
     }

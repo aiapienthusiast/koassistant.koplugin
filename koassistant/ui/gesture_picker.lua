@@ -120,9 +120,11 @@ GesturePicker.SECTIONS = {
 }
 
 local BY_ID = {}
+local order = 0
 for _idx, section in ipairs(GesturePicker.SECTIONS) do
     for _jdx, slot in ipairs(section.slots) do
-        BY_ID[slot.id] = { section = section, slot = slot }
+        order = order + 1
+        BY_ID[slot.id] = { section = section, slot = slot, order = order }
     end
 end
 
@@ -204,8 +206,15 @@ function GesturePicker.bindingsFor(data, action_id)
             end
         end
     end
+    -- by mode, then in the picker's own order (tap corners first, multiswipes
+    -- last), so a panel's corner reads before any other gesture bound to it
+    -- (the maintainer, 2026-10-19: alphabetical put a device's multiswipes
+    -- first and they read as defaults); an unknown slot id last, by name
     table.sort(out, function(a, b)
         if a.section ~= b.section then return a.section < b.section end
+        local oa = BY_ID[a.slot] and BY_ID[a.slot].order or math.huge
+        local ob = BY_ID[b.slot] and BY_ID[b.slot].order or math.huge
+        if oa ~= ob then return oa < ob end
         return a.slot < b.slot
     end)
     return out

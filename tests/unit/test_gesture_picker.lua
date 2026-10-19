@@ -145,10 +145,21 @@ TestRunner:test("bindingsFor lists an action's slots in both modes, sorted; bind
     local b = GesturePicker.bindingsFor(data, "koassistant_quick_actions")
     TestRunner:assertEqual(#b, 3)
     TestRunner:assertEqual(b[1].section, "gesture_fm", "file browser first (sorted by section key)")
-    TestRunner:assertEqual(b[2].slot, "double_tap_left_side")
-    TestRunner:assertEqual(b[3].slot, "tap_right_bottom_corner")
+    TestRunner:assertEqual(b[2].slot, "tap_right_bottom_corner", "within a mode, the picker's order: a tap corner before a double tap")
+    TestRunner:assertEqual(b[3].slot, "double_tap_left_side")
     TestRunner:assertEqual(GesturePicker.bindingsText(data, "koassistant_quick_actions"),
-        "Tap bottom-right corner (file browser), Double-tap left side (reader), Tap bottom-right corner (reader)")
+        "Tap bottom-right corner (file browser), Tap bottom-right corner (reader), Double-tap left side (reader)")
+    -- a device's own multiswipes sort after the corner, never before it (they read as defaults)
+    local multi = GesturePicker.bindingsFor({ gesture_reader = {
+        multiswipe_north_south_north = { koassistant_quick_actions = true },
+        multiswipe_south_north_south = { koassistant_quick_actions = true },
+        tap_right_bottom_corner = { koassistant_quick_actions = true },
+        some_future_gesture = { koassistant_quick_actions = true },
+    } }, "koassistant_quick_actions")
+    TestRunner:assertEqual(multi[1].slot, "tap_right_bottom_corner")
+    TestRunner:assertEqual(multi[2].slot, "multiswipe_north_south_north")
+    TestRunner:assertEqual(multi[3].slot, "multiswipe_south_north_south")
+    TestRunner:assertEqual(multi[4].slot, "some_future_gesture", "an id this copy does not know comes last")
     TestRunner:assertEqual(GesturePicker.bindingsText(data, "nothing"), nil)
     TestRunner:assertEqual(#GesturePicker.bindingsFor(nil, "x"), 0)
 end)
