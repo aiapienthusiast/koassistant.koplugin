@@ -58,6 +58,11 @@ function BookSettings.resolveBookInfoLevel(doc_settings, features, quick_on)
     -- effect without Quick, and Title & author where that level is None.
     local run = features and (features._run_book_info
         or (type(features._run_variant) == "table" and features._run_variant.book_info)) or nil
+    -- The dialog's own switch (the gear menu's Send book info, _session_book_info:
+    -- true = on, false = off for this chat), under a run option
+    if run == nil and features and features._session_book_info ~= nil then
+        run = features._session_book_info and "on" or "none"
+    end
     if run == "none" then return "none" end
     if quick_on and run ~= "on"
             and require("koassistant.ui.dialogs").quickPresetForces("book_info", true, features) then

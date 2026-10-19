@@ -378,6 +378,17 @@ TestRunner:test("the hold menu's Without / With book info for one run (B345, 202
         { book_info_in_chat = "basic", _run_book_info = "on" }), "basic", "With where the book says None: Title & author")
     TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
         { book_info_in_chat = "basic", _run_variant = { quick = true } }), "full", "a variant without the facet changes nothing")
+    -- the dialog's Send book info switch: under a run option, over Quick and the standing level
+    TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
+        { book_info_in_chat = "basic", _session_book_info = false }), "none", "switched off for this chat")
+    TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(none_ds,
+        { book_info_in_chat = "basic", _session_book_info = true }), "basic", "switched on where the book says None")
+    TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
+        { book_info_in_chat = "basic", quick_preset_book_info_off = true, _session_book_info = true }, true), "full",
+        "on beats the Quick switch")
+    TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
+        { book_info_in_chat = "basic", _session_book_info = false, _run_book_info = "on" }), "full",
+        "a run option beats the chat's switch")
 end)
 
 -- Per-book quiz overrides: per-book field > global > built-in default

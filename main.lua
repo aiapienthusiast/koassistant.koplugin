@@ -20874,6 +20874,8 @@ function AskGPT:_scrubContextFeatures(features)
   -- would exempt a facet from the preset in the NEXT quick chat
   features._session_web_touched = nil
   features._session_tools_touched = nil
+  -- The dialog's Send book info switch is dialog-scoped (2026-10-19)
+  features._session_book_info = nil
   -- A run option (B345) is set just-in-time and consumed at dispatch; a stray
   -- dies here
   features._run_variant = nil

@@ -509,10 +509,6 @@ local function buildUnifiedRequestConfig(config, domain_context, action, plugin)
                     features._run_reasoning = run_variant.reasoning
                 end
             end
-            -- Without / With book info for this run (resolveBookInfoLevel reads it)
-            if run_variant.book_info == "none" or run_variant.book_info == "on" then
-                features._run_book_info = run_variant.book_info
-            end
             run_web = run_variant.web
             if run_web ~= nil then
                 -- A web pick is a touched facet: the Quick preset stands down for
@@ -522,6 +518,11 @@ local function buildUnifiedRequestConfig(config, domain_context, action, plugin)
         end
         if run_variant.provider then
             run_model = { provider = run_variant.provider, model = run_variant.model }
+        end
+        -- Without / With book info for this run (resolveBookInfoLevel reads it):
+        -- every action, the artifact builders included
+        if run_variant.book_info == "none" or run_variant.book_info == "on" then
+            features._run_book_info = run_variant.book_info
         end
     end
     -- Quick Answer reaches predefined actions only by opt-in (accept_quick_answer
@@ -3701,6 +3702,7 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
         config.features._chat_view_mode = nil
         config.features._session_reasoning = nil
         config.features._session_model = nil
+        config.features._session_book_info = nil
         -- Run option (B345): set just-in-time by executeDirectAction / the input
         -- dialog; the copy in temp_config is consumed by the bake
         config.features._run_variant = nil
@@ -7029,6 +7031,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
     local session_spoiler_free = ((configuration or {}).features or {})._session_spoiler_free
     local session_book_tools = ((configuration or {}).features or {})._session_book_tools
     local session_web_search = ((configuration or {}).features or {})._session_web_search
+    local session_book_info = ((configuration or {}).features or {})._session_book_info
     -- NOTE: the _selection_context_window transient (pre-extracted selection window,
     -- surrounding context) deliberately STAYS on configuration.features — no dialog
     -- local. It is consumed at its two read points (handlePredefinedPrompt + freeform
@@ -7044,6 +7047,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
         configuration.features._session_spoiler_free = nil
         configuration.features._session_book_tools = nil
         configuration.features._session_web_search = nil
+        configuration.features._session_book_info = nil
         -- Stale-request hygiene: a per-chat web value from an earlier session must not
         -- outlive its dialog (it is normally consumed at bake/dispatch).
         configuration.features._web_search_active = nil
@@ -10299,7 +10303,8 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
             end
             require("koassistant.ui.action_hold").showSend(plugin, {
                 title = hint,
-                session = { quick = configuration.features._session_quick_answer == true },
+                session = { quick = configuration.features._session_quick_answer == true,
+                    book_info = configuration.features._session_book_info },
                 run = function(variant)
                     configuration.features._send_run_variant = variant
                     send_button.callback()
@@ -10406,6 +10411,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                                 quick = configuration.features._session_quick_answer == true,
                                 web = indicator_opts.effective_web_search,
                                 web_touched = configuration.features._session_web_touched == true,
+                                book_info = configuration.features._session_book_info,
                             },
                         })
                     end,
@@ -10491,6 +10497,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                                 quick = configuration.features._session_quick_answer == true,
                                 web = indicator_opts.effective_web_search,
                                 web_touched = configuration.features._session_web_touched == true,
+                                book_info = configuration.features._session_book_info,
                             },
                         })
                     end,
@@ -10767,6 +10774,8 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
             if session_book_tools ~= nil then configuration.features._session_book_tools = session_book_tools end
             -- Web: same explicit-false preservation as tools.
             if session_web_search ~= nil then configuration.features._session_web_search = session_web_search end
+            -- Send book info (the gear menu): explicit false preserved too
+            if session_book_info ~= nil then configuration.features._session_book_info = session_book_info end
             -- Scope-chip state is config-resident; this marker keeps it across the reopen
             -- (a fresh open clears it — see the consume block at the dialog top).
             configuration.features._session_keep_scope = true
@@ -11032,6 +11041,31 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         on_close = function() refreshInputDialog() end,
                     })
                 end }})
+                -- Send book info (2026-10-19): a check mark when the Book info in
+                -- effect goes with this chat's messages and actions; a tap switches
+                -- it for this chat alone (_session_book_info), a hold opens the
+                -- setting (For this book / Global). Inline requires (upvalue cap).
+                local bi_ds = require("koassistant.storage.doc_settings").resolve(document_path, ui_instance)
+                local bi_on = BookSettings.resolveBookInfoLevel(bi_ds, configuration.features,
+                    configuration.features._session_quick_answer) ~= "none"
+                table.insert(gear_buttons, {{
+                    text = (bi_on and "\u{2713} " or "") .. _("Send book info"),
+                    callback = function()
+                        UIManager:close(gear_menu)
+                        configuration.features._session_book_info = not bi_on
+                        refreshInputDialog()
+                    end,
+                    hold_callback = function()
+                        UIManager:close(gear_menu)
+                        BookSettings.showBookInfoPicker({
+                            plugin = plugin, ui = ui_instance, document_path = document_path,
+                            on_close = function()
+                                configuration.features._session_book_info = nil
+                                refreshInputDialog()
+                            end,
+                        })
+                    end,
+                }})
             end
             -- Library context: toggle to hide/show library scan actions
             if input_context == "library" then

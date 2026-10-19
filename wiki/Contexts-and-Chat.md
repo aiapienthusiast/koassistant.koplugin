@@ -224,6 +224,7 @@ Under the text field come, in order:
 - **Restore last input:** shown when there is typed text to restore.
 - **Toolbar Buttons…:** which session chips appear ([Choosing which chips appear](#choosing-which-chips-appear)).
 - **Book Settings** (book and highlight chats): per-book overrides for the book you're chatting about ([Book Settings and Book Hub](Book-Settings-and-Book-Hub)).
+- **Send book info** (book and highlight chats): checked when the book info goes with this chat's messages and the actions run from it. Tap it to switch for this chat alone (off sends nothing that names the book, as Book info set to None does; on sends the title and author even where None is set). Hold it for the setting itself, For this book or Global ([Privacy and Data](Privacy-and-Data#what-gets-sent)).
 - **Hide Library Scan Actions** (library chats; **Show Library Scan Actions** brings them back).
 
 ### Actions in the input dialog

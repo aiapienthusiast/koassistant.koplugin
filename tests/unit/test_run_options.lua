@@ -65,6 +65,10 @@ TestRunner:test("book info: the half that changes the level in effect, only wher
     b = RunOptions.buttons(RunOptions.DEFAULTS, PROSE, state({ book_info = { applies = false } }))
     TestRunner:assertEqual(labels(b), "Quick answer | claude-haiku-4-5 | No reasoning | With web search",
         "a general action, or one that cannot run without the title: no button")
+    b = RunOptions.buttons(RunOptions.DEFAULTS, { id = "summary", use_response_caching = true },
+        state({ book_info = { applies = true, level = "basic" } }))
+    TestRunner:assertEqual(labels(b), "Without book info | claude-haiku-4-5",
+        "an artifact builder takes the model and the book info, nothing else")
     local send = RunOptions.list({}, { send = true })
     for _idx, e in ipairs(send) do
         TestRunner:assertEqual(e.book_info, nil, "Send's menu has no book info entry")

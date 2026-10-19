@@ -236,6 +236,14 @@ function RunOptions.button(e, model_only, st)
         -- The model a normal tap already uses changes nothing
         if p == st.base.provider and m == st.base.model then return nil end
         v.provider, v.model = p, m
+    elseif e.book_info ~= nil then
+        -- Without / With book info (a stopgap of 2026-10-19 until the presets
+        -- plan settles a chat without the book): the half that changes the
+        -- Book info in effect for this run. Every action with a book in scope,
+        -- the artifact builders included (a privacy choice, not a quality one)
+        local b = st.book_info
+        if not b or not b.applies or (e.book_info == "none") == (b.level == "none") then return nil end
+        v.book_info = e.book_info
     elseif model_only then
         return nil
     elseif e.quick ~= nil then
@@ -249,13 +257,6 @@ function RunOptions.button(e, model_only, st)
         local w = st.web
         if w.pinned or not w.capable or (e.web == true) == w.on then return nil end
         v.web = e.web == true
-    elseif e.book_info ~= nil then
-        -- Without / With book info (a stopgap of 2026-10-19 until the presets
-        -- plan settles a chat without the book): the half that changes the
-        -- Book info in effect for this run
-        local b = st.book_info
-        if not b or not b.applies or (e.book_info == "none") == (b.level == "none") then return nil end
-        v.book_info = e.book_info
     else
         return nil
     end
@@ -374,9 +375,14 @@ function RunOptions.stateFor(plugin, action, opts)
     -- actions, DataAccess.needsTitle); the level in effect counts the Quick
     -- state of this menu
     local book_info = { applies = false }
-    if ds and not model_only and action.context ~= "general" and action.context ~= "library"
+    if ds and action.context ~= "general" and action.context ~= "library"
             and not require("koassistant.ui.data_access").needsTitle(action, nil) then
-        book_info = { applies = true, level = BookSettings.resolveBookInfoLevel(ds, features, quick_on) }
+        -- the dialog's own switch (the gear menu's Send book info) counts
+        local fv = features
+        if session.book_info ~= nil then
+            fv = setmetatable({ _session_book_info = session.book_info }, { __index = features })
+        end
+        book_info = { applies = true, level = BookSettings.resolveBookInfoLevel(ds, fv, quick_on) }
     end
 
     -- Key filter, as in every quick picker: disarmed while no real key exists
