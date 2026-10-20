@@ -8916,8 +8916,9 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
         chapter.presets = require("koassistant.request.scope_resolver").chapterPresets({
           chapter = info,
           current_page = info.current_page,
-          -- Per-book > global posture; the session Spoiler chip never applies to
-          -- predefined actions (buildUnifiedRequestConfig clears it for action ~= nil).
+          -- Per-book > global posture; the session Spoiler chip does not reach
+          -- this popup's defaults (the request's own spoiler line follows it:
+          -- buildUnifiedRequestConfig; R5 of the Quick audit, 2026-10-20)
           spoiler_free = require("koassistant.books.book_settings").resolveSpoilerFree(
               self.ui.doc_settings, features),
         })

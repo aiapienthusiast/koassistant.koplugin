@@ -532,4 +532,22 @@ TestRunner:test("saved chat state keeps a run option's model and reasoning; a ch
     TestRunner:assertEqual(cs.model.provider, "anthropic", "a later chat pick wins")
 end)
 
+TestRunner:test("namesBook: the book-info run option is offered only where the book's name goes", function()
+    local NB = RunOptions.namesBook
+    TestRunner:assertEqual(NB({ context = "highlight", include_book_context = false,
+        prompt = "Translate: {highlighted_text}" }), false, "Translate never names the book")
+    TestRunner:assertEqual(NB({ context = "highlight", prompt = "Define: {highlighted_text}" }),
+        false, "a highlight action without the flag or a placeholder")
+    TestRunner:assertEqual(NB({ context = "highlight", include_book_context = true,
+        prompt = "Explain: {highlighted_text}" }), true, "include_book_context")
+    TestRunner:assertEqual(NB({ context = "highlight", prompt = "In \"{title}\": {highlighted_text}" }),
+        true, "a title placeholder")
+    TestRunner:assertEqual(NB({ context = "highlight", prompt = "{highlighted_text}{author_clause}" }),
+        true, "an author placeholder")
+    TestRunner:assertEqual(NB({ context = "book", prompt = "Summarize." }), true, "a book action")
+    TestRunner:assertEqual(NB({ context = "both", prompt = "Connect: {highlighted_text}" }), true,
+        "a highlight-and-book action")
+    TestRunner:assertEqual(NB(nil), false, "no action")
+end)
+
 return TestRunner:summary()

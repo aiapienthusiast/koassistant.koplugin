@@ -224,7 +224,7 @@ Under the text field come, in order:
 - **Restore last input:** shown when there is typed text to restore.
 - **Toolbar Buttons…:** which session chips appear ([Choosing which chips appear](#choosing-which-chips-appear)).
 - **Book Settings** (book and highlight chats): per-book overrides for the book you're chatting about ([Book Settings and Book Hub](Book-Settings-and-Book-Hub)).
-- **Send book info** (book and highlight chats about the open book; not in the closed book's dialog, whose actions answer from what the AI knows and cannot run without the title): checked when the book info goes with this dialog's messages and the actions run from it. Tap it to switch for this dialog and the chat it starts (off sends nothing that names the book, as Book info set to None does, and an action that cannot run without the title says so; on sends the title and author even where None is set). The switch ends when the dialog closes. Hold it for the setting itself, For this book or Global ([Privacy and Data](Privacy-and-Data#what-gets-sent)).
+- **Send book info** (book and highlight chats about the open book; not in the closed book's dialog, whose actions answer from what the AI knows and cannot run without the title): checked when the book info goes with this dialog's messages and the actions run from it (under Quick with Leave Book Info Out on, the check mark follows the typed messages and the actions that take Quick; the others still send the book info). Tap it to switch for this dialog and the chat it starts (off sends nothing that names the book, as Book info set to None does, and an action that cannot run without the title says so; on sends the title and author even where None is set). The switch ends when the dialog closes. Hold it for the setting itself, For this book or Global ([Privacy and Data](Privacy-and-Data#what-gets-sent)).
 - **Hide Library Scan Actions** (library chats; **Show Library Scan Actions** brings them back).
 
 ### Actions in the input dialog
@@ -285,7 +285,7 @@ Tapping the **⚡ Quick** chip applies a configurable bundle to the chat: a brev
 
 Set up the bundle in Settings → Chat & Export Settings → Quick Answer Preset (also from the chip's long-press → **Preset settings…**):
 
-- **Quick Answer On by Default:** start new chats with the chip already on (default off). Still overridable per chat, and per book from Book Settings or the chip's long-press.
+- **Quick Answer On by Default:** start new chats with the chip already on (default off). It also runs the five actions that take Quick (Explain, Quick Explain, ELI5, Elaborate, Explain in Context) as Quick from the highlight menu, gestures and the panels. Still overridable per chat, and per book from Book Settings or the chip's long-press.
 - **Brevity nudge:** how strongly it asks for brevity: **Standard** (a short, direct reply with no preamble; the default), **Ultra-brief** (a hard ceiling of three short sentences), or **Off**.
 - **Turn Reasoning Off** (default on): models that can't disable reasoning drop to their lowest level.
 - **Turn Web Search Off** and **Turn Book Tools Off** (both default on).

@@ -291,6 +291,23 @@ end
 --- @param action table
 --- @param opts table { surface, book_file (file-browser row), session = { quick, web, web_touched } (input dialog chips),
 ---   base = {provider, model}|nil (a chat's own model: the reply's long-press on Send) }
+--- Whether a run of this action carries the book's name at all: a book or
+--- library action does (its book line, or the books it is about), a highlight
+--- action only with include_book_context or a title or author placeholder in
+--- its prompt (the dispatch's rule for the highlight context). Translate,
+--- Quick Define, Dictionary, Deep Analysis and Grammar never do, so the
+--- Without book info / With book info run option would change nothing for them
+--- (the Quick audit of 2026-10-20, finding 5). Pure.
+function RunOptions.namesBook(action)
+    if type(action) ~= "table" then return false end
+    if action.context ~= "highlight" then return true end
+    if action.include_book_context then return true end
+    local p = action.prompt
+    if type(p) ~= "string" then return false end
+    return (p:find("{title}", 1, true) or p:find("{author}", 1, true)
+        or p:find("{author_clause}", 1, true)) ~= nil
+end
+
 function RunOptions.stateFor(plugin, action, opts)
     opts = opts or {}
     local ModelConstraints = require("koassistant.request.model_constraints")
@@ -371,11 +388,12 @@ function RunOptions.stateFor(plugin, action, opts)
     end
 
     -- Book info for this run: a book or highlight action with a book in
-    -- scope, never one that cannot run without the title (the AI-knowledge
-    -- actions, DataAccess.needsTitle); the level in effect counts the Quick
-    -- state of this menu
+    -- scope that names the book (namesBook), never one that cannot run
+    -- without the title (the AI-knowledge actions, DataAccess.needsTitle);
+    -- the level in effect counts the Quick state of this menu
     local book_info = { applies = false }
     if ds and action.context ~= "general" and action.context ~= "library"
+            and RunOptions.namesBook(action)
             and not require("koassistant.ui.data_access").needsTitle(action, nil) then
         -- the dialog's own switch (the gear menu's Send book info) counts
         local fv = features

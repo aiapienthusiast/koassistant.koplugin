@@ -239,7 +239,7 @@ Built-in actions that cannot work without a kind of data check before anything i
 
 The check follows the same rules as the extraction: a trusted provider is judged by its own column, a book's Never fails it, and for a book that isn't open it reads that book's own values.
 
-With **Book info** at None (for all books, for the book, through the Quick Answer preset's **Leave Book Info Out** in a Quick chat, or for one chat with the gear menu's **Send book info** off), a book action that answers from what the AI knows about the book (About, About Author, Find Similar, Historical Context, Related Thinkers, Reviews, Suggest from Library, X-Ray (Simple)) stops the same way: it cannot work without the title, and the message says where None is set.
+With **Book info** at None (for all books, for the book, or for one chat with the gear menu's **Send book info** off; the Quick preset's **Leave Book Info Out** reaches none of these actions, since they do not take Quick), a book action that answers from what the AI knows about the book (About, About Author, Find Similar, Historical Context, Related Thinkers, Reviews, Suggest from Library, X-Ray (Simple)) stops the same way: it cannot work without the title, and the message says where None is set.
 
 ### Highlights, Recap and X-Ray
 
