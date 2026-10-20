@@ -8629,8 +8629,8 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
         -- Data-access indicator context: the 🌐 follows-default indicator tracks the
         -- SESSION Web chip (which dialog-launched nil-flag actions follow), and (🔍)
         -- marks smart-retrieval actions when tools could run this session (book
-        -- text not Never, a tool-capable provider, the open book) AND the session
-        -- Tools chip is on (the chip governs the popup's default pick).
+        -- text not Never, a tool-capable provider, the open book), whatever the
+        -- Tools chip says (the chip governs the popup's default pick only).
         local indicator_opts = {
             effective_web_search = session_web_search == true,
             -- A9 (b) verify round: hide an ACCEPTING action's follows-default
@@ -8645,12 +8645,14 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                 configuration.features._session_quick_answer == true,
                 configuration.features),
             quick_on = configuration.features._session_quick_answer == true,
-            -- offer = true: the mark describes the button, so book text on Ask
-            -- counts (the Send asks first) and only Never hides it, like the
-            -- Tools chip; without it the mark needed Allow and never showed
-            -- once the upgrade reset every switch to Ask (2026-10-20)
-            tools_allowed = session_book_tools == true
-                and BookToolRunner.smartRetrievalAllowed(configuration, ui_instance, { offer = true }) == true,
+            -- The source popup's own rule (B479): its Smart retrieval row is
+            -- offered whenever the session could run tools (a tool-capable
+            -- model, the open book, the book's text not Never: on Ask the Run
+            -- asks first), and the Tools chip only decides whether the popup
+            -- preselects it. The mark follows that rule, chip on or off
+            -- (maintainer 2026-10-20): chip-gated it hid for most readers, and
+            -- needing Allow hid it for everyone after the Ask reset.
+            tools_allowed = BookToolRunner.smartRetrievalAllowed(configuration, ui_instance, { offer = true }) == true,
         }
         -- Session chips (book_scoped_controls_plan.md §4): [Domain][Web][Tools][Scope]
         -- [Spoiler] by membership (gear menu → "Toolbar Buttons…"), replacing the old

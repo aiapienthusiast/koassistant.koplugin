@@ -111,7 +111,9 @@ TestRunner:test("the input dialog's (🔍) counts book text on Ask: offer = true
     local block = src:match("local indicator_opts = {(.-)\n        }")
     assert(block, "the input dialog's indicator_opts block is found")
     TestRunner:has(block, "smartRetrievalAllowed(configuration, ui_instance, { offer = true })",
-        "the mark asks the offer gate (Ask counts, only Never hides it), like the Tools chip")
+        "the mark asks the offer gate (Ask counts, only Never hides it), like the popup's row")
+    TestRunner:hasnt(block, "session_book_tools",
+        "the Tools chip does not gate the mark: the popup offers the row either way (B479)")
 end)
 
 print("")

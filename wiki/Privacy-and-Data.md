@@ -119,7 +119,7 @@ If your device supports emoji fonts, turn on **Settings → Display Settings →
 - 📚 library catalog
 - 📊 reading habits (reading engagement groups)
 - 🌐 web search, always on for this action; (🌐) web search through your default, which is on (in an input dialog, through its Web chip)
-- (🔍), in an input dialog: the action may search the book with AI Book Tools (smart retrieval is available, the book's text is not set to Never, and the Tools chip is on; on Ask the run asks first)
+- (🔍), in an input dialog: the action may search the book with AI Book Tools (smart retrieval is available and the book's text is not set to Never; on Ask the run asks first; the Tools chip only decides whether the source popup preselects it)
 - ⚡, in an input dialog with Quick on: the action takes the Quick preset; the buttons without it run as they always do
 
 ## Per-Book Values
