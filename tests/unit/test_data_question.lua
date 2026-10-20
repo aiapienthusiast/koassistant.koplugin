@@ -482,11 +482,46 @@ TestRunner:test("the dispatch: the window asks, its re-entry runs; no folder ref
         and not main:find("No scan folder is ticked", 1, true), "the folder refusals are gone")
     TestRunner:assertTrue(main:find('require("koassistant.ui.data_access").recentFolders(self)', 1, true),
         "the next read: a default folder or one picked before")
-    TestRunner:assertTrue(source("koassistant/ui/dialogs.lua"):find("local library_scan_available = library_toggle_on\n", 1, true),
-        "the library dialog offers the scan actions without a folder")
+    TestRunner:assertTrue(source("koassistant/ui/dialogs.lua"):find(
+        "local library_scan_available = library_toggle_on\n        and #require(\"koassistant.ui.data_access\").scanFolders(plugin, true, {}) > 0", 1, true),
+        "the library dialog greys its scan actions until a folder is ticked there")
     local reg = source("koassistant/storage/storage_registry.lua")
     TestRunner:assertTrue(reg:find('"library_recent_folders",', 1, true)
         and reg:find('"index_scan_folders", "library_recent_folders" }', 1, true), "registered, and follows a folder's move")
+end)
+
+print("  [the library dialog]")
+
+TestRunner:test("a library dialog run: its own ticks, no window; nothing ticked = no list, or a refusal", function()
+    local analyze = { id = "analyze_library", text = "Analyze Library", context = "library",
+        use_library = true, requires = { "library" } }
+    local recommend = { id = "recommend_books", text = "Recommend", context = "library", use_library = true }
+    local p = makePlugin({ features = { library_scan_folders = { DIR_B } } })
+    p._session_scan_folders = { DIR_A }
+    local cf = { is_library_context = true, provider = "anthropic" }
+    TestRunner:assertEqual(DataAccess.askForDispatch(p, analyze, cf, nil, { provider = "anthropic" }, function() end), true)
+    TestRunner:assertEqual(lastButtons(), "Allow once | Always allow | More… | Cancel", "the question alone: no folder rows")
+    TestRunner:assertTrue(tostring(shown[#shown].title):find("the books in tests", 1, true),
+        "it names the folders ticked in the dialog")
+    local empty = makePlugin({ features = {} })
+    TestRunner:assertEqual(DataAccess.askForDispatch(empty, recommend, { is_library_context = true, provider = "anthropic" },
+        nil, { provider = "anthropic" }, function() end), false, "nothing ticked: Recommend runs without the list, unasked")
+    local before = #shown
+    TestRunner:assertEqual(DataAccess.askForDispatch(empty, analyze, { is_library_context = true, provider = "anthropic" },
+        nil, { provider = "anthropic" }, function() error("must not run") end), true)
+    TestRunner:assertTrue(#shown == before + 1 and tostring(shown[#shown].text):find("No scan folder is ticked", 1, true),
+        "an action that needs the list and slips past the greying is refused")
+end)
+
+TestRunner:test("the library boxes: Library Scan on every editor screen, reading habits under it", function()
+    local pm = source("koassistant/ui/prompts_manager.lua")
+    local _a, any_ctx = pm:gsub("if state%.context and state%.use_library then", "")
+    TestRunner:assertEqual(any_ctx, 2, "the new-action wizard and a custom action's settings")
+    TestRunner:assertTrue(pm:find("if state.use_library_base and state.use_library then", 1, true),
+        "a built-in action's settings: on the actions that use the library")
+    TestRunner:assertTrue(pm:find("override.use_library = state.use_library", 1, true), "a built-in's change is kept")
+    TestRunner:assertTrue(pm:find("-- read back, or the save (updatePrompt) would drop it\n        use_library = prompt.use_library or false,", 1, true),
+        "a custom action's settings load the flag their save writes")
 end)
 
 SDS.resolve = saved.resolve

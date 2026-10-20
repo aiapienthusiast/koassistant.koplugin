@@ -58,15 +58,17 @@ A required kind (X-Ray's book text, say) on Never is a short refusal that names 
 
 ### The folder window
 
-A run that reads your library shows the scan folders it would read in a window before it goes, when Library Scan is on Ask or when the action cannot work without the list (Suggest from Library, Next Read, Discover New, Analyze Library, Challenge My Taste). On Never there is no window: an action that needs the list is refused, with a button to Privacy & Data.
+Outside the library dialog, a run that reads your library (Suggest from Library, Find Similar, the end-of-book suggestion) shows the scan folders it would read in a window before it goes, when Library Scan is on Ask or when the action cannot work without the list (Suggest from Library). On Never there is no window: an action that needs the list is refused, with a button to Privacy & Data.
 
-- **The folders.** The first rows are the folders this run would read, ticked: your default scan folders (**Settings → Reading & Library → Default Scan Folders**), or, for a run started from the library dialog, the folders ticked under its **Library Scan ▾**. Below them come your other default folders and the last five folders you added on the fly, unticked. A tap ticks or unticks a folder; a long-press shows its full path.
+- **The folders.** The first rows are your default scan folders (**Settings → Reading & Library → Default Scan Folders**), ticked. Below them come the last five folders you added on the fly, unticked. A tap ticks or unticks a folder; a long-press shows its full path.
 - **+ Add folder…** picks another folder for this run. It comes ticked and is remembered among the recent folders, but it never becomes a default scan folder.
-- **On Ask the window is the question.** The answers sit under the folders: **Allow once**, **Always allow**, **Continue without** (when the action can do without the list: Find Similar and Recommend), **More…** and **Cancel**. Next Read also offers **Allow once, without your reading habits**.
-- **On Allow the window has Run and Cancel**, and only the five actions that need the list show it. Find Similar and Recommend show no window on Allow: they read your default scan folders (in the library dialog, the folders ticked there) or, with none, go without the list.
-- **A folder has to be ticked** for an action that needs the list: until one is, its answer buttons are grayed out. With nothing ticked, Find Similar and Recommend offer **Continue without**, which runs them without your library scan. Reading habits ride the library's books, so with no folder ticked they do not go either.
+- **On Ask the window is the question.** The answers sit under the folders: **Allow once**, **Always allow**, **Continue without** (when the action can do without the list, as Find Similar can), **More…** and **Cancel**.
+- **On Allow the window has Run and Cancel**, for an action that needs the list. Find Similar shows no window on Allow: it reads your default scan folders or, with none, goes without the list.
+- **A folder has to be ticked** for an action that needs the list: until one is, its answer buttons are grayed out. With nothing ticked, Find Similar offers **Continue without**, which runs it without your library scan. Reading habits ride the library's books, so with no folder ticked they do not go either.
 
-No folder has to be set beforehand: the window is where you pick. The library dialog's typed Send is the other way in: it uses that dialog's own **Library Scan ▾** ticks and, on Ask, asks first, naming the folders ([Contexts and Chat](Contexts-and-Chat#library-mode)).
+No folder has to be set beforehand: the window is where you pick.
+
+**In the library dialog** the folders are picked before the action, under its **Library Scan ▾** ([Contexts and Chat](Contexts-and-Chat#library-mode)), so it has no folder window. Next Read, Discover New, Analyze Library and Challenge My Taste stay grayed out until a folder is ticked there (a default one counts). On Ask, a run asks first and names the ticked folders, with **Allow once, without your reading habits** where the action can also use them; on Allow it just runs. Recommend runs without your library scan when nothing is ticked. The typed Send asks on Ask too, naming the folders, and needs the list when no book is picked under **Items ▾** (it is then the chat's only context).
 
 ### Where it is asked
 

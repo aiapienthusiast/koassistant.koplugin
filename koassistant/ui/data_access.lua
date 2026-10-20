@@ -1107,11 +1107,13 @@ function DataAccess.askForDispatch(plugin, action, features, ui, config, run_fn)
     -- What the run has to send (2026-10-20): an optional kind with nothing
     -- behind it is not asked (Gates.needs opts.exists): the reading habits
     -- without KOReader's statistics. The library is there to pick (round 2):
-    -- the folder window lists the folders the run would read (the library
-    -- dialog's pick for a run started there, else the permanent ones) and
-    -- the recent ones, to tick for this run.
+    -- the folder window lists the default folders and the recent ones, to
+    -- tick for this run. A run started from the library dialog picked its
+    -- folders there, before the action (its Library Scan ▾): no window, the
+    -- question names them.
     local exists = {}
-    local folders = DataAccess.scanFolders(plugin, cf.is_library_context == true, cf)
+    local library_run = cf.is_library_context == true
+    local folders = DataAccess.scanFolders(plugin, library_run, cf)
     if action.use_advanced_stats then
         local okS, StatsReader = pcall(require, "koassistant.books.stats_reader")
         if not (okS and StatsReader and StatsReader.isAvailable and StatsReader.isAvailable()) then
@@ -1120,7 +1122,7 @@ function DataAccess.askForDispatch(plugin, action, features, ui, config, run_fn)
     end
     -- the window answered already (the dispatch's re-entry): its folders
     local picked = type(cf._data_once) == "table" and type(cf._data_once.folders) == "table"
-    if picked then
+    if picked or library_run then
         amounts.book_list, amounts.habits = DataAccess.libraryAmounts(folders)
     else
         amounts.book_list, amounts.habits = DataAccess.windowAmounts()
@@ -1150,14 +1152,26 @@ function DataAccess.askForDispatch(plugin, action, features, ui, config, run_fn)
     local opts = { features = cf, provider = provider, path = path, ui = ui, books = books,
         action_name = action.text or action.id, source = sm, stamps = stamps, nearby = nearby,
         amounts = amounts, hint = action.blocked_hint, exists = exists,
-        folders = not picked and { defaults = folders } or nil }
+        folders = not (picked or library_run) and { defaults = folders } or nil }
     local needs, never_books = DataAccess.needsFor(action, opts)
     local window = opts.folders and DataAccess.folderWindowNeed(needs)
     if not window and #folders == 0 then
         -- no window and no folder (a run that only can use the list, on
-        -- Allow): no list goes, nor the reading habits read from its books
+        -- Allow, or the library dialog with nothing ticked): no list goes,
+        -- nor the reading habits read from its books
         exists.book_list, exists.habits = false, false
         needs, never_books = DataAccess.needsFor(action, opts)
+        -- the library dialog greys an action that needs the list until a
+        -- folder is ticked there; one that gets through is refused
+        for _idx, n in ipairs(library_run and needs or {}) do
+            if n.kind == "book_list" and n.required and n.state ~= "never" then
+                UIManager:show(InfoMessage:new{
+                    text = _("No scan folder is ticked in this library dialog.\n\nTick one under Library Scan."),
+                })
+                drop()
+                return true
+            end
+        end
     end
     local plan = DataAccess.plan(needs)
     if not plan.refused and #plan.asked == 0 and not window then return false end

@@ -2051,6 +2051,12 @@ function PromptsManager:showStep3_Settings(state)
                 self:showStep3_Settings(state)
             end,
         })
+    end
+
+    -- Library Scan and reading habits (library-level, not per-book): the
+    -- habits are read from the library's books, so their box shows once
+    -- Library Scan is ticked, and goes off with it
+    if state.context then
         table.insert(items, {
             text = (state.use_library and "☑ " or "☐ ") .. _("Allow Library Scan"),
             callback = function()
@@ -2063,15 +2069,15 @@ function PromptsManager:showStep3_Settings(state)
                             timeout = 4,
                         })
                     end
+                else
+                    state.use_advanced_stats = false
                 end
                 UIManager:close(self.step3_dialog)
                 self:showStep3_Settings(state)
             end,
         })
     end
-
-    -- Advanced stats checkbox (library-level, not per-book — shown for any context)
-    if state.context then
+    if state.context and state.use_library then
         table.insert(items, {
             text = (state.use_advanced_stats and "☑ " or "☐ ") .. _("Allow reading habits"),
             callback = function()
@@ -3504,6 +3510,7 @@ function PromptsManager:showBuiltinSettingsEditor(prompt)
     local base_use_reading_progress = base_action and base_action.use_reading_progress or false
     local base_use_reading_stats = base_action and base_action.use_reading_stats or false
     local base_use_advanced_stats = base_action and base_action.use_advanced_stats or false
+    local base_use_library = base_action and base_action.use_library or false
     local base_use_notebook = base_action and base_action.use_notebook or false
 
     -- Get base view mode flags for comparison
@@ -3557,6 +3564,8 @@ function PromptsManager:showBuiltinSettingsEditor(prompt)
         use_reading_stats_base = base_use_reading_stats,
         use_advanced_stats = prompt.use_advanced_stats or false,
         use_advanced_stats_base = base_use_advanced_stats,
+        use_library = prompt.use_library or false,
+        use_library_base = base_use_library,
         use_notebook = prompt.use_notebook or false,
         use_notebook_base = base_use_notebook,
         -- View mode flags
@@ -3859,8 +3868,31 @@ function PromptsManager:showBuiltinSettingsDialog(state)
         })
     end
 
-    -- Advanced stats checkbox (library-level, not per-book — shown for any context)
-    if prompt.context then
+    -- Library Scan and reading habits (library-level, not per-book): the
+    -- habits are read from the library's books, so their box shows once
+    -- Library Scan is ticked, and goes off with it
+    if state.use_library_base then
+        table.insert(items, {
+            text = (state.use_library and "☑ " or "☐ ") .. _("Allow Library Scan"),
+            callback = function()
+                state.use_library = not state.use_library
+                if state.use_library then
+                    local features = self.plugin.settings:readSetting("features") or {}
+                    if require("koassistant.request.privacy_gates").summary({ features = features }).book_list.state == "never" then
+                        UIManager:show(InfoMessage:new{
+                            text = _("Library Scan enabled for this action. Note: Library Scan is set to Never (Settings → Privacy & Data), so it is not sent until that changes."),
+                            timeout = 4,
+                        })
+                    end
+                else
+                    state.use_advanced_stats = false
+                end
+                UIManager:close(self.builtin_settings_dialog)
+                self:showBuiltinSettingsDialog(state)
+            end,
+        })
+    end
+    if state.use_library_base and state.use_library then
         table.insert(items, {
             text = (state.use_advanced_stats and "☑ " or "☐ ") .. _("Allow reading habits"),
             callback = function()
@@ -4455,6 +4487,10 @@ function PromptsManager:saveBuiltinOverride(prompt, state)
         override.use_advanced_stats = state.use_advanced_stats
         has_any = true
     end
+    if state.use_library ~= (state.use_library_base or false) then
+        override.use_library = state.use_library
+        has_any = true
+    end
     if state.use_notebook ~= (state.use_notebook_base or false) then
         override.use_notebook = state.use_notebook
         has_any = true
@@ -4566,6 +4602,8 @@ function PromptsManager:showCustomQuickSettings(prompt)
         use_reading_stats = prompt.use_reading_stats or false,
         use_advanced_stats = prompt.use_advanced_stats or false,
         use_notebook = prompt.use_notebook or false,
+        -- read back, or the save (updatePrompt) would drop it
+        use_library = prompt.use_library or false,
         -- View mode flags
         translate_view = prompt.translate_view or false,
         compact_view = prompt.compact_view or false,
@@ -4875,8 +4913,31 @@ function PromptsManager:showCustomQuickSettingsDialog(state)
         })
     end
 
-    -- Advanced stats checkbox (library-level, not per-book — shown for any context)
+    -- Library Scan and reading habits (library-level, not per-book): the
+    -- habits are read from the library's books, so their box shows once
+    -- Library Scan is ticked, and goes off with it
     if state.context then
+        table.insert(items, {
+            text = (state.use_library and "☑ " or "☐ ") .. _("Allow Library Scan"),
+            callback = function()
+                state.use_library = not state.use_library
+                if state.use_library then
+                    local features = self.plugin.settings:readSetting("features") or {}
+                    if require("koassistant.request.privacy_gates").summary({ features = features }).book_list.state == "never" then
+                        UIManager:show(InfoMessage:new{
+                            text = _("Library Scan enabled for this action. Note: Library Scan is set to Never (Settings → Privacy & Data), so it is not sent until that changes."),
+                            timeout = 4,
+                        })
+                    end
+                else
+                    state.use_advanced_stats = false
+                end
+                UIManager:close(self.custom_quick_dialog)
+                self:showCustomQuickSettingsDialog(state)
+            end,
+        })
+    end
+    if state.context and state.use_library then
         table.insert(items, {
             text = (state.use_advanced_stats and "☑ " or "☐ ") .. _("Allow reading habits"),
             callback = function()

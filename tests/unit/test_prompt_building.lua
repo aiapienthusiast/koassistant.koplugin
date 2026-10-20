@@ -2856,8 +2856,9 @@ local function runNearbyTextTests()
             "the Send's private copy takes the chat's allowance; the shared table drops it")
         local _n, closes = dialogs:gsub("configuration.features._data_once = nil\n        end\n", "")
         TestRunner:assertEquals(closes, 2, "both user exits of the dialog end the chat's allowance")
-        TestRunner:assert(dialogs:find('{ kind = "book_list", required = false }', 1, true) ~= nil,
-            "a library chat's book list is optional at Send")
+        TestRunner:assert(dialogs:find('{ kind = "book_list", required = false }', 1, true) ~= nil
+            and dialogs:find('{ kind = "book_list", required = true }', 1, true) ~= nil,
+            "a library chat's list: optional beside picked books, required without them")
         TestRunner:assert(dialogs:find("resolveBookInfoLevel(\n        artifact_ds, configuration.features)", 1, true) ~= nil,
             "the artifact chat's book line follows Book info")
         local main = read("main.lua")

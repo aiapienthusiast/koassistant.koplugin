@@ -8649,9 +8649,11 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
         { features = settings_features, provider = configuration and configuration.provider })
     local has_session_scan = plugin and plugin._session_scan_folders and #plugin._session_scan_folders > 0
     local has_permanent_folders = settings_features.library_scan_folders and #settings_features.library_scan_folders > 0
-    -- the scan actions are offered unless Library Scan is Never: a run picks
-    -- its folders in its own window (round 2, 2026-10-20)
+    -- the scan actions need a folder ticked in this dialog's Library Scan ▾
+    -- (its pick, else the default scan folders): in the library dialog the
+    -- folders are picked before the action (round 2, 2026-10-20)
     local library_scan_available = library_toggle_on
+        and #require("koassistant.ui.data_access").scanFolders(plugin, true, {}) > 0
 
     local has_more_actions = false  -- Set by buildInputDialogButtons, read by gear menu
     local buildInputDialogButtons
@@ -9619,13 +9621,19 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         da_amounts.nearby_text = _("the text around your selection")
                     end
                     if configuration.features.is_library_context and library_toggle_on then
-                        -- optional: Continue without sends the message without it;
                         -- asked only when a folder is in effect (the dialog's pick,
-                        -- else the permanent ones), naming them (2026-10-20)
+                        -- else the default ones), naming them (2026-10-20); optional
+                        -- beside picked books (Continue without sends the books
+                        -- alone), required without them: the chat's only context
                         local DAl = require("koassistant.ui.data_access")
                         local lib_folders_now = DAl.scanFolders(plugin, true, configuration.features)
                         if #lib_folders_now > 0 then
-                            da_kinds[#da_kinds + 1] = { kind = "book_list", required = false }
+                            local picked_books = configuration.features.books_info
+                            if type(picked_books) == "table" and #picked_books > 0 then
+                                da_kinds[#da_kinds + 1] = { kind = "book_list", required = false }
+                            else
+                                da_kinds[#da_kinds + 1] = { kind = "book_list", required = true }
+                            end
                             da_amounts.book_list = DAl.libraryAmounts(lib_folders_now)
                         end
                     end
