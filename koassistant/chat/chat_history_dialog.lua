@@ -2494,7 +2494,7 @@ function ChatHistoryDialog:continueChat(ui, document_path, chat, chat_history_ma
                 highlights = _("the highlights this chat was given"),
                 annotations = _("the notes this chat was given"),
                 notebook = _("the notebook this chat was given"),
-                book_list = _("the book list this chat was given"),
+                book_list = _("the library scan this chat was given"),
                 habits = _("the reading habits this chat was given"),
                 nearby_text = _("the text around the selection this chat was given"),
             },

@@ -8296,28 +8296,14 @@ function AskGPT:_checkRequirements(action, target_file, run_provider)
       -- Per-action gate: use_library explicitly overridden to false?
       if action.use_library == false then
         UIManager:show(InfoMessage:new{
-          text = _("Library scanning is disabled for this action. Re-enable it in the Action Manager.") .. hint,
+          text = _("Library Scan is off for this action. Turn it back on in the Action Manager.") .. hint,
         })
         return true
       end
       local state, layer = Gates.resolve("book_list", gate)
       if state == "never" then return refuse("book_list", layer) end
-      -- Folder gate: the folders in effect (the library dialog's pick for an
-      -- action run from it, an empty pick included; else the permanent ones)
-      local library_run = action.context == "library"
-      local folders = require("koassistant.ui.data_access").scanFolders(self, library_run, features)
-      if #folders == 0 then
-        if library_run and type(self._session_scan_folders) == "table" then
-          UIManager:show(InfoMessage:new{
-            text = _("No scan folder is ticked in this library dialog.\n\nTick one under Library Scan.") .. hint,
-          })
-        else
-          UIManager:show(InfoMessage:new{
-            text = _("No scan folders configured.\n\nAdd folders in Settings → Reading & Library → Permanent Scan Folders.") .. hint,
-          })
-        end
-        return true
-      end
+      -- No folder gate (round 2, 2026-10-20): the run's folder window picks
+      -- the folders, permanent ones or not (DataAccess.withAccess)
     elseif req == "highlights" then
       -- Per-action gate: are both highlight flags explicitly disabled?
       if not action.use_highlights and not action.use_annotations then
@@ -14361,7 +14347,11 @@ function AskGPT:onEndOfBook()
   -- the standing Allow it needed kept it silent for every reader on Ask)
   local NextGates = require("koassistant.request.privacy_gates")
   if not NextGates.usable("book_list", NextGates.context(features, features.provider, {})) then return end
-  if not features.library_scan_folders or #features.library_scan_folders == 0 then return end
+  -- Offered to a reader with a library to suggest from: a permanent scan
+  -- folder, or a folder picked on the fly before (round 2, 2026-10-20: the
+  -- run's folder window picks for the run itself)
+  if not (type(features.library_scan_folders) == "table" and #features.library_scan_folders > 0)
+      and #require("koassistant.ui.data_access").recentFolders(self) == 0 then return end
   if not self.ui or not self.ui.document then return end
 
   -- Delay slightly to let KOReader's own end-of-book popup show first

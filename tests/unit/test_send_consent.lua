@@ -239,7 +239,7 @@ TestRunner:test("the book list is judged for the provider the Send goes to", fun
     TestRunner:assertFalse(cond:find("library_toggle_on", 1, true), "no judgment from the dialog's opening")
     local block = dialogs_src:match("Auto%-attach library scan data(.-)if scan_folders_to_use and #scan_folders_to_use")
     TestRunner:assertTrue(block:find("elseif library_toggle_on", 1, true)
-        and block:find("Your book list was left out", 1, true),
+        and block:find("Your library scan was left out", 1, true),
         "a list the dialog offered and this Send drops is named, never dropped silently")
     TestRunner:assertTrue(block:find(".book_list ~= false then", 1, true),
         "except after the question's Continue without: the reader chose (2026-10-20)")

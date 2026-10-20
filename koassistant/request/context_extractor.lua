@@ -1941,11 +1941,11 @@ function ContextExtractor:extractForAction(action)
     -- Library: check if requested but not available
     if action.use_library then
         if not library_setting_allowed then
-            table.insert(unavailable, withheld("book_list", _("book list")))
+            table.insert(unavailable, withheld("book_list", _("library scan")))
         elseif not library_folders_configured then
-            table.insert(unavailable, _("book list (no folders configured)"))
+            table.insert(unavailable, _("library scan (no folder picked)"))
         elseif not data.library_content or data.library_content == "" then
-            table.insert(unavailable, _("book list (no books found)"))
+            table.insert(unavailable, _("library scan (no books found)"))
         end
     end
 

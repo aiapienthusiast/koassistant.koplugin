@@ -955,29 +955,29 @@ local function runGatingTests()
         TestRunner:assertEquals(data.library_content, nil)
     end)
 
-    TestRunner:test("_unavailable_data: 'book list (not allowed for this request)' when global off", function()
+    TestRunner:test("_unavailable_data: 'library scan (not allowed for this request)' when global off", function()
         local extractor = createMockExtractor({ library_scan_folders = { "/test/books" } })
         local data = extractor:extractForAction({ use_library = true })
         TestRunner:assert(data._unavailable_data, "should have _unavailable_data")
         local found = false
         for _idx, msg in ipairs(data._unavailable_data) do
-            if msg:find("book list (not allowed for this request)", 1, true) then found = true end
+            if msg:find("library scan (not allowed for this request)", 1, true) then found = true end
         end
-        TestRunner:assert(found, "should contain 'book list (not allowed for this request)'")
+        TestRunner:assert(found, "should contain 'library scan (not allowed for this request)'")
     end)
 
-    TestRunner:test("_unavailable_data: 'book list (no folders configured)' when folders missing", function()
+    TestRunner:test("_unavailable_data: 'library scan (no folder picked)' when folders missing", function()
         local extractor = createMockExtractor({ enable_library_scanning = true })
         local data = extractor:extractForAction({ use_library = true })
         TestRunner:assert(data._unavailable_data, "should have _unavailable_data")
         local found = false
         for _idx, msg in ipairs(data._unavailable_data) do
-            if msg:find("book list (no folders configured)", 1, true) then found = true end
+            if msg:find("library scan (no folder picked)", 1, true) then found = true end
         end
-        TestRunner:assert(found, "should contain 'book list (no folders configured)'")
+        TestRunner:assert(found, "should contain 'library scan (no folder picked)'")
     end)
 
-    TestRunner:test("_unavailable_data: 'book list (no books found)' when allowed but empty", function()
+    TestRunner:test("_unavailable_data: 'library scan (no books found)' when allowed but empty", function()
         local empty_scanner = {
             scan = function() return { books = {}, by_status = {}, by_folder = {}, stats = { total = 0 } } end,
             format = function() return "" end,
@@ -992,9 +992,9 @@ local function runGatingTests()
         package.loaded["koassistant.books.library_scanner"] = mock_library_scanner  -- restore (before any assert)
         local found = false
         for _idx, msg in ipairs(data._unavailable_data) do
-            if msg:find("book list (no books found)", 1, true) then found = true end
+            if msg:find("library scan (no books found)", 1, true) then found = true end
         end
-        TestRunner:assert(found, "should contain 'book list (no books found)'")
+        TestRunner:assert(found, "should contain 'library scan (no books found)'")
     end)
 
     -- =========================================================================

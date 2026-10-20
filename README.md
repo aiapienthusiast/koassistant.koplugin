@@ -38,7 +38,7 @@
 - **Multilingual** → chat in any of 47 languages the AI understands; the plugin's UI in 26. [Languages](https://github.com/zeeyado/koassistant.koplugin/wiki/Languages)
 - **Generate images** → a highlight or an X-Ray entry becomes an image (OpenAI, xAI, Gemini or OpenRouter image models) in a style and shape you pick, its prompt written by your chat provider's fast model from the book's context, kept on the device in a thumbnail gallery. [Image Generation](https://github.com/zeeyado/koassistant.koplugin/wiki/Image-Generation)
 - **Customizable** → custom actions, behaviors, domains, per-action models, template variables, and control over every menu the plugin appears in. [Actions and Menus](https://github.com/zeeyado/koassistant.koplugin/wiki/Actions-and-Menus), [Prompts, Behaviors and Domains](https://github.com/zeeyado/koassistant.koplugin/wiki/Prompts-Behaviors-and-Domains)
-- **Private by default** → your highlights, notes, notebook, the book's text, book list and reading habits stay on the device until you say so: the first time an action wants one, it shows what it sends and to whom, and your answer can be kept for the book. [Privacy and Data](https://github.com/zeeyado/koassistant.koplugin/wiki/Privacy-and-Data)
+- **Private by default** → your highlights, notes, notebook, the book's text, library scan and reading habits stay on the device until you say so: the first time an action wants one, it shows what it sends and to whom, and your answer can be kept for the book. [Privacy and Data](https://github.com/zeeyado/koassistant.koplugin/wiki/Privacy-and-Data)
 - **Keeps itself current** → one-tap updates, backups and restore. [Backups and Updates](https://github.com/zeeyado/koassistant.koplugin/wiki/Backups-and-Updates)
 
 [32 built-in providers](#supported-providers) (Anthropic, OpenAI, Gemini, Ollama and more) plus custom OpenAI-compatible providers. OpenAI can also be used without an API key by signing in with your ChatGPT plan (OpenAI Subscription). Reasoning is configured per model. Personal reading data (highlights, annotation notes, notebooks, the book's text) is not sent to the AI until you allow it.
@@ -96,7 +96,7 @@ Restart KOReader after editing the file (it is read once per session); keys ente
 
 ### 4. Privacy settings
 
-Your highlights, annotation notes, notebook, the book's text, book list and reading habits are each asked for the first time an action wants them. **Settings → Privacy & Data** holds one value per kind (Ask, Allow or Never) and a **Preset** row that sets them all at once (the Setup Wizard's privacy step offers the same presets); **Allow everything** sends everything without a question, book text included. See [Privacy at a glance](#privacy-at-a-glance).
+Your highlights, annotation notes, notebook, the book's text, library scan and reading habits are each asked for the first time an action wants them. **Settings → Privacy & Data** holds one value per kind (Ask, Allow or Never) and a **Preset** row that sets them all at once (the Setup Wizard's privacy step offers the same presets); **Allow everything** sends everything without a question, book text included. See [Privacy at a glance](#privacy-at-a-glance).
 
 ## First steps
 
@@ -119,7 +119,7 @@ KOAssistant sends data to AI providers to generate answers. The threat model is 
 
 - **Always sent:** your question, and the selected text for highlight actions.
 - **Sent by default:** the book's title and author (Book info, which None turns off so nothing names the book), the enabled system content (languages, domain, behavior), your reading position (progress, chapter, time since you last read), the text around what you tap (a few sentences or one page), and a per-book Background note if you wrote one.
-- **Asked the first time:** highlights, annotation notes, the notebook, the book's text (for X-Ray, Recap and the like), the book list, reading habits (curated groups with rounded hours and days; the raw statistics stay on the device). The question names the action, the provider and the amount; **Allow once** covers that run, **Allow for this book** keeps your answer.
+- **Asked the first time:** highlights, annotation notes, the notebook, the book's text (for X-Ray, Recap and the like), the library scan, reading habits (curated groups with rounded hours and days; the raw statistics stay on the device). The question names the action, the provider and the amount; **Allow once** covers that run, **Allow for this book** keeps your answer.
 
 | Preset | What it does |
 |---|---|

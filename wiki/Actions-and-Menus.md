@@ -126,7 +126,7 @@ Tap **+ Add Action** at the top of Manage Actions. The editor takes three steps:
    - **Skip language**: don't send your language preferences (useful when the prompt already specifies a target language).
    - **Include book info** (highlight actions; ticked for a new one): send the book's title and author with the highlight.
    - **Takes the Quick preset**: the ⚡ chip, an action's long-press **Quick answer** and Quick Answer On by Default reach this action. Off for a new action. Not offered for an action that saves a result (X-Ray, Summary and the like): a short answer would break what it saves. The settings editor of a built-in action has the same box, and Action Details shows the value.
-   - The data-access boxes, the per-action half of [double-gating](Privacy-and-Data#double-gating-for-custom-actions): **Allow text extraction**, **Allow highlight use**, **Allow annotation use (notes)** (which ticks highlight use with it), **Allow notebook use** and **Allow library use** for highlight and book actions, and **Allow advanced stats** for any action. Ticking one whose data is set to Never for all books (Settings → Privacy & Data) says so: the action is refused, or that data is not sent, until you change it.
+   - The data-access boxes, the per-action half of [double-gating](Privacy-and-Data#double-gating-for-custom-actions): **Allow text extraction**, **Allow highlight use**, **Allow annotation use (notes)** (which ticks highlight use with it), **Allow notebook use** and **Allow Library Scan** for highlight and book actions, and **Allow reading habits** for any action. Ticking one whose data is set to Never for all books (Settings → Privacy & Data) says so: the action is refused, or that data is not sent, until you change it.
 
 **Create** saves the action, turned on and marked ★.
 
@@ -218,7 +218,7 @@ Data the action may use. The sensitive flags are double-gated: they need the glo
 - `use_highlights`: include the book's highlights (text only, no notes). Needs highlights or annotation notes allowed.
 - `use_annotations`: include annotations (highlights with your notes). Needs annotation notes allowed.
 - `use_notebook`: include the book's KOAssistant notebook. Needs the notebook allowed.
-- `use_library`: include the library catalog (`{library_section}`). Needs the book list allowed plus configured scan folders (triple-gated).
+- `use_library`: include the library catalog (`{library_section}`). Needs Library Scan allowed plus a folder ticked for the run (triple-gated).
 - `use_advanced_stats`: include reading engagement groups (`{deep_reads}`, `{stalled}`, `{recently_finished}`, `{briefly_started}` and their section forms) and per-book engagement labels in library output. Needs reading habits allowed and this flag. Used by the library scan actions Next Read, Discover New, Analyze Library and Challenge My Taste.
 - `use_summary_cache` / `use_xray_cache` / `use_analyze_cache`: let the matching document cache placeholder resolve (double-gated; see [Document caches](#tips-for-custom-actions) above).
 - `use_reading_progress`: include the reading position (`{reading_progress}`, `{progress_decimal}`, `{time_since_last_read}`). Needs Reading position on.
@@ -396,7 +396,7 @@ The KOAssistant menu (Tools → KOAssistant) starts with rows that open somethin
 - **Book Chat/Action** (with a book open): a conversation about the current book, or a book action ([Contexts and Chat](Contexts-and-Chat#bookdocument-mode)).
 - **Book Hub** (with a book open): the current book's hub, with its artifacts, chats, notebook, group and settings in one view ([Book Settings and Book Hub](Book-Settings-and-Book-Hub)).
 - **General Chat/Action**: a context-free conversation, or a general action ([Contexts and Chat](Contexts-and-Chat#general-chat)).
-- **Library Chat/Action**: the library dialog with scan-based and selection-based actions. The scan-based ones (Next Read, Discover New, Analyze Library, Challenge My Taste) work once scan folders are set and the book list is not Never (on Ask, the first run asks); the selection-based ones (Compare, Recommend and the others) need books you add under **Items ▾** ([Contexts and Chat](Contexts-and-Chat#library-mode)).
+- **Library Chat/Action**: the library dialog with scan-based and selection-based actions. The scan-based ones (Next Read, Discover New, Analyze Library, Challenge My Taste) work whenever Library Scan is not Never: each run shows its scan folders to tick, and on Ask that window is the question ([the folder window](Privacy-and-Data#the-folder-window)); the selection-based ones (Compare, Recommend and the others) need books you add under **Items ▾** ([Contexts and Chat](Contexts-and-Chat#library-mode)).
 - **Chat History**: your saved conversations ([Conversations, Notebooks and Export](Conversations-Notebooks-and-Export)).
 - **Browse Notebooks**: the Notebook Manager, with every notebook.
 - **Browse Artifacts**: the Artifact Browser, with every cached artifact ([Artifacts and Caching](Artifacts-and-Caching)).

@@ -1576,7 +1576,7 @@ function PromptsManager:showContextSelectorWizard(state)
                     text = _("Context determines when your action appears and what data is available:") .. "\n\n" ..
                            "• " .. _("Highlight") .. ": " .. _("When text is selected. Gets: selected text, optionally book info") .. "\n\n" ..
                            "• " .. _("Book") .. ": " .. _("File browser or 'New Book Chat/Action'. Gets: title, author") .. "\n\n" ..
-                           "• " .. _("Library") .. ": " .. _("Multiple books selected. Gets: book list with count") .. "\n\n" ..
+                           "• " .. _("Library") .. ": " .. _("Multiple books selected. Gets: the picked books' titles, with their count") .. "\n\n" ..
                            "• " .. _("General") .. ": " .. _("Standalone chat. No automatic context"),
                 })
             end,
@@ -2052,14 +2052,14 @@ function PromptsManager:showStep3_Settings(state)
             end,
         })
         table.insert(items, {
-            text = (state.use_library and "☑ " or "☐ ") .. _("Allow library use"),
+            text = (state.use_library and "☑ " or "☐ ") .. _("Allow Library Scan"),
             callback = function()
                 state.use_library = not state.use_library
                 if state.use_library then
                     local features = self.plugin.settings:readSetting("features") or {}
                     if require("koassistant.request.privacy_gates").summary({ features = features }).book_list.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Library use enabled. Note: the book list is set to Never (Settings → Privacy & Data), so it is not sent until that changes."),
+                            text = _("Library Scan enabled for this action. Note: Library Scan is set to Never (Settings → Privacy & Data), so it is not sent until that changes."),
                             timeout = 4,
                         })
                     end
@@ -2073,14 +2073,14 @@ function PromptsManager:showStep3_Settings(state)
     -- Advanced stats checkbox (library-level, not per-book — shown for any context)
     if state.context then
         table.insert(items, {
-            text = (state.use_advanced_stats and "☑ " or "☐ ") .. _("Allow advanced stats"),
+            text = (state.use_advanced_stats and "☑ " or "☐ ") .. _("Allow reading habits"),
             callback = function()
                 state.use_advanced_stats = not state.use_advanced_stats
                 if state.use_advanced_stats then
                     local features = self.plugin.settings:readSetting("features") or {}
                     if require("koassistant.request.privacy_gates").summary({ features = features }).habits.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Advanced stats enabled. Note: reading habits are set to Never (Settings → Privacy & Data), so they are not sent until that changes."),
+                            text = _("Reading habits enabled for this action. Note: reading habits are set to Never (Settings → Privacy & Data), so they are not sent until that changes."),
                             timeout = 4,
                         })
                     end
@@ -3862,14 +3862,14 @@ function PromptsManager:showBuiltinSettingsDialog(state)
     -- Advanced stats checkbox (library-level, not per-book — shown for any context)
     if prompt.context then
         table.insert(items, {
-            text = (state.use_advanced_stats and "☑ " or "☐ ") .. _("Allow advanced stats"),
+            text = (state.use_advanced_stats and "☑ " or "☐ ") .. _("Allow reading habits"),
             callback = function()
                 state.use_advanced_stats = not state.use_advanced_stats
                 if state.use_advanced_stats then
                     local features = self.plugin.settings:readSetting("features") or {}
                     if require("koassistant.request.privacy_gates").summary({ features = features }).habits.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Advanced stats enabled. Note: reading habits are set to Never (Settings → Privacy & Data), so they are not sent until that changes."),
+                            text = _("Reading habits enabled for this action. Note: reading habits are set to Never (Settings → Privacy & Data), so they are not sent until that changes."),
                             timeout = 4,
                         })
                     end
@@ -4878,14 +4878,14 @@ function PromptsManager:showCustomQuickSettingsDialog(state)
     -- Advanced stats checkbox (library-level, not per-book — shown for any context)
     if state.context then
         table.insert(items, {
-            text = (state.use_advanced_stats and "☑ " or "☐ ") .. _("Allow advanced stats"),
+            text = (state.use_advanced_stats and "☑ " or "☐ ") .. _("Allow reading habits"),
             callback = function()
                 state.use_advanced_stats = not state.use_advanced_stats
                 if state.use_advanced_stats then
                     local features = self.plugin.settings:readSetting("features") or {}
                     if require("koassistant.request.privacy_gates").summary({ features = features }).habits.state == "never" then
                         UIManager:show(InfoMessage:new{
-                            text = _("Advanced stats enabled. Note: reading habits are set to Never (Settings → Privacy & Data), so they are not sent until that changes."),
+                            text = _("Reading habits enabled for this action. Note: reading habits are set to Never (Settings → Privacy & Data), so they are not sent until that changes."),
                             timeout = 4,
                         })
                     end

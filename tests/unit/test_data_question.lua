@@ -341,6 +341,154 @@ TestRunner:test("the X-Ray chat and the artifact chat record what they carried",
         "the X-Ray chat's kinds reach the Send's record")
 end)
 
+print("  [the folder window]")
+
+-- Real folders: a remembered folder since removed is not offered again
+local DIR_A, DIR_B, DIR_C = plugin_dir .. "/tests", plugin_dir .. "/wiki", plugin_dir .. "/koassistant"
+
+local function buttonOf(text)
+    for _r, row in ipairs((shown[#shown] and shown[#shown].buttons) or {}) do
+        for _b, b in ipairs(row) do
+            if b.text == text then return b end
+        end
+    end
+end
+
+TestRunner:test("on Ask the window is the question: the folders to tick, then the answers", function()
+    local store = { features = { library_scan_folders = { DIR_A, DIR_B }, library_recent_folders = { DIR_C, "/gone/away" } } }
+    local f, ran = {}, nil
+    DataAccess.withAccess(makePlugin(store), FIND_SIMILAR, { features = f, provider = "anthropic", path = "/b/x.epub",
+        amounts = { book_list = (DataAccess.windowAmounts()) }, folders = { defaults = { DIR_A } } },
+        function(g) ran = g end)
+    TestRunner:assertEqual(lastButtons(), "☑ tests | ☐ wiki | ☐ koassistant | + Add folder… | "
+        .. "Allow once | Always allow | Continue without | More… | Cancel",
+        "the run's folders ticked, the other default one and the recent one unticked, the gone one left out")
+    TestRunner:assertTrue(tostring(shown[#shown].title):find("the folders ticked below", 1, true), "the line")
+    press("☐ wiki")
+    TestRunner:assertEqual(lastButtons(), "☑ tests | ☑ wiki | ☐ koassistant | + Add folder… | "
+        .. "Allow once | Always allow | Continue without | More… | Cancel", "a tap ticks, the window drawn again")
+    TestRunner:assertTrue(ran == nil, "a tick is not an answer")
+    press("Allow once")
+    TestRunner:assertTrue(ran and ran.asked, "answered")
+    local picked = DataAccess.scanFolders(makePlugin(store), false, f)
+    TestRunner:assertEqual(table.concat(picked, ","), DIR_A .. "," .. DIR_B, "the run reads the folders ticked")
+    TestRunner:assertEqual((Gates.resolve("book_list", Gates.context(f, "anthropic", { path = "/b/x.epub" }))), "allow")
+    TestRunner:assertEqual(#store.features.library_scan_folders, 2, "the default folders untouched")
+end)
+
+TestRunner:test("nothing ticked and the action needs the list: its answers wait for a folder", function()
+    DataAccess.withAccess(makePlugin({ features = {} }), SUGGEST, { features = {}, provider = "anthropic",
+        path = "/b/x.epub", folders = { defaults = {} } }, function() error("must not run") end)
+    TestRunner:assertEqual(lastButtons(), "+ Add folder… | Allow once | Always allow | More… | Cancel")
+    TestRunner:assertEqual(buttonOf("Allow once").enabled, false, "Allow once waits for a folder")
+    TestRunner:assertEqual(buttonOf("Always allow").enabled, false, "so does Always allow")
+    TestRunner:assertTrue(tostring(shown[#shown].title):find("Tick or add a folder", 1, true), "the window says why")
+end)
+
+TestRunner:test("nothing ticked on a use that can do without: Continue without, the list declined", function()
+    local f, ran = {}, nil
+    DataAccess.withAccess(makePlugin({ features = {} }), FIND_SIMILAR, { features = f, provider = "anthropic",
+        path = "/b/x.epub", folders = { defaults = {} } }, function(g) ran = g end)
+    TestRunner:assertEqual(lastButtons(), "+ Add folder… | Continue without | More… | Cancel")
+    press("Continue without")
+    TestRunner:assertTrue(ran and ran.asked, "the run goes on")
+    TestRunner:assertEqual(#DataAccess.scanFolders(makePlugin({ features = {} }), false, f), 0, "no folder for the run")
+    TestRunner:assertEqual((Gates.resolve("book_list", Gates.context(f, "anthropic", { path = "/b/x.epub" }))), "never",
+        "the list declined for this run")
+end)
+
+TestRunner:test("on Allow: Run and Cancel for an action built on the list, no window for one that can do without", function()
+    local f, ran = { enable_library_scanning = true }, nil
+    DataAccess.withAccess(makePlugin({ features = {} }), SUGGEST, { features = f, provider = "anthropic",
+        path = "/b/x.epub", folders = { defaults = { DIR_A } } }, function(g) ran = g end)
+    TestRunner:assertEqual(lastButtons(), "☑ tests | + Add folder… | Run | Cancel")
+    press("☑ tests")
+    TestRunner:assertEqual(buttonOf("Run").enabled, false, "nothing ticked: Run waits")
+    press("☐ tests")
+    press("Run")
+    TestRunner:assertTrue(ran and ran.asked, "Run is an answer")
+    TestRunner:assertEqual(DataAccess.scanFolders(makePlugin({ features = {} }), false, f)[1], DIR_A, "the pick")
+    local before, direct = #shown, nil
+    DataAccess.withAccess(makePlugin({ features = {} }), FIND_SIMILAR, { features = { enable_library_scanning = true },
+        provider = "anthropic", path = "/b/x.epub", folders = { defaults = {} } }, function(g) direct = g end)
+    TestRunner:assertEqual(#shown, before, "Find Similar on Allow: no window")
+    TestRunner:assertEqual(direct and direct.asked, false, "it runs on the folders as they are")
+    TestRunner:assertTrue(DataAccess.folderWindowNeed({ { kind = "book_list", state = "never", required = true } }) == nil,
+        "Never: no window")
+end)
+
+TestRunner:test("+ Add folder…: ticked for this run, remembered, never made a default folder", function()
+    local saved_pc, saved_tick, saved_grs = package.loaded["ui/widget/pathchooser"], UIManager.nextTick, G_reader_settings
+    package.loaded["ui/widget/pathchooser"] = { new = function(_self, o) return o end }
+    UIManager.nextTick = function(_self, fn) fn() end
+    G_reader_settings = { readSetting = function() return "/" end }  -- luacheck: ignore
+    local store = { features = { library_scan_folders = { DIR_A } } }
+    local f, ran = {}, nil
+    DataAccess.withAccess(makePlugin(store), SUGGEST, { features = f, provider = "anthropic", path = "/b/x.epub",
+        folders = { defaults = { DIR_A } } }, function(g) ran = g end)
+    press("+ Add folder…")
+    shown[#shown].onConfirm(DIR_B)
+    TestRunner:assertEqual(lastButtons(), "☑ tests | ☑ wiki | + Add folder… | Allow once | Always allow | More… | Cancel",
+        "the folder chosen is ticked")
+    TestRunner:assertEqual(store.features.library_recent_folders[1], DIR_B, "remembered")
+    TestRunner:assertEqual(#store.features.library_scan_folders, 1, "never a default folder")
+    press("Allow once")
+    TestRunner:assertEqual(#DataAccess.scanFolders(makePlugin(store), false, f), 2, "both for this run")
+    package.loaded["ui/widget/pathchooser"], UIManager.nextTick, G_reader_settings = saved_pc, saved_tick, saved_grs  -- luacheck: ignore
+end)
+
+TestRunner:test("More… keeps the ticks, also when nothing is left to ask after it", function()
+    local opened
+    BookSettings.showPrivacyConfig = function(o) opened = o end
+    local store = { features = { library_scan_folders = { DIR_A }, library_recent_folders = { DIR_B } } }
+    local f, ran = {}, nil
+    DataAccess.withAccess(makePlugin(store), FIND_SIMILAR, { features = f, provider = "anthropic", path = "/b/x.epub",
+        folders = { defaults = { DIR_A } } }, function(g) ran = g end)
+    press("☑ tests")
+    press("☐ wiki")
+    press("More…")
+    store.features.enable_library_scanning = true   -- Allow, set on the screen
+    opened.on_close()
+    BookSettings.showPrivacyConfig = saved.spc
+    TestRunner:assertTrue(ran ~= nil, "nothing left to ask: the run goes on")
+    TestRunner:assertEqual(table.concat(DataAccess.scanFolders(makePlugin(store), false, f), ","), DIR_B,
+        "the folders ticked before More…, not the default one unticked")
+end)
+
+TestRunner:test("recent folders: newest first, five kept; the run's pick beats every other folder", function()
+    local store = { features = {} }
+    local p = makePlugin(store)
+    for i = 1, 6 do DataAccess.rememberFolder(p, "/r/" .. i) end
+    DataAccess.rememberFolder(p, "/r/3")
+    TestRunner:assertEqual(table.concat(store.features.library_recent_folders, ","), "/r/3,/r/6,/r/5,/r/4,/r/2")
+    p._session_scan_folders = { "/dialog" }
+    TestRunner:assertEqual(DataAccess.scanFolders(p, true, { _data_once = { kinds = {}, folders = { "/run" } } })[1], "/run")
+    TestRunner:assertEqual(#DataAccess.folderRows({ "/a" }, { "/a", "/b" }, { "/b", "/c" }), 3, "each folder once")
+end)
+
+TestRunner:test("the dispatch: the window asks, its re-entry runs; no folder refusal is left", function()
+    local store = { features = { library_scan_folders = { DIR_A } } }
+    local cf = { is_book_context = true, book_metadata = { file = "/b/x.epub" }, provider = "anthropic" }
+    local reentered = false
+    local action = { id = "suggest_from_library", text = "Suggest from Library", use_library = true, requires = { "library" } }
+    TestRunner:assertEqual(DataAccess.askForDispatch(makePlugin(store), action, cf, nil, { provider = "anthropic" },
+        function() reentered = true end), true, "the window shows")
+    press("Allow once")
+    TestRunner:assertTrue(reentered, "the answer re-enters the dispatch")
+    TestRunner:assertEqual(DataAccess.askForDispatch(makePlugin(store), action, cf, nil, { provider = "anthropic" },
+        function() end), false, "the re-entry finds the pick made: nothing shown")
+    local main = source("main.lua")
+    TestRunner:assertTrue(not main:find("No scan folders configured", 1, true)
+        and not main:find("No scan folder is ticked", 1, true), "the folder refusals are gone")
+    TestRunner:assertTrue(main:find('require("koassistant.ui.data_access").recentFolders(self)', 1, true),
+        "the next read: a default folder or one picked before")
+    TestRunner:assertTrue(source("koassistant/ui/dialogs.lua"):find("local library_scan_available = library_toggle_on\n", 1, true),
+        "the library dialog offers the scan actions without a folder")
+    local reg = source("koassistant/storage/storage_registry.lua")
+    TestRunner:assertTrue(reg:find('"library_recent_folders",', 1, true)
+        and reg:find('"index_scan_folders", "library_recent_folders" }', 1, true), "registered, and follows a folder's move")
+end)
+
 SDS.resolve = saved.resolve
 UIManager.show = saved.show
 UIManager.close = saved.close

@@ -1383,7 +1383,7 @@ local SettingsSchema = {
                     text = _("Suggest Next Read on Finish"),
                     path = "features.enable_end_of_book_suggestion",
                     default = true,
-                    help_text = _("When you reach the end of a book, offer to suggest what to read next from your library. Requires your book list allowed (Ask asks first) and at least one permanent scan folder."),
+                    help_text = _("When you reach the end of a book, offer to suggest what to read next from your library. Needs Library Scan allowed (Ask asks first) and a folder to suggest from: a default scan folder, or one you picked before."),
                     separator = true,
                 },
                 -- Library
@@ -1395,11 +1395,11 @@ local SettingsSchema = {
                 {
                     id = "enable_library_scanning_reading",
                     type = "dropdown",
-                    text = _("Book list"),
+                    text = _("Library Scan"),
                     path = "features.enable_library_scanning",
                     default = false,
                     options = PRIVACY_VALUE_OPTIONS,
-                    help_text = _("The same value as in Privacy & Data: whether the titles, authors and reading status of the books in your scan folders may go to the AI for the library actions. Ask (the default) asks the first time; Allow sends without a question; Never refuses those actions. Add permanent scan folders below, or pick folders on the fly in the input dialog."),
+                    help_text = _("The same value as in Privacy & Data: whether the titles, authors and reading status of the books in your scan folders may go to the AI for the library actions. Ask (the default) asks at each run, showing the folders to tick; Allow sends without a question; Never refuses those actions. A library action lets you pick its folders for that run: the default scan folders below start ticked, and you can add others."),
                 },
                 {
                     id = "library_scan_folders_reading",
@@ -1408,16 +1408,16 @@ local SettingsSchema = {
                         local f = plugin.settings:readSetting("features") or {}
                         local folders = f.library_scan_folders or {}
                         if #folders == 0 then
-                            return _("Permanent Scan Folders: None")
+                            return _("Default Scan Folders: None")
                         else
-                            return T(_("Permanent Scan Folders: %1"), #folders)
+                            return T(_("Default Scan Folders: %1"), #folders)
                         end
                     end,
                     enabled_func = function(plugin)
                         -- usable unless the book list is Never (the question comes at the run)
                         return require("koassistant.request.privacy_gates").summary({ features = plugin.settings:readSetting("features") or {} }).book_list.state ~= "never"
                     end,
-                    help_text = _("Folders always scanned for library actions. You can also pick folders on the fly in the input dialog."),
+                    help_text = _("The folders a library action starts with: ticked by default, and you can untick them or add others for that run. None has to be set here."),
                     callback = "getLibraryFoldersMenuItems",
                 },
             },
@@ -2160,7 +2160,7 @@ local SettingsSchema = {
                           default = true, help_text = _("Your reading progress, the current chapter and the time since you last read. Sent or not; never asked.") },
                         { id = "trusted_habits", type = "dropdown", text = _("Reading habits"), path = "features.trusted_habits",
                           default = "allow", options = TRUSTED_VALUE_OPTIONS },
-                        { id = "trusted_book_list", type = "dropdown", text = _("Book list"), path = "features.trusted_book_list",
+                        { id = "trusted_book_list", type = "dropdown", text = _("Library Scan"), path = "features.trusted_book_list",
                           default = "allow", options = TRUSTED_VALUE_OPTIONS },
                         { id = "trusted_nearby_text", type = "dropdown", text = _("Text around what you tap"), path = "features.trusted_nearby_text",
                           default = "allow", options = TRUSTED_VALUE_OPTIONS },
@@ -2246,11 +2246,11 @@ local SettingsSchema = {
                 {
                     id = "enable_library_scanning",
                     type = "dropdown",
-                    text = _("Book list"),
+                    text = _("Library Scan"),
                     path = "features.enable_library_scanning",
                     default = false,
                     options = PRIVACY_VALUE_OPTIONS,
-                    help_text = _("The titles, authors and reading status of the books in your scan folders, for the library actions. Configure permanent scan folders in Reading & Library, or pick folders on the fly in the input dialog. The question offers \"Always allow\", which sets Allow here."),
+                    help_text = _("The titles, authors and reading status of the books in your scan folders, for the library actions. A library action lets you pick its folders for that run: your default scan folders (Reading & Library) start ticked, and you can add others. The question offers \"Always allow\", which sets Allow here."),
                 },
                 {
                     id = "enable_advanced_stats",

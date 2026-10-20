@@ -1016,7 +1016,7 @@ function SetupWizard.stepPrivacy(plugin, ctx, next_step)
             saveFeats(plugin, f)
         end
         head = _("PRIVACY & DATA") .. "\n" ..
-            _("This version changed how privacy works. Every kind of data is now set to Ask: the first action that needs your highlights, notes, notebook, book text, book list or reading habits asks you first. Your books' own settings and your trusted providers were kept.")
+            _("This version changed how privacy works. Every kind of data is now set to Ask: the first action that needs your highlights, notes, notebook, book text, library scan or reading habits asks you first. Your books' own settings and your trusted providers were kept.")
         first_row = {
             { text = _("Keep Default (Ask)"), callback = function()
                 UIManager:close(dialog)
@@ -1030,7 +1030,7 @@ function SetupWizard.stepPrivacy(plugin, ctx, next_step)
         }
     else
         head = _("PRIVACY & DATA") .. "\n" ..
-            _("What may KOAssistant send to your AI provider? Your highlights, notes, notebook, book text, book list and reading habits each have one setting: Ask, Allow or Never.")
+            _("What may KOAssistant send to your AI provider? Your highlights, notes, notebook, book text, library scan and reading habits each have one setting: Ask, Allow or Never.")
         first_row = {
             { text = _("Default (Ask)"), callback = function() applyPreset("applyPrivacyPresetDefault", _("Default (Ask)")) end },
         }

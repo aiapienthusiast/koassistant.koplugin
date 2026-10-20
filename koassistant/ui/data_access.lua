@@ -47,7 +47,7 @@ function DataAccess.kindLabel(kind)
     if kind == "notebook" then return _("your notebook") end
     if kind == "position" then return _("your reading position") end
     if kind == "habits" then return _("your reading habits") end
-    if kind == "book_list" then return _("your book list") end
+    if kind == "book_list" then return _("your library scan") end
     if kind == "nearby_text" then return _("the text around what you tapped") end
     return tostring(kind)
 end
@@ -60,7 +60,7 @@ function DataAccess.kindName(kind)
     if kind == "notebook" then return _("Notebook") end
     if kind == "position" then return _("Reading position") end
     if kind == "habits" then return _("Reading habits") end
-    if kind == "book_list" then return _("Book list") end
+    if kind == "book_list" then return _("Library Scan") end
     if kind == "nearby_text" then return _("Text around what you tap") end
     return tostring(kind)
 end
@@ -128,7 +128,12 @@ end
 --- the optional kinds and nothing is stored; the image run, whose kinds reach
 --- it indirectly, where a book-wide Never would stop the book's X-Ray updates),
 --- spec.no_book (no book to hold a value: no Allow for this book, no Not for
---- this book).
+--- this book). The folder window (round 2, 2026-10-20; built by withAccess):
+--- spec.folders = { rows = { { path, ticked } }, toggle(i), add(replace) },
+--- one row per folder above the answers; spec.run_only = nothing on Ask
+--- (Run and Cancel, answer "run"); spec.without_only = nothing to send and
+--- nothing required (Continue without and Cancel); spec.blocked = the run
+--- needs a folder ticked: its answers are shown disabled.
 function DataAccess.ask(plugin, spec, on_answer)
     local dialog
     local answered = false
@@ -151,40 +156,73 @@ function DataAccess.ask(plugin, spec, on_answer)
     -- A set of books holds no per-book answer; the kinds no book holds (the
     -- book list, reading habits) keep Always allow and More… in a set too
     local set_global = spec.set and plan.global_only
-    local first = {}
-    if not spec.standing_only then
-        first[#first + 1] = { text = _("Allow once"), callback = function() answer("once") end }
-    end
-    if not spec.set or set_global then
-        if plan.global_only then
-            first[#first + 1] = { text = _("Always allow"), callback = function() answer("always") end }
-        elseif not spec.no_book then
-            first[#first + 1] = { text = _("Allow for this book"), callback = function() answer("book") end }
-        end
-    end
     local rows = {}
-    if #first > 0 then rows[1] = first end
-    -- Going without the optional part, for this run only (2026-10-20): the
-    -- whole ask when nothing asked is required, else the required kinds
-    -- allowed once and the optional ones left out. Not for this book stays
-    -- the lasting choice for a book's own kinds.
-    local skip = {}
-    -- (a set asking each book's own data stays Allow once / Cancel: its needs
-    -- do not tell a book's required kinds from its optional ones)
-    if #optional_labels > 0 and not spec.standing_only and (not spec.set or set_global) then
-        if plan.optional_only then
-            skip[#skip + 1] = { text = _("Continue without"), callback = function() answer("without") end }
-        else
-            skip[#skip + 1] = { text = T(_("Allow once, without %1"), table.concat(optional_labels, ", ")),
-                callback = function() answer("once_without") end }
+    -- The folder window: the scan folders this run reads, ticked or not; a
+    -- tap ticks or unticks one (the window is drawn again), "+ Add folder…"
+    -- picks another for this run
+    if spec.folders then
+        for i, row in ipairs(spec.folders.rows) do
+            rows[#rows + 1] = { {
+                text = (row.ticked and "\u{2611} " or "\u{2610} ") .. DataAccess.folderNames({ row.path }),
+                callback = function()
+                    answered = true  -- replaced by the window drawn again, not answered
+                    UIManager:close(dialog)
+                    spec.folders.toggle(i)
+                end,
+                hold_callback = function()
+                    UIManager:show(InfoMessage:new{ text = row.path, timeout = 5 })
+                end,
+            } }
+        end
+        rows[#rows + 1] = { { text = _("+ Add folder…"), callback = function()
+            spec.folders.add(function()
+                answered = true
+                UIManager:close(dialog)
+            end)
+        end } }
+    end
+    local first, skip = {}, {}
+    if spec.run_only then
+        first[1] = { text = _("Run"), enabled = not spec.blocked, callback = function() answer("run") end }
+    elseif spec.without_only then
+        skip[1] = { text = _("Continue without"), callback = function() answer("without") end }
+    else
+        if not spec.standing_only then
+            first[#first + 1] = { text = _("Allow once"), callback = function() answer("once") end }
+        end
+        if not spec.set or set_global then
+            if plan.global_only then
+                first[#first + 1] = { text = _("Always allow"), callback = function() answer("always") end }
+            elseif not spec.no_book then
+                first[#first + 1] = { text = _("Allow for this book"), callback = function() answer("book") end }
+            end
+        end
+        -- Going without the optional part, for this run only (2026-10-20): the
+        -- whole ask when nothing asked is required, else the required kinds
+        -- allowed once and the optional ones left out. Not for this book stays
+        -- the lasting choice for a book's own kinds.
+        -- (a set asking each book's own data stays Allow once / Cancel: its needs
+        -- do not tell a book's required kinds from its optional ones)
+        if #optional_labels > 0 and not spec.standing_only and (not spec.set or set_global) then
+            if plan.optional_only then
+                skip[#skip + 1] = { text = _("Continue without"), callback = function() answer("without") end }
+            else
+                skip[#skip + 1] = { text = T(_("Allow once, without %1"), table.concat(optional_labels, ", ")),
+                    callback = function() answer("once_without") end }
+            end
+        end
+        if not spec.set and plan.optional_only and plan.per_book and not spec.no_book and not spec.decline_once then
+            skip[#skip + 1] = { text = _("Not for this book"), callback = function() answer("not_book") end }
+        end
+        if spec.blocked then
+            for _idx, b in ipairs(first) do b.enabled = false end
+            for _idx, b in ipairs(skip) do b.enabled = false end
         end
     end
-    if not spec.set and plan.optional_only and plan.per_book and not spec.no_book and not spec.decline_once then
-        skip[#skip + 1] = { text = _("Not for this book"), callback = function() answer("not_book") end }
-    end
+    if #first > 0 then rows[#rows + 1] = first end
     if #skip > 0 then rows[#rows + 1] = skip end
     local last = {}
-    if not spec.set or set_global then
+    if not spec.run_only and (not spec.set or set_global) then
         last[#last + 1] = { text = _("More…"), callback = function() answer("more") end }
     end
     last[#last + 1] = { text = _("Cancel"), id = "close", callback = function() answer("cancel") end }
@@ -322,13 +360,16 @@ local function refreshPrivacyKeys(plugin, features)
     features.trusted_providers = live.trusted_providers
 end
 
---- The scan folders a run reads, one rule for the question, the requirement
---- check and the gathers (2026-10-20): a run started from the library dialog
---- reads that dialog's pick (plugin._session_scan_folders, set once a folder
---- is ticked or unticked there; an empty pick = no list), every other run the
---- permanent folders.
+--- The scan folders a run reads, one rule for the question and the gathers
+--- (2026-10-20): the run's own pick from the folder window (the allowance's
+--- folders, Gates.pickFolders) first; then, for a run started from the
+--- library dialog, that dialog's pick (plugin._session_scan_folders, set once
+--- a folder is ticked or unticked there); else the permanent folders. An
+--- empty pick = no list.
 --- @return table list of folder paths (possibly empty)
 function DataAccess.scanFolders(plugin, library_run, features)
+    local once = type(features) == "table" and features._data_once
+    if type(once) == "table" and type(once.folders) == "table" then return once.folders end
     if library_run and plugin and type(plugin._session_scan_folders) == "table" then
         return plugin._session_scan_folders
     end
@@ -346,12 +387,79 @@ function DataAccess.folderNames(folders)
     return table.concat(names, ", ")
 end
 
---- The question's lines for the book list and the reading habits, naming the
---- folders they come from (nil without a folder: nothing would go).
+--- The question's lines for the library scan and the reading habits, naming
+--- the folders they come from (nil without a folder: nothing would go).
 function DataAccess.libraryAmounts(folders)
     if type(folders) ~= "table" or #folders == 0 then return nil, nil end
-    return T(_("your book list: the books in %1 (titles, authors, reading status)"), DataAccess.folderNames(folders)),
+    return T(_("your library scan: the books in %1 (titles, authors, reading status)"), DataAccess.folderNames(folders)),
         _("your reading habits for those books (read a lot, stalled, barely started)")
+end
+
+--- The same lines in the folder window, whose folders are listed below them.
+function DataAccess.windowAmounts()
+    return _("your library scan: the books in the folders ticked below (titles, authors, reading status)"),
+        _("your reading habits for those books (read a lot, stalled, barely started)")
+end
+
+-- Whether a path is a folder now (a remembered one may be gone); without the
+-- file system module (the tests) every path counts
+local function isDirectory(path)
+    local ok, lfs = pcall(require, "libs/libkoreader-lfs")
+    if not (ok and lfs and lfs.attributes) then return true end
+    return lfs.attributes(path, "mode") == "directory"
+end
+
+local RECENT_FOLDERS_MAX = 5
+
+--- The folders added on the fly (the folder window's and the library
+--- dialog's "+ Add folder…"), newest first, those still there: offered again
+--- unticked, scanned only when ticked, never made permanent.
+function DataAccess.recentFolders(plugin)
+    local f = plugin and plugin.settings and plugin.settings:readSetting("features") or {}
+    local out = {}
+    for _idx, path in ipairs(type(f.library_recent_folders) == "table" and f.library_recent_folders or {}) do
+        if type(path) == "string" and path ~= "" and isDirectory(path) then out[#out + 1] = path end
+    end
+    return out
+end
+
+--- Remember a folder added on the fly, first in the list (five kept).
+function DataAccess.rememberFolder(plugin, path)
+    if not (plugin and plugin.settings) or type(path) ~= "string" or path == "" then return end
+    local f = plugin.settings:readSetting("features") or {}
+    local list = { path }
+    for _idx, p in ipairs(type(f.library_recent_folders) == "table" and f.library_recent_folders or {}) do
+        if p ~= path and #list < RECENT_FOLDERS_MAX then list[#list + 1] = p end
+    end
+    f.library_recent_folders = list
+    plugin.settings:saveSetting("features", f)
+    plugin.settings:flush()
+end
+
+--- Pure: the folder window's rows: the folders the run would read, ticked;
+--- then the other permanent folders and the recent ones, unticked (each once).
+function DataAccess.folderRows(defaults, permanent, recent)
+    local rows, seen = {}, {}
+    local function add(path, ticked)
+        if type(path) ~= "string" or path == "" or seen[path] then return end
+        seen[path] = true
+        rows[#rows + 1] = { path = path, ticked = ticked }
+    end
+    for _idx, p in ipairs(defaults or {}) do add(p, true) end
+    for _idx, p in ipairs(permanent or {}) do add(p, false) end
+    for _idx, p in ipairs(recent or {}) do add(p, false) end
+    return rows
+end
+
+--- Pure: the library need that opens the folder window (round 2,
+--- 2026-10-20): the run reads the library, Library Scan is not Never, and it
+--- is on Ask or the run cannot do without the list. nil = no window (on
+--- Allow, a run that only can use the list reads the folders as they are).
+function DataAccess.folderWindowNeed(needs)
+    for _idx, n in ipairs(needs or {}) do
+        if n.kind == "book_list" and n.state ~= "never" and (n.state == "ask" or n.required) then return n end
+    end
+    return nil
 end
 
 --- The needs of a run over several books (a library request with picked
@@ -487,12 +595,33 @@ function DataAccess.withAccess(plugin, action, opts, run_fn)
         if opts.on_refused then opts.on_refused() end
         return false
     end
-    if #plan.asked == 0 then
+    -- The folder window (round 2, 2026-10-20): with opts.folders (the funnel's
+    -- { defaults }), a run that reads the library shows the scan folders to
+    -- tick, untick or add for this run; on Ask it is the question itself
+    local lib = opts.folders and DataAccess.folderWindowNeed(needs) or nil
+    -- a set of books: an allowance for the run, not for one book
+    local once_path = opts.path
+    if opts.books then once_path = nil end
+    if #plan.asked == 0 and not lib then
+        -- asked again after More… with nothing left to ask (Library Scan set
+        -- to Allow there): the folders ticked in the window still go
+        if opts.folders and opts.folders.rows then
+            local list = {}
+            for _idx, row in ipairs(opts.folders.rows) do
+                if row.ticked then list[#list + 1] = row.path end
+            end
+            Gates.pickFolders(features, once_path, list)
+        end
         run_fn({ asked = false })
         return true
     end
-    local asked_kinds = {}
-    for _idx, n in ipairs(plan.asked) do asked_kinds[#asked_kinds + 1] = n.kind end
+    if lib and not opts.folders.rows then
+        -- kept on opts: More… asks again with the ticks as they were
+        local f = plugin and plugin.settings and plugin.settings:readSetting("features") or {}
+        opts.folders.rows = DataAccess.folderRows(opts.folders.defaults,
+            type(f.library_scan_folders) == "table" and f.library_scan_folders or {},
+            DataAccess.recentFolders(plugin))
+    end
     local note = opts.note
     -- the set's note concerns each book's own data: only when such a kind is asked
     if opts.books and plan.per_book then
@@ -503,94 +632,198 @@ function DataAccess.withAccess(plugin, action, opts, run_fn)
         end
         note = note and (note .. "\n" .. set_note) or set_note
     end
-    DataAccess.ask(plugin, {
-        action_name = opts.action_name or action.text,
-        provider_name = opts.provider_name or providerName(plugin, opts.provider),
-        asked = plan.asked, plan = plan, amounts = opts.amounts, note = note,
-        set = opts.books ~= nil, standing_only = opts.standing_only, decline_once = opts.decline_once,
-        -- no book to hold a value (a picture made outside a book): the
-        -- per-book answers could store nothing
-        no_book = opts.books == nil and opts.path == nil,
-    }, function(choice)
-        -- a set of books: an allowance for the run, not for one book
-        local once_path = opts.path
-        if opts.books then once_path = nil end
-        -- the optional asked kinds, declined for this run
-        local function declined()
-            local rec = {}
-            for _idx, n in ipairs(plan.asked) do
-                if not n.required then rec[n.kind] = false end
-            end
-            return rec
+    local function ticked()
+        local list = {}
+        for _idx, row in ipairs(lib and opts.folders.rows or {}) do
+            if row.ticked then list[#list + 1] = row.path end
         end
-        if choice == "once" then
-            Gates.grantOnce(features, once_path, asked_kinds)
-            run_fn({ once = asked_kinds, asked = true })
-        elseif choice == "once_without" then
-            local rec = declined()
-            for _idx, n in ipairs(plan.asked) do
-                if n.required then rec[#rec + 1] = n.kind end
-            end
-            Gates.grantOnce(features, once_path, rec)
-            run_fn({ once = rec, asked = true })
-        elseif choice == "book" then
-            local stored, once = {}, {}
-            for _idx, kind in ipairs(asked_kinds) do
-                if Gates.BOOK_KINDS[kind] then stored[#stored + 1] = kind else once[#once + 1] = kind end
-            end
-            if not writeBookValues(opts.path, opts.ui, stored, true) then
-                -- no book to write to (none known): this run only
-                for _idx, kind in ipairs(stored) do once[#once + 1] = kind end
-            end
-            if #once > 0 then Gates.grantOnce(features, opts.path, once) end
-            run_fn({ once = #once > 0 and once or nil, asked = true })
-        elseif choice == "not_book" then
-            local stored = {}
-            for _idx, kind in ipairs(asked_kinds) do
-                if Gates.BOOK_KINDS[kind] then stored[#stored + 1] = kind end
-            end
-            writeBookValues(opts.path, opts.ui, stored, false)
-            run_fn({ asked = true })
-        elseif choice == "without" then
-            -- recorded on the run's own settings, so a run that passes the
-            -- question again (the dispatch's re-entry) is not asked twice
-            local rec = declined()
-            Gates.grantOnce(features, once_path, rec)
-            run_fn({ once = rec, asked = true })
-        elseif choice == "always" then
-            writeAlwaysAllow(plugin, plan.asked, features)
-            run_fn({ asked = true })
-        elseif choice == "more" then
-            -- the screen may set a value, for the book or for all books: the
-            -- run's own settings take the file's values, then the question is
-            -- asked again (it may find nothing left to ask)
-            local function again()
-                refreshPrivacyKeys(plugin, features)
-                opts.needs, opts.never_books = nil, nil
-                DataAccess.withAccess(plugin, action, opts, run_fn)
-            end
-            local trusted_asked = false
-            for _idx, n in ipairs(plan.asked) do
-                if n.layer == "trusted" then trusted_asked = true end
-            end
-            if not plugin then
-                if opts.on_cancel then opts.on_cancel() end
-            elseif plan.per_book and opts.path then
-                openBookPrivacy(plugin, opts.path, opts.ui, again)
-            elseif trusted_asked and plugin.onKOAssistantSettings then
-                -- judged in the trusted providers' column, which only the
-                -- settings menu holds: open it; the run does not go on
-                plugin:onKOAssistantSettings()
-                if opts.on_cancel then opts.on_cancel() end
-            else
-                require("koassistant.books.book_settings").showPrivacyConfig({
-                    plugin = plugin, ui = opts.ui, all_books = true, on_close = again,
-                })
-            end
-        elseif opts.on_cancel then
-            opts.on_cancel()
+        return list
+    end
+    -- What the window lists: every kind on Ask, and with the folders the
+    -- library's kinds the run sends on Allow
+    local display = {}
+    for _idx, n in ipairs(needs) do
+        if n.state == "ask" or (lib and n.state == "allow" and (n.kind == "book_list" or n.kind == "habits")) then
+            display[#display + 1] = n
         end
-    end)
+    end
+    local show
+    -- The answer, judged on the plan the window showed (eff: without the
+    -- library's kinds when no folder is ticked)
+    local function onAnswer(eff, none)
+        return function(choice)
+            local asked_kinds = {}
+            for _idx, n in ipairs(eff.asked) do asked_kinds[#asked_kinds + 1] = n.kind end
+            -- the run's record (Gates.grantOnce: a list = allowed, kind = false =
+            -- declined): with no folder ticked the library and the habits read
+            -- from its books are declined; the folders picked ride along
+            local function record(rec)
+                rec = rec or {}
+                if none then rec.book_list, rec.habits = false, false end
+                Gates.grantOnce(features, once_path, rec)
+                if lib then Gates.pickFolders(features, once_path, ticked()) end
+                return rec
+            end
+            -- the optional asked kinds, declined for this run
+            local function declined()
+                local rec = {}
+                for _idx, n in ipairs(eff.asked) do
+                    if not n.required then rec[n.kind] = false end
+                end
+                return rec
+            end
+            if choice == "once" then
+                local rec = {}
+                for _idx, kind in ipairs(asked_kinds) do rec[#rec + 1] = kind end
+                record(rec)
+                run_fn({ once = asked_kinds, asked = true })
+            elseif choice == "once_without" then
+                local rec = declined()
+                for _idx, n in ipairs(eff.asked) do
+                    if n.required then rec[#rec + 1] = n.kind end
+                end
+                record(rec)
+                run_fn({ once = rec, asked = true })
+            elseif choice == "book" then
+                local stored, once = {}, {}
+                for _idx, kind in ipairs(asked_kinds) do
+                    if Gates.BOOK_KINDS[kind] then stored[#stored + 1] = kind else once[#once + 1] = kind end
+                end
+                if not writeBookValues(opts.path, opts.ui, stored, true) then
+                    -- no book to write to (none known): this run only
+                    for _idx, kind in ipairs(stored) do once[#once + 1] = kind end
+                end
+                if #once > 0 or lib then
+                    local rec = {}
+                    for _idx, kind in ipairs(once) do rec[#rec + 1] = kind end
+                    record(rec)
+                end
+                run_fn({ once = #once > 0 and once or nil, asked = true })
+            elseif choice == "not_book" then
+                local stored = {}
+                for _idx, kind in ipairs(asked_kinds) do
+                    if Gates.BOOK_KINDS[kind] then stored[#stored + 1] = kind end
+                end
+                writeBookValues(opts.path, opts.ui, stored, false)
+                if lib then record({}) end
+                run_fn({ asked = true })
+            elseif choice == "without" then
+                -- recorded on the run's own settings, so a run that passes the
+                -- question again (the dispatch's re-entry) is not asked twice
+                local rec = record(declined())
+                run_fn({ once = rec, asked = true })
+            elseif choice == "always" then
+                writeAlwaysAllow(plugin, eff.asked, features)
+                if lib then record({}) end
+                run_fn({ asked = true })
+            elseif choice == "run" then
+                -- the folder window on Allow: the folders alone
+                record({})
+                run_fn({ asked = true })
+            elseif choice == "more" then
+                -- the screen may set a value, for the book or for all books: the
+                -- run's own settings take the file's values, then the question is
+                -- asked again (it may find nothing left to ask)
+                local function again()
+                    refreshPrivacyKeys(plugin, features)
+                    opts.needs, opts.never_books = nil, nil
+                    DataAccess.withAccess(plugin, action, opts, run_fn)
+                end
+                local trusted_asked = false
+                for _idx, n in ipairs(plan.asked) do
+                    if n.layer == "trusted" then trusted_asked = true end
+                end
+                if not plugin then
+                    if opts.on_cancel then opts.on_cancel() end
+                elseif plan.per_book and opts.path then
+                    openBookPrivacy(plugin, opts.path, opts.ui, again)
+                elseif trusted_asked and plugin.onKOAssistantSettings then
+                    -- judged in the trusted providers' column, which only the
+                    -- settings menu holds: open it; the run does not go on
+                    plugin:onKOAssistantSettings()
+                    if opts.on_cancel then opts.on_cancel() end
+                else
+                    require("koassistant.books.book_settings").showPrivacyConfig({
+                        plugin = plugin, ui = opts.ui, all_books = true, on_close = again,
+                    })
+                end
+            elseif opts.on_cancel then
+                opts.on_cancel()
+            end
+        end
+    end
+    -- "+ Add folder…": KOReader's folder chooser over the window; a folder
+    -- chosen is ticked, remembered among the recent ones (never made
+    -- permanent), and the window drawn again once the chooser has closed
+    local function addFolder(replace)
+        local Device = require("device")
+        local start = G_reader_settings:readSetting("home_dir") or Device.home_dir
+            or require("datastorage"):getDataDir()
+        UIManager:show(require("ui/widget/pathchooser"):new{
+            title = _("Add a folder for this run"),
+            path = start,
+            select_directory = true,
+            select_file = false,
+            onConfirm = function(path)
+                if type(path) ~= "string" or path == "" then return end
+                local rows, at = opts.folders.rows, 0
+                for i, row in ipairs(rows) do
+                    if row.path == path then at = -i break end
+                    if row.ticked then at = i end
+                end
+                if at < 0 then
+                    rows[-at].ticked = true
+                else
+                    table.insert(rows, at + 1, { path = path, ticked = true })
+                end
+                DataAccess.rememberFolder(plugin, path)
+                UIManager:nextTick(function()
+                    replace()
+                    show()
+                end)
+            end,
+        })
+    end
+    show = function()
+        local none = lib ~= nil and #ticked() == 0
+        local eff = plan
+        if none then
+            local rest = {}
+            for _idx, n in ipairs(needs) do
+                if n.kind ~= "book_list" and n.kind ~= "habits" then rest[#rest + 1] = n end
+            end
+            eff = DataAccess.plan(rest)
+        end
+        local spec_note = note
+        if none then
+            local why = lib.required and _("Tick or add a folder to run this.")
+                or _("No folder ticked: it runs without your library scan.")
+            spec_note = spec_note and (spec_note .. "\n" .. why) or why
+        end
+        DataAccess.ask(plugin, {
+            action_name = opts.action_name or action.text,
+            provider_name = opts.provider_name or providerName(plugin, opts.provider),
+            asked = display, plan = eff, amounts = opts.amounts, note = spec_note,
+            set = opts.books ~= nil, standing_only = opts.standing_only, decline_once = opts.decline_once,
+            -- no book to hold a value (a picture made outside a book): the
+            -- per-book answers could store nothing
+            no_book = opts.books == nil and opts.path == nil,
+            folders = lib and {
+                rows = opts.folders.rows,
+                toggle = function(i)
+                    opts.folders.rows[i].ticked = not opts.folders.rows[i].ticked
+                    show()
+                end,
+                add = addFolder,
+            } or nil,
+            -- nothing on Ask: the folders alone (Allow), or nothing to send
+            -- and nothing required (Continue without)
+            run_only = lib ~= nil and #eff.asked == 0 and lib.state ~= "ask",
+            without_only = lib ~= nil and #eff.asked == 0 and none and not lib.required,
+            blocked = none and lib.required or false,
+        }, onAnswer(eff, none))
+    end
+    show()
     return true
 end
 
@@ -872,20 +1105,26 @@ function DataAccess.askForDispatch(plugin, action, features, ui, config, run_fn)
         amounts.annotations = T(_("your notes on highlights (%1)"), notes)
     end
     -- What the run has to send (2026-10-20): an optional kind with nothing
-    -- behind it is not asked (Gates.needs opts.exists). The book list needs a
-    -- scan folder (the library dialog's pick for a run started there, else the
-    -- permanent ones), the reading habits KOReader's statistics too.
+    -- behind it is not asked (Gates.needs opts.exists): the reading habits
+    -- without KOReader's statistics. The library is there to pick (round 2):
+    -- the folder window lists the folders the run would read (the library
+    -- dialog's pick for a run started there, else the permanent ones) and
+    -- the recent ones, to tick for this run.
     local exists = {}
     local folders = DataAccess.scanFolders(plugin, cf.is_library_context == true, cf)
-    if #folders == 0 then
-        exists.book_list, exists.habits = false, false
-    elseif action.use_advanced_stats then
+    if action.use_advanced_stats then
         local okS, StatsReader = pcall(require, "koassistant.books.stats_reader")
         if not (okS and StatsReader and StatsReader.isAvailable and StatsReader.isAvailable()) then
             exists.habits = false
         end
     end
-    amounts.book_list, amounts.habits = DataAccess.libraryAmounts(folders)
+    -- the window answered already (the dispatch's re-entry): its folders
+    local picked = type(cf._data_once) == "table" and type(cf._data_once.folders) == "table"
+    if picked then
+        amounts.book_list, amounts.habits = DataAccess.libraryAmounts(folders)
+    else
+        amounts.book_list, amounts.habits = DataAccess.windowAmounts()
+    end
     if live and ui.annotation and type(ui.annotation.annotations) == "table" then
         local n, notes = 0, 0
         for _idx, a in ipairs(ui.annotation.annotations) do
@@ -910,10 +1149,18 @@ function DataAccess.askForDispatch(plugin, action, features, ui, config, run_fn)
     end
     local opts = { features = cf, provider = provider, path = path, ui = ui, books = books,
         action_name = action.text or action.id, source = sm, stamps = stamps, nearby = nearby,
-        amounts = amounts, hint = action.blocked_hint, exists = exists }
+        amounts = amounts, hint = action.blocked_hint, exists = exists,
+        folders = not picked and { defaults = folders } or nil }
     local needs, never_books = DataAccess.needsFor(action, opts)
+    local window = opts.folders and DataAccess.folderWindowNeed(needs)
+    if not window and #folders == 0 then
+        -- no window and no folder (a run that only can use the list, on
+        -- Allow): no list goes, nor the reading habits read from its books
+        exists.book_list, exists.habits = false, false
+        needs, never_books = DataAccess.needsFor(action, opts)
+    end
     local plan = DataAccess.plan(needs)
-    if not plan.refused and #plan.asked == 0 then return false end
+    if not plan.refused and #plan.asked == 0 and not window then return false end
     opts.needs, opts.never_books = needs, never_books
     opts.on_cancel, opts.on_refused = drop, drop
     DataAccess.withAccess(plugin, action, opts, run_fn)
@@ -933,7 +1180,7 @@ function DataAccess.maybeShowUpgradeNotice(plugin)
     plugin.settings:flush()
     UIManager:show(InfoMessage:new{
         text = _("Privacy has been redone.") .. "\n\n"
-            .. _("KOAssistant now asks before it sends your highlights, notes, notebook, book text, book list or reading habits for the first time, and remembers your answer for the book. Every sharing switch in Settings → Privacy & Data is set to Ask; your per-book settings and trusted providers are kept.")
+            .. _("KOAssistant now asks before it sends your highlights, notes, notebook, book text, library scan or reading habits for the first time, and remembers your answer for the book. Every sharing switch in Settings → Privacy & Data is set to Ask; your per-book settings and trusted providers are kept.")
             .. "\n\n" .. _("Each switch can also be set to Allow (sent without asking) or Never."),
     })
     return true

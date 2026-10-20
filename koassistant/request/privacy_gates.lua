@@ -187,6 +187,16 @@ function Gates.grantOnce(features, path, kinds)
     end
 end
 
+--- Record the scan folders picked for this run (the folder window,
+--- 2026-10-20) on the run's allowance record, beside its kinds: every gather
+--- reads them first (DataAccess.scanFolders), and the dispatch's re-entry
+--- finds the pick made. An empty list = no list for this run.
+function Gates.pickFolders(features, path, folders)
+    if type(features) ~= "table" or type(folders) ~= "table" then return end
+    Gates.grantOnce(features, path, {})
+    features._data_once.folders = folders
+end
+
 --- Whether a kind may go into the request, and which layer said so.
 --- ctx.features  the settings the request runs under (configuration.features,
 ---               or the extractor's own settings table)

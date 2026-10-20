@@ -26,7 +26,7 @@ The wizard has two faces, chosen the first time you open KOAssistant (its menu, 
 
 After the wizard, complete these steps for the best experience:
 
-- [ ] **Decide what you share:** your highlights, notes, notebook, book text, book list and reading habits are on Ask by default, so you can simply answer when an action asks; **Settings → Privacy & Data** sets a kind to Allow or Never for all books. See [Privacy and Data](Privacy-and-Data).
+- [ ] **Decide what you share:** your highlights, notes, notebook, book text, library scan and reading habits are on Ask by default, so you can simply answer when an action asks; **Settings → Privacy & Data** sets a kind to Allow or Never for all books. See [Privacy and Data](Privacy-and-Data).
 - [ ] **Set up gestures** (if you skipped the wizard). See [Gestures](#gestures).
 - [ ] **Explore the highlight menu:** 9 buttons are included by default: the model button, then Translate, Explain, Quick Explain, Summarize, Quick Define, Dictionary, Look up in X-Ray and Generate Image. The last two show only when the book has an X-Ray, and when an image provider is configured. Add more (ELI5, Elaborate, Connect, Fact Check, AI Wiki, Counterpoint and others) in **Settings → Actions & Prompts → Manage Actions** (hold an action, then **+ Highlight Menu**), or in **Settings → Menus & Buttons → Highlight Menu Actions**. See [Actions and Menus](Actions-and-Menus).
 - [ ] **Try Dictionary Bypass:** single-word selections go straight to the AI dictionary (**Settings → Dictionary Settings → Bypass KOReader Dictionary**). See [Bypass Modes](#bypass-modes).

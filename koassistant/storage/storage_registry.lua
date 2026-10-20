@@ -114,6 +114,7 @@ Registry.SETTINGS_SUBKEYS = {
         "xray_carried_entries",     -- where carried entries are listed (categories/list; nil = categories; #116, B393)
         "xray_default_status",      -- global default for new X-Rays' status block (on/off; nil = on; B271)
         "run_recent_models",        -- the hold menu's recent "More models…" picks (B345; newest first)
+        "library_recent_folders",   -- folders added on the fly for a library run (newest first, five; never scan folders of their own)
         "favorite_models",          -- favorite models (B345): the long-press menus' first model spots; ♥ in pickers
     },
     internal = {
@@ -656,7 +657,7 @@ end
 -- the moves KOReader follows for its own lists, no others.
 
 -- The plugin's settings that name folders (lists, then single paths)
-local FOLDER_LIST_SETTINGS = { "library_scan_folders", "index_scan_folders" }
+local FOLDER_LIST_SETTINGS = { "library_scan_folders", "index_scan_folders", "library_recent_folders" }
 local FOLDER_SETTINGS = { "notebook_custom_path", "export_custom_path" }
 
 --- @param old_dir string

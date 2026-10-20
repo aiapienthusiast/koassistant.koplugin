@@ -2,7 +2,7 @@
 
 KOAssistant sends data to the AI provider you choose so it can answer you. This page explains what is sent, what is asked for before it goes, and every control you have: the value of each kind of data (Ask, Allow or Never), the presets, per-book values, trusted providers, and the per-action flags of custom actions.
 
-> ⚠️ **KOAssistant asks before it sends your data.** Your highlights, notes, notebook, book text, book list and reading habits are each on **Ask** by default: the first time an action wants one of them, KOAssistant shows what it is about to send and to whom, and you answer **Allow once** or **Allow for this book** (**Always allow** for the book list and reading habits). Set a kind to **Allow** in **Settings → Privacy & Data** to skip the question, or to **Never** to refuse it everywhere. Two kinds go without a question unless you change them: your reading position and the text around what you tap ([What Gets Sent](#what-gets-sent)).
+> ⚠️ **KOAssistant asks before it sends your data.** Your highlights, notes, notebook, book text, library scan and reading habits are each on **Ask** by default: the first time an action wants one of them, KOAssistant shows what it is about to send and to whom, and you answer **Allow once** or **Allow for this book** (**Always allow** for the library scan and reading habits). Set a kind to **Allow** in **Settings → Privacy & Data** to skip the question, or to **Never** to refuse it everywhere. Two kinds go without a question unless you change them: your reading position and the text around what you tap ([What Gets Sent](#what-gets-sent)).
 
 This is not privacy theater: the "threat model" is simply users including sensitive data (annotations, notes, content) by accident. You are already being permissive by using online AIs at all, this plugin encourages AI analysis of your reading material, and the available placeholders (template variables) can carry a substantial amount of sensitive data. Reading habits (Ask by default, like the others) are read from KOReader's Statistics plugin locally to derive reading engagement groups; see [Design Choices](#design-choices) for what this means. Best practice is to pick providers thoughtfully, and the very best practice is to use local or self-hosted solutions, such as Ollama (see [Local Processing](#local-processing)).
 
@@ -15,7 +15,7 @@ This is not privacy theater: the "threat model" is simply users including sensit
 
 ### Sent by default (for actions that use it)
 
-- **Book info**: what the AI is told about the book, set in **Settings → Privacy & Data → Book info**: None, Title only, Title & author (the default), or Title, author & position (adds your reading progress, chapter and page when Reading position is on). It is never asked and the presets leave it alone. **None sends nothing that names the book**: no book line, and an action's own prompt says "this book" where it would name the title and leaves out the author and any DOI. Book actions that answer from what the AI knows about the book (About, About Author, Find Similar, Historical Context, Related Thinkers, Reviews, X-Ray (Simple)) cannot work without the title, so they say so instead of running; so does any book action run with the source popup's **AI knowledge only**, which sends neither text nor summary (Suggest from Library runs: it sends your book list). A book can have its own level in **Book Settings → Privacy & Data**; one run can go without it, or with the title and author where None is in effect (**Without book info** or **With book info** in an action's long-press menu, [Actions and Menus](Actions-and-Menus#the-action-hold-menu)); a book or highlight chat about the open book can switch it with **Send book info** in the input dialog's gear menu ([Contexts and Chat](Contexts-and-Chat#the-gear-menu)). A highlight action leaves the book line out when you uncheck **Include book info** in its settings in the action manager, and Book Settings → Identity can change or blank the title and author the AI is told (see [Book Settings and Book Hub](Book-Settings-and-Book-Hub)).
+- **Book info**: what the AI is told about the book, set in **Settings → Privacy & Data → Book info**: None, Title only, Title & author (the default), or Title, author & position (adds your reading progress, chapter and page when Reading position is on). It is never asked and the presets leave it alone. **None sends nothing that names the book**: no book line, and an action's own prompt says "this book" where it would name the title and leaves out the author and any DOI. Book actions that answer from what the AI knows about the book (About, About Author, Find Similar, Historical Context, Related Thinkers, Reviews, X-Ray (Simple)) cannot work without the title, so they say so instead of running; so does any book action run with the source popup's **AI knowledge only**, which sends neither text nor summary (Suggest from Library runs: it sends your library scan). A book can have its own level in **Book Settings → Privacy & Data**; one run can go without it, or with the title and author where None is in effect (**Without book info** or **With book info** in an action's long-press menu, [Actions and Menus](Actions-and-Menus#the-action-hold-menu)); a book or highlight chat about the open book can switch it with **Send book info** in the input dialog's gear menu ([Contexts and Chat](Contexts-and-Chat#the-gear-menu)). A highlight action leaves the book line out when you uncheck **Include book info** in its settings in the action manager, and Book Settings → Identity can change or blank the title and author the AI is told (see [Book Settings and Book Hub](Book-Settings-and-Book-Hub)).
 - **Enabled system content**, like your languages, domain and behavior.
 - **Reading position**: reading progress (percentage), chapter title, chapters read count, how long ago you last read the book, and the print page number when the book carries a page list. The data used to calculate them (the exact date and time you last read, from KOReader's reading statistics, and so on) stays local. It is on by default because spoiler protection relies on it, and it is the one kind that is never asked: **Settings → Privacy & Data → Reading position** turns it on or off.
 - **The text around what you tap**: the bounded text around a selection (the context of a highlight or of a dictionary lookup), your current page (page translate, the Scope chip's "Current page") and the text around an image prompt. A few sentences or one page, never more; it has its own value (Allow by default), independent of the book's text.
@@ -27,8 +27,8 @@ This is not privacy theater: the "threat model" is simply users including sensit
 - **Annotation notes**: your highlighted text with the personal notes you attached. Allowing notes allows highlights; Never for highlights is Never for notes.
 - **Notebook**: your KOAssistant notebook for the book, with the dates of its entries.
 - **Book text**: actual text from the document (for X-Ray, Recap and others). See [Text Extraction and Double-gating](#text-extraction-and-double-gating).
-- **Book list**: metadata of the books in your scan folders: title, author, series and reading status, with the progress percentage of books you are reading or have put on hold. Books are grouped by status and ordered by when you last read them; the dates themselves are not sent. Only sent by library chats and by actions that use your library (such as Next Read, Find Similar and Suggest from Library), and only with a scan folder, permanent or picked on the fly.
-- **Reading habits**: reading engagement data derived from KOReader's Statistics plugin: curated groups based on reading time and completion patterns (books read extensively, stalled reads, briefly started, recently finished). Raw statistics (session logs, pages per session, reading speed, exact timestamps) are computed locally and **never** sent; only book lists with rounded labels reach the AI (see [Design Choices](#design-choices)). Only used by library scan actions.
+- **Library Scan**: metadata of the books in your scan folders: title, author, series and reading status, with the progress percentage of books you are reading or have put on hold. Books are grouped by status and ordered by when you last read them; the dates themselves are not sent. Only sent by library chats and by actions that use your library (such as Next Read, Find Similar and Suggest from Library), and only from the folders ticked for that run: your default scan folders, or others you add on the fly ([the folder window](#the-folder-window)).
+- **Reading habits**: reading engagement data derived from KOReader's Statistics plugin: curated groups based on reading time and completion patterns (books read extensively, stalled reads, briefly started, recently finished). Raw statistics (session logs, pages per session, reading speed, exact timestamps) are computed locally and **never** sent; only lists of books with rounded labels reach the AI (see [Design Choices](#design-choices)). Only used by library scan actions.
 
 ## The Three Values and the Question
 
@@ -40,25 +40,37 @@ Every kind of data has one value, for all books, in **Settings → Privacy & Dat
 
 ### The question
 
-It names the action, the provider the request goes to, and every kind of data the run wants that is still on Ask, with the amount or the source where it is known ("text from this book, up to your position (42%)", "your highlights (12)", "your book list: the books in Fiction, Non-fiction"). Data the run has nothing of is not asked: the book list with no scan folder, your reading habits without KOReader's reading statistics, highlights, notes or a notebook the book does not have.
+It names the action, the provider the request goes to, and every kind of data the run wants that is still on Ask, with the amount or the source where it is known ("text from this book, up to your position (42%)", "your highlights (12)", "your library scan: the books in the folders ticked below"). Data the run has nothing of is not asked: your reading habits without KOReader's reading statistics, highlights, notes or a notebook the book does not have.
 
 - **Allow once**: this run and the replies of the chat it opens. Nothing is stored.
 - **Allow for this book**: sets the book's own value to Allow (Book Settings → Privacy & Data), so this book is never asked again for that kind.
 - **Continue without** (when nothing asked is required): the run goes on without those kinds, this time only. Nothing is stored.
-- **Allow once, without …** (when a run asks a required kind and an optional one, as Next Read asks your book list and your reading habits): the required kind goes this time, the optional one stays out.
+- **Allow once, without …** (when a run asks a required kind and an optional one, as Next Read asks your library scan and your reading habits): the required kind goes this time, the optional one stays out.
 - **Not for this book** (only when nothing asked is required): the run goes on without those kinds, and the book's own value becomes Never for them, so later runs leave them out too. Change it on the book's Privacy & Data screen.
-- **Always allow** replaces "Allow for this book" for the two kinds no book can hold, the book list and your reading habits: it sets the value for all books (with a trusted provider, the trusted providers' own value).
+- **Always allow** replaces "Allow for this book" for the two kinds no book can hold, your library scan and your reading habits: it sets the value for all books (with a trusted provider, the trusted providers' own value).
 - A request about no book (an image made outside a book, for instance) has neither "Allow for this book" nor "Not for this book": there is no book to keep the answer.
-- **More…**: opens the book's Privacy & Data screen, or the one for all books when there is no book or only the book list or reading habits are asked, and asks again when you come back (or goes on, when nothing is left to ask). A question judged by a trusted provider's own values opens the settings, where those values live.
+- **More…**: opens the book's Privacy & Data screen, or the one for all books when there is no book or only the library scan or reading habits are asked, and asks again when you come back (or goes on, when nothing is left to ask). A question judged by a trusted provider's own values opens the settings, where those values live.
 - **Cancel**: nothing is sent.
 
 Generate Image with its prompt writer on sends the text around the passage and X-Ray descriptions to two providers: the one that writes the prompt and the one that draws it, which receives a prompt made from them. Each kind must be allowed for both, and the question names both ("Generate Image will send to Anthropic, to write the prompt, and to OpenAI, to draw it"). Its **Continue without** (in place of Not for this book) makes this picture without them and stores nothing, since a Never for the book's text would also stop its X-Ray updates; see [Image Generation](Image-Generation#the-prompt-writer). **Illustrate…** on an X-Ray entry asks the same way for the kinds the entry's description was made from, without Continue without: the description is the picture's subject, so a Never refuses it ([Image Generation](Image-Generation#illustrate-from-x-ray)). A kept image remembers what its prompt carried: drawing that prompt again from the gallery (**Regenerate**, **Regenerate and replace** or **Edit prompt…**) asks the same way for the provider drawing now, and for the prompt writer's provider too when a new Style has it restyle the prompt ("Regenerate will send to Anthropic, to restyle the prompt, and to OpenAI, to draw it"), without Continue without (what a written prompt took from them cannot be taken out), and a Never refuses it ([Image Generation](Image-Generation#the-gallery)).
 
 A required kind (X-Ray's book text, say) on Never is a short refusal that names where the value comes from (this book, all books or trusted providers): **Change for this book…** opens the book's Privacy & Data screen, **Open Settings** the settings. A request over several picked books asks once for the set; each book's own value still decides for its data, and books set to Never stay out.
 
+### The folder window
+
+A run that reads your library shows the scan folders it would read in a window before it goes, when Library Scan is on Ask or when the action cannot work without the list (Suggest from Library, Next Read, Discover New, Analyze Library, Challenge My Taste). On Never there is no window: an action that needs the list is refused, with a button to Privacy & Data.
+
+- **The folders.** The first rows are the folders this run would read, ticked: your default scan folders (**Settings → Reading & Library → Default Scan Folders**), or, for a run started from the library dialog, the folders ticked under its **Library Scan ▾**. Below them come your other default folders and the last five folders you added on the fly, unticked. A tap ticks or unticks a folder; a long-press shows its full path.
+- **+ Add folder…** picks another folder for this run. It comes ticked and is remembered among the recent folders, but it never becomes a default scan folder.
+- **On Ask the window is the question.** The answers sit under the folders: **Allow once**, **Always allow**, **Continue without** (when the action can do without the list: Find Similar and Recommend), **More…** and **Cancel**. Next Read also offers **Allow once, without your reading habits**.
+- **On Allow the window has Run and Cancel**, and only the five actions that need the list show it. Find Similar and Recommend show no window on Allow: they read your default scan folders (in the library dialog, the folders ticked there) or, with none, go without the list.
+- **A folder has to be ticked** for an action that needs the list: until one is, its answer buttons are grayed out. With nothing ticked, Find Similar and Recommend offer **Continue without**, which runs them without your library scan. Reading habits ride the library's books, so with no folder ticked they do not go either.
+
+No folder has to be set beforehand: the window is where you pick. The library dialog's typed Send is the other way in: it uses that dialog's own **Library Scan ▾** ticks and, on Ask, asks first, naming the folders ([Contexts and Chat](Contexts-and-Chat#library-mode)).
+
 ### Where it is asked
 
-At the moment of need, and nowhere else: when an action starts (from a menu, a gesture, the Quick Actions panel, the highlight menu, the file browser or an input dialog), on the **Run** button of an action's scope and source popup (where the spoiler reminder also sits, so the two are one dialog), when you pick a Scope chip range or turn the Tools chip on and send, when you attach your notebook or chat about it, when you chat about an X-Ray entry whose page lists your highlights, when you generate an image, illustrate an X-Ray entry or draw a kept image's prompt again, when a library chat sends your book list, and, while the text around what you tap is on Ask, when a lookup, a highlight chat or **Translate Page** would send it. Viewing, browsing and deleting what is already on the device never ask.
+At the moment of need, and nowhere else: when an action starts (from a menu, a gesture, the Quick Actions panel, the highlight menu, the file browser or an input dialog), on the **Run** button of an action's scope and source popup (where the spoiler reminder also sits, so the two are one dialog), when you pick a Scope chip range or turn the Tools chip on and send, when you attach your notebook or chat about it, when you chat about an X-Ray entry whose page lists your highlights, when you generate an image, illustrate an X-Ray entry or draw a kept image's prompt again, when a library chat sends your library scan, and, while the text around what you tap is on Ask, when a lookup, a highlight chat or **Translate Page** would send it. Viewing, browsing and deleting what is already on the device never ask.
 
 A saved result follows what it was built from, wherever it goes: chatting about an artifact (the artifact window's → Chat, Chat about this on an X-Ray entry, the X-Ray's Full View, an AI Wiki article), attaching an artifact or a pinned answer to a chat, writing an AI Wiki article and every AI merge ask the same way for the kinds the result was built from, and a kind set to Never refuses them. Continuing a saved chat checks the kinds it was given ([Conversations, Notebooks and Export](Conversations-Notebooks-and-Export#chat-history)).
 
@@ -78,7 +90,7 @@ Automatic X-Ray and checkpoint builds have no moment to ask while you read, so t
 | **Allow everything** | Every kind goes without a question, book text included (it raises token costs). |
 | **Block everything** | Every kind set to Never: only your question, the selected text and the book info go (and the behavior, domain and Background texts, which no preset touches); reading position goes off too, so spoiler protection no longer knows where you are. Actions that need more are refused until you allow it. |
 
-A preset sets the values for all books (Default (Ask) the trusted providers' column as well). The trusted providers list, each book's own values, Book info and the scan folders stay as they are: under Allow everything and Block everything a trusted provider keeps its own column, and a book with its own Allow still sends that kind.
+A preset sets the values for all books (Default (Ask) the trusted providers' column as well). The trusted providers list, each book's own values, Book info and the default scan folders stay as they are: under Allow everything and Block everything a trusted provider keeps its own column, and a book with its own Allow still sends that kind.
 
 ### The kinds of data
 
@@ -88,7 +100,7 @@ The rows sit under the presets in **Settings → Privacy & Data**, each with Ask
 - **Highlights** (default: Ask): your highlighted text passages, without notes. Never here is Never for notes too. Used by Recap, Analyze Notes and actions with `{highlights}` placeholders. X-Ray does not send them: an X-Ray entity page lists the highlights that mention the entry, matched on the device, and they go out only when you chat about that entry. Grayed out while Annotation notes are on Allow.
 - **Notebook** (default: Ask): the notebook entries for the book. Used by Connect (With Notes), Analyze Notes, Analyze in Context and actions with the `{notebook}` placeholder, and by attaching your notebook in a chat or chatting about it.
 - **Reading position** (default: on): reading progress percentage, chapter title, chapters read count, how long ago you last read the book. On or off, never asked. Used by X-Ray, Recap and other context-aware features.
-- **Book list** (default: Ask): the same value as **Book list** in Reading & Library; see [Library Scanning Settings](#library-scanning-settings).
+- **Library Scan** (default: Ask): the same value as **Library Scan** in Reading & Library; see [Library Scanning Settings](#library-scanning-settings).
 - **Reading habits** (default: Ask): reading engagement data derived from KOReader's Statistics plugin, shared as curated groups with library scan actions. See [Design Choices](#design-choices).
 - **Text around what you tap** (default: Allow): the bounded text around a selection, your current page and the text around an image prompt; independent of book text.
 - **Book info** (default: Title & author): what the AI is told about the book; see [What Gets Sent](#what-gets-sent).
@@ -99,10 +111,10 @@ The rows sit under the presets in **Settings → Privacy & Data**, each with Ask
 
 In **Settings → Reading & Library**, under Library:
 
-- **Book list** (default: Ask): the same value as in Privacy & Data. Needed by the scan-based library actions (Next Read, Discover New, Analyze Library, Challenge My Taste) and the Suggest from Library book action. Find Similar and Recommend add your library to their answer when the book list is allowed, but don't need it.
-- **Permanent Scan Folders**: folders always scanned for library actions (grayed out while the book list is Never). You can also pick folders on the fly in the library dialog: the pick lasts while that dialog is open, and with every folder unticked no list is sent. Book actions (Suggest from Library, Find Similar) read the permanent folders.
+- **Library Scan** (default: Ask): the same value as in Privacy & Data. Needed by the scan-based library actions (Next Read, Discover New, Analyze Library, Challenge My Taste) and the Suggest from Library book action. Find Similar and Recommend add your library to their answer when Library Scan is allowed, but don't need it.
+- **Default Scan Folders**: the folders a library action starts with, ticked by default (grayed out while Library Scan is Never). Each run can untick them or add others in [the folder window](#the-folder-window); none has to be set. The library dialog starts from them too: its pick lasts while that dialog is open, and with every folder unticked no list is sent. Book actions (Suggest from Library, Find Similar) start from them as well.
 
-A library action needs three things: the book list's value (Ask asks the first time, with **Always allow** for all books), at least one folder, permanent or picked on the fly, and the action's "Allow library use" flag (see [Design Choices](#design-choices)).
+A library action needs three things: the Library Scan value (Ask asks at each run, with **Always allow** for all books), at least one folder ticked for the run, and the action's "Allow Library Scan" flag (see [Design Choices](#design-choices)).
 
 ### Graceful Degradation
 
@@ -131,7 +143,7 @@ Every kind that concerns one book's data (book text, highlights, annotation note
 - **A book's Never always wins**, even over [trusted providers](#trusted-providers) and an allowance given for one run, and it binds background features such as Automatic X-Ray too.
 - **A book's Allow satisfies only the global gate**: per-action flags still apply (see [Double-gating for Custom Actions](#double-gating-for-custom-actions)).
 - Allowing annotation notes for a book implies highlights; Never for highlights is Never for notes too.
-- Reading position, the book list and reading habits have no per-book value.
+- Reading position, the library scan and reading habits have no per-book value.
 
 This lets you keep a kind on Ask or Never for all books and allow it for specific books, or allow it everywhere and fence off a sensitive one. **How this works…** at the bottom of the screen restates these rules.
 
@@ -150,12 +162,12 @@ The Quick Settings panel's **Privacy & Data** tile opens this same screen: a tap
 A trusted provider follows its own column of values, **Settings → Privacy & Data → What trusted providers may use**: one row per kind of data, Allow for all of them unless you change it, so nothing is asked for requests that go to a trusted provider. Set a kind to Ask or Never there and it applies to trusted providers only; every other provider follows the rows of Privacy & Data.
 
 - Trust replaces the values for all books only. Each action still needs its own per-action flags, and a [book's Never](#per-book-values) still wins.
-- Library scanning still needs at least one folder (permanent or picked on the fly).
+- Library Scan still needs at least one folder ticked for the run ([the folder window](#the-folder-window)).
 - A trusted provider's Allow is a standing Allow for background features (Automatic X-Ray and X-Ray checkpoint builds): those build without a question.
 
 **Which provider counts.** The value is judged for the provider a request actually goes to: your active provider, an action's own pinned provider, a model picked from the long-press menu of an action or of Send, or the Quick chip's preset model. Pinning an action to a different provider never inherits trust it shouldn't. When the receiving provider may not get something, it is left out of that request:
 
-- book passages gathered by smart retrieval, a notebook or an artifact attached with the Attach chip (in a new chat, a reply, or a chat reopened from Chat History) and the book list of a library chat, each with a short notice;
+- book passages gathered by smart retrieval, a notebook or an artifact attached with the Attach chip (in a new chat, a reply, or a chat reopened from Chat History) and the library scan of a library chat, each with a short notice;
 - the highlights an X-Ray entry's "Chat about this" carries.
 
 A chat about your notebook from the notebook viewer ("Chat about this notebook") follows the notebook's value for the provider that chat goes to: the book's own value decides first, then the question on Ask, Allow, or a trusted provider; under Never it does not start.
@@ -220,8 +232,8 @@ Which flags each data type needs (relevant when you create custom actions from s
 | Highlights | Highlights (or Annotation notes) | "Allow highlight use" checked |
 | Annotations | Annotation notes (degrades to highlights when notes are not allowed but highlights are) | "Allow annotation use (notes)" checked |
 | Notebook | Notebook | "Allow notebook use" checked |
-| Library catalog | Book list + folders configured | "Allow library use" checked |
-| Reading habits | Reading habits (they ride the library catalog, so the book list too) | "Allow advanced stats" checked (with "Allow library use") |
+| Library catalog | Library Scan + a folder ticked for the run | "Allow Library Scan" checked |
+| Reading habits | Reading habits (they ride the library catalog, so Library Scan too) | "Allow reading habits" checked (with "Allow Library Scan") |
 | Text around what you tap* | Text around what you tap (Allow by default) | Field `use_surrounding_context` (no in-app checkbox): unset = follow the global Surrounding Context setting (the default for custom actions), `true` = always on (also set automatically when your prompt contains `{surrounding_context}`), `false` = never |
 | Per-book values | Book Settings → Privacy & Data (per book; a book's Never beats everything, trusted providers included) | Same per-action flags as above |
 | Page text* | Text around what you tap | Automatic when the prompt uses a `{page_text}` placeholder |
@@ -238,7 +250,7 @@ Built-in actions that cannot work without a kind of data check before anything i
 |-------|---------|
 | Book text | X-Ray, Document Summary, Document Analysis |
 | Highlights or annotation notes | Analyze Notes, Connect (With Notes) |
-| The book list and a scan folder | Next Read, Discover New, Analyze Library, Challenge My Taste, Suggest from Library |
+| Library Scan and a folder ticked for the run ([the folder window](#the-folder-window)) | Next Read, Discover New, Analyze Library, Challenge My Taste, Suggest from Library |
 
 The check follows the same rules as the extraction: a trusted provider is judged by its own column, a book's Never fails it, and for a book that isn't open it reads that book's own values.
 
@@ -294,13 +306,13 @@ The **OpenAI Subscription** provider authenticates with your consumer ChatGPT ac
 
 ### Library Scanning
 
-When the book list is allowed (**Settings → Reading & Library**, or your answer to the question), KOAssistant scans your configured folders for book metadata (title, author, series, reading status, progress) to power library-aware features like Next Read and reading pattern analysis (Analyze Library). Your last-read dates only order the list and are not sent. Only catalog metadata is sent, **not** book content, highlights or annotations.
+When Library Scan is allowed (**Settings → Privacy & Data → Library Scan**, or your answer to the question), KOAssistant scans the folders you tick for the run (your default scan folders, or others you add) for book metadata (title, author, series, reading status, progress) to power library-aware features like Next Read and reading pattern analysis (Analyze Library). Your last-read dates only order the list and are not sent. Only catalog metadata is sent, **not** book content, highlights or annotations.
 
 Library scanning is triple-gated:
 
-1. the **Book list** value (Ask by default; the question offers **Always allow**);
-2. at least one folder, permanent or picked on the fly;
-3. the action's "Allow library use" flag.
+1. the **Library Scan** value (Ask by default; the question offers **Always allow**);
+2. at least one folder ticked for the run: your default scan folders start ticked, and you can add others ([the folder window](#the-folder-window));
+3. the action's "Allow Library Scan" flag.
 
 Trusted providers follow their own column for the first gate but still need a folder.
 
@@ -317,7 +329,7 @@ KOReader's Statistics plugin collects extensive local data (reading time, pages 
 
 In the library list itself, a book with notable engagement gets one short label: "read extensively", "stalled", "opened briefly" or "recently finished".
 
-**What reaches the AI:** only human-readable book lists, for example `"Title" by Author (47 hours)`. Raw statistics (exact timestamps, pages per session, reading speed, session logs) are used for local computation only and **never** leave the device. The AI sees categorized book lists, not behavioral data.
+**What reaches the AI:** only human-readable lists of books, for example `"Title" by Author (47 hours)`. Raw statistics (exact timestamps, pages per session, reading speed, session logs) are used for local computation only and **never** leave the device. The AI sees categorized lists of books, not behavioral data.
 
 **Why it asks:** reading patterns over time create a surprisingly detailed personal profile. Even the curated groups reveal information about reading habits: which books were abandoned, which consumed obsessively, which ignored for months. This warrants a conscious answer rather than a default-on toggle.
 

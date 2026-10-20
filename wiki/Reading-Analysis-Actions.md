@@ -25,13 +25,13 @@ Most of these actions read your own reading data, so they need the matching sett
 | **Document Analysis** | The entire document or a section (your choice) | Book text (required) |
 | **Document Summary** | The entire document or a section (your choice) | Book text (required) |
 | **About** | AI training knowledge (+ web search when it is on) | None |
-| **Suggest from Library** | Library catalog + current book + reading progress | Book list (required) + folders configured |
-| **Next Read** | Library catalog + engagement groups (recently finished, stalled, briefly started) | Book list (required) + folders configured; Reading habits (optional, adds engagement data) |
-| **Discover New** | Library catalog + engagement groups (deep reads, recently finished) | Book list (required) + folders configured; Reading habits (optional) |
-| **Analyze Library** | Library catalog + all engagement groups | Book list (required) + folders configured; Reading habits (optional) |
-| **Challenge My Taste** | Library catalog + engagement groups (deep reads, stalled, briefly started) | Book list (required) + folders configured; Reading habits (optional) |
+| **Suggest from Library** | Library catalog + current book + reading progress | Library Scan (required) + a folder ticked for the run |
+| **Next Read** | Library catalog + engagement groups (recently finished, stalled, briefly started) | Library Scan (required) + a folder ticked for the run; Reading habits (optional, adds engagement data) |
+| **Discover New** | Library catalog + engagement groups (deep reads, recently finished) | Library Scan (required) + a folder ticked for the run; Reading habits (optional) |
+| **Analyze Library** | Library catalog + all engagement groups | Library Scan (required) + a folder ticked for the run; Reading habits (optional) |
+| **Challenge My Taste** | Library catalog + engagement groups (deep reads, stalled, briefly started) | Library Scan (required) + a folder ticked for the run; Reading habits (optional) |
 
-The last four are library actions: see [Contexts and Chat](Contexts-and-Chat) for library mode and [Privacy and Data](Privacy-and-Data) for what each setting shares.
+The last four are library actions: see [Contexts and Chat](Contexts-and-Chat) for library mode and [Privacy and Data](Privacy-and-Data) for what each setting shares. Suggest from Library and the four library actions show their scan folders to tick before they run ([the folder window](Privacy-and-Data#the-folder-window)).
 
 These actions don't get your reading data unless you allow it: each kind is asked for the first time an action wants it (the question names the action, the provider and the amount), and your answer can be kept for the book. With book text set to Never, an action with source selection has only **AI knowledge only** available; the other actions fall back to the AI's training knowledge, with a "*Response generated without: ...*" notice in the chat. X-Ray, Document Summary and Document Analysis are the exception: they are refused, with a message that names where the value comes from and a button to it (the book's Privacy & Data screen, or the settings), and for X-Ray the message points to X-Ray (Simple) instead. A result you generated earlier stays viewable after you set the text to Never, but you cannot regenerate or redo it.
 
@@ -182,7 +182,7 @@ It skips books you haven't started and books past 95%. For a book with no record
 
 When you reach the end of a book, KOAssistant offers to suggest what to read next from your library ("Would you like an AI suggestion for what to read next from your library?"), just after KOReader's own end-of-book popup. **Suggest** runs **Suggest from Library**, which suggests three to five books you already own, based on the book you are reading and your reading patterns.
 
-- **Settings → Reading & Library → Suggest Next Read on Finish** (default: On). It is offered unless the book list is set to Never for your provider (a trusted provider follows its own value), and needs at least one permanent scan folder; on Ask, the suggestion asks before your list is read: **Settings → Reading & Library → Book list** and **Permanent Scan Folders**.
+- **Settings → Reading & Library → Suggest Next Read on Finish** (default: On). It is offered unless Library Scan is set to Never for your provider (a trusted provider follows its own value), and only when you have a default scan folder or have added a folder on the fly before. **Suggest** runs Suggest from Library, which shows its [folder window](Privacy-and-Data#the-folder-window) (on Ask it is also the question). The settings are **Settings → Reading & Library → Library Scan** and **Default Scan Folders**.
 - When the book's last chapter has a quiz to offer, the quiz takes the end-of-book moment and the suggestion is skipped that time.
 
 Suggest from Library is also an ordinary book action, in Quick Actions by default. It sends your library catalog (title, author, series when it has one, reading status, and progress for books you are reading or have on hold; last-read dates only order the list and are not sent): see [Privacy and Data](Privacy-and-Data).

@@ -4719,10 +4719,11 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
                 provider = effective_provider,
                 -- Library scanning (session folders from library dialog override permanent config)
                 library_scan_folders = config.features and config.features.library_scan_folders,
-                -- the library dialog's pick, for a run started there only: a book
-                -- action reads the permanent folders (2026-10-20)
-                _session_scan_folders = (temp_config.features and temp_config.features.is_library_context)
-                    and plugin and plugin._session_scan_folders or nil,
+                -- the folders the run reads (DataAccess.scanFolders: its folder
+                -- window's pick, else the library dialog's for a run started
+                -- there, else the permanent ones; 2026-10-20)
+                _session_scan_folders = require("koassistant.ui.data_access").scanFolders(plugin,
+                    (temp_config.features and temp_config.features.is_library_context) == true, temp_config.features),
                 -- Ladder rung 1 (create from nothing): bound {book_text} extraction at
                 -- the rung boundary instead of the reader's position (§6 slice 1)
                 _ladder_target_ratio = message_data._ladder_target,
@@ -4794,7 +4795,9 @@ if prune_book_text then
                 -- Library placeholders (the catalog and the engagement lists) were
                 -- always empty from the file browser without these (B463)
                 library_scan_folders = config.features and config.features.library_scan_folders,
-                _session_scan_folders = config.features and config.features._session_scan_folders,
+                -- the folders the run reads (the folder rule, as above)
+                _session_scan_folders = require("koassistant.ui.data_access").scanFolders(plugin,
+                    (temp_config.features and temp_config.features.is_library_context) == true, temp_config.features),
             }))
             logger.dbg("KOAssistant: Sidecar extraction for file browser:", fb_document_path)
             local extracted = extractor:extractForAction(prompt or {})
@@ -4806,7 +4809,6 @@ if prune_book_text then
     elseif prompt and prompt.use_library then
         -- No open document but action needs library data — extract library only
         -- Global toggle is absolute gate; session folders bypass folder config only
-        local lib_features = plugin and plugin.settings and plugin.settings:readSetting("features") or {}
         -- Judged on the request's own config, as the extractor branches above
         -- are: the run's allowance (Allow once) rides it and nothing else
         local lib_gate = require("koassistant.request.privacy_gates").context(
@@ -4814,9 +4816,10 @@ if prune_book_text then
         local lib_toggle = require("koassistant.request.privacy_gates").allows("book_list", lib_gate)
         local scan_folders_to_use
         if lib_toggle then
-            -- the folder rule: the library dialog's pick for a run started there
+            -- the folder rule: the run's folder window pick, else the library
+            -- dialog's for a run started there, else the permanent folders
             scan_folders_to_use = require("koassistant.ui.data_access").scanFolders(plugin,
-                (temp_config.features and temp_config.features.is_library_context) == true, lib_features)
+                (temp_config.features and temp_config.features.is_library_context) == true, temp_config.features or {})
         end
         if scan_folders_to_use and #scan_folders_to_use > 0 then
             local scan_ok, LibraryScanner = pcall(require, "koassistant.books.library_scanner")
@@ -8214,6 +8217,28 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
             }})
         end
 
+        -- Folders added on the fly before (here or in a run's folder window),
+        -- offered again unticked; a tap adds one for this dialog
+        local listed = {}
+        for _idx, p in ipairs(perm_folders) do listed[p] = true end
+        for _idx, p in ipairs(session_state.adhoc_folders) do listed[p] = true end
+        for _idx, folder_path in ipairs(require("koassistant.ui.data_access").recentFolders(plugin)) do
+            if not listed[folder_path] then
+                table.insert(menu_buttons, {{
+                    text = "\u{2610} " .. (folder_path:match("([^/]+)$") or folder_path),
+                    callback = function()
+                        UIManager:close(library_folder_dialog)
+                        table.insert(session_state.adhoc_folders, folder_path)
+                        syncLibraryState()
+                        refreshInputDialog()
+                    end,
+                    hold_callback = function()
+                        UIManager:show(InfoMessage:new{ text = folder_path, timeout = 5 })
+                    end,
+                }})
+            end
+        end
+
         -- Add Folder button
         table.insert(menu_buttons, {{
             text = _("+ Add Folder…"),
@@ -8249,6 +8274,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                             end
                         end
                         table.insert(session_state.adhoc_folders, selected_path)
+                        require("koassistant.ui.data_access").rememberFolder(plugin, selected_path)
                         syncLibraryState()
                         refreshInputDialog()
                     end,
@@ -8623,7 +8649,9 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
         { features = settings_features, provider = configuration and configuration.provider })
     local has_session_scan = plugin and plugin._session_scan_folders and #plugin._session_scan_folders > 0
     local has_permanent_folders = settings_features.library_scan_folders and #settings_features.library_scan_folders > 0
-    local library_scan_available = library_toggle_on and (has_session_scan or has_permanent_folders)
+    -- the scan actions are offered unless Library Scan is Never: a run picks
+    -- its folders in its own window (round 2, 2026-10-20)
+    local library_scan_available = library_toggle_on
 
     local has_more_actions = false  -- Set by buildInputDialogButtons, read by gear menu
     local buildInputDialogButtons
@@ -9863,7 +9891,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                             -- this Send goes without it rather than drop it silently
                             -- (not after the question's Continue without: the reader chose)
                             UIManager:show(require("ui/widget/notification"):new{
-                                text = _("Your book list was left out: it is not allowed for this provider."),
+                                text = _("Your library scan was left out: it is not allowed for this provider."),
                                 timeout = 3,
                             })
                         end
@@ -10794,7 +10822,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                             showLibraryFolderPopup()
                         else
                             UIManager:show(InfoMessage:new{
-                                text = _("The library scan actions are off: your book list is set to Never (Settings → Privacy & Data → Book list).\n\nIf you don't need these actions, you can hide this section from the gear menu."),
+                                text = _("The library scan actions are off: Library Scan is set to Never (Settings → Privacy & Data → Library Scan).\n\nIf you don't need these actions, you can hide this section from the gear menu."),
                             })
                         end
                     end,
