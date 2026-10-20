@@ -173,6 +173,14 @@ TestRunner:test("needsTitle: an action with nothing of the book but its title (B
     TestRunner:assertFalse(DataAccess.needsTitle({ prompt = 'My notes on "{title}"', use_annotations = true }, nil),
         "the reader's notes go")
     TestRunner:assertFalse(DataAccess.needsTitle({ prompt = "Explain this." }, nil), "no title in the prompt")
+    -- B514: judged on what the run sends
+    local args = { prompt = 'Key arguments of "{title}"', use_book_text = true, use_summary_cache = true, source_selection = true }
+    TestRunner:assertTrue(DataAccess.needsTitle(args, "ai_knowledge"), "AI knowledge only: no text, no summary")
+    TestRunner:assertFalse(DataAccess.needsTitle(args, "summary"), "the summary goes")
+    TestRunner:assertFalse(DataAccess.needsTitle(args, "full_text"), "the text goes")
+    TestRunner:assertFalse(DataAccess.needsTitle(args, nil), "no source picked yet: the action could use both")
+    TestRunner:assertFalse(DataAccess.needsTitle({ prompt = 'Something like "{title}"', use_library = true }, nil),
+        "the book list goes (Suggest from Library)")
 end)
 
 TestRunner:test("the presets' names and the layers' words", function()

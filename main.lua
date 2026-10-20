@@ -8793,6 +8793,7 @@ end
 --- @param action table: The action definition
 --- @param action_id string: The action ID
 --- @param opts table: { on_execute = function(state), for_highlight = boolean }
+---   session_spoiler = true|false|nil (the chat's Spoiler chip, R5), session_tools = bool|nil
 ---   state = { source = "full_text"|"summary"|"ai_knowledge",
 ---             scope = "full"|"section"|"read_so_far"|"chapter"|"chapter_so_far"|"from_section"|"range",
 ---             section_entry = table|nil, section_label = string|nil }
@@ -8960,10 +8961,14 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
   -- to a scope covering unread text; the C3 consent confirm then only fires when
   -- the user ACTIVELY picks a spoiler-crossing scope. (read_so_far_available
   -- implies an open book, so doc_settings is resolvable here.)
+  -- Spoiler protection for this popup's default scope and its unread-text
+  -- confirm: the chat's Spoiler chip when the dialog passes one (R5, ruled
+  -- 2026-10-20, for that one run), else the standing rule (research, a
+  -- finished book, the book's and the global value)
+  local popup_spoiler = require("koassistant.books.book_settings").resolveSpoilerPosture(
+      self.ui.doc_settings, features, { session = opts.session_spoiler }).protected
   local state = {
-    scope = (read_so_far_available
-        and require("koassistant.books.book_settings").resolveSpoilerFree(self.ui.doc_settings, features)
-        and "read_so_far") or "full",
+    scope = (read_so_far_available and popup_spoiler and "read_so_far") or "full",
     source = (requires_book_text and "full_text")
         -- Dialog launches pass session_tools (the session Tools chip); false skips the
         -- smart-retrieval DEFAULT (row stays selectable). Direct entries pass nothing.
@@ -9045,8 +9050,7 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
     -- is the popup's pre-selected default, so the plain open→Run path never
     -- touches a radio row. Cancel returns to the popup unchanged. Declared at
     -- this level because the Run button lives outside the scope-section block.
-    local scope_spoiler_free = require("koassistant.books.book_settings").resolveSpoilerFree(
-        self_ref.ui.doc_settings, features)
+    local scope_spoiler_free = popup_spoiler
     local function confirmUnreadScope(covers_unread, proceed)
       if scope_spoiler_free and covers_unread then
         local ConfirmBox = require("ui/widget/confirmbox")

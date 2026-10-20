@@ -451,6 +451,15 @@ local function quickPresetForces(facet, quick_on, features, action)
     return false
 end
 
+-- The Quick preset's "book tools off" for an action that takes the preset (R4,
+-- ruled 2026-10-20): Smart retrieval is not preselected in the source popup
+-- and a direct tap does not gather silently; the row stays pickable. quick_on =
+-- the chip's state, a run variant's pick, or the Quick default on a direct tap.
+local function quickToolsOff(action, features, quick_on)
+    if not action or action.accept_quick_answer ~= true then return false end
+    return quickPresetForces("tools", quick_on, features)
+end
+
 local function ensureReasoningHeadroom(api_params, provider, decision)
     if not (api_params and api_params.max_tokens and decision) then return end
     local might_reason = decision.mode == "on"
@@ -528,7 +537,10 @@ local function buildUnifiedRequestConfig(config, domain_context, action, plugin)
     -- gate covers the WHOLE preset (two-source rule, maintainer 2026-07-19): every
     -- preset component below derives from quick_answer, while manual ⚡-menu
     -- overrides (reasoning_override/model_override) keep their Web-pattern reach.
-    if quick_answer and action and action.accept_quick_answer ~= true then
+    if quick_answer and action and (action.accept_quick_answer ~= true
+            or require("koassistant.request.run_options").isModelOnly(action)) then
+        -- an action that saves a result never takes the preset, whatever its
+        -- flag says (the editor refuses the checkbox for them; R6, 2026-10-20)
         quick_answer = nil
         -- Also drop the chip-state key from this chat's config: it would ride
         -- into the action chat's replies, where applyQuickReplyOverrides has no
@@ -7899,7 +7911,10 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         local is_hl = action.context == "highlight" or action.context == "both"
                         plugin:_showUnifiedActionPopup(action, action_id, {
                             for_highlight = is_hl or nil,
-                            session_tools = session_book_tools == true,
+                            session_tools = session_book_tools == true
+                                and not require("koassistant.ui.dialogs").quickToolsOff(action,
+                                    configuration.features, configuration.features._session_quick_answer == true),
+                            session_spoiler = session_spoiler_free,
                             on_execute = function(popup_state)
                                 runActionWithSource(popup_state, is_hl)
                             end,
@@ -7941,7 +7956,10 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         local is_hl = action.context == "highlight" or action.context == "both"
                         plugin:_showUnifiedActionPopup(action, action_id, {
                             for_highlight = is_hl or nil,
-                            session_tools = session_book_tools == true,
+                            session_tools = session_book_tools == true
+                                and not require("koassistant.ui.dialogs").quickToolsOff(action,
+                                    configuration.features, configuration.features._session_quick_answer == true),
+                            session_spoiler = session_spoiler_free,
                             on_execute = function(popup_state)
                                 runActionWithSource(popup_state, is_hl)
                             end,
@@ -7991,7 +8009,10 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
             local is_highlight = action.context == "highlight" or action.context == "both"
             plugin:_showUnifiedActionPopup(action, action_id, {
                 for_highlight = is_highlight or nil,
-                session_tools = session_book_tools == true,
+                session_tools = session_book_tools == true
+                    and not require("koassistant.ui.dialogs").quickToolsOff(action,
+                        configuration.features, configuration.features._session_quick_answer == true),
+                session_spoiler = session_spoiler_free,
                 on_execute = function(popup_state)
                     runActionWithSource(popup_state, is_highlight)
                 end,
@@ -8617,6 +8638,12 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
             quick_web_strip = require("koassistant.ui.dialogs").quickPresetForces("web",
                 configuration.features._session_quick_answer == true,
                 configuration.features),
+            -- the same for book tools (R4), and the ⚡ mark on the actions that
+            -- take Quick while the chip is on (the maintainer 2026-10-20)
+            quick_tools_strip = require("koassistant.ui.dialogs").quickPresetForces("tools",
+                configuration.features._session_quick_answer == true,
+                configuration.features),
+            quick_on = configuration.features._session_quick_answer == true,
             tools_allowed = session_book_tools == true
                 and (BookToolRunner.smartRetrievalAllowed(configuration, ui_instance)) == true,
         }
@@ -13522,8 +13549,22 @@ local function executeDirectAction(ui, action, highlighted_text, configuration, 
         gather_config.provider = rv.provider
         gather_config.model = rv.model
     end
+    -- Quick on a direct tap (R4): a run variant's pick, else the Quick default
+    -- for this book; the preset's "book tools off" then skips the silent gather
+    local quick_direct = false
+    if action.accept_quick_answer == true then
+        if rv and rv.quick ~= nil then
+            quick_direct = rv.quick == true
+        else
+            local gf = (gather_config and gather_config.features) or {}
+            quick_direct = require("koassistant.books.book_settings").resolveQuickAnswerDefault(
+                require("koassistant.storage.doc_settings").resolve((gf.book_metadata or {}).file, ui)
+                    or (ui and ui.doc_settings), gf) == true
+        end
+    end
     if action.smart_retrieval == true
-            and BookToolRunner.smartRetrievalAllowed(gather_config, ui) then
+            and BookToolRunner.smartRetrievalAllowed(gather_config, ui)
+            and not quickToolsOff(action, gather_config and gather_config.features, quick_direct) then
         runSmartRetrieval(action, action.id or (action.text or "action"), highlighted_text,
             ui, gather_config, plugin, function()
                 -- Run option (B345), set just-in-time: the gather can be cancelled,
@@ -13949,6 +13990,7 @@ return {
     quickPresetNudgeLabel = quickPresetNudgeLabel,
     applyQuickReplyOverrides = applyQuickReplyOverrides,
     quickPresetForces = quickPresetForces,
+    quickToolsOff = quickToolsOff,
     showAttachMenu = showAttachMenu,
     attachChipLabel = attachChipLabel,
     -- Exported for the main-settings action row (AskGPT:showQuickPresetModelMode)

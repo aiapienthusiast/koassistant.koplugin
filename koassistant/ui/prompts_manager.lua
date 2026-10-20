@@ -274,6 +274,7 @@ function PromptsManager:loadPrompts()
             description = prompt.description,
             id = prompt.id,
             include_book_context = prompt.include_book_context,
+            accept_quick_answer = prompt.accept_quick_answer,
             skip_language_instruction = prompt.skip_language_instruction,
             skip_domain = prompt.skip_domain,
             skip_background = prompt.skip_background,
@@ -360,6 +361,7 @@ function PromptsManager:loadPrompts()
                     end
                 end
                 if override.include_book_context ~= nil then entry.include_book_context = override.include_book_context end
+                if override.accept_quick_answer ~= nil then entry.accept_quick_answer = override.accept_quick_answer end
                 -- Context extraction flag overrides
                 if override.use_book_text ~= nil then entry.use_book_text = override.use_book_text end
                 if override.use_highlights ~= nil then entry.use_highlights = override.use_highlights end
@@ -895,6 +897,14 @@ function PromptsManager:showPromptDetails(prompt)
             local book_context_text = prompt.include_book_context and _("Yes") or _("No")
             info_text = info_text .. "\n" .. _("Include Book Info") .. ": " .. book_context_text
         end
+        -- Takes the Quick preset (R6, 2026-10-20); never an action that saves a result
+        local quick_text
+        if require("koassistant.request.run_options").isModelOnly(prompt) then
+            quick_text = _("Never (it saves a result)")
+        else
+            quick_text = prompt.accept_quick_answer == true and _("Yes") or _("No")
+        end
+        info_text = info_text .. "\n" .. _("Takes the Quick preset") .. ": " .. quick_text
 
         -- Book text extraction (for contexts that can run in reading mode)
         -- Note: Lightweight data (progress, highlights, annotations, stats) is always available
@@ -1213,6 +1223,9 @@ function PromptsManager:duplicateAction(action)
         behavior_variant = duplicate.behavior_variant,
         behavior_override = duplicate.behavior_override,
         include_book_context = duplicate.include_book_context,
+        accept_quick_answer = duplicate.accept_quick_answer,
+        skip_spoiler = duplicate.skip_spoiler,
+        use_surrounding_context = duplicate.use_surrounding_context,
         skip_language_instruction = duplicate.skip_language_instruction,
         skip_domain = duplicate.skip_domain,
         skip_background = duplicate.skip_background,
@@ -1281,6 +1294,7 @@ function PromptsManager:showPromptEditor(existing_prompt)
         prompt = existing_prompt and existing_prompt.prompt or "",
         context = existing_prompt and existing_prompt.context or nil,
         include_book_context = existing_prompt and existing_prompt.include_book_context or (not existing_prompt and true) or false,
+        accept_quick_answer = existing_prompt and existing_prompt.accept_quick_answer == true or false,
         skip_language_instruction = existing_prompt and existing_prompt.skip_language_instruction or false,
         skip_domain = existing_prompt and existing_prompt.skip_domain or false,
         -- Background gate (tri-state: nil = follow domain / true / false) — no `or nil`,
@@ -1932,6 +1946,22 @@ function PromptsManager:showStep3_Settings(state)
             text = (state.include_book_context and "☑ " or "☐ ") .. _("Include book info"),
             callback = function()
                 state.include_book_context = not state.include_book_context
+                UIManager:close(self.step3_dialog)
+                self:showStep3_Settings(state)
+            end,
+        })
+    end
+
+    -- Takes the Quick preset (R6, 2026-10-20): the ⚡ chip, an action's Quick
+    -- answer and the Quick default reach only the actions with this on. Never
+    -- an action that saves a result: a short answer would break what it saves.
+    if require("koassistant.request.run_options").isModelOnly(state) then
+        table.insert(items, { text = _("Takes the Quick preset: never (it saves a result)"), enabled = false })
+    else
+        table.insert(items, {
+            text = (state.accept_quick_answer and "☑ " or "☐ ") .. _("Takes the Quick preset"),
+            callback = function()
+                state.accept_quick_answer = not state.accept_quick_answer
                 UIManager:close(self.step3_dialog)
                 self:showStep3_Settings(state)
             end,
@@ -3502,6 +3532,8 @@ function PromptsManager:showBuiltinSettingsEditor(prompt)
         domain_base = base_domain,  -- Track base for comparison on save
         include_book_context = prompt.include_book_context or false,
         include_book_context_base = base_include_book_context,
+        accept_quick_answer = prompt.accept_quick_answer == true,
+        accept_quick_answer_base = base_action and base_action.accept_quick_answer == true or false,
         -- New format: reasoning_config
         reasoning_config = prompt.reasoning_config,
         -- Legacy format (backward compatibility)
@@ -3709,6 +3741,22 @@ function PromptsManager:showBuiltinSettingsDialog(state)
             text = (state.include_book_context and "☑ " or "☐ ") .. _("Include book info"),
             callback = function()
                 state.include_book_context = not state.include_book_context
+                UIManager:close(self.builtin_settings_dialog)
+                self:showBuiltinSettingsDialog(state)
+            end,
+        })
+    end
+
+    -- Takes the Quick preset (R6, 2026-10-20): the ⚡ chip, an action's Quick
+    -- answer and the Quick default reach only the actions with this on. Never
+    -- an action that saves a result: a short answer would break what it saves.
+    if require("koassistant.request.run_options").isModelOnly(prompt) then
+        table.insert(items, { text = _("Takes the Quick preset: never (it saves a result)"), enabled = false })
+    else
+        table.insert(items, {
+            text = (state.accept_quick_answer and "☑ " or "☐ ") .. _("Takes the Quick preset"),
+            callback = function()
+                state.accept_quick_answer = not state.accept_quick_answer
                 UIManager:close(self.builtin_settings_dialog)
                 self:showBuiltinSettingsDialog(state)
             end,
@@ -4411,6 +4459,11 @@ function PromptsManager:saveBuiltinOverride(prompt, state)
         override.use_notebook = state.use_notebook
         has_any = true
     end
+    -- Takes the Quick preset (R6, 2026-10-20)
+    if state.accept_quick_answer ~= (state.accept_quick_answer_base or false) then
+        override.accept_quick_answer = state.accept_quick_answer
+        has_any = true
+    end
 
     -- Save enable_web_search if it differs from base (tri-state: nil/true/false)
     -- Use "global" sentinel to represent overriding to nil (follow global)
@@ -4704,6 +4757,22 @@ function PromptsManager:showCustomQuickSettingsDialog(state)
             text = (state.include_book_context and "☑ " or "☐ ") .. _("Include book info"),
             callback = function()
                 state.include_book_context = not state.include_book_context
+                UIManager:close(self.custom_quick_dialog)
+                self:showCustomQuickSettingsDialog(state)
+            end,
+        })
+    end
+
+    -- Takes the Quick preset (R6, 2026-10-20): the ⚡ chip, an action's Quick
+    -- answer and the Quick default reach only the actions with this on. Never
+    -- an action that saves a result: a short answer would break what it saves.
+    if require("koassistant.request.run_options").isModelOnly(state) then
+        table.insert(items, { text = _("Takes the Quick preset: never (it saves a result)"), enabled = false })
+    else
+        table.insert(items, {
+            text = (state.accept_quick_answer and "☑ " or "☐ ") .. _("Takes the Quick preset"),
+            callback = function()
+                state.accept_quick_answer = not state.accept_quick_answer
                 UIManager:close(self.custom_quick_dialog)
                 self:showCustomQuickSettingsDialog(state)
             end,
@@ -5483,6 +5552,7 @@ function PromptsManager:addPrompt(state)
             use_advanced_stats = state.use_advanced_stats or nil,
             use_notebook = state.use_notebook or nil,
             use_library = state.use_library or nil,
+            accept_quick_answer = state.accept_quick_answer or nil,
             -- View mode flags
             translate_view = state.translate_view or nil,
             compact_view = state.compact_view or nil,
@@ -5563,6 +5633,7 @@ function PromptsManager:updatePrompt(existing_prompt, state)
                 use_advanced_stats = state.use_advanced_stats or nil,
                 use_notebook = state.use_notebook or nil,
                 use_library = state.use_library or nil,
+                accept_quick_answer = state.accept_quick_answer or nil,
                 -- View mode flags
                 translate_view = state.translate_view or nil,
                 compact_view = state.compact_view or nil,

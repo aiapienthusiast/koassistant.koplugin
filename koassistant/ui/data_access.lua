@@ -539,15 +539,20 @@ end
 --- selection's window), with the amounts the reader can judge. Returns true
 --- when a question or a refusal is up (the run continues through run_fn, or
 --- not at all), false when nothing needs asking (the caller goes on).
--- What a request carries of the book besides its text: an action with one of
--- these has something to go on without the title.
+-- What a request carries of the book besides its text and the stored summary,
+-- whatever the source: an action with one of these has something to go on
+-- without the title (the book list included, B514).
 local CONTENT_FLAGS = { "use_highlights", "use_annotations", "use_notebook", "use_xray_cache",
-    "use_analyze_cache", "use_summary_cache", "use_page_text" }
+    "use_analyze_cache", "use_page_text", "use_library" }
 
 --- Book info None means none (B500): whether an action names the book only
---- through its title, with nothing of the book itself to go on (no text,
---- or the AI-knowledge source, and none of the stored or reader's material),
---- so it cannot run while the AI is told nothing about the book. Pure.
+--- through its title, with nothing of the book itself to go on in THIS run,
+--- so it cannot run while the AI is told nothing about the book. Judged on
+--- what the run sends, not on what the action could use (B514): the text
+--- goes unless the picked source is the summary or AI knowledge, the summary
+--- only when the picked source is the summary (or the action has no source
+--- popup), the reader's material, the caches and the book list whatever the
+--- source. Pure.
 function DataAccess.needsTitle(action, source)
     action = action or {}
     local prompt = action.prompt
@@ -556,7 +561,8 @@ function DataAccess.needsTitle(action, source)
         prompt = ok and Templates and Templates.get(action.template) or nil
     end
     if type(prompt) ~= "string" or not prompt:find("{title}", 1, true) then return false end
-    if action.use_book_text and source ~= "ai_knowledge" then return false end
+    if action.use_book_text and source ~= "ai_knowledge" and source ~= "summary" then return false end
+    if action.use_summary_cache and (source == nil or source == "summary") then return false end
     for _idx, flag in ipairs(CONTENT_FLAGS) do
         if action[flag] then return false end
     end

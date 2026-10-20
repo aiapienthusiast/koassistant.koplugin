@@ -373,7 +373,7 @@ local SettingsSchema = {
                             text = _("Emoji Data Access Indicators"),
                             path = "features.enable_data_access_indicators",
                             default = false,
-                            help_text = _("Show emoji indicators on action names showing what data they access: 📄 document text, 🔖 highlights, 📝 annotations, 📓 notebook, 📚 library, 📊 reading stats, 🌐 web search. Needs the emoji font (the Emoji Font row above installs it)."),
+                            help_text = _("Show emoji indicators on action names showing what data they access: 📄 document text, 🔖 highlights, 📝 annotations, 📓 notebook, 📚 library, 📊 reading stats, 🌐 web search, (🔍) smart retrieval; in a chat with Quick on, ⚡ marks the actions that take the Quick preset. Needs the emoji font (the Emoji Font row above installs it)."),
                         },
                     },
                 },

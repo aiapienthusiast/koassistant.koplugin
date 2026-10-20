@@ -91,6 +91,16 @@ TestRunner:test("smart retrieval badge only when tools could actually run", func
     TestRunner:has(on, "(🔍)")
 end)
 
+TestRunner:test("the Quick mark and the smart retrieval badge under Quick (2026-10-20)", function()
+    local takes = { text = "A", accept_quick_answer = true, smart_retrieval = true }
+    local plain = { text = "B", smart_retrieval = true }
+    TestRunner:has(DT(takes, IND, { quick_on = true }), "⚡")
+    TestRunner:hasnt(DT(plain, IND, { quick_on = true }), "⚡")
+    TestRunner:hasnt(DT(takes, IND, { quick_on = false }), "⚡")
+    TestRunner:hasnt(DT(takes, IND, { quick_on = true, tools_allowed = true, quick_tools_strip = true }), "🔍")
+    TestRunner:has(DT(plain, IND, { quick_on = true, tools_allowed = true, quick_tools_strip = true }), "(🔍)")
+end)
+
 print("")
 print(string.rep("-", 50))
 print(string.format("  Results: %d passed, %d failed", TestRunner.passed, TestRunner.failed))

@@ -246,6 +246,10 @@ function ActionService:loadActions()
                     if override.include_book_context ~= nil then
                         action_data.include_book_context = override.include_book_context
                     end
+                    -- Takes the Quick preset (R6, 2026-10-20): the editor's checkbox
+                    if override.accept_quick_answer ~= nil then
+                        action_data.accept_quick_answer = override.accept_quick_answer
+                    end
                     -- Context extraction flag overrides
                     if override.use_book_text ~= nil then
                         action_data.use_book_text = override.use_book_text
@@ -1842,6 +1846,10 @@ function ActionService:createDuplicateAction(action)
         skip_background = action.skip_background,
         -- Web search override (tri-state: true/false/nil)
         enable_web_search = action.enable_web_search,
+        -- The three pins a copy used to drop (the Quick audit, finding 16)
+        accept_quick_answer = action.accept_quick_answer,
+        skip_spoiler = action.skip_spoiler,
+        use_surrounding_context = action.use_surrounding_context,
         -- Context extraction flags
         use_book_text = action.use_book_text,
         use_highlights = action.use_highlights,
@@ -1981,11 +1989,16 @@ end
 --   🌐 = web search active (per-action force-on; parenthesized when following the
 --        effective default — the input dialog passes its session Web chip state via opts)
 --   (🔍) = smart retrieval available (action.smart_retrieval + opts.tools_allowed —
---        the AI may search the book for targeted passages)
+--        the AI may search the book for targeted passages; hidden for an action that
+--        takes Quick while the preset turns book tools off, opts.quick_tools_strip)
+--   ⚡ = this action takes the Quick preset and Quick is on (opts.quick_on; the
+--        maintainer 2026-10-20: the chips describe the typed message, the marks
+--        each button)
 -- @param action: Action definition table (needs flag fields)
 -- @param features: Features settings table (needs enable_data_access_indicators, enable_web_search)
 -- @param opts: optional { effective_web_search = bool (overrides the global for the
---        follows-default 🌐 case), tools_allowed = bool (gates the (🔍) indicator) }
+--        follows-default 🌐 case), tools_allowed = bool (gates the (🔍) indicator),
+--        quick_web_strip = bool, quick_tools_strip = bool, quick_on = bool }
 -- @return string: Display text with optional emoji suffix
 function ActionService.getActionDisplayText(action, features, opts)
     local text = action.text or action.id
@@ -2042,8 +2055,12 @@ function ActionService.getActionDisplayText(action, features, opts)
     -- Smart retrieval: the action may search the book via tools (parenthesized — the
     -- source popup / silent gather decides per run). Only when the caller says tools
     -- could actually run (posture, provider, consent — see smartRetrievalAllowed).
-    if action.smart_retrieval == true and opts and opts.tools_allowed then
+    if action.smart_retrieval == true and opts and opts.tools_allowed
+        and not (opts.quick_tools_strip and action.accept_quick_answer == true) then
         table.insert(indicators, "(🔍)")
+    end
+    if opts and opts.quick_on and action.accept_quick_answer == true then
+        table.insert(indicators, "⚡")
     end
 
     if #indicators > 0 then
