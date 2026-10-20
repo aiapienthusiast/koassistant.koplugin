@@ -320,7 +320,7 @@ In the library list itself, a book with notable engagement gets one short label:
 
 ## Related
 
-- [Book Settings and Book Hub](Book-Settings-and-Book-Hub): the per-book Privacy, Identity and Chat behavior screens.
+- [Book Settings and Book Hub](Book-Settings-and-Book-Hub): the per-book Privacy & Data, Identity and Chat behavior screens.
 - [Actions and Menus](Actions-and-Menus): the action editor's data-access checkboxes for custom actions.
 - [Template Variables](Template-Variables): every placeholder and the kind of data it needs.
 - [Using X-Ray](Using-X-Ray): Automatic X-Ray and checkpoints, which run under a standing Allow for book text.
