@@ -15,7 +15,7 @@ Most of these actions read your own reading data, so they need the matching sett
 | **X-Ray** | Book text up to your current position | Book text (required; asked the first time). Highlights are only listed locally on entry pages; nothing extra is sent |
 | **X-Ray (Simple)** | AI training knowledge + reading progress | None |
 | **Recap** | Book text up to your current position, or AI knowledge (your choice), + your highlights | Book text (for extracted text), Highlights |
-| **Analyze Notes** | Your highlights and annotations, plus the book's notebook and summary when allowed | Highlights (required) or Annotation notes (your notes need Annotation notes, the notebook Notebook) |
+| **Analyze Notes** | Your highlights and annotations, plus the book's notebook and summary when allowed | Highlights (required); your notes need Annotation notes, the notebook Notebook |
 | **Key Arguments** | Full text, summary, or AI knowledge (your choice) | Book text (for full text or summary) |
 | **Counterarguments** | Full text, summary, or AI knowledge (your choice) | Book text (for full text or summary) |
 | **Discussion Questions** | Full text, summary, or AI knowledge (your choice) | Book text (for full text or summary) |
@@ -29,11 +29,11 @@ Most of these actions read your own reading data, so they need the matching sett
 | **Next Read** | Library catalog + engagement groups (recently finished, stalled, briefly started) | Book list (required) + folders configured; Reading habits (optional, adds engagement data) |
 | **Discover New** | Library catalog + engagement groups (deep reads, recently finished) | Book list (required) + folders configured; Reading habits (optional) |
 | **Analyze Library** | Library catalog + all engagement groups | Book list (required) + folders configured; Reading habits (optional) |
-| **Challenge My Taste** | Library catalog + all engagement groups | Book list (required) + folders configured; Reading habits (optional) |
+| **Challenge My Taste** | Library catalog + engagement groups (deep reads, stalled, briefly started) | Book list (required) + folders configured; Reading habits (optional) |
 
 The last four are library actions: see [Contexts and Chat](Contexts-and-Chat) for library mode and [Privacy and Data](Privacy-and-Data) for what each setting shares.
 
-These actions don't get your reading data unless you allow it: each kind is asked for the first time an action wants it (the question names the action, the provider and the amount), and your answer can be kept for the book. With book text set to Never, an action with source selection has only **AI knowledge only** available; the other actions fall back to the AI's training knowledge, with a "*Response generated without: ...*" notice in the chat. X-Ray, Document Summary and Document Analysis are the exception: they are refused, with a button to the screen that holds the value (or, for X-Ray, use X-Ray (Simple) instead). A result you generated earlier stays viewable after you set the text to Never, but you cannot regenerate or redo it.
+These actions don't get your reading data unless you allow it: each kind is asked for the first time an action wants it (the question names the action, the provider and the amount), and your answer can be kept for the book. With book text set to Never, an action with source selection has only **AI knowledge only** available; the other actions fall back to the AI's training knowledge, with a "*Response generated without: ...*" notice in the chat. X-Ray, Document Summary and Document Analysis are the exception: they are refused, with a message that names where the value comes from and a button to it (the book's Privacy & Data screen, or the settings), and for X-Ray the message points to X-Ray (Simple) instead. A result you generated earlier stays viewable after you set the text to Never, but you cannot regenerate or redo it.
 
 With **AI knowledge only** as the source, an action that normally runs without web search follows your web search setting, since without the book's text a search can help check what the AI recalls.
 
@@ -51,7 +51,7 @@ You can add any of them to Quick Actions, the file browser or a gesture: see [Ac
 
 ## Recap
 
-A "Previously on..." refresher to help you get back into a book after time away: the situation so far, recent events (in the most detail), the active threads, and the moment where you stopped. It adapts to the content: a "Previously on..." narrative for fiction, a "Where we left off..." refresher for non-fiction, a "Research progress so far..." refresher for academic papers. Deep into a book it first walks the whole arc so far in brief, then gives the recent stretch the detail. When highlights are shared it weaves in what you found notable; it reads your highlights, never your notes ([Privacy and Data](Privacy-and-Data)).
+A "Previously on..." refresher to help you get back into a book after time away: the situation so far, recent events (in the most detail), the active threads, and the moment where you stopped. It adapts to the content: a "Previously on..." narrative for fiction, a "Where we left off..." refresher for non-fiction, a "Research progress so far..." refresher for academic papers. Deep into a book it first walks the whole arc so far in brief, then gives the recent stretch the detail. When highlights are shared it weaves in what you found notable; it reads your highlights, never your notes ([Privacy and Data](Privacy-and-Data)). A fresh Recap also tells the AI how long ago you last read the book (for example "Last read: 3 days ago"), from KOReader's reading statistics; nothing is sent when the statistics have no record of the book or when Reading position is off.
 
 Recap works with source selection: choose between extracted text (recommended, with incremental updates as you read) or AI knowledge only.
 
@@ -89,13 +89,13 @@ An overview of the work from the AI's own knowledge: what it is about (the premi
 - It uses web search when web search is on, for current information.
 - It runs with reasoning off, and the result is saved as an artifact.
 
-For a paper in research mode, About writes a research overview instead: see [Research Mode](Research-Mode). About is not the per-book **Book info** setting, which decides how much of the book's identity rides along with every request ([Book Settings and Book Hub](Book-Settings-and-Book-Hub)).
+For a paper in research mode, About writes a research overview instead: see [Research Mode](Research-Mode). About is not the per-book **Book info** setting, which decides how much of the book's identity rides along with every request ([Book Settings and Book Hub](Book-Settings-and-Book-Hub)). The two do meet: with Book info set to None (**Settings → Privacy & Data → Book info**, or the book's own value in Book Settings → Privacy & Data), About cannot run, because it answers only from what the AI knows about the book, and it says it cannot run without the title. X-Ray (Simple) and the other AI-knowledge actions, such as Find Similar, About Author, Historical Context and Reviews, do the same; the actions that read the book's text, your highlights or a saved summary still run.
 
 ## Analyze Notes
 
 Looks at you as a reader, through your highlights and notes, rather than summarizing the work: the kinds of passages that catch your attention, the threads you seem to be tracking and connections between highlights you may not have noticed, what your notes reveal about how your thinking is evolving, the questions you seem to be asking, and suggestions (parts to revisit, themes to watch for, connections to other works). It is asked not to reveal anything beyond your reading position.
 
-- It needs your highlights or annotation notes: it asks the first time and is refused when both are set to Never. With highlights only, it works from the highlighted passages; your notes reach it when annotation notes are allowed.
+- It needs your highlights: it asks the first time and is refused when Highlights is set to Never (Never for highlights is Never for notes too). With highlights only, it works from the highlighted passages; your notes reach it when annotation notes are allowed.
 - When the notebook is allowed it also reads the book's notebook. When the book has a Document Summary and the book's text is allowed, it sends the summary too, so the AI knows what your notes are about.
 - It reads the book's sidecar files, so it also runs from the file browser.
 - The result is saved as an artifact; run it again as you add notes.
@@ -176,16 +176,16 @@ When you open a book you haven't read in a while, KOAssistant can ask "You haven
 - **Settings → Reading & Library → Remind to Recap on Book Open:** show the reminder (default: Off).
 - **Settings → Reading & Library → Days Before Reminder:** how many days since you last opened the book before the reminder appears (default 7, range 1-90; grayed out while the reminder is off).
 
-It skips books you haven't started and books past 95%. For a book with no record yet, it goes by when the book's sidecar folder last changed.
+It skips books you haven't started and books past 95%. For a book with no record yet, it goes by when the book's sidecar folder last changed. The time you last opened a book is recorded whether or not the reminder is on, so switching the reminder on later counts from your real last open.
 
 ## End of book
 
 When you reach the end of a book, KOAssistant offers to suggest what to read next from your library ("Would you like an AI suggestion for what to read next from your library?"), just after KOReader's own end-of-book popup. **Suggest** runs **Suggest from Library**, which suggests three to five books you already own, based on the book you are reading and your reading patterns.
 
-- **Settings → Reading & Library → Suggest Next Read on Finish** (default: On). It only activates when the book list is on Allow with at least one folder configured (it has no moment to ask): **Settings → Reading & Library → Book list** and **Permanent Scan Folders**.
+- **Settings → Reading & Library → Suggest Next Read on Finish** (default: On). It only activates when the book list is on Allow for your provider (a trusted provider follows its own value) and at least one permanent scan folder is configured (it has no moment to ask): **Settings → Reading & Library → Book list** and **Permanent Scan Folders**.
 - When the book's last chapter has a quiz to offer, the quiz takes the end-of-book moment and the suggestion is skipped that time.
 
-Suggest from Library is also an ordinary book action, in Quick Actions by default. It sends your library catalog (title, author, series, status, progress, last read date): see [Privacy and Data](Privacy-and-Data).
+Suggest from Library is also an ordinary book action, in Quick Actions by default. It sends your library catalog (title, author, series when it has one, reading status, and progress for books you are reading or have on hold; last-read dates only order the list and are not sent): see [Privacy and Data](Privacy-and-Data).
 
 ## Scope, sections and spoilers
 
@@ -193,7 +193,7 @@ Suggest from Library is also an ordinary book action, in Quick Actions by defaul
 
 **Spoiler safety.** Recap, like X-Ray, extracts only up to your current reading position (`{book_text_section}`). The other text-extraction actions default to the full document, but their scope popup also offers **Up to current position**, **From section…** and section ranges, and pre-selects **Up to current position** while spoiler protection is on for the book; running a scope that covers text you haven't read asks once first ([Spoiler Protection](Spoiler-Protection)). For a spoiler-free variant of a custom action, use `{book_text_section}` instead of `{full_document_section}` ([Template Variables](Template-Variables)).
 
-**Sections.** Most text-extraction book actions can focus on a chapter or part instead of the whole document. In the scope popup, **Pick section…** chooses one from a hierarchical TOC picker, and **Pick section range…** and **From section… (to NN%)** cover spans. Section results are stored as their own artifacts (for example "Section Summary: Chapter 5") and appear as groups in the Artifact Browser ("View Section Summaries (N)" and so on). While you are reading inside a section's page range, a quick **View** button for that section appears in the action's popup. Naming a section with the same page range as an existing one replaces the old entry. The section's text reaches the AI under its own heading, naming the section and its pages. Supported actions: Document Summary, Document Analysis, Key Arguments, Counterarguments, Discussion Questions, Quiz, Extract Key Insights and Reading Guide (X-Ray has its own section X-Rays). Section scoping follows KOReader's custom (handmade) TOC: create custom chapter boundaries to define your own scopes.
+**Sections.** Most text-extraction book actions can focus on a chapter or part instead of the whole document. In the scope popup, **Pick section…** chooses one from a hierarchical TOC picker, and **Pick section range…** and **From section… (to NN%)** cover spans. Section results are stored as their own artifacts (for example "Section Summary: Chapter 5") and appear as groups in the Artifact Browser ("View Section Summaries (N)" and so on). While you are reading inside a section's page range, a quick **View** button for that section appears in the action's popup. Naming a section with the same page range as an existing one asks whether to replace the old entry. The section's text reaches the AI under its own heading, naming the section and its pages. Supported actions: Document Summary, Document Analysis, Key Arguments, Counterarguments, Discussion Questions, Quiz, Extract Key Insights and Reading Guide (X-Ray has its own section X-Rays). Section scoping follows KOReader's custom (handmade) TOC: create custom chapter boundaries to define your own scopes.
 
 > **Tip:** Make specialized versions for your workflow. Copy a built-in action, adjust the prompt for your field (for example "Focus on methodology and statistical claims" for scientific papers), and pair it with a matching domain. Turn off built-ins you don't use in the Action Manager (tap to toggle). See [Actions and Menus](Actions-and-Menus).
 
@@ -212,7 +212,7 @@ Custom actions using `{book_text}`, `{full_document}` or `{page_text}` need read
 
 ## Models and reasoning
 
-- X-Ray, About, Quiz and Suggest from Library run with reasoning off in their own settings; the others follow your reasoning setting (**Settings → Advanced → Reasoning**). An action's own setting outranks your reasoning stance.
+- X-Ray, About, Quiz, Suggest from Library and Next Read run with reasoning off in their own settings; the others follow your reasoning setting (**Settings → Advanced → Reasoning**). An action's own setting outranks your reasoning stance.
 - To change that, or to tie an action to its own provider and model (a stronger model for Document Analysis while a fast one handles everything else, for example), open **Settings → Actions & Prompts → Manage Actions**, hold the action and pick **Edit Settings**, which holds Reasoning, Provider and Model. See [Actions and Menus](Actions-and-Menus).
 
 ## Related

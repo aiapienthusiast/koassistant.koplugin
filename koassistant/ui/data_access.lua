@@ -635,9 +635,11 @@ function DataAccess.askForDispatch(plugin, action, features, ui, config, run_fn)
         local BookSettings = require("koassistant.books.book_settings")
         local ds = path and require("koassistant.storage.doc_settings").resolve(path, ui) or nil
         -- A dialog launch carries the chat's Quick state on the source config
-        -- (_quick_answer_active); a direct entry seeds it later, accept-gated,
-        -- and no AI-knowledge action accepts Quick
-        if BookSettings.resolveBookInfoLevel(ds, cf, cf._quick_answer_active) == "none" then
+        -- (_quick_answer_active) for every action; the preset reaches only the
+        -- actions that take it (accept_quick_answer), and no AI-knowledge
+        -- action does
+        local quick_on = cf._quick_answer_active and action.accept_quick_answer == true
+        if BookSettings.resolveBookInfoLevel(ds, cf, quick_on) == "none" then
             local layer = "global"
             if cf._session_book_info == false then
                 layer = "chat"   -- the dialog's Send book info switch (over Quick and the setting)

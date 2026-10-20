@@ -1002,7 +1002,7 @@ local SettingsSchema = {
                             text = _("Automatic X-Ray (all books)"),
                             path = "features.xray_auto_update",
                             default = false,
-                            help_text = _("Keep the X-Rays you started up to date as you read (flowing formats like EPUB only): checkpoints at chapter-sized steps, always keeping the next checkpoint ready ahead of you; reaching it installs it instantly and the one after starts building. Books with no X-Ray are left alone: start one from the X-Ray popup with \"In checkpoints, as I read (automatic)\", or switch a book to Automatic individually (X-Ray popup or Book Settings → X-Ray → Automatic X-Ray), which works even with this off; a per-book Off always wins.\n\nSpend guards: a cooldown before retrying a step that was declined, failed or cancelled, WiFi only, and text-extraction consent (or a trusted provider) required; background runs extract book text and use API tokens without a per-request tap. Leave off if every request should be explicit."),
+                            help_text = _("Keep the X-Rays you started up to date as you read (flowing formats like EPUB only): checkpoints at chapter-sized steps, always keeping the next checkpoint ready ahead of you; reaching it installs it instantly and the one after starts building. Books with no X-Ray are left alone: start one from the X-Ray popup with \"In checkpoints, as I read (automatic)\", or switch a book to Automatic individually (X-Ray popup or Book Settings → X-Ray → Automatic X-Ray), which works even with this off; a per-book Off always wins.\n\nSpend guards: a cooldown before retrying a step that was declined, failed or cancelled, WiFi only, and the book's text allowed for the book, or a trusted provider (a book on Ask is asked once); background runs extract book text and use API tokens without a per-request tap. Leave off if every request should be explicit."),
                             on_change = function(new_value, plugin)
                                 -- Round 22 (R4 / known gap (a)): flipping the master with a
                                 -- book open must reach that book immediately — refresh the
@@ -1391,7 +1391,7 @@ local SettingsSchema = {
                     text = _("Suggest Next Read on Finish"),
                     path = "features.enable_end_of_book_suggestion",
                     default = true,
-                    help_text = _("When you reach the end of a book, offer to suggest what to read next from your library. Requires library scanning to be enabled with at least one folder configured."),
+                    help_text = _("When you reach the end of a book, offer to suggest what to read next from your library. Requires your book list allowed (Ask asks first) and at least one permanent scan folder."),
                     separator = true,
                 },
                 -- Library
@@ -1859,7 +1859,7 @@ local SettingsSchema = {
                         return T(_("Actions Using Minimal Popup: %1"), n)
                     end,
                     callback = "buildMinimalPopupActionsMenu",
-                    help_text = _("Which highlight actions open in the minimal popup. Translate and Quick Define by default."),
+                    help_text = _("Which highlight actions open in the minimal popup. Translate, Quick Define and Quick Explain by default."),
                 },
             },
         },
@@ -2729,7 +2729,7 @@ local SettingsSchema = {
             emoji = "🪄",
             callback = "rerunSetupWizard",
             keep_menu_open = true,
-            help_text = _("Re-run any part of the setup: the provider, privacy, your language, the emoji icons and their font, the panels' gestures. Each topic shows whether it is set up."),
+            help_text = _("Re-run any part of the setup: the provider, privacy, your language, the emoji icons and their font, the (KOA) mark on the plugin's buttons, the panels' gestures. Each topic shows whether it is set up."),
         },
         -- Backup & Reset submenu
         {
@@ -3348,7 +3348,7 @@ local SettingsSchema = {
                     id = "enable_book_tools",
                     type = "toggle",
                     text = _("AI Book Tools"),
-                    help_text = _("EXPERIMENTAL: for providers and models that support tool calls (Test provider shows whether yours does). Book tools let the AI search the open book's text, read specific pages, and view the table of contents, so it can ground answers in the actual book instead of guessing. Requires \"Allow Text Extraction\".\n\nThis sets whether the Tools chip in book chats starts ON or OFF; you can always flip it per chat, and the AI still decides per question whether to actually search.\n\nPredefined actions are unaffected either way; they never use tools unless they explicitly offer smart retrieval. Override per book in Book Settings. Work in progress; behavior may change."),
+                    help_text = _("EXPERIMENTAL: for providers and models that support tool calls (Test provider shows whether yours does). Book tools let the AI search the open book's text, read specific pages, and view the table of contents, so it can ground answers in the actual book instead of guessing. Requires the book's text to be allowed (a book on Ask is asked first).\n\nThis sets whether the Tools chip in book chats starts ON or OFF; you can always flip it per chat, and the AI still decides per question whether to actually search.\n\nPredefined actions are unaffected either way; they never use tools unless they explicitly offer smart retrieval. Override per book in Book Settings. Work in progress; behavior may change."),
                     path = "features.enable_book_tools",
                     default = false,
                 },

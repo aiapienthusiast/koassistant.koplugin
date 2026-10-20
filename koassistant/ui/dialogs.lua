@@ -3794,7 +3794,7 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
     -- and translate family, whose answers are no chat about the attachment
     if attachments_active and prompt and (prompt.use_response_caching or prompt.cache_as_xray
             or prompt.cache_as_analyze or prompt.cache_as_summary
-            or prompt.dictionary_view or prompt.translate_view) then
+            or prompt.dictionary_view or prompt.translate_view or prompt.compact_view) then
         attachments_active = nil
     end
     -- Background auto-update (xray_background_plan.md §4): consume the dispatch flag
@@ -4400,10 +4400,13 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
     -- placeholders (B500, message_builder).
     do
         local rf = temp_config.features or config.features
+        -- the preset reaches only the actions that take it (accept_quick_answer),
+        -- as the bake decides for the rest of the preset
+        local quick_on = rf._quick_answer_active and prompt.accept_quick_answer == true
         message_data._book_info_level = require("koassistant.books.book_settings").resolveBookInfoLevel(
-            per_book_ds, rf, rf._quick_answer_active)
+            per_book_ds, rf, quick_on)
         logger.dbg("KOAssistant: book info level", message_data._book_info_level,
-            rf._quick_answer_active and "with Quick on" or "with Quick off")
+            quick_on and "with Quick on" or "with Quick off")
     end
 
     -- Resolve effective research mode
@@ -9169,7 +9172,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                                             require("koassistant.request.privacy_gates").context(feats,
                                                 configuration.provider, { path = document_path, ui = ui_instance })) then
                                         UIManager:show(InfoMessage:new{
-                                            text = _("The current page counts as text around what you tap, which is set to Never for this book, for all books or for this chat (Book Settings → Privacy & Data, Settings → Privacy & Data, or the Data chip)."),
+                                            text = _("The current page counts as text around what you tap, which is set to Never for this book or for all books (Book Settings → Privacy & Data, or Settings → Privacy & Data)."),
                                         })
                                         return
                                     end

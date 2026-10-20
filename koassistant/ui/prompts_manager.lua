@@ -596,7 +596,7 @@ function PromptsManager:showPromptsMenu()
                 text = _("Restore Defaults"),
                 callback = function()
                     UIManager:show(ConfirmBox:new{
-                        text = _("This will remove all custom actions and reset all action settings. Continue?"),
+                        text = _("This will remove the custom actions made in the app (custom_actions.lua is kept) and reset all action settings. Continue?"),
                         ok_callback = function()
                             if self.plugin.restoreDefaultPrompts then
                                 self.plugin:restoreDefaultPrompts()
@@ -747,7 +747,7 @@ function PromptsManager:showResetMenusDialog()
             {{ text = _("Reset Input Dialog Actions"), callback = function()
                 UIManager:close(dialog)
                 UIManager:show(ConfirmBox:new{
-                    text = _("Reset input dialog actions to defaults for all contexts (book, file browser, highlight, X-Ray chat)?"),
+                    text = _("Reset input dialog actions to defaults for every input dialog but the general one?"),
                     ok_callback = function()
                         self_ref.plugin:resetInputDialogActions()
                         self_ref:refreshMenu()
@@ -2290,7 +2290,7 @@ end
 -- @param refresh_callback: Callback to refresh the parent dialog
 function PromptsManager:showWebSearchSelector(state, refresh_callback)
     local options = {
-        { value = "global", text = _("Global (use setting)"), desc = _("Uses your web search setting from AI Response Settings") },
+        { value = "global", text = _("Global (use setting)"), desc = _("Uses the global web search setting") },
         { value = true, text = _("Always use web search"), desc = _("Force web search on, even if global setting is off") },
         { value = false, text = _("Never use web search"), desc = _("Force web search off, even if global setting is on") },
     }

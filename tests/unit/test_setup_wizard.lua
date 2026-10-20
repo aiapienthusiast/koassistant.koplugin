@@ -407,4 +407,24 @@ TestRunner:test("marks: the step sits in the chain, the topic menu, the probes a
     TestRunner:assertTrue(src:find('elseif name == "marks" then', 1, true) ~= nil, "probeRaw answers it")
 end)
 
+TestRunner:test("provider probe: a keyless main provider counts; the chain resumes after a font restart", function()
+    local function ph(k) return k == "YOUR_KEY" end
+    local function name(id) return id end
+    local ok, detail = SetupWizard.probeProviderF(nil, nil, false, ph, { main = "ollama", keyless_main = true, name = name })
+    TestRunner:assertTrue(ok, "Ollama as the main provider counts as connected")
+    TestRunner:assertEqual(detail, "ollama")
+    TestRunner:assertFalse(SetupWizard.probeProviderF(nil, nil, false, ph, { main = "anthropic", keyless_main = false, name = name }))
+    local f = assert(io.open(PLUGIN_DIR .. "/koassistant/ui/setup_wizard.lua", "r"))
+    local src = f:read("*a"); f:close()
+    TestRunner:assertTrue(src:find("_wizard_resume", 1, true) ~= nil, "Restart now records the resume")
+    TestRunner:assertTrue(src:find("opts.from", 1, true) ~= nil, "runChain resumes at a step")
+    TestRunner:assertTrue(src:find("function SetupWizard.resumePending", 1, true) ~= nil, "the resume entry exists")
+    local m = assert(io.open(PLUGIN_DIR .. "/main.lua", "r"))
+    local main_src = m:read("*a"); m:close()
+    TestRunner:assertTrue(main_src:find("SetupWizard.resumePending(self)", 1, true) ~= nil, "the entry point resumes first")
+    local r = assert(io.open(PLUGIN_DIR .. "/koassistant/storage/storage_registry.lua", "r"))
+    local reg = r:read("*a"); r:close()
+    TestRunner:assertTrue(reg:find('"_wizard_resume"', 1, true) ~= nil, "the resume key is registered")
+end)
+
 return TestRunner:summary()

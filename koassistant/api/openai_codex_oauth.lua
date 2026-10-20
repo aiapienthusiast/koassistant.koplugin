@@ -434,7 +434,7 @@ local function showConnectEntryError(message)
     })
 end
 
-local function startInteractiveConnectOnline(plugin)
+local function startInteractiveConnectOnline(plugin, on_done)
     local UIManager = require("ui/uimanager")
     local ButtonDialog = require("ui/widget/buttondialog")
     local Notification = require("ui/widget/notification")
@@ -461,6 +461,7 @@ local function startInteractiveConnectOnline(plugin)
             active_pid = nil
         end
         closeDialog()
+        if on_done then on_done(false) end
     end
 
     local function guarded(fn)
@@ -529,6 +530,7 @@ local function startInteractiveConnectOnline(plugin)
             stopped = true
             closeDialog()
             UIManager:show(Notification:new{ text = _("OpenAI Subscription connected"), timeout = 3 })
+            if on_done then on_done(true) end
         end)
     end
 
@@ -624,13 +626,14 @@ local function startInteractiveConnectOnline(plugin)
     end)
 end
 
-function OAuth.startInteractiveConnect(plugin)
+-- on_done(connected) runs once the flow ends (the wizard's chain goes on).
+function OAuth.startInteractiveConnect(plugin, on_done)
     if not (plugin and plugin.settings) then return end
     local ok, err = xpcall(function()
         local NetworkMgr = require("ui/network/manager")
         NetworkMgr:runWhenConnected(function()
             local online_ok, online_err = xpcall(function()
-                startInteractiveConnectOnline(plugin)
+                startInteractiveConnectOnline(plugin, on_done)
             end, debug.traceback)
             if not online_ok then showConnectEntryError(online_err) end
         end)

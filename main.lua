@@ -12490,8 +12490,8 @@ function AskGPT:_showSectionXrayNameInput(action, entry, run_variant)
               UIManager:show(InfoMessage:new{ text = _("Please enter a name."), timeout = 2 })
               return
             end
-            -- Truncate to 80 chars (menus truncate display naturally)
-            if #label > 80 then label = label:sub(1, 80) end
+            -- Cut to 80 bytes on a whole character (menus truncate display naturally)
+            label = require("koassistant.request.scope_resolver").utf8Head(label, 80)
             UIManager:close(input_dialog)
 
             -- Sanitize cache key: strip colons (separator conflict)
@@ -12770,7 +12770,7 @@ function AskGPT:_showSectionNameInput(action, action_id, entry, opts)
               UIManager:show(InfoMessage:new{ text = _("Please enter a name."), timeout = 2 })
               return
             end
-            if #label > 80 then label = label:sub(1, 80) end
+            label = require("koassistant.request.scope_resolver").utf8Head(label, 80)
             UIManager:close(input_dialog)
 
             local cache_label = label:gsub(":", "-")
@@ -23663,6 +23663,7 @@ function AskGPT:checkSetupWizard()
     return false
   end
   local SetupWizard = require("koassistant.ui.setup_wizard")
+  if SetupWizard.resumePending(self) then return true end
   local face = SetupWizard.face(self)
   -- One tick later, so the first dialog lands above whatever the entry
   -- point shows next (a menu, an input dialog); shown inline it opened

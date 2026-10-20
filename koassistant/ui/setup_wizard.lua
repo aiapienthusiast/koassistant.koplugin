@@ -224,9 +224,13 @@ end
 -- one, and how many more have one ("Anthropic and 2 more").
 function SetupWizard.probeProviderF(gui_keys, file_keys, has_oauth, is_placeholder, opts)
     local keyed = SetupWizard.keyedProviders(gui_keys, file_keys, has_oauth, is_placeholder)
-    if #keyed == 0 then return false end
     opts = opts or {}
     local name = opts.name or function(id) return (id:gsub("^%l", string.upper)) end
+    if #keyed == 0 then
+        -- a main provider that needs no key (Ollama, a local custom provider)
+        if opts.keyless_main and type(opts.main) == "string" then return true, name(opts.main) end
+        return false
+    end
     local first = keyed[1]
     for _idx, id in ipairs(keyed) do
         if id == opts.main then first = id end
@@ -404,9 +408,13 @@ local function probeRaw(plugin, name)
         local Base = require("koassistant.api.base")
         local has_oauth = type(f.openai_codex_oauth) == "table"
             and next(f.openai_codex_oauth) ~= nil
+        local main = require("koassistant.core.config_helper").mainProvider(f)
         return SetupWizard.probeProviderF(f.api_keys, readFileApiKeys(),
             has_oauth, Base.isPlaceholderKey, {
-                main = require("koassistant.core.config_helper").mainProvider(f),
+                main = main,
+                -- Ollama and a local custom provider need no key
+                keyless_main = main ~= "openai_codex" and plugin.isProviderConfigured ~= nil
+                    and plugin:isProviderConfigured(main) == true,
                 name = function(id) return plugin:getProviderDisplayName(id) end,
             })
     elseif name == "privacy" then
@@ -537,8 +545,33 @@ function SetupWizard.installFont(plugin, opts)
 
     local function restartThen()
         local UIM = require("ui/uimanager")
-        UIM:askForRestart()
-        done(true)
+        local Device = require("device")
+        if not ctx or not Device:canRestart() then
+            -- outside the chain, or a device that cannot restart itself (the
+            -- note "takes effect on next restart"): KOReader's own ask
+            UIM:askForRestart()
+            done(true)
+            return
+        end
+        -- In the chain, KOReader's own ask landed on top of the next step,
+        -- and Restart now lost the rest of the chain (no stamp written, so
+        -- the next start greeted a new install with the update note). Ask
+        -- here: Restart now resumes the chain at the icons step after the
+        -- restart (the glyph test first); Restart later goes on now, and the
+        -- glyph test comes at a later start (resumePending).
+        local ConfirmBox = require("ui/widget/confirmbox")
+        UIM:show(ConfirmBox:new{
+            text = _("Restart KOReader now to load the font? The remaining steps continue after the restart."),
+            ok_text = _("Restart now"),
+            cancel_text = _("Restart later"),
+            ok_callback = function()
+                local ff = feats(plugin)
+                ff._wizard_resume = { update = ctx.update or false, mark_complete = ctx.mark_complete or false }
+                saveFeats(plugin, ff)
+                UIM:broadcastEvent(require("ui/event"):new("Restart"))
+            end,
+            cancel_callback = function() done(true) end,
+        })
     end
 
     if reason == "cap" then
@@ -718,7 +751,7 @@ function SetupWizard.stepWelcome(plugin, ctx, next_step)
     local InfoMessage = require("ui/widget/infomessage")
     UIManager:show(InfoMessage:new{
         text = _("Welcome to KOAssistant!") .. "\n\n" ..
-            _("Let's set up four things: how you connect to an AI provider, what the plugin may read, your language and icons, and how you open it fast.") .. "\n\n" ..
+            _("Let's set up five things: how you connect to an AI provider, what the plugin may read, your language and icons, the (KOA) mark on its buttons, and how you open it fast.") .. "\n\n" ..
             _("Every step can be skipped and changed later in Settings. Tap to continue."),
         dismiss_callback = next_step,
     })
@@ -827,7 +860,7 @@ function SetupWizard.stepProvider(plugin, ctx, next_step)
             plugin:updateConfigFromSettings()
             table.insert(ctx.results, _("Provider: Ollama (local)"))
             UIManager:show(InfoMessage:new{
-                text = _("Ollama selected, no API key needed. It expects a local server at localhost:11434 (change the endpoint in Settings > Provider)."),
+                text = _("Ollama selected, no API key needed. It expects a local server at localhost:11434 (other servers are added from the model menu)."),
                 dismiss_callback = function() offerTest("ollama", "Ollama") end,
             })
             return
@@ -901,9 +934,17 @@ function SetupWizard.stepProvider(plugin, ctx, next_step)
             callback = function()
                 closeDialog()
                 -- The OAuth connect flow owns the screen from here (its
-                -- dialog is modal); finish setup later via the topic menu.
+                -- dialog is modal); the chain goes on once it is done, and
+                -- comes back to this list when it is cancelled
                 local OAuth = require("koassistant.api.openai_codex_oauth")
-                OAuth.startInteractiveConnect(plugin)
+                OAuth.startInteractiveConnect(plugin, function(signed_in)
+                    if signed_in then
+                        table.insert(ctx.results, _("Provider: OpenAI Subscription"))
+                        advanceOnce()
+                    else
+                        SetupWizard.stepProvider(plugin, ctx, next_step)
+                    end
+                end)
             end,
         }}
         if not connected then
@@ -1367,10 +1408,15 @@ function SetupWizard.runChain(plugin, opts)
         restart_needed = false,
     }
     local i = 0
+    local started = not opts.from   -- opts.from = the key of the step to resume at
     local function advance()
         i = i + 1
         local step = CHAIN[i]
         if not step then return end
+        if not started then
+            if step.key ~= opts.from then return advance() end
+            started = true
+        end
         local configured = PROBED[step.key] and SetupWizard.probe(plugin, step.key) or false
         local run, forced = SetupWizard.shouldRun(step.key, { update = ctx.update, only = only, force = opts.force }, configured)
         logger.dbg("KOAssistant wizard: step", step.key, run and (forced and "run, forced" or "run") or "skip")
@@ -1383,6 +1429,35 @@ function SetupWizard.runChain(plugin, opts)
         end
     end
     advance()
+end
+
+--- At start, before the face (main.lua checkSetupWizard): a chain cut by
+--- the font install's Restart now resumes at the icons step (the glyph test,
+--- then the rest); a font installed with Restart later gets its glyph test
+--- alone once KOReader has loaded the font. True when it took the start.
+function SetupWizard.resumePending(plugin)
+    local UIManager = require("ui/uimanager")
+    local f = feats(plugin)
+    local resume = f._wizard_resume
+    if type(resume) == "table" then
+        f._wizard_resume = nil
+        saveFeats(plugin, f)
+        logger.dbg("KOAssistant wizard: resuming the chain at icons", resume.update and "(update)" or "(fresh)")
+        UIManager:nextTick(function()
+            SetupWizard.runChain(plugin, { update = resume.update == true,
+                mark_complete = resume.mark_complete == true, from = "icons" })
+        end)
+        return true
+    end
+    if f._wizard_font_pending_confirm and SetupWizard.readFontState() == "installed" then
+        logger.dbg("KOAssistant wizard: the glyph test after the font's restart")
+        UIManager:nextTick(function()
+            SetupWizard.stepIcons(plugin, { force = true, single = true, results = {}, restart_needed = false },
+                function() end)
+        end)
+        return true
+    end
+    return false
 end
 
 -- The completer surface: per-topic state, each row runs one step forced.
@@ -1484,7 +1559,7 @@ function SetupWizard.runUpdate(plugin)
                     acted = true
                     UIManager:close(dialog)
                     stamp()
-                    UIManager:show(InfoMessage:new{ text = _("Settings → Setup Wizard runs this check any time."), timeout = 3 })
+                    UIManager:show(InfoMessage:new{ text = _("Settings → Setup Wizard runs any of these steps any time."), timeout = 3 })
                 end },
             },
         },

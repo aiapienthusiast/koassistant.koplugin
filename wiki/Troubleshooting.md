@@ -1,16 +1,16 @@
 # Troubleshooting
 
-What to check when something does not work, in the order people usually need it: missing data, text extraction, fonts and icons, keys and connections, menus, and the reset options. Most problems are a setting that is still off; the first two sections cover almost all reports.
+What to check when something does not work, in the order people usually need it: missing data, text extraction, fonts and icons, keys and connections, menus, and the reset options. Most problems are a setting that is still off or a kind of data set to Never; the first two sections cover almost all reports.
 
 ## Features not working or empty data
 
-If Analyze Notes, Connect (With Notes), X-Ray or Recap seem to ignore your reading data: **every kind of reading data is asked for the first time an action wants it, and a kind set to Never is left out.** Check what you answered (Book Settings → Privacy & Data for the book) and **Settings → Privacy & Data** for all books.
+If Analyze Notes, Connect (With Notes), X-Ray or Recap seem to ignore your reading data: **highlights, notes, the notebook and the book's text are each asked for the first time an action wants them, and a kind set to Never is left out.** Check what you answered (Book Settings → Privacy & Data for the book) and **Settings → Privacy & Data** for all books (**What trusted providers may use** there, for a trusted provider); a refusal names which of the three it comes from. After an update from an earlier version every sharing switch starts on Ask, the ones that were on included ([Privacy and Data](Privacy-and-Data#upgrading-from-an-earlier-version)).
 
-| Feature not working | Enable this setting |
+| Feature not working | What to check |
 |---|---|
-| Analyze Notes is refused ("needs highlights, which is set to Never") | Highlights or Annotation notes set to Never for the book or for all books; set it to Ask or Allow |
+| Analyze Notes or Connect (With Notes) is refused ("needs highlights, which is set to Never") | Highlights set to Never for the book or for all books; set it to Ask or Allow |
 | Connect (With Notes) ignores your notes | Annotation notes and Notebook: answer Allow when it asks, or set them to Allow |
-| Recap misses your highlights | Highlights (or Annotation notes): answer Allow when it asks, or check for a Never. X-Ray does not use highlights: it reads the book's text only |
+| Recap misses your highlights | Highlights: answer Allow when it asks (allowing Annotation notes allows them too), or check for a Never. X-Ray does not use highlights: it reads the book's text only |
 | X-Ray is refused ("needs book text, which is set to Never") | Book text set to Never for the book or for all books (**Settings → Privacy & Data → Text Extraction**); set it to Ask or Allow, or use X-Ray (Simple) instead |
 | Document Analysis or Document Summary is refused | Book text set to Never |
 | Recap uses only the book's title | Book text: answer Allow when it asks, or check for a Never |
@@ -24,7 +24,7 @@ If Analyze Notes, Connect (With Notes), X-Ray or Recap seem to ignore your readi
 
 Actions that use document text still work without it: they do not fail, the AI is told to use its training knowledge and to be honest about what it does not recognize. For well-known books that often gives reasonable results; for obscure works or papers, allow the book's text. With book text allowed and a provider and model that support tool calls, Explain in Context and Analyze in Context can search the book for the passages they need (**Smart retrieval** in their source popup) instead of sending a full extraction; see [Reasoning, Web Search and Book Tools](Reasoning-Web-Search-and-Book-Tools).
 
-**Quick fix:** in **Settings → Privacy & Data → Preset**, **Allow everything** sends every kind without a question, book text included; **Default (Ask)** brings the questions back.
+**Quick fix:** in **Settings → Privacy & Data → Preset**, **Allow everything** sends every kind without a question, book text included; **Default (Ask)** brings the questions back. A preset leaves each book's own values alone, so a book set to Never stays that way.
 
 **See what an action needs:** **Settings → Display Settings → Emoji → Emoji Data Access Indicators** adds a suffix to each action's name showing what it accesses (📄 🔖 📝 📓 📚 📊 🌐; the legend is on [Privacy and Data](Privacy-and-Data#seeing-what-an-action-uses)). It needs an emoji font, below.
 
@@ -48,7 +48,7 @@ Why it asks: extraction sends the book's content to the provider, raises token u
 
 Emoji icons in the plugin's menus and buttons (Emoji Menu Icons, Emoji Data Access Indicators) need an emoji font installed in KOReader, which ships none. The icons work in menus, the action manager, the X-Ray browser and chat-window buttons; they do not render inside the Markdown chat view, whose renderer (MuPDF) has no per-glyph font fallback. That is a KOReader limitation.
 
-**The short route:** **Settings → Display Settings → Emoji → Emoji Font** installs the bundled Noto Emoji font into KOReader's fonts folder, enables it as a UI fallback font and asks for a restart; after the restart the same row shows a display test whose **Yes, enable** turns the icons on. The row's label says where you are (Not Installed, Restart KOReader, Installed). If the icons are on and no emoji font is there, the plugin offers the install once when it starts. The steps below are the same thing by hand.
+**The short route:** **Settings → Display Settings → Emoji → Emoji Font** installs the bundled Noto Emoji font into KOReader's fonts folder, enables it as a UI fallback font and asks for a restart; after the restart the same row shows a display test whose **Yes, enable** turns the icons on (with the icons already on, its buttons read **Yes, looks good** and **No, reinstall the font**, which copies the font again). The row's label says where you are (Not Installed, Restart KOReader, Installed). The Setup Wizard's Icons step (**Settings → Setup Wizard**) runs the same install and test. If the icons are on and no emoji font is there, the plugin offers the install once when it starts. The steps below are the same thing by hand.
 
 **Step 1, install the font.** KOAssistant carries a copy in its own folder, `koassistant.koplugin/fonts/NotoEmoji-Regular.ttf`; you can also download **Noto Emoji** (monochrome, `.ttf`) from [Google Fonts](https://fonts.google.com/noto/specimen/Noto+Emoji): `NotoEmoji-Regular.ttf`, not Noto Color Emoji, which KOReader's text renderer cannot use. Copy it to KOReader's fonts folder (KOReader does not look for fonts inside plugin folders) and restart KOReader:
 
@@ -84,7 +84,7 @@ Once any provider has a key, the provider pickers (inside the **Settings → Mod
 ## No response or a timeout
 
 1. Check the internet connection.
-2. Read the error: a provider's refusal names the provider and the model, and when the cause is a known one (a rate limit, an account out of credits, a request too large for the model) one tip says what to do. An error stays on screen until you tap it (cancelling a request is the one brief message); a rate limit, an overloaded model or an account out of credits comes with a **Try again** button where a retry makes sense. **Settings → Advanced → Console Debug** also writes the provider's own error text to `crash.log`.
+2. Read the error: a provider's refusal names the provider and the model, keeps the provider's own sentence with its HTTP status (such as "HTTP 429"), and when the cause is a known one (a rate limit, an account out of credits, a request too large for the model) one tip says what to do. An error stays on screen until you tap it (cancelling a request is the one brief message); a rate limit, an overloaded model or an account out of credits comes with a **Try again** button where a retry makes sense. **Settings → Advanced → Console Debug** also writes the provider's own error text to `crash.log`.
 3. Try **Settings → Advanced → Test Connection**.
 4. Be patient with very long requests: the plugin waits up to 15 minutes for the provider to send something, so a big X-Ray or a full-document run on a slow model is not cut off early.
 5. If the provider stopped the answer for a reason of its own (a content filter, a recitation block, a refusal), the reply says so by name instead of reporting a broken response; a partial answer is kept and marked as cut short, never saved as complete. For Gemini, see **Settings → Advanced → Provider Settings → Gemini Content Filter**.
@@ -114,9 +114,9 @@ After a problematic update, or for a fresh start: **Settings → Backup & Reset 
 
 - **Settings wrong?** **Quick: Settings only** resets the settings, keeps API keys, languages, your selections and actions.
 - **Action problems?** **Quick: Actions only** resets every action setting, keeps everything else.
-- **Strange behaviour after an update?** **Quick: Settings only** is the safest first step.
-- **Many things broken?** **Quick: Fresh start** resets everything except API keys, languages, gesture registrations and chats, and the setup wizard runs again the next time KOAssistant starts.
-- **Want to redo the provider, privacy, language, icons or gestures?** **Settings → Setup Wizard** lists each topic with its state; a tap re-runs that step.
+- **Strange behaviour after an update?** **Quick: Settings only** is the safest first step. After a manual update, restart KOReader and see [Manual update](Backups-and-Updates#manual-update): a clean install rules out files left from an older version.
+- **Many things broken?** **Quick: Fresh start** resets everything except your API keys and subscription sign-in, languages, gesture registrations and chats. The Setup Wizard's welcome chain then starts again by itself only when no key or sign-in is left; **Run everything** in **Settings → Setup Wizard** walks it by hand.
+- **Want to redo the provider, privacy, language, icons, button marks or gestures?** **Settings → Setup Wizard** lists each topic with its state; a tap re-runs that step.
 - **Exact control?** **Custom reset...** lists what to reset.
 
 A long press on any reset row shows exactly what it resets and keeps. The options are described on [Backups and Updates](Backups-and-Updates#reset-settings).

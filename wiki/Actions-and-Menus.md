@@ -67,9 +67,9 @@ Long-press an action button in the highlight menu, the dictionary popup, the Qui
 - **With web search** or **Without web search**, when the model can search and the action doesn't decide that itself.
 - **More models…**: any model you have a key for. It opens on the models of the provider a tap would use, with **Other provider…** at the top and your favorites after it. A model you pick there joins your recent picks (the five latest are kept).
 
-Only the buttons that would change something appear. With emoji icons on, they carry the chips' icons (⚡ Quick, 🤖 models, 🧠 reasoning, 🌐 web). In an input dialog they run on top of that dialog's chips.
+Only the buttons that would change something appear. With emoji icons on, they carry the chips' icons (⚡ Quick, 🤖 models, 🧠 reasoning, 🌐 web) and 🔒 for the book info. In an input dialog they run on top of that dialog's chips.
 
-The action's own settings still apply: an action that turns reasoning off, or always or never searches, keeps that; only a model you pick overrides a model pinned on the action. Artifact actions (X-Ray, summaries, recaps, the quiz, AI Wiki) get the model buttons only, and the pick carries through their View / Update / Redo popup (for X-Ray, the X-Ray popup) to the run that tap starts, section X-Rays and section summaries included (checkpoint builds and automatic updates keep your default model); on AI Wiki it writes a new entry, which replaces the saved one once it succeeds. Replies in the chat that opens stay on the picked model, a chat you resume later keeps it, and the next action you run uses your defaults again.
+The action's own settings still apply: an action that turns reasoning off, or always or never searches, keeps that; only a model you pick overrides a model pinned on the action. Artifact actions (X-Ray, summaries, recaps, the quiz, AI Wiki) get the model buttons and the book info button only, and the pick carries through their View / Update / Redo popup (for X-Ray, the X-Ray popup) to the run that tap starts, section X-Rays and section summaries included (checkpoint builds and automatic updates keep your default model); on AI Wiki it writes a new entry, which replaces the saved one once it succeeds. Replies in the chat that opens stay on the picked model, a chat you resume later keeps it, and the next action you run uses your defaults again.
 
 **Change the action for good.** Below a double line:
 
@@ -77,7 +77,7 @@ The action's own settings still apply: an action that turns reasoning off, or al
 - **Edit…** opens the settings editor of a built-in action, or the full editor of your own. For an action from `custom_actions.lua` it reads **Edit (custom_actions.lua)…** and reminds you to edit the file.
 - **More…** holds **Other placements…** (the action's details screen, with every placement button), **Duplicate as custom action…** (not for X-Ray, whose result needs the X-Ray browser), and **Reset to default** for a built-in you have changed. When only one of these applies, it shows directly instead.
 
-Look up in X-Ray, Generate Image and the model button run handlers of their own: their menu has the placement rows, with no Edit and no Duplicate. Generate Image has one run button, **Generate with a note…**, which asks what the picture should show, or how ([Image Generation](Image-Generation)); the other two have none.
+Look up in X-Ray, Generate Image and the model button run handlers of their own: their menu has the placement rows, with no Edit and no Duplicate. Generate Image has two run buttons: **Generate with a note…**, which asks what the picture should show, or how, and **Image settings…**, which opens the image settings and draws from there ([Image Generation](Image-Generation)); the other two have none.
 
 A long-press on **Send** (in an input dialog, the reply window, or a chat about an artifact) offers the model buttons, **No reasoning** and **More models…** for that message and the rest of the chat: see [Contexts and Chat](Contexts-and-Chat#managing-the-input-dialog). To make a model a favorite, long-press it in any model list; ♥ marks favorites ([Providers and Models](Providers-and-Models#favorite-models)).
 
@@ -125,7 +125,7 @@ Tap **+ Add Action** at the top of Manage Actions. The editor takes three steps:
    - **View** (highlight actions): how the answer shows. Standard (full chat), Dictionary (full-size with dictionary buttons), Dictionary Compact (compact dialog with language buttons) or Translate (translation-focused, with a language switch and a toggle for the original text). An action in the Minimal Popup list opens there first when the answer fits, and the row says so; edit that list in Settings → Minimal Popup → Actions Using Minimal Popup ([Chat Windows](Chat-Windows#minimal-popup)).
    - **Skip language**: don't send your language preferences (useful when the prompt already specifies a target language).
    - **Include book info** (highlight actions; ticked for a new one): send the book's title and author with the highlight.
-   - The data-access boxes, the per-action half of [double-gating](Privacy-and-Data#double-gating-for-custom-actions): **Allow text extraction**, **Allow highlight use**, **Allow annotation use (notes)** (which ticks highlight use with it), **Allow notebook use** and **Allow library use** for highlight and book actions, and **Allow advanced stats** for any action. Ticking one whose global privacy setting is off reminds you to turn that on.
+   - The data-access boxes, the per-action half of [double-gating](Privacy-and-Data#double-gating-for-custom-actions): **Allow text extraction**, **Allow highlight use**, **Allow annotation use (notes)** (which ticks highlight use with it), **Allow notebook use** and **Allow library use** for highlight and book actions, and **Allow advanced stats** for any action. Ticking one whose data is set to Never for all books (Settings → Privacy & Data) says so: the action is refused, or that data is not sent, until you change it.
 
 **Create** saves the action, turned on and marked ★.
 
@@ -184,7 +184,7 @@ Good to know:
 
 - In the app these actions show as ★ … (file). They can't be edited there (**Edit file** says so); **Duplicate** turns one into an action of your own that you can edit.
 - Each entry is known by its position in the file. Add new entries at the end: inserting or removing one shifts the on/off state and the menu placements of the entries after it.
-- If the file has an error, none of its actions load, and no message says so.
+- If the file has an error, none of its actions load, and nothing on screen says so (crash.log has one line saying the file was not loaded).
 - `enabled` is **ignored in file-based actions**. The loader overwrites it from the Action Manager's own enable/disable state on every load, so a value written here has no effect. Disable the action in Manage Actions instead.
 
 **Optional fields.** Model and behavior:
@@ -205,7 +205,7 @@ What the request includes:
 - `domain`: force a specific domain by ID (overrides the per-book and global domain). The editor's **Domain** picker sets it too.
 - `research_mode`: `true` or `false` turns research mode on or off for this action, ahead of the book's setting, DOI detection and the global setting ([Research Mode](Research-Mode)).
 - `enable_web_search`: override the global web search setting (`true` forces it on, `false` off, unset follows the global setting).
-- `include_book_context`: send the book's title and author with a highlight action.
+- `include_book_context`: send the book's title and author with a highlight action, as far as Settings → Privacy & Data → Book info allows (at None nothing names the book).
 - `skip_language_instruction`: leave the language instruction out of the system message (default off; Translate and Dictionary set it, since the target language is in their prompt).
 - `skip_domain`: leave the domain out of the system message (default off; Translate and Dictionary set it).
 - `skip_background`: whether the action sends the per-book Background note (your standing note about the book). Unset follows `skip_domain`, `true` never sends it, `false` always does.
@@ -307,7 +307,7 @@ Propagation runs one way. A built-in that gains a default placement **is** injec
 3. Tap **+ Highlight Menu**.
 4. A notification confirms it; the change takes effect the next time the highlight menu opens (no restart needed).
 
-In the highlight menu, actions read "Explain (KOA)", "Translate (KOA)" and so on (untick **Show (KOA) on KOAssistant's buttons** under Settings → Menus & Buttons → Highlight menu to drop the mark; the dictionary popup and the file browser have their own box). Long-press any of them to run it once another way, or for its description plus **Remove from the highlight menu**, **Edit…** and **More…**: [The action hold menu](#the-action-hold-menu).
+In the highlight menu, actions read "Explain (KOA)", "Translate (KOA)" and so on (untick **Show (KOA) on KOAssistant's buttons** under Settings → Menus & Buttons → Highlight menu to drop the mark; the dictionary popup and the file browser have their own box, and the Setup Wizard's Button marks step sets all three at once: [Setup, Gestures and Panels](Setup-Gestures-and-Panels#setup-wizard)). Long-press any of them to run it once another way, or for its description plus **Remove from the highlight menu**, **Edit…** and **More…**: [The action hold menu](#the-action-hold-menu).
 
 **Managing the menu:**
 
@@ -376,16 +376,15 @@ Listed in the order the buttons appear in the long-press popup. All nine are on 
 
 ### Gestures
 
-- **Shortcuts**: see and change the gestures bound to KOAssistant's panels and actions, every action with its current binding on one screen. Assignments apply immediately, with no restart.
 - **Register gesture actions** (on): registers the actions you added with **+ Gesture Menu** in KOReader's gesture dispatcher (needs a restart). The built-in gestures (Chat History, Quick Settings, the toggles and the others) are always available.
 
-More in [Setup, Gestures and Panels](Setup-Gestures-and-Panels#gestures).
+To give KOAssistant's panels and actions a gesture, use **Settings → Gestures**: it lists every KOAssistant gesture action with the gestures it has now and offers any KOReader gesture, showing what holds a gesture that is already in use. More in [Setup, Gestures and Panels](Setup-Gestures-and-Panels#gestures).
 
 ### Text selection in viewers
 
 - **Enhance text selection** (off; needs a restart): dictionary lookup and an action popup for text you select in KOReader's own viewers (the dictionary popup, TextViewer and others). A single word goes to the dictionary; a long-press on a word, or a selection of several words, opens a popup with Copy, Dictionary and Translate. See [Chat Windows](Chat-Windows#selecting-text-in-a-window).
 
-**Restarts:** adding an action to the gesture menu, **Register gesture actions** and **Enhance text selection** need a KOReader restart, since they are registered when the plugin starts. Binding a gesture on the **Shortcuts** screen does not. File browser, highlight menu and dictionary popup changes take effect the next time the menu opens.
+**Restarts:** adding an action to the gesture menu, **Register gesture actions** and **Enhance text selection** need a KOReader restart, since they are registered when the plugin starts. Binding a gesture in **Settings → Gestures** does not while KOReader's gesture plugin is loaded. File browser, highlight menu and dictionary popup changes take effect the next time the menu opens.
 
 ## The first rows of the KOAssistant menu
 
@@ -396,7 +395,7 @@ The KOAssistant menu (Tools → KOAssistant) starts with rows that open somethin
 - **Book Chat/Action** (with a book open): a conversation about the current book, or a book action ([Contexts and Chat](Contexts-and-Chat#bookdocument-mode)).
 - **Book Hub** (with a book open): the current book's hub, with its artifacts, chats, notebook, group and settings in one view ([Book Settings and Book Hub](Book-Settings-and-Book-Hub)).
 - **General Chat/Action**: a context-free conversation, or a general action ([Contexts and Chat](Contexts-and-Chat#general-chat)).
-- **Library Chat/Action**: the library dialog with scan-based and selection-based actions. The scan-based ones (Next Read, Discover New, Analyze Library, Challenge My Taste) work at once when library scanning is on with scan folders set; the selection-based ones (Compare, Recommend and the others) need books you add under **Items ▾** ([Contexts and Chat](Contexts-and-Chat#library-mode)).
+- **Library Chat/Action**: the library dialog with scan-based and selection-based actions. The scan-based ones (Next Read, Discover New, Analyze Library, Challenge My Taste) work once scan folders are set and the book list is not Never (on Ask, the first run asks); the selection-based ones (Compare, Recommend and the others) need books you add under **Items ▾** ([Contexts and Chat](Contexts-and-Chat#library-mode)).
 - **Chat History**: your saved conversations ([Conversations, Notebooks and Export](Conversations-Notebooks-and-Export)).
 - **Browse Notebooks**: the Notebook Manager, with every notebook.
 - **Browse Artifacts**: the Artifact Browser, with every cached artifact ([Artifacts and Caching](Artifacts-and-Caching)).
