@@ -13,16 +13,16 @@ The placeholders an action's prompt can use. Each is replaced at run time with t
 | `{author_clause}` | Book, Highlight | " by Author", or empty (always empty when Book info is None) | |
 | `{count}` | Library | Number of selected books | |
 | `{books_list}` | Library | The selected books as a list, enriched with per-book highlights, annotations and notebook when the action declares those flags | Highlights / Annotation notes / Notebook, when those flags are set; one question for the set |
-| `{library}` | Library, Book, Highlight | The library catalog, raw, no label | Allow Library Scanning and a scan folder |
-| `{library_section}` | Library, Book, Highlight | The catalog with the label "My library:", or empty | Allow Library Scanning and a scan folder |
-| `{deep_reads}` | Library, Book, Highlight | Finished books with over 5 hours of reading time | Allow Advanced Stats and Allow Library Scanning (with a scan folder) |
-| `{deep_reads_section}` | Library, Book, Highlight | The same with "Books I read extensively:", or empty | Allow Advanced Stats and Allow Library Scanning (with a scan folder) |
-| `{recently_finished}` | Library, Book, Highlight | Finished books last opened in the past 30 days | Allow Advanced Stats and Allow Library Scanning (with a scan folder) |
-| `{recently_finished_section}` | Library, Book, Highlight | The same with "Books I recently finished:", or empty | Allow Advanced Stats and Allow Library Scanning (with a scan folder) |
-| `{stalled}` | Library, Book, Highlight | Unfinished books read past 20% and not opened for over 30 days | Allow Advanced Stats and Allow Library Scanning (with a scan folder) |
-| `{stalled_section}` | Library, Book, Highlight | The same with "Books I started but haven't returned to:", or empty | Allow Advanced Stats and Allow Library Scanning (with a scan folder) |
-| `{briefly_started}` | Library, Book, Highlight | Unfinished books with under 30 minutes of reading time | Allow Advanced Stats and Allow Library Scanning (with a scan folder) |
-| `{briefly_started_section}` | Library, Book, Highlight | The same with "Books I opened briefly:", or empty | Allow Advanced Stats and Allow Library Scanning (with a scan folder) |
+| `{library}` | Library, Book, Highlight | The library catalog, raw, no label | Book list and a scan folder |
+| `{library_section}` | Library, Book, Highlight | The catalog with the label "My library:", or empty | Book list and a scan folder |
+| `{deep_reads}` | Library, Book, Highlight | Finished books with over 5 hours of reading time | Reading habits and Book list (with a scan folder) |
+| `{deep_reads_section}` | Library, Book, Highlight | The same with "Books I read extensively:", or empty | Reading habits and Book list (with a scan folder) |
+| `{recently_finished}` | Library, Book, Highlight | Finished books last opened in the past 30 days | Reading habits and Book list (with a scan folder) |
+| `{recently_finished_section}` | Library, Book, Highlight | The same with "Books I recently finished:", or empty | Reading habits and Book list (with a scan folder) |
+| `{stalled}` | Library, Book, Highlight | Unfinished books read past 20% and not opened for over 30 days | Reading habits and Book list (with a scan folder) |
+| `{stalled_section}` | Library, Book, Highlight | The same with "Books I started but haven't returned to:", or empty | Reading habits and Book list (with a scan folder) |
+| `{briefly_started}` | Library, Book, Highlight | Unfinished books with under 30 minutes of reading time | Reading habits and Book list (with a scan folder) |
+| `{briefly_started_section}` | Library, Book, Highlight | The same with "Books I opened briefly:", or empty | Reading habits and Book list (with a scan folder) |
 | `{previous_results}` | General | This action's own recent results: the AI's replies from your last 3 saved general-context chats of this action, raw | none (your own AI output) |
 | `{previous_results_section}` | General | The same in a labelled "Previous results from earlier runs of this action…" block with an avoid-repeating hint, or empty | none |
 | `{translation_language}` | Any | The translation target from the settings | |
@@ -30,34 +30,34 @@ The placeholders an action's prompt can use. Each is replaced at run time with t
 | `{response_language}` | Any | The primary response language in effect for this request, a per-book override included (with no languages set, KOReader's interface language, else English) | |
 | `{context}` | Highlight | The text around the selection, as much as Settings → Dictionary Settings → Context Mode sends (a sentence by default; a book's own setting first). With no context, every prompt line holding it or the words "In context" is dropped | |
 | `{context_section}` | Highlight | The context with the label "Word appears in this context:" | |
-| `{reading_progress}` | Book, Highlight | The current position, as "42%" | Allow Basic Stats |
-| `{progress_decimal}` | Book, Highlight | The position as an unrounded decimal fraction, "0.4215…" | Allow Basic Stats |
-| `{chapter_title}` | Book, Highlight (reading) | The current chapter's name | Allow Basic Stats |
-| `{chapters_read}` | Book, Highlight (reading) | How many table-of-contents entries begin at or before the current page, "5" | Allow Basic Stats |
-| `{page_number}` | Book, Highlight (reading) | The EPUB's reference page label, "37" (the print edition's page from the book's page map; empty when the EPUB has none) | Allow Basic Stats |
-| `{time_since_last_read}` | Book, Highlight | How long ago KOReader's reading statistics last recorded you reading the book, "3 days ago" (empty when they have no record of the book; a book that is not open is read the same way) | Allow Basic Stats |
-| `{time_since_last_read_section}` | Book, Highlight | "Last read: 3 days ago", or nothing at all when the statistics have no record of the book (Recap uses this form, so no half sentence is sent) | Allow Basic Stats |
-| `{highlights}` | Book, Highlight | The book's highlights, text only (the first 100), each with its chapter or page | Allow Highlights (or Allow Annotation Notes) |
-| `{annotations}` | Book, Highlight | The book's highlights (the first 100), each with its note when it has one | Allow Annotation Notes (degrades to Allow Highlights) |
-| `{highlights_section}` | Book, Highlight | Highlights with "My highlights so far:" | Allow Highlights (or Allow Annotation Notes) |
-| `{annotations_section}` | Book, Highlight | Annotations with an adaptive label: "My annotations:" when the notes may be sent, "My highlights so far:" when degraded to highlights only | Allow Annotation Notes (degrades to Allow Highlights) |
-| `{notebook}` | Book, Highlight | The book's KOAssistant notebook | Allow Notebook |
-| `{notebook_section}` | Book, Highlight | The notebook with "My notebook entries:" | Allow Notebook |
-| `{book_text}` | Book, Highlight (reading) | The book's text from the start to the current position | Allow Text Extraction |
-| `{book_text_section}` | Book, Highlight (reading) | The same with "Book content so far:" | Allow Text Extraction |
-| `{full_document}` | Book, Highlight (reading) | The whole document, start to end, whatever the position (only the section when a run is limited to one) | Allow Text Extraction |
-| `{full_document_section}` | Book, Highlight (reading) | The same with "Full document:" | Allow Text Extraction |
+| `{reading_progress}` | Book, Highlight | The current position, as "42%" | Reading position |
+| `{progress_decimal}` | Book, Highlight | The position as an unrounded decimal fraction, "0.4215…" | Reading position |
+| `{chapter_title}` | Book, Highlight (reading) | The current chapter's name | Reading position |
+| `{chapters_read}` | Book, Highlight (reading) | How many table-of-contents entries begin at or before the current page, "5" | Reading position |
+| `{page_number}` | Book, Highlight (reading) | The EPUB's reference page label, "37" (the print edition's page from the book's page map; empty when the EPUB has none) | Reading position |
+| `{time_since_last_read}` | Book, Highlight | How long ago KOReader's reading statistics last recorded you reading the book, "3 days ago" (empty when they have no record of the book; a book that is not open is read the same way) | Reading position |
+| `{time_since_last_read_section}` | Book, Highlight | "Last read: 3 days ago", or nothing at all when the statistics have no record of the book (Recap uses this form, so no half sentence is sent) | Reading position |
+| `{highlights}` | Book, Highlight | The book's highlights, text only (the first 100), each with its chapter or page | Highlights (or Annotation notes) |
+| `{annotations}` | Book, Highlight | The book's highlights (the first 100), each with its note when it has one | Annotation notes (degrades to Highlights) |
+| `{highlights_section}` | Book, Highlight | Highlights with "My highlights so far:" | Highlights (or Annotation notes) |
+| `{annotations_section}` | Book, Highlight | Annotations with an adaptive label: "My annotations:" when the notes may be sent, "My highlights so far:" when degraded to highlights only | Annotation notes (degrades to Highlights) |
+| `{notebook}` | Book, Highlight | The book's KOAssistant notebook | Notebook |
+| `{notebook_section}` | Book, Highlight | The notebook with "My notebook entries:" | Notebook |
+| `{book_text}` | Book, Highlight (reading) | The book's text from the start to the current position | Book text |
+| `{book_text_section}` | Book, Highlight (reading) | The same with "Book content so far:" | Book text |
+| `{full_document}` | Book, Highlight (reading) | The whole document, start to end, whatever the position (only the section when a run is limited to one) | Book text |
+| `{full_document_section}` | Book, Highlight (reading) | The same with "Full document:" | Book text |
 | `{surrounding_context}` | Highlight (reading) | The text around the highlighted passage, extracted whenever the prompt carries this placeholder: as much as Settings → Highlight Settings → Surrounding Context sends (a sentence while that is off), at most 2000 characters | |
 | `{surrounding_context_section}` | Highlight (reading) | The same in a labelled block that marks the passage with >>> <<< and tells the AI to answer about the passage only | |
 | `{page_text}` | Book, Highlight (reading) | The text of the visible page | |
 | `{page_text_section}` | Book, Highlight (reading) | The same with "Current page text:" | |
-| `{xray_cache}` | Book, Highlight | The saved X-Ray, if any, as stored (normally JSON) | Allow Text Extraction (and Allow Highlights if the X-Ray used them) |
+| `{xray_cache}` | Book, Highlight | The saved X-Ray, if any, as stored (normally JSON) | Book text (and Highlights if the X-Ray used them) |
 | `{xray_cache_section}` | Book, Highlight | The same as readable text, with a progress label | as above |
-| `{analyze_cache}` | Book, Highlight | The saved document analysis, if any | Allow Text Extraction |
-| `{analyze_cache_section}` | Book, Highlight | The same with its label | Allow Text Extraction |
-| `{summary_cache}` | Book, Highlight | The saved document summary, if any | Allow Text Extraction |
-| `{summary_cache_section}` | Book, Highlight | The same with its label | Allow Text Extraction |
-| `{document_context_section}` | Book, Highlight (reading) | The unified source block: the full text (or a section's), a saved summary, targeted passages (Smart retrieval) or nothing, as chosen in the source popup of an action with source selection | Allow Text Extraction |
+| `{analyze_cache}` | Book, Highlight | The saved document analysis, if any | Book text |
+| `{analyze_cache_section}` | Book, Highlight | The same with its label | Book text |
+| `{summary_cache}` | Book, Highlight | The saved document summary, if any | Book text |
+| `{summary_cache_section}` | Book, Highlight | The same with its label | Book text |
+| `{document_context_section}` | Book, Highlight (reading) | The unified source block: the full text (or a section's), a saved summary, targeted passages (Smart retrieval) or nothing, as chosen in the source popup of an action with source selection | Book text |
 | `{doi_clause}` | Book, Highlight | A new line "DOI: …" when the book's DOI is known (from its metadata, or a scan of its first page while it is open), empty otherwise; most built-in book prompts carry it ([Research Mode](Research-Mode)) | |
 
 **Contexts:** Book = reading mode and the file browser (there, highlights, annotations, the notebook, the reading progress and saved results are read from the book's files on disk, the time since you last read comes from KOReader's reading statistics, and the library and reading-engagement placeholders stay empty); Highlight = reading mode (there is no highlight without an open book); General = a standalone chat with no book; (reading) = reading mode only, an open book required. Whether the file browser offers an action is decided by its flags, not by its placeholders ([Actions and Menus](Actions-and-Menus#tips-for-custom-actions)). The privacy setting is the kind of data under **Settings → Privacy & Data** the variable needs: on Ask the action asks the first time, on Allow it goes, and under Never the variable is empty and its section form disappears ([Privacy and Data](Privacy-and-Data)). Two exceptions: a provider in Trusted Providers follows its own column of values (the library still needs a scan folder), and a book's own Privacy rows (Book Settings → Privacy & Data) allow or refuse book text, highlights, annotation notes, the notebook and the text around what you tap for that book, a Never winning even over a trusted provider.
@@ -85,9 +85,9 @@ The raw forms (`{book_text}`, `{full_document}`, `{highlights}`, `{annotations}`
 
 Use the section forms in most cases: a prompt that says "Look at my highlights: {highlights}" with no highlights gives the AI an instruction about content that is not there, while a section form brings its label only when it has content. A raw form whose data was never fetched (the action lacks the flag, or a saved result is not allowed) is dropped, so the AI sees nothing in its place.
 
-**Privacy.** The section forms follow the privacy settings: a data type that is off, or not yet turned on, leaves its placeholder empty and its section form vanishes. `{highlights_section}` is empty unless Allow Highlights is on (or Allow Annotation Notes, which implies highlights). Actions never need changing to match your privacy choices.
+**Privacy.** The section forms follow the privacy settings: a kind of data that is not allowed for the request (set to Never, or declined when asked) leaves its placeholder empty and its section form vanishes. `{highlights_section}` is empty unless Highlights is allowed (or Annotation notes, which implies highlights). Actions never need changing to match your privacy choices.
 
-**Double-gating in custom actions.** Sensitive data needs both the global privacy setting and the action's own permission flag: with Allow Text Extraction on globally, a new custom action still needs "Allow text extraction" checked to use it. Built-in actions carry the right flags, and a copy made with Duplicate keeps the data-access ones (not the saved-result flags or the source popup). The saved-result placeholders need the permissions of their source: `{xray_cache}` needs text extraction, plus highlights if the X-Ray was built with them; `{analyze_cache}` and `{summary_cache}` need text extraction. Their own flags (`use_xray_cache`, `use_analyze_cache`, `use_summary_cache`) have no box in the action editor, so they work in built-in actions and in actions written in `custom_actions.lua`. The full table is on [Privacy and Data](Privacy-and-Data#text-extraction-and-double-gating).
+**Double-gating in custom actions.** Sensitive data needs both the global privacy setting and the action's own permission flag: with Book text on Allow for all books, a new custom action still needs "Allow text extraction" checked to use it. Built-in actions carry the right flags, and a copy made with Duplicate keeps the data-access ones (not the saved-result flags or the source popup). The saved-result placeholders need the permissions of their source: `{xray_cache}` needs text extraction, plus highlights if the X-Ray was built with them; `{analyze_cache}` and `{summary_cache}` need text extraction. Their own flags (`use_xray_cache`, `use_analyze_cache`, `use_summary_cache`) have no box in the action editor, so they work in built-in actions and in actions written in `custom_actions.lua`. The full table is on [Privacy and Data](Privacy-and-Data#text-extraction-and-double-gating).
 
 **`{previous_results_section}`** is not privacy-gated because its content is the AI's own earlier output, going back to the provider. It lets a recurring general-context action (a custom "daily news roundup" cloned from an existing action, say) see its last few results so it stops repeating items. It reads the AI's replies from your newest 3 saved general-context chats that ran this same action, so it needs saved chats; with Auto-save All Chats on (the default) that happens on its own. It is a general-context stopgap; book and library history is not covered.
 

@@ -38,7 +38,7 @@ end
 local FORM_ORDER = { "grant_type", "client_id", "code", "redirect_uri", "code_verifier", "refresh_token" }
 local function formEncode(values)
     local parts = {}
-    for _, key in ipairs(FORM_ORDER) do
+    for _idx, key in ipairs(FORM_ORDER) do
         if values[key] ~= nil then
             parts[#parts + 1] = urlEncode(key) .. "=" .. urlEncode(values[key])
         end
@@ -358,7 +358,7 @@ local function selectProviderIfFirst(plugin)
     local Base = require("koassistant.api.base")
     local ModelLists = require("koassistant.request.model_lists")
     local has_key = false
-    for _, provider in ipairs(ModelLists.getAllProviders()) do
+    for _idx, provider in ipairs(ModelLists.getAllProviders()) do
         if provider ~= "openai_codex" and Base.getApiKey(provider, plugin.settings) then
             has_key = true
             break

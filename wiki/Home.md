@@ -8,7 +8,7 @@ This wiki documents KOAssistant <!-- koa-version -->on the main branch<!-- /koa-
 
 - [Getting Started](Getting-Started): install, add an API key, run your first action.
 - [Setup, Gestures and Panels](Setup-Gestures-and-Panels): the wizard, the two quick panels, gestures and shortcuts.
-- [Privacy and Data](Privacy-and-Data): what is sent to the AI, what is opt-in, and how to control it per book.
+- [Privacy and Data](Privacy-and-Data): what is sent to the AI, what is asked first, and how to control it per book.
 
 ## Using KOAssistant
 
@@ -23,7 +23,7 @@ This wiki documents KOAssistant <!-- koa-version -->on the main branch<!-- /koa-
 - [Book Settings and Book Hub](Book-Settings-and-Book-Hub): per-book settings and the one page per book.
 - [Conversations, Notebooks and Export](Conversations-Notebooks-and-Export): history, notebooks, export, tags, pins.
 - [Artifacts and Caching](Artifacts-and-Caching): saved results, updates, pinned responses, costs.
-- [Image Generation](Image-Generation): a picture from a highlight.
+- [Image Generation](Image-Generation): a picture from a highlight or an X-Ray entry.
 
 ## Customization
 

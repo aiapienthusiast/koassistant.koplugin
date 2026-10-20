@@ -41,7 +41,7 @@ koreader
 
 KOReader loads plugins when it starts, so restart it once. KOAssistant's menu is then the first row of KOReader's Tools menu: **Tools → KOAssistant**. In this wiki, "Settings" means this menu, so **Settings → API Keys & Auth** is the API Keys & Auth row of Tools → KOAssistant.
 
-The first time you open KOAssistant (its menu, or one of its actions), the [Setup Wizard](Setup-Gestures-and-Panels#setup-wizard) walks you through a provider, privacy, language, the emoji icons and the panels' gestures; after an update it checks only what changed.
+The first time you open KOAssistant (its menu, or one of its actions), the [Setup Wizard](Setup-Gestures-and-Panels#setup-wizard) walks you through a provider, privacy, language, the emoji icons, the (KOA) mark on its buttons and the panels' gestures; after an update it checks only what changed.
 
 ## 3. Get an API Key
 
@@ -116,7 +116,7 @@ That's it: you're up and running. To check a key without opening a book, **Setti
 
 ## 6. Choose What You Share (Optional)
 
-Nothing of yours is sent unasked: the first time an action wants your highlights, notes, notebook, the book's text, your book list or your reading habits, KOAssistant shows what it is about to send and to whom, and you answer **Allow once** or **Allow for this book**. **Settings → Privacy & Data** holds one value per kind (Ask, Allow or Never); [Privacy and Data](Privacy-and-Data) explains every option.
+Your highlights, notes, notebook, the book's text, your book list and your reading habits are not sent unasked: the first time an action wants one of them, KOAssistant shows what it is about to send and to whom, and you answer **Allow once** or **Allow for this book**. **Settings → Privacy & Data** holds one value per kind (Ask, Allow or Never); [Privacy and Data](Privacy-and-Data) explains every option.
 
 > **Quick option:** in **Settings → Privacy & Data → Preset**, **Allow everything** sends every kind without a question, book text included (X-Ray needs it, for one; it raises token costs). **Block everything** is the other end.
 
