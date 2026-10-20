@@ -513,6 +513,19 @@ TestRunner:test("a library dialog run: its own ticks, no window; nothing ticked 
         "an action that needs the list and slips past the greying is refused")
 end)
 
+TestRunner:test("the question lists the library scan before the reading habits read from it", function()
+    local text = DataAccess.questionText({ action_name = "Next Read", provider_name = "Anthropic",
+        asked = { { kind = "habits" }, { kind = "book_list" } },
+        amounts = { book_list = "your library scan: the books in Fiction", habits = "your reading habits for those books" } })
+    local list_at, habits_at = text:find("library scan", 1, true), text:find("reading habits", 1, true)
+    TestRunner:assertTrue(list_at and habits_at and list_at < habits_at, "the folders' line first")
+    -- habits asked alone (the list on Allow): the list is shown beside them
+    DataAccess.withAccess(makePlugin({ features = {} }), NEXT_READ, { features = { enable_library_scanning = true },
+        provider = "anthropic", path = "/b/x.epub" }, function() end)
+    TestRunner:assertTrue(tostring(shown[#shown].title):find("your library scan", 1, true),
+        "the books the habits are read from")
+end)
+
 TestRunner:test("the library boxes: Library Scan on every editor screen, reading habits under it", function()
     local pm = source("koassistant/ui/prompts_manager.lua")
     local _a, any_ctx = pm:gsub("if state%.context and state%.use_library then", "")

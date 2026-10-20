@@ -108,7 +108,20 @@ function DataAccess.questionText(spec)
     local lines = {}
     lines[#lines + 1] = T(_("%1 will send to %2:"), spec.action_name or _("This action"),
         spec.provider_name or _("your AI provider"))
+    -- the reading habits are read from the library scan's books ("for those
+    -- books"): listed right after it, the line that names the folders
+    local listed, habits = {}, nil
     for _idx, n in ipairs(spec.asked or {}) do
+        if n.kind == "habits" then habits = n else listed[#listed + 1] = n end
+    end
+    if habits then
+        local at = #listed + 1
+        for i, n in ipairs(listed) do
+            if n.kind == "book_list" then at = i + 1 end
+        end
+        table.insert(listed, at, habits)
+    end
+    for _idx, n in ipairs(listed) do
         local line = spec.amounts and spec.amounts[n.kind] or DataAccess.kindLabel(n.kind)
         lines[#lines + 1] = "• " .. line
     end
@@ -640,10 +653,17 @@ function DataAccess.withAccess(plugin, action, opts, run_fn)
         return list
     end
     -- What the window lists: every kind on Ask, and with the folders the
-    -- library's kinds the run sends on Allow
+    -- library's kinds the run sends on Allow; the library scan also beside
+    -- reading habits asked alone (the books they are read from)
+    local habits_asked = false
+    for _idx, n in ipairs(needs) do
+        if n.kind == "habits" and n.state == "ask" then habits_asked = true end
+    end
     local display = {}
     for _idx, n in ipairs(needs) do
-        if n.state == "ask" or (lib and n.state == "allow" and (n.kind == "book_list" or n.kind == "habits")) then
+        if n.state == "ask"
+                or (lib and n.state == "allow" and (n.kind == "book_list" or n.kind == "habits"))
+                or (habits_asked and n.state == "allow" and n.kind == "book_list") then
             display[#display + 1] = n
         end
     end
