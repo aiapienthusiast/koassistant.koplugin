@@ -693,7 +693,7 @@ local SettingsSchema = {
                             text = _("Leave Book Info Out"),
                             path = "features.quick_preset_book_info_off",
                             default = false,
-                            help_text = _("Send nothing that names the book in Quick Answer chats: no book line, and an action's own prompt says \"this book\" instead of the title (what Book info set to None does, for Quick chats only). Off by default: the title helps a short answer. It reaches Quick chats and the actions that take the Quick preset (Explain, Quick Explain, Elaborate, Explain in Context); an action that does not take it, About or Reviews say, keeps the Book info in effect."),
+                            help_text = _("Send nothing that names the book in Quick Answer chats: no book line, and an action's own prompt says \"this book\" instead of the title (what Book info set to None does, for Quick chats only). Off by default: the title helps a short answer. It reaches Quick chats and the actions that take the Quick preset (Explain, Quick Explain, ELI5, Elaborate, Explain in Context), from the ⚡ chip or an action's long-press Quick answer; an action that does not take it, About or Reviews say, keeps the Book info in effect."),
                         },
                         {
                             id = "quick_preset_behavior",
@@ -2185,7 +2185,7 @@ local SettingsSchema = {
                         return T(_("Preset: %1"), require("koassistant.ui.data_access").presetLabel(
                             require("koassistant.request.privacy_gates").presetOf(f)))
                     end,
-                    help_text = _("One tap sets every kind of data below for all books. Default (Ask) puts every value back to the one it ships with: Ask, with reading position and the text around what you tap sent, and Allow for trusted providers. Allow everything sends every kind without a question, book text included (it raises token costs). Block everything sends nothing but your question, the selected text and the book info; reading position goes off too, so spoiler protection no longer knows where you are. Allow everything and Block everything leave the trusted providers' own values alone, and every preset keeps the books' own values and Book info. The row names the preset your values match, or Custom."),
+                    help_text = _("One tap sets every kind of data below for all books. Default (Ask) puts every value back to the one it ships with: Ask, with reading position and the text around what you tap sent, and Allow for trusted providers. Allow everything sends every kind without a question, book text included (it raises token costs). Block everything sets every kind to Never: only your question, the selected text and the book info go (and the behavior, domain and Background texts, which no preset touches); reading position goes off too, so spoiler protection no longer knows where you are. Allow everything and Block everything leave the trusted providers' own values alone, and every preset keeps the books' own values and Book info. The row names the preset your values match, or Custom."),
                     callback = "showPrivacyPresetPicker",
                     keep_menu_open = true,
                     separator = true,
@@ -3435,10 +3435,9 @@ local SettingsSchema = {
                     path = "features.debug",
                     default = false,
                     on_change = function(new_value, plugin)
-                        -- Routine tracing lives at logger.dbg, which KOReader's
-                        -- default level discards (issue #104) — raise the level
-                        -- so this toggle actually delivers the diagnostics it
-                        -- promises above.
+                        -- Routine tracing lives at the plugin logger's dbg, which
+                        -- this switch alone turns on (KOReader's own level is
+                        -- left as it is, issue #104).
                         require("koassistant.core.debug_utils").syncLogLevel(new_value)
                         -- Most consumers read the flag per request; the marks
                         -- module caches it at sync — resync so the toggle is

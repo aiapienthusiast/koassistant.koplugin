@@ -111,9 +111,8 @@ This is an unofficial integration: KOAssistant identifies itself honestly, and i
 
 The credits arrive each billing month, are spent before any credits you bought, and expire at the end of the month (no rollover). When they run out, requests stop until the next month unless the organization has bought credits or turned on auto-reload. New subscribers can claim after seven days on the plan. Details: [Anthropic's help article](https://support.claude.com/en/articles/17154008-monthly-api-credits-for-max-and-team-plans).
 
-### Planned and not planned
+### Not planned
 
-- **Planned: coding-plan subscriptions** (Kimi Code, Z.AI GLM Coding Plan, MiniMax Coding Plan). These plans expose standard API endpoints that a subscriber's own plan key can use, so no technical circumvention is involved, but their terms generally permit only a short list of named coding tools, and KOAssistant is not on those lists. Support is planned as a strictly opt-in feature behind an explicit warning you must acknowledge: it is against the plan's terms of service, it may stop working at any time, and in principle the provider could restrict your account. KOAssistant will always identify itself honestly and will never impersonate an allowlisted client: if a provider blocks third-party clients, the integration stops working rather than sneaking around it.
 - **Not planned: signing in with a Claude (Anthropic), Google or GitHub Copilot subscription.** These providers ban third-party subscription use and enforce it server-side, so supporting them would require actively impersonating their official clients. That is out of scope permanently (barring a policy change on their side). Claude Max and Team plans can use their monthly API credits instead (above).
 
 ## Choosing a provider and model

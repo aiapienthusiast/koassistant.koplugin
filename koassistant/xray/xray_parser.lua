@@ -1481,7 +1481,7 @@ function XrayParser.formatItemDetail(item, category_key, opts)
         for _idx, b in ipairs(item.background) do
             if type(b) == "table" and type(b.text) == "string" and b.text ~= "" then
                 if #parts > 0 and parts[#parts] ~= "" then table.insert(parts, "") end
-                table.insert(parts, T(_("Background — \"%1\": %2"), b.source or "?", b.text))
+                table.insert(parts, T(_("Background (%1): %2"), b.source or "?", b.text))
             end
         end
     end

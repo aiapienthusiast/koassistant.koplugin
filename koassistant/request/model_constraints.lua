@@ -1962,12 +1962,9 @@ end
 --- separately as info.temp_1_when_reasoning and must not be treated as a rejection:
 --- those models honor temperature whenever reasoning is off.
 ---
---- KNOWN GAP: apply() runs only for openai and anthropic (openai_compatible.lua calls
---- clampMaxTokens only), so a temperature constraint declared in custom_models.lua for
---- some OTHER provider is reported "forced" here but never actually applied to the
---- request. That is a hole in the apply path, not in this predicate — reporting the
---- declared data is the honest answer, and special-casing providers here would just
---- move the inconsistency somewhere harder to find.
+--- Every body builder runs apply() on its body (tests/unit/test_handler_constraints.lua
+--- sweeps the built-ins), so a constraint reported "forced" here is the one the
+--- request gets, custom_models.lua's for any provider included.
 --- @param provider string|nil
 --- @param model string|nil
 --- @return string mode  "rejected" (stripped) | "forced" (pinned) | "free"

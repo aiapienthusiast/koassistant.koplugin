@@ -2442,7 +2442,7 @@ function PromptsManager:getModelTierDisplayText(state)
     -- always beats the tier hint — say so, instead of two live-looking rows
     -- silently fighting.
     if state.model then
-        return T(_("%1 (unused — model set)"), label)
+        return T(_("%1 (unused: model set)"), label)
     end
     return label
 end

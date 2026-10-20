@@ -453,6 +453,19 @@ local function quickPresetForces(facet, quick_on, features, action)
     return false
 end
 
+-- Whether a request runs under the Quick preset, THE signal the facet rule
+-- above takes for a facet read before the bake (the book info, B515): the hold
+-- menu's pick for this run (the run variant's Quick answer / Without Quick,
+-- consumed by the bake after those reads), else the dialog's chip state (the
+-- dispatch consumable _quick_answer_active); and only for an action that takes
+-- the preset (accept_quick_answer), as the bake decides for the rest of it.
+local function quickOn(features, action)
+    if not features or not action or action.accept_quick_answer ~= true then return false end
+    local rv = features._run_variant
+    if type(rv) == "table" and rv.quick ~= nil then return rv.quick == true end
+    return features._quick_answer_active == true
+end
+
 local function ensureReasoningHeadroom(api_params, provider, decision)
     if not (api_params and api_params.max_tokens and decision) then return end
     local might_reason = decision.mode == "on"
@@ -4400,9 +4413,9 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
     -- placeholders (B500, message_builder).
     do
         local rf = temp_config.features or config.features
-        -- the preset reaches only the actions that take it (accept_quick_answer),
-        -- as the bake decides for the rest of the preset
-        local quick_on = rf._quick_answer_active and prompt.accept_quick_answer == true
+        -- the chip or the hold menu's pick, for the actions that take the
+        -- preset only (quickOn, B515)
+        local quick_on = quickOn(rf, prompt)
         message_data._book_info_level = require("koassistant.books.book_settings").resolveBookInfoLevel(
             per_book_ds, rf, quick_on)
         logger.dbg("KOAssistant: book info level", message_data._book_info_level,
@@ -6588,7 +6601,7 @@ if prune_book_text then
         local empty_dialog
         local empty_title = message_data.extraction_empty_at_start
             and _("You're at the very beginning of this book, so there is no text before your position to send.\n\nSending anyway means the AI answers from general knowledge, not this book's text.")
-            or _("No text could be extracted from this document — it may be a scanned or image-only file.\n\nSending anyway means the AI answers from general knowledge, not this book's text.")
+            or _("No text could be extracted from this document. It may be a scanned or image-only file.\n\nSending anyway means the AI answers from general knowledge, not this book's text.")
         empty_dialog = ButtonDialog:new{
             title = empty_title,
             buttons = {
@@ -7705,8 +7718,8 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
             configuration.features._source_mode = popup_state.source
             -- The popup's question allowed these kinds once (B395): on this
             -- dialog's config, read by the gather and consumed at the dispatch;
-            -- merged with what the chat allowed (the Data chip): grantOnce
-            -- replaces only another book's record
+            -- merged with what the chat allowed: grantOnce replaces only
+            -- another book's record
             if popup_state.data_once then
                 require("koassistant.request.privacy_gates").grantOnce(configuration.features,
                     document_path, popup_state.data_once)
@@ -9501,9 +9514,14 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                 -- call: off the shared features at once, so no exit can leak it
                 local send_rv = configuration.features._send_run_variant
                 configuration.features._send_run_variant = nil
-                -- Block empty sends for contexts without highlighted text (nothing useful to send)
+                -- Block empty sends where there is no selection to talk about: a
+                -- book chat carries its book-context string as highlighted_text
+                -- (B517), so the context flags decide, as the input context does
                 local typed_text = input_dialog:getInputText()
-                if (not typed_text or typed_text == "") and not highlighted_text then
+                if (not typed_text or typed_text == "")
+                        and (not highlighted_text or configuration.features.is_book_context
+                            or configuration.features.is_general_context
+                            or configuration.features.is_library_context) then
                     UIManager:show(InfoMessage:new{
                         text = _("Type a message first, or tap an action button."),
                         timeout = 2,
@@ -9551,8 +9569,8 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         da_amounts.nearby_text = _("the text around your selection")
                     end
                     if configuration.features.is_library_context and library_toggle_on then
-                        -- optional: a book list left out of this chat (the Data chip)
-                        -- lets the Send go without it
+                        -- optional: a book list left out of this chat lets the
+                        -- Send go without it
                         da_kinds[#da_kinds + 1] = { kind = "book_list", required = false }
                         da_amounts.book_list = _("your book list (titles, authors, reading status)")
                     end
@@ -10325,7 +10343,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
         end
         -- Chips + Send fill the TOP ROW ONLY, shrinking with count (maintainer
         -- 2026-07-12): all chips + Send share one row; font size steps down as the row
-        -- fills. Current max is 8 chips + Send (Quick joined 2026-07-19); if the row
+        -- fills. Current max is 7 chips + Send; if the row
         -- gets too tight on device, revisit membership defaults in the defaults sweep
         -- (noted alternative: a gear-anchored controls menu).
         local top_chip_row = {}
@@ -11361,7 +11379,7 @@ local function openXrayBrowserFromCache(ui, data, cached, config, plugin, book_m
         require("koassistant.books.book_settings").clearXrayLineageState(
             SafeDocSettings.resolve(target_file, ui), config and config.features)
         UIManager:show(Notification:new{
-            text = keep_versions and _("X-Ray deleted — archived versions kept")
+            text = keep_versions and _("X-Ray deleted, archived versions kept")
                 or T(_("%1 deleted"), "X-Ray"),
             timeout = 2,
         })
@@ -13227,7 +13245,7 @@ local function executeDirectAction(ui, action, highlighted_text, configuration, 
                                 SafeDocSettings.resolve(ui.document.file, ui),
                                 configuration and configuration.features)
                             UIManager:show(Notification:new{
-                                text = keep_versions and _("X-Ray deleted — archived versions kept")
+                                text = keep_versions and _("X-Ray deleted, archived versions kept")
                                     or T(_("%1 deleted"), "X-Ray"),
                                 timeout = 2,
                             })
@@ -13955,6 +13973,7 @@ return {
     quickPresetNudgeLabel = quickPresetNudgeLabel,
     applyQuickReplyOverrides = applyQuickReplyOverrides,
     quickPresetForces = quickPresetForces,
+    quickOn = quickOn,
     showAttachMenu = showAttachMenu,
     attachChipLabel = attachChipLabel,
     -- Exported for the main-settings action row (AskGPT:showQuickPresetModelMode)

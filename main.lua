@@ -1528,10 +1528,10 @@ function AskGPT:initSettings()
   self._settings_path = DataStorage:getSettingsDir() .. "/koassistant_settings.lua"
   -- Initialize settings with default values from configuration.lua
   self.settings = LuaSettings:open(self._settings_path)
-  -- A chat's own data choices (the Data chip) and an allowance for one run live
-  -- on the features table while a dialog or a request holds them, and that table
-  -- is the one a settings flush writes: one that reached the disk must not come
-  -- back with the next start (B395)
+  -- An allowance for one run (Allow once) lives on the features table while a
+  -- dialog or a request holds it, and that table is the one a settings flush
+  -- writes: one that reached the disk must not come back with the next start
+  -- (B395)
   do
     local f = self.settings:readSetting("features")
     if type(f) == "table" then
@@ -2975,7 +2975,7 @@ function AskGPT:showProviderTestReport(provider, model, results, caps)
     table.insert(lines, line)
   end
   if #results == 0 then
-    table.insert(lines, _("No results — the test could not run. Check the base URL and API key."))
+    table.insert(lines, _("No results: the test could not run. Check the base URL and API key."))
   end
 
   local buttons = {}
@@ -3060,8 +3060,15 @@ function AskGPT:getProviderDisplayName(provider_id)
   if provider_id == "openai_codex" then
     return _("OpenAI Subscription")
   end
-  -- Community-set ids whose display casing isn't first-letter-capitalize
+  -- Ids whose name is not first-letter-capitalize, as the brands write them
+  -- (the pages and the README use these; B524)
   local special = {
+    openai = "OpenAI",
+    deepseek = "DeepSeek",
+    xai = "xAI",
+    zai = "Z.AI",
+    openrouter = "OpenRouter",
+    sambanova = "SambaNova",
     nvidia = "NVIDIA",
     minimax = "MiniMax",
     deepinfra = "DeepInfra",
@@ -3484,11 +3491,11 @@ function AskGPT:buildProviderMenu(simplified, show_all, hub)
     -- Tappable legend (maintainer 2026-08-14: the * was explained nowhere
     -- in-plugin) — the disabled see-README row became a real explainer.
     table.insert(items, {
-      text = _("* = community set — tap for info"),
+      text = _("* = community set (tap for info)"),
       keep_menu_open = true,
       callback = function()
         UIManager:show(InfoMessage:new{
-          text = _("Providers marked * are the community set: wired up from documentation and community reports, not maintainer-tested end to end. Their model lists are seed lists — use \"Fetch models from provider…\" inside the provider for the live list, and \"Test provider…\" to verify your key and connection.\n\nUnmarked providers are the curated set."),
+          text = _("Providers marked * are the community set: wired up from documentation and community reports, not maintainer-tested end to end. Their model lists are seed lists: use \"Fetch models from provider…\" inside the provider for the live list, and \"Test provider…\" to verify your key and connection.\n\nUnmarked providers are the curated set."),
         })
       end,
     })
@@ -4012,7 +4019,7 @@ function AskGPT:switchModel(provider, model, provider_display_name)
   self:updateConfigFromSettings()
   UIManager:show(Notification:new{
     text = switching
-      and T(_("Provider: %1 — Model: %2"), provider_display_name, model)
+      and T(_("Provider: %1, model: %2"), provider_display_name, model)
       or T(_("Model: %1"), model),
     timeout = 1.5,
   })
@@ -4762,7 +4769,7 @@ function AskGPT:buildTierMenu(provider)
       keep_menu_open = true,
       callback = function()
         UIManager:show(InfoMessage:new{
-          text = _("A speed ladder for this provider: actions that declare a speed tier (like Quick Define and Translate) and the Quick Answer preset pick their model from it.\n\nTiers never switch providers — use a per-action provider pin or a global tier pin for that.\n\nFrontier is never chosen automatically."),
+          text = _("A speed ladder for this provider: actions that declare a speed tier (like Quick Define and Translate) and the Quick Answer preset pick their model from it.\n\nTiers never switch providers: use a per-action provider pin or a global tier pin for that.\n\nFrontier is never chosen automatically."),
         })
       end,
     },
@@ -5033,21 +5040,6 @@ local function maskApiKey(key)
   end
   -- Show first 3 and last 4 characters
   return key:sub(1, 3) .. "..." .. key:sub(-4)
-end
-
--- Helper: Check if a key value looks like a placeholder (not a real key)
-local function isPlaceholderKey(key)
-  if not key or key == "" then return true end
-  -- Detect common placeholder patterns from apikeys.lua.sample ("your-key-here" too, B432)
-  local upper = (key:upper():gsub("-", "_"))
-  if upper:find("YOUR_") or upper:find("_HERE") or upper:find("API_KEY") then
-    return true
-  end
-  -- Real API keys are typically at least 20 characters
-  if #key < 20 then
-    return true
-  end
-  return false
 end
 
 -- Helper: Check if apikeys.lua has a real (non-placeholder) key for provider
@@ -8047,7 +8039,7 @@ function AskGPT:showCacheViewer(cache_info)
       -- Invalidate file browser row cache so deleted artifacts don't reappear
       self._file_dialog_row_cache = { file = nil, rows = nil }
       UIManager:show(Notification:new{
-        text = keep_versions and _("X-Ray deleted — archived versions kept")
+        text = keep_versions and _("X-Ray deleted, archived versions kept")
           or T(_("%1 deleted"), cache_name),
         timeout = 2,
       })
@@ -10162,7 +10154,7 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
         local nc_reason = nc_stop and self:_xrayStopReasonLabel(nc_stop.kind)
         table.insert(buttons, {{
           text = nc_reason
-            and T(_("Resume building checkpoints (%1 so far — stopped: %2)…"), nc_rungs, nc_reason)
+            and T(_("Resume building checkpoints (%1 so far, stopped: %2)…"), nc_rungs, nc_reason)
             or T(_("Resume building checkpoints (%1 so far)…"), nc_rungs),
           callback = function()
             UIManager:close(dialog)
@@ -10231,13 +10223,13 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
         local posture_hint
         if cached_entry and cached_entry.result
             and (cached_entry.full_document or inst_dec >= 0.995) then
-          posture_hint = _("The installed X-Ray covers the whole book — spoiler protection does not limit it")
+          posture_hint = _("The installed X-Ray covers the whole book, so spoiler protection does not limit it")
         elseif current_progress and inst_dec > (current_progress.decimal or 0) + 0.01
             and self.ui and self.ui.document and self.ui.document.file == sx_file then
           posture_hint = T(_("The installed X-Ray reaches %1%, ahead of your reading position"),
             math.floor(inst_dec * 100 + 0.5))
         else
-          posture_hint = _("Spoiler protection is on — checkpoints follow your position")
+          posture_hint = _("Spoiler protection is on: checkpoints follow your position")
         end
         table.insert(buttons, {{
           text = posture_hint,
@@ -10511,7 +10503,7 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
           local sx_reason = sx_stop and self:_xrayStopReasonLabel(sx_stop.kind)
           table.insert(buttons, {{
             text = sx_reason
-              and T(_("Resume building checkpoints (from %1% — stopped: %2)…"),
+              and T(_("Resume building checkpoints (from %1%, stopped: %2)…"),
                 math.floor((ladder_highest or 0) * 100 + 0.5), sx_reason)
               or T(_("Resume building checkpoints (from %1%)…"),
                 math.floor((ladder_highest or 0) * 100 + 0.5)),
@@ -10680,13 +10672,13 @@ function AskGPT:_showXrayScopePopup(action, action_id, on_update, cached_entry, 
         local posture_hint
         if cached_entry and cached_entry.result
             and (cached_entry.full_document or inst_dec >= 0.995) then
-          posture_hint = _("The installed X-Ray covers the whole book — spoiler protection does not limit it")
+          posture_hint = _("The installed X-Ray covers the whole book, so spoiler protection does not limit it")
         elseif current_progress and inst_dec > (current_progress.decimal or 0) + 0.01
             and self.ui and self.ui.document and self.ui.document.file == sx_file then
           posture_hint = T(_("The installed X-Ray reaches %1%, ahead of your reading position"),
             math.floor(inst_dec * 100 + 0.5))
         else
-          posture_hint = _("Spoiler protection is on — checkpoints follow your position")
+          posture_hint = _("Spoiler protection is on: checkpoints follow your position")
         end
         table.insert(buttons, {{
           text = posture_hint,
@@ -13376,9 +13368,9 @@ function AskGPT:_showXrayCheckpointList(opts)
   local ring_n = #ring
   for idx, e in ipairs(entries) do
     if idx == 1 and ring_n > 0 then
-      table.insert(buttons, {{ text = _("— Archived versions —"), enabled = false }})
+      table.insert(buttons, {{ text = _("Archived versions:"), enabled = false }})
     elseif idx == ring_n + 1 then
-      table.insert(buttons, {{ text = _("— Prepared checkpoints —"), enabled = false }})
+      table.insert(buttons, {{ text = _("Prepared checkpoints:"), enabled = false }})
     end
     local row_text = self:_xrayCheckpointLabel(e.cp)
     if e.is_rung then
@@ -13733,7 +13725,7 @@ function AskGPT:_showXrayLadderRungOptions(rung, opts)
         .. _("If automatic building needs this grid point again, it is rebuilt.")
       if is_live then
         title_text = title_text .. "\n"
-          .. _("This checkpoint is currently installed as your X-Ray — deleting it from the list alone keeps it installed.")
+          .. _("This checkpoint is currently installed as your X-Ray. Deleting it from the list alone keeps it installed.")
       end
       local confirm
       local confirm_rows = {}
@@ -13761,7 +13753,7 @@ function AskGPT:_showXrayLadderRungOptions(rung, opts)
             self_ref._file_dialog_row_cache = { file = nil, rows = nil }
             self_ref:_refreshXrayAutoState()
             UIManager:show(Notification:new{
-              text = T(_("Checkpoint deleted — X-Ray back to %1"), revert_label),
+              text = T(_("Checkpoint deleted, X-Ray back to %1"), revert_label),
               timeout = 3,
             })
           end,
@@ -14880,7 +14872,7 @@ function AskGPT:_fireXrayAutoCheckpoints(opts)
       if not self._xray_auto_never_noted[file] then
         self._xray_auto_never_noted[file] = true
         UIManager:show(InfoMessage:new{
-          text = _("Automatic X-Ray is on for this book, but its book text is set to Never (Book Settings → Privacy & Data). Nothing is built until that changes."),
+          text = _("Automatic X-Ray is on for this book, but its book text is set to Never (Book Settings → Privacy & Data, or Settings → Privacy & Data for all books). Nothing is built until that changes."),
           timeout = 5,
         })
       end
@@ -16308,7 +16300,7 @@ function AskGPT:_fireXrayLadderRung()
             kind, ") - retrying in", retry_in, "s:", err_text)
           if not cur.silent or features.xray_auto_notify == true then
             UIManager:show(Notification:new{
-              text = T(_("Model busy — retrying checkpoint %1 of %2 in %3 s…"),
+              text = T(_("Model busy, retrying checkpoint %1 of %2 in %3 s…"),
                 cur.step or cur.idx, cur.total, retry_in),
             })
           end
@@ -17705,7 +17697,7 @@ function AskGPT:_reasoningControlRows(profile, get_pref, effective_label, on_set
     -- reads as if Off were forgotten. Minimal stance already maps to the
     -- lowest effort for these models; this row is explanation only.
     rows[#rows + 1] = { info = true,
-      text = _("Always reasons — this model's API has no off switch") }
+      text = _("Always reasons (this model's API has no off switch)") }
   end
   if profile.axis == "binary" then
     rows[#rows + 1] = {
@@ -18437,7 +18429,7 @@ function AskGPT:onKOAssistantAISettings(on_close_callback)
       local posture = BookSettings.resolveSpoilerPosture(doc_settings, f)
       if posture.reason == "book" then
         UIManager:show(Notification:new{
-          text = _("Saved as default. This book has its own override — hold the button to change it."),
+          text = _("Saved as default. This book has its own override. Hold the button to change it."),
           timeout = 3,
         })
       elseif posture.reason == "research" then
@@ -21792,7 +21784,7 @@ function AskGPT:showPrivacyPresetPicker(touchmenu_instance)
     title = T(_("Privacy preset: %1"), DataAccess.presetLabel(current)) .. "\n\n"
       .. _("Default (Ask): each kind of data is asked the first time an action wants it; reading position and the text around what you tap are sent.") .. "\n"
       .. _("Allow everything: every kind goes without a question, book text included.") .. "\n"
-      .. _("Block everything: nothing but your question, the selected text and the book info."),
+      .. _("Block everything: every kind is Never; only your question, the selected text and the book info go (and the behavior, domain and Background texts, which no preset touches)."),
     buttons = buttons,
   }
   UIManager:show(dialog)

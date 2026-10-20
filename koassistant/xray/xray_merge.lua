@@ -2822,7 +2822,7 @@ function XrayMerge.maybeOfferDedupScan(opts)
     local ButtonDialog = require("ui/widget/buttondialog")
     local dialog
     dialog = ButtonDialog:new{
-        title = T(_("The merge may have left %1 duplicate entit(y/ies) — the same figure under two names. Review them?"), #found),
+        title = T(_("The merge may have left %1 duplicate entit(y/ies), the same figure under two names. Review them?"), #found),
         buttons = {
             {{ text = _("Review duplicates…"), callback = function()
                 UIManager:close(dialog)
@@ -3291,7 +3291,7 @@ function XrayMerge.maybeNotePredecessorGap(opts)
         return
     end
     UIManager:show(require("ui/widget/infomessage"):new{
-        text = T(_("\"%1\" (the previous book in %2) has no X-Ray yet — build one there to carry its knowledge forward."),
+        text = T(_("\"%1\" (the previous book in %2) has no X-Ray yet. Build one there to carry its knowledge forward."),
             BookGroups.displayTitle(nearest, opts.ui), (group and groupName(group)) or _("this group")),
         timeout = 6,
     })
@@ -3820,7 +3820,7 @@ function XrayMerge.startCrossBookFlow(opts)
                                             -- it usually means the model answered
                                             -- in prose. Nothing was written.
                                             UIManager:show(InfoMessage:new{
-                                                text = T(_("X-Ray merge failed — the model did not return a usable result. Nothing was changed; trying again often works.\n\n%1"),
+                                                text = T(_("X-Ray merge failed: the model did not return a usable result. Nothing was changed; trying again often works.\n\n%1"),
                                                     tostring(err or "unknown error")),
                                                 timeout = 6,
                                             })

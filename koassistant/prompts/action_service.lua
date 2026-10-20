@@ -348,6 +348,13 @@ end
 
 -- Add a custom action to the cache
 function ActionService:addCustomAction(id, action, source, disabled_actions)
+    -- No context field (B522): expandContexts(nil) yields nothing, so the loop
+    -- below ran zero times and the action vanished without a word
+    if action.context == nil then
+        logger.warn("ActionService: custom action " .. tostring(action.text or id)
+            .. " skipped: no context field (highlight, book, library or general)")
+        return
+    end
     local contexts = self:expandContexts(action.context)
 
     for _idx, context in ipairs(contexts) do

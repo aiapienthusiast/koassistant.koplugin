@@ -60,7 +60,7 @@ Long-press an action button in the highlight menu, the dictionary popup, the Qui
 
 **Run it once another way.** The buttons at the top run the action this one time with a change, and change no setting:
 
-- **Quick answer**, or **Without Quick** where Quick is already on, for an action that accepts the Quick Answer posture (among the built-ins: Explain, Quick Explain, ELI5, Elaborate and Explain in Context). See [Contexts and Chat](Contexts-and-Chat#quick-answer-and-its-preset).
+- **Quick answer**, or **Without Quick** where Quick is already on, for an action that accepts the Quick Answer posture (among the built-ins: Explain, Quick Explain, ELI5, Elaborate and Explain in Context), with everything the preset sets, its Leave Book Info Out switch included. See [Contexts and Chat](Contexts-and-Chat#quick-answer-and-its-preset).
 - **Without book info**, or **With book info** where None is in effect (the book's own level, Settings → Privacy & Data → Book info, the Quick preset's Leave Book Info Out, or the dialog's **Send book info** switch), for any action with a book in scope, the artifact builders included: nothing that names the book goes with that one run, or the title and author do. Not offered for the actions that answer from what the AI knows about the book, which cannot run without the title ([Privacy and Data](Privacy-and-Data#what-gets-sent)).
 - Up to three model buttons: your favorite models first, then the models you picked lately through **More models…** (newest first), then your provider's fast model while a spot is free. A model whose provider has no API key, or the model a plain tap would use anyway, is left out.
 - **No reasoning**, when the action would reason, its model can turn reasoning off, and the action doesn't set reasoning itself.
@@ -177,7 +177,7 @@ return {
 Every entry needs:
 
 - `text`: the button label.
-- `context`: `"highlight"`, `"book"`, `"library"` or `"general"`. `"both"` puts the action in the highlight and book contexts; `"highlight+general"`, `"book+general"` and `"both+general"` add the general context. Any other value skips that action, with a line in the log; the other actions still load.
+- `context`: `"highlight"`, `"book"`, `"library"` or `"general"`. `"both"` puts the action in the highlight and book contexts; `"highlight+general"`, `"book+general"` and `"both+general"` add the general context. Any other value, or no `context` at all, skips that action, with a line in the log (KOReader's crash.log); the other actions still load.
 - `prompt`: the instruction, with placeholders ([Template Variables](Template-Variables)).
 
 Good to know:

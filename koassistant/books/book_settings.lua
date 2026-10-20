@@ -3897,8 +3897,8 @@ function BookSettings.showBookInfoPicker(opts)
 end
 
 --- The Privacy & Data screen (B395 slice 3, named by B502; Book Settings →
--- Privacy & Data, the Quick Settings tile's tap and hold, the refusal's door,
--- the Data chip's hold): the two-layer shape every book-overridable setting
+-- Privacy & Data, the Quick Settings tile's tap and hold, the refusal's
+-- door): the two-layer shape every book-overridable setting
 -- shares, on the picker engine's list mode (spec.rows). With a book in scope
 -- the For this book tab lists the five kinds a book can hold a value for and
 -- Book info, each row reading "Follow global (Ask)", "Follow group X (Never)",

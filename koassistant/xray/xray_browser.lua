@@ -2813,7 +2813,7 @@ function XrayBrowser:_showConnectionList(conn_entries, source, owner_title)
             end,
         })
     end
-    self:navigateForward(T(_("%1 — connections (%2)"), owner_title or _("Details"),
+    self:navigateForward(T(_("%1: connections (%2)"), owner_title or _("Details"),
         #conn_entries), items, nil, {
         single_line = false,
         multilines_forced = true,
@@ -3851,7 +3851,7 @@ function XrayBrowser:_showEntityManagePopup(item, category_key, title, source, n
     end
     if ops_start > 0 and #buttons > ops_start then
         table.insert(buttons, ops_start + 1,
-            {{ text = _("— Edit this entry —"), enabled = false }})
+            {{ text = _("Edit this entry:"), enabled = false }})
     end
     table.insert(buttons, {{
         text = _("Cancel"),
@@ -3998,7 +3998,7 @@ function XrayBrowser:_commitLink(member_file, member_title, entry, parsed,
     end
     if not XrayParser.addItemAliases(parsed, r_cat, r_name, our_names) then
         UIManager:show(InfoMessage:new{
-            text = _("That entry changed on disk — reopen and retry."), timeout = 3 })
+            text = _("That entry changed on disk. Reopen and retry."), timeout = 3 })
         return
     end
     local okj, member_json = pcall(json.encode, parsed, { pretty = true, indent = true })
@@ -4023,7 +4023,7 @@ function XrayBrowser:_commitLink(member_file, member_title, entry, parsed,
         })
     if not ok_remote then
         UIManager:show(InfoMessage:new{
-            text = _("Could not write the member book's X-Ray — nothing was linked."),
+            text = _("Could not write the member book's X-Ray. Nothing was linked."),
             timeout = 4 })
         return
     end
@@ -4042,7 +4042,7 @@ function XrayBrowser:_commitLink(member_file, member_title, entry, parsed,
     else
         -- The remote write landed; only this book's side is missing
         UIManager:show(InfoMessage:new{
-            text = _("The member book was linked, but this book's write failed — run the link again to finish this side."),
+            text = _("The member book was linked, but this book's write failed. Run the link again to finish this side."),
             timeout = 5 })
     end
 end
@@ -4136,7 +4136,7 @@ function XrayBrowser:_commitRename(category_key, old_name, new_name, viewer)
     local ConfirmBox = require("ui/widget/confirmbox")
     local self_ref = self
     UIManager:show(ConfirmBox:new{
-        text = T(_("Keep matching \"%1\" in the book text?\nThe AI keeps the old name either way — this only affects occurrence counts, search and highlight matching."), old_name),
+        text = T(_("Keep matching \"%1\" in the book text?\nThe AI keeps the old name either way. This only affects occurrence counts, search and highlight matching."), old_name),
         ok_text = _("Keep matching"),
         cancel_text = _("Stop matching"),
         cancel_callback = function()
@@ -4506,7 +4506,7 @@ function XrayBrowser:chatAboutItem(detail_text, entity)
         subject = "an entry from the X-Ray"
     end
     -- The book is named by the chat's own book line, which follows Book info
-    -- (the chat's Data chip included, B500); the framing never names it
+    -- (B500); the framing never names it
     local book_name = " of this book"
     local framing
     if self.scope then
@@ -6658,16 +6658,16 @@ function XrayBrowser:_showChapterMentions(item, category_key, item_title, chapte
         -- menu title truncates — it carries only the entity name now)
         local scope_line
         if chapter and boundary then
-            scope_line = T(_("%1 (up to p. %2) — %3 mentions"),
+            scope_line = T(_("%1 (up to p. %2): %3 mentions"),
                 chapter.title or _("Chapter"), boundary, #mentions)
         elseif chapter then
-            scope_line = T(_("%1 — %2 mentions"),
+            scope_line = T(_("%1: %2 mentions"),
                 chapter.title or _("Chapter"), #mentions)
         elseif boundary then
-            scope_line = T(_("Whole book (up to p. %1) — %2 mentions"),
+            scope_line = T(_("Whole book (up to p. %1): %2 mentions"),
                 boundary, #mentions)
         else
-            scope_line = T(_("Whole book — %1 mentions"), #mentions)
+            scope_line = T(_("Whole book: %1 mentions"), #mentions)
         end
         table.insert(list_items, 1, {
             text = scope_line,

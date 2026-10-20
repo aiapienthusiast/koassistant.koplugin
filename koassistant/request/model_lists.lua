@@ -308,7 +308,7 @@ local ModelLists = {
 
     qwen = {
         -- Qwen3.8 (2026-08/09, 1M context). Probed 2026-09-28: reason by default
-        -- (enable_thinking=false turns it off on the wire; not sent yet, B368), temp
+        -- (enable_thinking=false turns it off on the wire, api_params.qwen_thinking, B368), temp
         -- [0, 2), 128K out; forced tool calls refused while thinking, so no tools.
         "qwen3.8-max",                  -- default + flagship (since 2026-10-14)
         "qwen3.8-flash",

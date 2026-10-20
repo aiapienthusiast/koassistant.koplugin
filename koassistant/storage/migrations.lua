@@ -393,8 +393,8 @@ function Migrations.run(features)
   -- users who deliberately turned a chip OFF have it absent from session_chips but no
   -- dismissal record, and auto-injection would resurrect it. Seed the dismissal list from
   -- the current gap (canonical ids minus saved membership) to preserve their choice.
-  -- The canonical ids AS OF this migration (frozen): a chip added later (the
-  -- Data chip, B395) was never in an old membership list, and must reach the
+  -- The canonical ids AS OF this migration (frozen): a chip added later (B395
+  -- added one, since removed) was never in an old membership list, and must reach the
   -- reader through the registry's injection, not land here as "dismissed".
   if not features._session_chips_registry_v1 then
     if type(features.session_chips) == "table" then

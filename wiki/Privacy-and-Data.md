@@ -74,7 +74,7 @@ Automatic X-Ray and checkpoint builds have no moment to ask while you read, so t
 |--------|--------------|
 | **Default (Ask)** | Every value goes back to the one it ships with, the trusted providers' column included: each kind is asked for the first time an action wants it; reading position and the text around what you tap are sent. |
 | **Allow everything** | Every kind goes without a question, book text included (it raises token costs). |
-| **Block everything** | Nothing but your question, the selected text and the book info (with the enabled system content and a book's Background, which no preset touches); reading position goes off too, so spoiler protection no longer knows where you are. Actions that need more are refused until you allow it. |
+| **Block everything** | Every kind set to Never: only your question, the selected text and the book info go (and the behavior, domain and Background texts, which no preset touches); reading position goes off too, so spoiler protection no longer knows where you are. Actions that need more are refused until you allow it. |
 
 A preset sets the values for all books (Default (Ask) the trusted providers' column as well). The trusted providers list, each book's own values, Book info and the scan folders stay as they are: under Allow everything and Block everything a trusted provider keeps its own column, and a book with its own Allow still sends that kind.
 

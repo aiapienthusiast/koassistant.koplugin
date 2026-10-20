@@ -76,6 +76,27 @@ for _idx, case in ipairs(CASES) do
     end)
 end
 
+-- Dialogs.quickOn (B515): THE signal "this request runs under the preset" for
+-- a facet read before the bake (the book info): the hold menu's pick for the
+-- run beats the chip's state, and nothing reaches an action that does not take
+-- the preset.
+local QO = require("koassistant.ui.dialogs").quickOn
+local takes = { accept_quick_answer = true }
+local plain = {}
+for _idx, case in ipairs({
+    { "quickOn: the chip on, an action that takes the preset", { _quick_answer_active = true }, takes, true },
+    { "quickOn: the chip on, an action that does not take it", { _quick_answer_active = true }, plain, false },
+    { "quickOn: the hold menu's Quick answer, the chip off", { _run_variant = { quick = true } }, takes, true },
+    { "quickOn: the hold menu's Without Quick beats the chip", { _quick_answer_active = true, _run_variant = { quick = false } }, takes, false },
+    { "quickOn: a run variant without a Quick part leaves the chip's say", { _quick_answer_active = true, _run_variant = { book_info = "none" } }, takes, true },
+    { "quickOn: nothing on", {}, takes, false },
+    { "quickOn: no action, no features", nil, nil, false },
+}) do
+    TestRunner:test(case[1], function()
+        TestRunner:eq(QO(case[2], case[3]), case[4])
+    end)
+end
+
 print("")
 print(string.rep("-", 50))
 print(string.format("  Results: %d passed, %d failed", TestRunner.passed, TestRunner.failed))
