@@ -228,7 +228,7 @@ TestRunner:test("the section merge and the search's browser read ranges in this 
     TestRunner:assertTrue(merge:find("opts.section_range(e)", 1, true) ~= nil, "the inputs' spans")
     TestRunner:assertTrue(merge:find("table.sort(sections, function(a, b) return starts[a] < starts[b] end)", 1, true)
         ~= nil, "the sections in this layout's text order")
-    TestRunner:assertTrue(merge:find("main_possible = coverage_ratio ~= nil or opts.main_entry.full_document\n", 1, true)
+    TestRunner:assertTrue(merge:find("main_possible = coverage_ratio ~= nil or main_whole\n", 1, true)
         ~= nil, "no merge into the main judged on stored pages alone")
     local browser = read("koassistant/xray/xray_browser.lua")
     TestRunner:assertTrue(browser:find("group.scope_start or group.cache_entry.scope_start_page", 1, true) ~= nil,

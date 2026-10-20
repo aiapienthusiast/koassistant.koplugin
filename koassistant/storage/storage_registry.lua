@@ -83,7 +83,7 @@ Registry.UNPREFIXED_GLOBAL_KEYS = {
 --   internal     migration/version flags. Preserved by Reset Settings + Fresh Start
 --                (track data state — clearing risks re-migration); cleared on
 --                wipe/uninstall — EXCEPT setup_wizard_completed, which Fresh Start
---                clears so onboarding re-runs.
+--                clears before offering the welcome chain (B519).
 Registry.SETTINGS_SUBKEYS = {
     -- api_key_selected holds masked fingerprints (never keys) but is meaningless
     -- without the keys it points at, so it lives and dies with them.
@@ -622,7 +622,7 @@ end
 
 -- "Fresh Start" (clean-slate): keep credentials, languages, and internal flags.
 -- Custom assets (no schema default) and preferences are dropped/reset; the wizard
--- flag is cleared separately (top-level) so onboarding re-runs.
+-- flag is cleared separately (top-level) and the welcome chain is offered (B519).
 function Registry.freshStartPreserve()
     return Registry.featuresPreserveList({ "credentials", "languages", "internal" })
 end

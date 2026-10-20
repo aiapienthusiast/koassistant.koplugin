@@ -21659,7 +21659,8 @@ function AskGPT:quickResetFreshStart()
   self:resetActionMenus(true)     -- highlight/dict/quick/general/file-browser/input menus
   self.settings:delSetting("qa_utilities_order")
   self.settings:delSetting("qs_items_order")
-  -- Fresh start: clear wizard flag so onboarding re-runs on next launch
+  -- Fresh start: clear the completion flag and offer the welcome chain below
+  -- (B519: with a key kept, the next start shows no face by itself)
   self.settings:delSetting("setup_wizard_completed")
 
   self.settings:flush()
@@ -21683,10 +21684,21 @@ function AskGPT:quickResetFreshStart()
     end
   end
 
-  UIManager:show(Notification:new{
-    text = _("Fresh start complete - API keys preserved"),
-    timeout = 2,
-  })
+  -- The welcome chain, offered right away (B519): Later leaves it to
+  -- Settings → Setup Wizard → Run everything
+  UIManager:nextTick(function()
+    local ConfirmBox = require("ui/widget/confirmbox")
+    UIManager:show(ConfirmBox:new{
+      text = _("Fresh start complete. Your API keys, languages and chats are kept.\n\nRun the Setup Wizard now? It walks through the connection, privacy, language, icons, button marks and gestures again."),
+      ok_text = _("Run the wizard"),
+      cancel_text = _("Later"),
+      ok_callback = function()
+        UIManager:nextTick(function()
+          require("koassistant.ui.setup_wizard").runChain(self, { mark_complete = true })
+        end)
+      end,
+    })
+  end)
 end
 
 -- The three privacy presets (ruling 10 of 2026-10-14; one row since B499):

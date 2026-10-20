@@ -56,12 +56,8 @@ local CASES = {
         "tools", true, { _session_tools_touched = true }, nil, false },
     { "tools survives: preset component disabled",
         "tools", true, { quick_preset_tools_off = false }, nil, false },
-    { "book info off: quick on and the switch on (opt-in, B502)",
-        "book_info", true, { quick_preset_book_info_off = true }, nil, true },
-    { "book info survives: the switch is off by default",
-        "book_info", true, {}, nil, false },
-    { "book info survives: quick not on",
-        "book_info", false, { quick_preset_book_info_off = true }, nil, false },
+    { "book info is no facet (removed 2026-10-20): never forced",
+        "book_info", true, { quick_preset_book_info_off = true }, nil, false },
     { "unknown facet never forces",
         "reasoning", true, {}, nil, false },
     { "nil features never forces",
@@ -73,27 +69,6 @@ for _idx, case in ipairs(CASES) do
         case[1], case[2], case[3], case[4], case[5], case[6]
     TestRunner:test(name, function()
         TestRunner:eq(QPF(facet, quick_on, features, action), expected)
-    end)
-end
-
--- Dialogs.quickOn (B515): THE signal "this request runs under the preset" for
--- a facet read before the bake (the book info): the hold menu's pick for the
--- run beats the chip's state, and nothing reaches an action that does not take
--- the preset.
-local QO = require("koassistant.ui.dialogs").quickOn
-local takes = { accept_quick_answer = true }
-local plain = {}
-for _idx, case in ipairs({
-    { "quickOn: the chip on, an action that takes the preset", { _quick_answer_active = true }, takes, true },
-    { "quickOn: the chip on, an action that does not take it", { _quick_answer_active = true }, plain, false },
-    { "quickOn: the hold menu's Quick answer, the chip off", { _run_variant = { quick = true } }, takes, true },
-    { "quickOn: the hold menu's Without Quick beats the chip", { _quick_answer_active = true, _run_variant = { quick = false } }, takes, false },
-    { "quickOn: a run variant without a Quick part leaves the chip's say", { _quick_answer_active = true, _run_variant = { book_info = "none" } }, takes, true },
-    { "quickOn: nothing on", {}, takes, false },
-    { "quickOn: no action, no features", nil, nil, false },
-}) do
-    TestRunner:test(case[1], function()
-        TestRunner:eq(QO(case[2], case[3]), case[4])
     end)
 end
 

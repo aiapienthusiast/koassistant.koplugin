@@ -45,17 +45,16 @@ BookSettings.KEY_BOOK_INFO = "koassistant_book_info_level"
 --   count, difficulty, mc, sa, essay, chapter_depth, min_pages, min_minutes.
 BookSettings.KEY_QUIZ = "koassistant_book_quiz"
 
---- Resolve the effective book-info level for a book: per-book override >
--- global default ("basic"). quick_on = this request or chat runs under the
--- Quick Answer preset, whose "Leave Book Info Out" switch then makes it none
--- (THE facet rule, Dialogs.quickPresetForces; B502). A caller resolving a
--- standing value (a chat's framing at launch, the image frame) passes nothing.
+--- Resolve the effective book-info level for a book: a run option or the
+-- dialog's own switch > per-book override > global default ("basic"). The
+-- Quick preset has no say (its Leave Book Info Out switch was removed
+-- 2026-10-20 before the tag: book info has one home per scope).
 -- @return "none" | "title" | "basic" | "full"
-function BookSettings.resolveBookInfoLevel(doc_settings, features, quick_on)
+function BookSettings.resolveBookInfoLevel(doc_settings, features)
     -- A run option from the hold menu (B345; Without book info / With book
     -- info, 2026-10-19): on the request's config before the bake consumes
     -- _run_variant, as _run_book_info after it. "on" means the level in
-    -- effect without Quick, and Title & author where that level is None.
+    -- effect, and Title & author where that level is None.
     local run = features and (features._run_book_info
         or (type(features._run_variant) == "table" and features._run_variant.book_info)) or nil
     -- The dialog's own switch (the gear menu's Send book info, _session_book_info:
@@ -64,10 +63,6 @@ function BookSettings.resolveBookInfoLevel(doc_settings, features, quick_on)
         run = features._session_book_info and "on" or "none"
     end
     if run == "none" then return "none" end
-    if quick_on and run ~= "on"
-            and require("koassistant.ui.dialogs").quickPresetForces("book_info", true, features) then
-        return "none"
-    end
     doc_settings = BookStore.wrap(doc_settings)
     local per_book = doc_settings and doc_settings:readSetting(BookSettings.KEY_BOOK_INFO)
     local level = per_book

@@ -60,7 +60,7 @@ Font size and alignment **persist across opens**, artifact and X-Ray windows inc
 
 - **Web** (🌐 with emoji icons): web search for your next replies, on or off. It reads **Web N/A** when your provider cannot search; tap it to see which providers can.
 - **Tools** (🔍): AI Book Tools for your next replies. Only in book chats with the book open. It reads **Tools N/A** when your provider cannot use them, when text extraction is not allowed, and in X-Ray chats; tap it for the reason.
-- **Quick** (⚡): the speed parts of the Quick Answer preset for your next replies (the model, reasoning, web search and book tools; the shorter-answer instruction and Leave Book Info Out stay as the chat started). It reads **Quick ON** or **Quick** (⚡ ON or ⚡ OFF with emoji icons).
+- **Quick** (⚡): the speed parts of the Quick Answer preset for your next replies (the model, reasoning, web search and book tools; the shorter-answer instruction stays as the chat started). It reads **Quick ON** or **Quick** (⚡ ON or ⚡ OFF with emoji icons).
 - **Attach** (📎): stages a notebook, artifact, chat, file or note to go with your next reply; the label shows the count.
 
 A tap changes this chat only, without touching your saved settings, and keeps your draft. A long press opens the same pickers as the input dialog's chips: the per-book and global defaults for Web and Tools, the Quick answer default and **Preset settings…** for ⚡, and the staged items for Attach. What each chip does is on [Contexts and Chat](Contexts-and-Chat).

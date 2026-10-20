@@ -168,6 +168,16 @@ local function fillLiteral(text, marker, value)
     end
 end
 
+--- Whether a main X-Ray covers the whole text: the complete track, or an
+--- incremental X-Ray updated to the end (B518, ruled 2026-10-20). Such a main
+--- takes a delta merge with the book closed: nothing has to be placed against
+--- its coverage. Pure.
+function XrayMerge.coversWholeBook(main_entry)
+    if type(main_entry) ~= "table" then return false end
+    if main_entry.full_document then return true end
+    return (tonumber(main_entry.progress_decimal) or 0) >= 1
+end
+
 --- Coverage phrase for the delta prompt's %COVERAGE% slot. Pure.
 function XrayMerge.coveragePhrase(main_entry)
     if main_entry.full_document then
@@ -2303,6 +2313,9 @@ local function pickTargetThenRun(opts)
         delta_mode = parsed_main ~= nil and not parsed_main.error
     end
     opts.delta_mode = delta_mode
+    -- A main that covers the whole text (the complete track, or 100% reached)
+    -- needs no placing: the merge may go with the book closed (B518)
+    local main_whole = delta_mode and XrayMerge.coversWholeBook(opts.main_entry)
 
     local function warningsFor(target)
         local warnings = {}
@@ -2315,7 +2328,7 @@ local function pickTargetThenRun(opts)
             -- Base-coverage gap (device round 1 T4): a delta merge whose first
             -- selected section starts past the main's covered range leaves a hole
             -- no input fills — the between-inputs loop above can't see it
-            local base_page = delta_mode and not opts.main_entry.full_document
+            local base_page = delta_mode and not main_whole
                 and tonumber(opts.main_entry.progress_page) or nil
             local first_start = scoped[1] and tonumber(scoped[1].start_page)
             if base_page and first_start and first_start > base_page + 1 then
@@ -2330,7 +2343,7 @@ local function pickTargetThenRun(opts)
                 warnings[#warnings + 1] = T(
                     _("The selected sections cover text beyond your reading position (%1%). The merged X-Ray will contain later material."),
                     math.floor(reader_p * 100 + 0.5))
-            elseif coverage_ratio and main_p and not opts.main_entry.full_document
+            elseif coverage_ratio and main_p and not main_whole
                 and coverage_ratio > main_p + 0.01 then
                 warnings[#warnings + 1] = T(
                     _("The selected sections extend beyond the X-Ray's current coverage (%1%). Its coverage claim will rise to %2%."),
@@ -2353,14 +2366,14 @@ local function pickTargetThenRun(opts)
 
     -- Into-main coverage requirements:
     -- DELTA: the floor holds the main's claim, so a missing ratio is safe when
-    -- the main is complete-track. Whether it covers every selected section is
-    -- only known with the book open (B503): stored pages may come from
-    -- different layouts, and a wrong yes would keep a claim below the text
-    -- the merge adds.
-    -- REPLACE/CREATE: the result's claim IS the ratio — never write a guess.
+    -- the main covers the whole text (complete-track, or 100% reached). Whether
+    -- it covers every selected section is otherwise only known with the book
+    -- open (B503): stored pages may come from different layouts, and a wrong
+    -- yes would keep a claim below the text the merge adds.
+    -- REPLACE/CREATE: the result's claim IS the ratio, never write a guess.
     local main_possible
     if delta_mode then
-        main_possible = coverage_ratio ~= nil or opts.main_entry.full_document
+        main_possible = coverage_ratio ~= nil or main_whole
     else
         main_possible = coverage_ratio ~= nil
     end

@@ -427,7 +427,7 @@ local REASONING_HEADROOM_FLOOR = 16384
 -- The ⚡ Quick preset's facet-off rule, ONE implementation (six-pack [1] —
 -- this was hand-duplicated at ~12 dispatch/label/toast sites and the copies
 -- could drift silently). Returns true when the preset forces `facet`
--- ("web" | "tools" | "book_info") OFF. `quick_on` is passed by the site because two signals
+-- ("web" | "tools") OFF. `quick_on` is passed by the site because two signals
 -- exist: the bake reads the dispatch consumable _quick_answer_active, chip
 -- labels and the reply window read the session state. Pin-beats-preset: a
 -- facet TOUCHED while Quick is on keeps its own value. Web exempts an action
@@ -445,25 +445,10 @@ local function quickPresetForces(facet, quick_on, features, action)
         return features.quick_preset_tools_off ~= false
             and not features._session_tools_touched
     end
-    -- Book info (B502, 2026-10-19): opt-in, no chip to pin it; a Quick chat
-    -- then sends nothing that names the book (BookSettings.resolveBookInfoLevel)
-    if facet == "book_info" then
-        return features.quick_preset_book_info_off == true
-    end
+    -- Book info is no facet of the preset (removed 2026-10-20 before the tag:
+    -- a privacy switch has one home per scope, Settings → Privacy & Data, the
+    -- gear menu's Send book info for a chat, the hold menu for one run)
     return false
-end
-
--- Whether a request runs under the Quick preset, THE signal the facet rule
--- above takes for a facet read before the bake (the book info, B515): the hold
--- menu's pick for this run (the run variant's Quick answer / Without Quick,
--- consumed by the bake after those reads), else the dialog's chip state (the
--- dispatch consumable _quick_answer_active); and only for an action that takes
--- the preset (accept_quick_answer), as the bake decides for the rest of it.
-local function quickOn(features, action)
-    if not features or not action or action.accept_quick_answer ~= true then return false end
-    local rv = features._run_variant
-    if type(rv) == "table" and rv.quick ~= nil then return rv.quick == true end
-    return features._quick_answer_active == true
 end
 
 local function ensureReasoningHeadroom(api_params, provider, decision)
@@ -1614,7 +1599,6 @@ showQuickPresetEditor = function(opts)
             toggleRow(_("Book tools off"), "quick_preset_tools_off"),
             toggleRow(_("Skip domain lens"), "quick_preset_skip_domain", true),
             toggleRow(_("Skip book background"), "quick_preset_skip_background", true),
-            toggleRow(_("Leave book info out"), "quick_preset_book_info_off", true),
             {{
                 text = T(_("Behavior: %1"), quickPresetBehaviorLabel(f)),
                 callback = function()
@@ -4406,20 +4390,15 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
         end
     end
 
-    -- Resolve the "book info" level (per-book > global, and none under the Quick
-    -- Answer preset's "Leave Book Info Out") on the request's own config, whose
-    -- _quick_answer_active says whether this request runs under the preset.
-    -- "none" drops the book line and neutralizes the {title}/{author}
-    -- placeholders (B500, message_builder).
+    -- Resolve the "book info" level (a run option or the dialog's Send book
+    -- info switch > per-book > global) on the request's own config. "none"
+    -- drops the book line and neutralizes the {title}/{author} placeholders
+    -- (B500, message_builder).
     do
         local rf = temp_config.features or config.features
-        -- the chip or the hold menu's pick, for the actions that take the
-        -- preset only (quickOn, B515)
-        local quick_on = quickOn(rf, prompt)
         message_data._book_info_level = require("koassistant.books.book_settings").resolveBookInfoLevel(
-            per_book_ds, rf, quick_on)
-        logger.dbg("KOAssistant: book info level", message_data._book_info_level,
-            quick_on and "with Quick on" or "with Quick off")
+            per_book_ds, rf)
+        logger.dbg("KOAssistant: book info level", message_data._book_info_level)
     end
 
     -- Resolve effective research mode
@@ -9853,8 +9832,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         -- For book context (file browser or gesture action), include book metadata
                         -- unless the per-book "Book info" level is None.
                         local book_info_level = require("koassistant.books.book_settings")
-                            .resolveBookInfoLevel(doc_settings, configuration.features,
-                                configuration.features._session_quick_answer)
+                            .resolveBookInfoLevel(doc_settings, configuration.features)
                         if book_info_level ~= "none" then
                             table.insert(parts, "[Context]")
                             if ai_book_metadata then
@@ -9887,8 +9865,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         -- For highlighted text context - include book info unless the per-book
                         -- "Book info" level is None (the selected text is always included).
                         local book_info_level = require("koassistant.books.book_settings")
-                            .resolveBookInfoLevel(doc_settings, configuration.features,
-                                configuration.features._session_quick_answer)
+                            .resolveBookInfoLevel(doc_settings, configuration.features)
                         table.insert(parts, "[Context]")
                         if ai_book_metadata and ai_book_metadata.title and book_info_level ~= "none" then
                             local show_author = book_info_level ~= "title"
@@ -11081,8 +11058,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
             -- maintainer, 2026-10-19). Inline requires (upvalue cap).
             if document_path and input_context ~= "book_filebrowser" then
                 local bi_ds = require("koassistant.storage.doc_settings").resolve(document_path, ui_instance)
-                local bi_on = BookSettings.resolveBookInfoLevel(bi_ds, configuration.features,
-                    configuration.features._session_quick_answer) ~= "none"
+                local bi_on = BookSettings.resolveBookInfoLevel(bi_ds, configuration.features) ~= "none"
                 table.insert(gear_buttons, {{
                     text = (bi_on and "\u{2713} " or "") .. _("Send book info"),
                     callback = function()
@@ -13973,7 +13949,6 @@ return {
     quickPresetNudgeLabel = quickPresetNudgeLabel,
     applyQuickReplyOverrides = applyQuickReplyOverrides,
     quickPresetForces = quickPresetForces,
-    quickOn = quickOn,
     showAttachMenu = showAttachMenu,
     attachChipLabel = attachChipLabel,
     -- Exported for the main-settings action row (AskGPT:showQuickPresetModelMode)

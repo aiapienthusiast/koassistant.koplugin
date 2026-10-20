@@ -389,8 +389,7 @@ function RunOptions.stateFor(plugin, action, opts)
 
     -- Book info for this run: a book or highlight action with a book in
     -- scope that names the book (namesBook), never one that cannot run
-    -- without the title (the AI-knowledge actions, DataAccess.needsTitle);
-    -- the level in effect counts the Quick state of this menu
+    -- without the title (the AI-knowledge actions, DataAccess.needsTitle)
     local book_info = { applies = false }
     if ds and action.context ~= "general" and action.context ~= "library"
             and RunOptions.namesBook(action)
@@ -400,7 +399,7 @@ function RunOptions.stateFor(plugin, action, opts)
         if session.book_info ~= nil then
             fv = setmetatable({ _session_book_info = session.book_info }, { __index = features })
         end
-        book_info = { applies = true, level = BookSettings.resolveBookInfoLevel(ds, fv, quick_on) }
+        book_info = { applies = true, level = BookSettings.resolveBookInfoLevel(ds, fv) }
     end
 
     -- Key filter, as in every quick picker: disarmed while no real key exists

@@ -132,6 +132,15 @@ TestRunner:test("injectPayload: post-build injection, framing, single-pass safet
     TestRunner:assertEqual(out_empty, "A  B", "empty index → empty block")
 end)
 
+
+TestRunner:test("coversWholeBook: the complete track or a main at 100% (B518)", function()
+    TestRunner:assertTrue(XrayMerge.coversWholeBook({ full_document = true }), "the complete track")
+    TestRunner:assertTrue(XrayMerge.coversWholeBook({ progress_decimal = 1.0 }), "100% reached")
+    TestRunner:assertTrue(XrayMerge.coversWholeBook({ progress_decimal = "1" }), "a string 1")
+    TestRunner:assertFalse(XrayMerge.coversWholeBook({ progress_decimal = 0.98 }), "98%")
+    TestRunner:assertFalse(XrayMerge.coversWholeBook({}), "no claim")
+    TestRunner:assertFalse(XrayMerge.coversWholeBook(nil), "no main")
+end)
 TestRunner:test("coverage phrasing: percent, full-document, unknown bases", function()
     TestRunner:assertEqual(XrayMerge.coveragePhrase({ progress_decimal = 0.42 }),
         "42% of the book", "percent phrasing")

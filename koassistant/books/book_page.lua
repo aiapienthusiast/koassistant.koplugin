@@ -164,11 +164,11 @@ local function buildItems(ctx)
         }
     end
     for _idx, cache in ipairs(caches) do
-        -- The X-Ray versions group is pruned (the section quizzes went above,
-        -- under Quiz): it belongs to the X-Ray browser, which owns the
-        -- up-arrow navigation contract and already surfaces it standalone
-        -- ("Archived X-Ray Versions") when no live X-Ray row exists, so
-        -- nothing orphans.
+        -- The X-Ray versions group is pruned while a live X-Ray exists (the
+        -- section quizzes went above, under Quiz): the X-Ray's own All
+        -- versions row has them. Without a live X-Ray the group is the
+        -- "Archived X-Ray Versions" row (is_orphan) and stays: a closed book
+        -- has no other door to a restore (B523, ruled 2026-10-20).
         --
         -- Section-scoped groups (section X-Rays, section quizzes/summaries/
         -- analyses) were pruned alongside it 2026-08-11, but that contradicted
@@ -176,7 +176,7 @@ local function buildItems(ctx)
         -- read as artifacts silently missing (maintainer 2026-08-19: section
         -- quizzes existed on disk and the page showed only the whole-book
         -- ones). They are rows again; openArtifactRow already dispatched them.
-        if not cache.is_xray_versions_group then
+        if not cache.is_xray_versions_group or cache.is_orphan then
             -- ONE formatter with the View-Artifacts popups and the artifact
             -- browser (A4 parity): percent always when tracked + compact age
             local mandatory = require("koassistant.artifacts.artifact_browser").rowMeta(cache)

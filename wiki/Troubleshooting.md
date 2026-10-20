@@ -115,7 +115,7 @@ After a problematic update, or for a fresh start: **Settings → Backup & Reset 
 - **Settings wrong?** **Quick: Settings only** resets the settings, keeps API keys, languages, your selections and actions.
 - **Action problems?** **Quick: Actions only** resets every action setting, keeps everything else.
 - **Strange behaviour after an update?** **Quick: Settings only** is the safest first step. After a manual update, restart KOReader and see [Manual update](Backups-and-Updates#manual-update): a clean install rules out files left from an older version.
-- **Many things broken?** **Quick: Fresh start** resets everything except your API keys and subscription sign-in, languages, gesture registrations and chats. The Setup Wizard's welcome chain then starts again by itself only when no key or sign-in is left; **Run everything** in **Settings → Setup Wizard** walks it by hand.
+- **Many things broken?** **Quick: Fresh start** resets everything except your API keys and subscription sign-in, languages, gesture registrations and chats. It then offers the Setup Wizard's welcome chain; **Later** leaves it to **Run everything** in **Settings → Setup Wizard**.
 - **Want to redo the provider, privacy, language, icons, button marks or gestures?** **Settings → Setup Wizard** lists each topic with its state; a tap re-runs that step.
 - **Exact control?** **Custom reset...** lists what to reset.
 

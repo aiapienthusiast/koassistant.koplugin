@@ -564,14 +564,12 @@ function DataAccess.needsTitle(action, source)
 end
 
 --- The refusal for an action that needs the title while Book info is None.
---- spec: action_name, layer ("quick" | "book" | "global"), path, ui.
+--- spec: action_name, layer ("chat" | "book" | "global"), path, ui.
 function DataAccess.refuseNoTitle(plugin, spec)
     logger.dbg("KOAssistant data access: refused, no title, layer", spec.layer, "for", spec.action_name or "?")
     local where
     if spec.layer == "chat" then
         where = _("for this chat (the gear menu's Send book info is off); turn it on there to run it")
-    elseif spec.layer == "quick" then
-        where = _("for Quick Answer chats (Settings → Chat & Export Settings → Quick Answer Preset → Leave Book Info Out); turn Quick off for this chat to run it")
     elseif spec.layer == "book" then
         where = _("for this book (Book Settings → Privacy & Data)")
     else
@@ -634,16 +632,10 @@ function DataAccess.askForDispatch(plugin, action, features, ui, config, run_fn)
     if cf.is_book_context and DataAccess.needsTitle(action, sm) then
         local BookSettings = require("koassistant.books.book_settings")
         local ds = path and require("koassistant.storage.doc_settings").resolve(path, ui) or nil
-        -- The chip's state or the hold menu's pick on the source config, for
-        -- the actions that take the preset only (Dialogs.quickOn, B515); no
-        -- AI-knowledge action does
-        local quick_on = require("koassistant.ui.dialogs").quickOn(cf, action)
-        if BookSettings.resolveBookInfoLevel(ds, cf, quick_on) == "none" then
+        if BookSettings.resolveBookInfoLevel(ds, cf) == "none" then
             local layer = "global"
             if cf._session_book_info == false then
-                layer = "chat"   -- the dialog's Send book info switch (over Quick and the setting)
-            elseif BookSettings.resolveBookInfoLevel(ds, cf) ~= "none" then
-                layer = "quick"
+                layer = "chat"   -- the dialog's Send book info switch (over the setting)
             elseif ds and ds:readSetting(BookSettings.KEY_BOOK_INFO) == "none" then
                 layer = "book"
             end

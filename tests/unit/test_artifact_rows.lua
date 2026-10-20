@@ -805,7 +805,7 @@ TestRunner:test("no file but the aggregation and the artifact browser reads the 
         ["koassistant/books/book_page.lua"] = {
             'if cache.is_pinned_group then return "📌" end',
             'if cache.is_image_group then return "🖼️" end',
-            "if not cache.is_xray_versions_group then",
+            "if not cache.is_xray_versions_group or cache.is_orphan then",
         },
     }
     local files = { "main.lua" }

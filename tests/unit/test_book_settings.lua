@@ -354,14 +354,11 @@ TestRunner:test("none + custom title: nothing names the book, the custom title i
     TestRunner:assertNotContains(result, "Real Title", "original never appears")
 end)
 
-TestRunner:test("the Quick Answer preset's Leave Book Info Out: none for a Quick chat (B502)", function()
+TestRunner:test("the Quick preset has no say over the book info (its switch was removed 2026-10-20)", function()
     local ds = makeDocSettings({ koassistant_book_info_level = "full" })
     TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
-        { book_info_in_chat = "basic", quick_preset_book_info_off = true }, true), "none", "Quick on, the switch on")
-    TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
-        { book_info_in_chat = "basic", quick_preset_book_info_off = true }), "full", "not a Quick request: the book's level")
-    TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
-        { book_info_in_chat = "basic" }, true), "full", "Quick on, the switch off (the default)")
+        { book_info_in_chat = "basic", quick_preset_book_info_off = true, _quick_answer_active = true,
+          _session_quick_answer = true }), "full", "a stale switch value and a Quick chat change nothing")
 end)
 
 TestRunner:test("the hold menu's Without / With book info for one run (B345, 2026-10-19)", function()
@@ -370,9 +367,6 @@ TestRunner:test("the hold menu's Without / With book info for one run (B345, 202
         { book_info_in_chat = "basic", _run_book_info = "none" }), "none", "Without, after the bake")
     TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
         { book_info_in_chat = "basic", _run_variant = { book_info = "none" } }), "none", "Without, before the bake (the funnel)")
-    TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
-        { book_info_in_chat = "basic", quick_preset_book_info_off = true, _run_book_info = "on" }, true), "full",
-        "With beats the Quick switch: the level in effect without Quick")
     local none_ds = makeDocSettings({ koassistant_book_info_level = "none" })
     TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(none_ds,
         { book_info_in_chat = "basic", _run_book_info = "on" }), "basic", "With where the book says None: Title & author")
@@ -383,9 +377,6 @@ TestRunner:test("the hold menu's Without / With book info for one run (B345, 202
         { book_info_in_chat = "basic", _session_book_info = false }), "none", "switched off for this chat")
     TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(none_ds,
         { book_info_in_chat = "basic", _session_book_info = true }), "basic", "switched on where the book says None")
-    TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
-        { book_info_in_chat = "basic", quick_preset_book_info_off = true, _session_book_info = true }, true), "full",
-        "on beats the Quick switch")
     TestRunner:assertEqual(BookSettings.resolveBookInfoLevel(ds,
         { book_info_in_chat = "basic", _session_book_info = false, _run_book_info = "on" }), "full",
         "a run option beats the chat's switch")

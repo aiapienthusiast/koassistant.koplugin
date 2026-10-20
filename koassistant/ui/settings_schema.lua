@@ -688,14 +688,6 @@ local SettingsSchema = {
                             help_text = _("Leave the per-book Background note out of Quick Answer chats. Off by default: the Background frames how you read this book, and costs almost nothing in speed."),
                         },
                         {
-                            id = "quick_preset_book_info_off",
-                            type = "toggle",
-                            text = _("Leave Book Info Out"),
-                            path = "features.quick_preset_book_info_off",
-                            default = false,
-                            help_text = _("Send nothing that names the book in Quick Answer chats: no book line, and an action's own prompt says \"this book\" instead of the title (what Book info set to None does, for Quick chats only). Off by default: the title helps a short answer. It reaches Quick chats and the actions that take the Quick preset (Explain, Quick Explain, ELI5, Elaborate, Explain in Context), from the ⚡ chip or an action's long-press Quick answer; an action that does not take it, About or Reviews say, keeps the Book info in effect."),
-                        },
-                        {
                             id = "quick_preset_behavior",
                             type = "action",
                             text_func = function(plugin)
@@ -2292,7 +2284,7 @@ local SettingsSchema = {
                         { value = "basic", label = _("Title & author") },
                         { value = "full", label = _("Title, author & position") },
                     },
-                    help_text = _("What the AI is told about the book with every request: the title, the author, and with \"Title, author & position\" your reading progress, chapter and page (when Reading position is on). Never asked, and the presets leave it alone. None sends nothing that names the book: no book line, and an action's own prompt says \"this book\" where it would name the title; actions that answer from what the AI knows about the book (About, Find Similar, Reviews…) cannot run then, and say so. Image prompts follow it too. Override per book in Book Settings → Privacy & Data; a Quick Answer chat can leave it out (the preset's Leave Book Info Out)."),
+                    help_text = _("What the AI is told about the book with every request: the title, the author, and with \"Title, author & position\" your reading progress, chapter and page (when Reading position is on). Never asked, and the presets leave it alone. None sends nothing that names the book: no book line, and an action's own prompt says \"this book\" where it would name the title; actions that answer from what the AI knows about the book (About, Find Similar, Reviews…) cannot run then, and say so. Image prompts follow it too. Override per book in Book Settings → Privacy & Data; one chat can switch it with the gear menu's Send book info, one run with the hold menu's Without book info."),
                     separator = true,
                 },
                 -- Text Extraction settings (moved from Advanced)
@@ -2841,9 +2833,9 @@ local SettingsSchema = {
                             id = "quick_reset_fresh_start",
                             type = "action",
                             text = _("Quick: Fresh start"),
-                            help_text = _("Resets everything except API keys and chat history:\n• All settings (provider, model, temperature, all toggles)\n• All actions (custom, edits, menus, the + Gesture Menu list)\n• Custom behaviors & domains\n• Custom providers & models\n\nKeeps: API keys, your languages, gesture registrations, chat history only."),
+                            help_text = _("Resets everything except API keys and chat history:\n• All settings (provider, model, temperature, all toggles)\n• All actions (custom, edits, menus, the + Gesture Menu list)\n• Custom behaviors & domains\n• Custom providers & models\n\nKeeps: API keys, your languages, gesture registrations, chat history only. Offers the Setup Wizard when it is done."),
                             confirm = true,
-                            confirm_text = _("Fresh start?\n\nResets:\n• All settings (provider, model, temperature, all toggles)\n• All actions (custom, edits, menus, the + Gesture Menu list)\n• Custom behaviors & domains\n• Custom providers & models\n\nKeeps: API keys, your languages, gesture registrations, chat history only."),
+                            confirm_text = _("Fresh start?\n\nResets:\n• All settings (provider, model, temperature, all toggles)\n• All actions (custom, edits, menus, the + Gesture Menu list)\n• Custom behaviors & domains\n• Custom providers & models\n\nKeeps: API keys, your languages, gesture registrations, chat history only.\n\nThe Setup Wizard is offered when it is done."),
                             callback = "quickResetFreshStart",
                             separator = true,
                         },
