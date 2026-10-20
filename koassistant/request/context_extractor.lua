@@ -1813,14 +1813,17 @@ function ContextExtractor:extractForAction(action)
     -- Requires: (1) use_library action flag, (2) enable_library_scanning global setting,
     --           (3) library_scan_folders configured (non-empty)
     -- Trusted providers bypass gate 2 only (NOT gate 3 — folders must always be explicit)
-    -- Session scan folders (_session_scan_folders) bypass gates 2+3 — user actively chose them
+    -- Session scan folders (_session_scan_folders, the library dialog's pick for
+    -- a run started there) replace the permanent folders; an empty pick is no
+    -- list, never all the permanent folders (2026-10-20). The gate still applies.
     local session_scan = self.settings._session_scan_folders
-    local has_session_scan = session_scan and #session_scan > 0
+    local session_pick = type(session_scan) == "table"
+    local has_session_scan = session_pick and #session_scan > 0
     local library_setting_allowed = Gates.allows("book_list", gate)
     local library_folders = self.settings.library_scan_folders
-    local library_folders_configured = library_folders and #library_folders > 0
-    -- Global toggle is absolute gate; session folders only bypass folder configuration requirement
-    local library_allowed = library_setting_allowed and (library_folders_configured or has_session_scan)
+    local library_folders_configured = (has_session_scan or (not session_pick and library_folders and #library_folders > 0)) and true or false
+    -- Global toggle is absolute gate; the folders in effect must not be empty
+    local library_allowed = library_setting_allowed and library_folders_configured
     if action.use_library and library_allowed then
         local LibraryScanner = require("koassistant.books.library_scanner")
         -- Use session scan folders if available (already computed as effective set)
@@ -1863,7 +1866,10 @@ function ContextExtractor:extractForAction(action)
     local function withheld(kind, what)
         local state, layer = Gates.resolve(kind, gate)
         local why
-        if state == "never" then
+        if state == "never" and layer == "once" then
+            -- left out for this run at the question (Continue without)
+            why = _("not allowed for this request")
+        elseif state == "never" then
             if layer == "book" then
                 why = _("set to Never for this book")
             elseif layer == "trusted" then

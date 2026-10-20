@@ -119,8 +119,8 @@ function DataAccess.questionText(spec)
     return table.concat(lines, "\n")
 end
 
---- Show the question. on_answer(choice): "once" | "book" | "not_book" |
---- "without" | "always" | "more" | "cancel". spec: the questionText fields
+--- Show the question. on_answer(choice): "once" | "once_without" | "book" |
+--- "not_book" | "without" | "always" | "more" | "cancel". spec: the questionText fields
 --- plus spec.plan (DataAccess.plan), spec.set (a request over many books:
 --- Allow once and Cancel only), spec.standing_only (no Allow once: a feature
 --- with no moment to ask offers Allow for this book alone), spec.decline_once
@@ -142,11 +142,20 @@ function DataAccess.ask(plugin, spec, on_answer)
         on_answer(choice)
     end
     local plan = spec.plan or { asked = spec.asked or {}, optional_only = false, per_book = true }
+    -- The asked kinds the run can go without (the optional ones), named on
+    -- the button of a run that also asks a required kind
+    local optional_labels = {}
+    for _idx, n in ipairs(plan.asked or {}) do
+        if not n.required then optional_labels[#optional_labels + 1] = DataAccess.kindLabel(n.kind) end
+    end
+    -- A set of books holds no per-book answer; the kinds no book holds (the
+    -- book list, reading habits) keep Always allow and More… in a set too
+    local set_global = spec.set and plan.global_only
     local first = {}
     if not spec.standing_only then
         first[#first + 1] = { text = _("Allow once"), callback = function() answer("once") end }
     end
-    if not spec.set then
+    if not spec.set or set_global then
         if plan.global_only then
             first[#first + 1] = { text = _("Always allow"), callback = function() answer("always") end }
         elseif not spec.no_book then
@@ -155,13 +164,27 @@ function DataAccess.ask(plugin, spec, on_answer)
     end
     local rows = {}
     if #first > 0 then rows[1] = first end
-    if not spec.set and plan.optional_only and spec.decline_once then
-        rows[#rows + 1] = { { text = _("Continue without"), callback = function() answer("without") end } }
-    elseif not spec.set and plan.optional_only and plan.per_book and not spec.no_book then
-        rows[#rows + 1] = { { text = _("Not for this book"), callback = function() answer("not_book") end } }
+    -- Going without the optional part, for this run only (2026-10-20): the
+    -- whole ask when nothing asked is required, else the required kinds
+    -- allowed once and the optional ones left out. Not for this book stays
+    -- the lasting choice for a book's own kinds.
+    local skip = {}
+    -- (a set asking each book's own data stays Allow once / Cancel: its needs
+    -- do not tell a book's required kinds from its optional ones)
+    if #optional_labels > 0 and not spec.standing_only and (not spec.set or set_global) then
+        if plan.optional_only then
+            skip[#skip + 1] = { text = _("Continue without"), callback = function() answer("without") end }
+        else
+            skip[#skip + 1] = { text = T(_("Allow once, without %1"), table.concat(optional_labels, ", ")),
+                callback = function() answer("once_without") end }
+        end
     end
+    if not spec.set and plan.optional_only and plan.per_book and not spec.no_book and not spec.decline_once then
+        skip[#skip + 1] = { text = _("Not for this book"), callback = function() answer("not_book") end }
+    end
+    if #skip > 0 then rows[#rows + 1] = skip end
     local last = {}
-    if not spec.set then
+    if not spec.set or set_global then
         last[#last + 1] = { text = _("More…"), callback = function() answer("more") end }
     end
     last[#last + 1] = { text = _("Cancel"), id = "close", callback = function() answer("cancel") end }
@@ -207,10 +230,20 @@ function DataAccess.refuse(plugin, spec)
             UIManager:close(dialog)
             openBookPrivacy(plugin, spec.path, spec.ui, nil)
         end } }
-    elseif plugin and plugin.onKOAssistantSettings then
+    elseif plugin and spec.layer == "trusted" and plugin.onKOAssistantSettings then
+        -- the trusted providers' column is in the settings menu (Privacy &
+        -- Data → What trusted providers may use), not on the screen below
         rows[#rows + 1] = { { text = _("Open Settings"), callback = function()
             UIManager:close(dialog)
             plugin:onKOAssistantSettings()
+        end } }
+    elseif plugin then
+        -- the values for all books: the Privacy & Data screen
+        rows[#rows + 1] = { { text = _("Open Settings"), callback = function()
+            UIManager:close(dialog)
+            require("koassistant.books.book_settings").showPrivacyConfig({
+                plugin = plugin, ui = spec.ui, all_books = true,
+            })
         end } }
     end
     rows[#rows + 1] = { { text = _("Close"), id = "close", callback = function() UIManager:close(dialog) end } }
@@ -256,18 +289,69 @@ function DataAccess.allowForBook(path, ui, kinds)
     return writeBookValues(path, ui, kinds, true)
 end
 
--- Write the global value of the kinds no book can hold (Always allow).
-local function writeGlobalAllow(plugin, kinds)
+-- Always allow, for the kinds no book can hold: the value for all books in
+-- the column the question was judged from (a trusted provider's own column
+-- when trust picked it), in the settings file AND in the run's own settings
+-- table, which may be a copy taken before the question (a Quick Actions or
+-- file-browser run): the run passing the question again must find it.
+local function writeAlwaysAllow(plugin, asked, run_features)
     if not (plugin and plugin.settings) then return end
     local f = plugin.settings:readSetting("features") or {}
-    for _idx, kind in ipairs(kinds) do
-        local key = Gates.GLOBAL_KEY[kind]
-        if key then f[key] = true end
+    for _idx, need in ipairs(asked) do
+        local key, value = Gates.GLOBAL_KEY[need.kind], true
+        if need.layer == "trusted" then key, value = Gates.TRUSTED_KEY[need.kind], "allow" end
+        if key then
+            f[key] = value
+            if type(run_features) == "table" then run_features[key] = value end
+        end
     end
     plugin.settings:saveSetting("features", f)
     plugin.settings:flush()
     if plugin.updateConfigFromSettings then plugin:updateConfigFromSettings() end
-    logger.info("KOAssistant: privacy value set to Allow for all books:", #kinds, "kinds")
+    logger.info("KOAssistant: privacy value set to Allow for all books:", #asked, "kinds")
+end
+
+-- The values for all books as the settings file holds them now, into a run's
+-- own settings table (a copy taken before the question): after More…, the
+-- question asked again judges what the reader set on the screen.
+local function refreshPrivacyKeys(plugin, features)
+    if type(features) ~= "table" or not (plugin and plugin.settings) then return end
+    local live = plugin.settings:readSetting("features") or {}
+    for _kind, key in pairs(Gates.GLOBAL_KEY) do features[key] = live[key] end
+    for _kind, key in pairs(Gates.TRUSTED_KEY) do features[key] = live[key] end
+    features.trusted_providers = live.trusted_providers
+end
+
+--- The scan folders a run reads, one rule for the question, the requirement
+--- check and the gathers (2026-10-20): a run started from the library dialog
+--- reads that dialog's pick (plugin._session_scan_folders, set once a folder
+--- is ticked or unticked there; an empty pick = no list), every other run the
+--- permanent folders.
+--- @return table list of folder paths (possibly empty)
+function DataAccess.scanFolders(plugin, library_run, features)
+    if library_run and plugin and type(plugin._session_scan_folders) == "table" then
+        return plugin._session_scan_folders
+    end
+    local f = plugin and plugin.settings and plugin.settings:readSetting("features") or features or {}
+    return type(f.library_scan_folders) == "table" and f.library_scan_folders or {}
+end
+
+--- The folders by their own names, for the question: up to three, then "…".
+function DataAccess.folderNames(folders)
+    local names = {}
+    for i, path in ipairs(folders or {}) do
+        if i > 3 then names[#names + 1] = "…"; break end
+        names[#names + 1] = tostring(path):match("([^/]+)/*$") or tostring(path)
+    end
+    return table.concat(names, ", ")
+end
+
+--- The question's lines for the book list and the reading habits, naming the
+--- folders they come from (nil without a folder: nothing would go).
+function DataAccess.libraryAmounts(folders)
+    if type(folders) ~= "table" or #folders == 0 then return nil, nil end
+    return T(_("your book list: the books in %1 (titles, authors, reading status)"), DataAccess.folderNames(folders)),
+        _("your reading habits for those books (read a lot, stalled, barely started)")
 end
 
 --- The needs of a run over several books (a library request with picked
@@ -307,7 +391,7 @@ local function needsForSet(action, opts)
         end
     end
     local ctx = Gates.context(opts.features, opts.provider, {})
-    for _idx, n in ipairs(Gates.needs(action, ctx, { source = opts.source, stamps = opts.stamps })) do
+    for _idx, n in ipairs(Gates.needs(action, ctx, { source = opts.source, stamps = opts.stamps, exists = opts.exists })) do
         if not Gates.BOOK_KINDS[n.kind] then out[#out + 1] = n end
     end
     return out, never_books
@@ -333,12 +417,19 @@ function DataAccess.needsFor(action, opts)
     end
     local ctx = Gates.context(features, opts.provider, { path = opts.path, ui = opts.ui, book = opts.book })
     if opts.kinds then
-        local needs = {}
+        local needs, at = {}, {}
         for _idx, k in ipairs(opts.kinds) do
             -- a kind, or { kind, required } when the list mixes required and
             -- optional kinds (the X-Ray chat: the entry's text, its highlights)
             local kind, req = k, opts.required ~= false
             if type(k) == "table" then kind, req = k.kind, k.required ~= false end
+            if at[kind] then
+                -- one kind asked twice (a page scope and the text around a
+                -- selection): one line, required when either use is, so no
+                -- "without" can leave out what an allowance lets through
+                if req then needs[at[kind]].required = true end
+                goto continue
+            end
             local state, layer
             for _p, provider in ipairs(opts.providers or {}) do
                 ctx.provider = provider
@@ -351,10 +442,20 @@ function DataAccess.needsFor(action, opts)
                 state, layer = Gates.resolve(kind, ctx)
             end
             needs[#needs + 1] = { kind = kind, state = state, layer = layer, required = req }
+            at[kind] = #needs
+            ::continue::
+        end
+        -- declined for this run where it was optional: a use that needs it
+        -- asks again (an Allow once then beats the decline)
+        for _idx, n in ipairs(needs) do
+            if n.required and n.state == "never" and n.layer == "once" then
+                n.state, n.layer = "ask", Gates.isTrusted(features, opts.provider) and "trusted" or "global"
+            end
         end
         return needs
     end
-    return Gates.needs(action, ctx, { source = opts.source, stamps = opts.stamps, nearby = opts.nearby })
+    return Gates.needs(action, ctx, { source = opts.source, stamps = opts.stamps, nearby = opts.nearby,
+        exists = opts.exists })
 end
 
 --- The funnel: resolve what the run wants, refuse a required kind on Never,
@@ -365,10 +466,15 @@ end
 --- path (the book's file, nil = no book), ui, action_name, source, stamps,
 --- nearby, amounts (kind = line), note, standing_only, kinds (an explicit list
 --- of kinds, for a pick that is not an action), books (a set, see needsForSet),
---- hint, required (with kinds: whether they are required), on_cancel (after
---- Cancel), on_refused (after a refusal).
---- run_fn(granted) runs the request; granted = { once = kinds } after Allow
---- once, {} otherwise. Never called after Cancel or a refusal.
+--- hint, required (with kinds: whether they are required), exists (what the
+--- run has to send, Gates.needs), on_cancel (after Cancel), on_refused
+--- (after a refusal).
+--- run_fn(granted) runs the request; granted.once = the kinds allowed once,
+--- with the declined ones mapped to false (Continue without, Allow once
+--- without), for the caller's own allowance record (Gates.grantOnce takes
+--- both); granted.asked = true when a question was answered (false when
+--- nothing needed asking: a caller that merged its own confirm into the
+--- question shows it then). Never called after Cancel or a refusal.
 function DataAccess.withAccess(plugin, action, opts, run_fn)
     opts = opts or {}
     action = action or {}
@@ -382,13 +488,14 @@ function DataAccess.withAccess(plugin, action, opts, run_fn)
         return false
     end
     if #plan.asked == 0 then
-        run_fn({})
+        run_fn({ asked = false })
         return true
     end
     local asked_kinds = {}
     for _idx, n in ipairs(plan.asked) do asked_kinds[#asked_kinds + 1] = n.kind end
     local note = opts.note
-    if opts.books then
+    -- the set's note concerns each book's own data: only when such a kind is asked
+    if opts.books and plan.per_book then
         local n_books = #opts.books
         local set_note = T(_("One answer for the %1 picked books; each book's own Privacy setting still applies."), n_books)
         if never_books and never_books > 0 then
@@ -405,12 +512,27 @@ function DataAccess.withAccess(plugin, action, opts, run_fn)
         -- per-book answers could store nothing
         no_book = opts.books == nil and opts.path == nil,
     }, function(choice)
+        -- a set of books: an allowance for the run, not for one book
+        local once_path = opts.path
+        if opts.books then once_path = nil end
+        -- the optional asked kinds, declined for this run
+        local function declined()
+            local rec = {}
+            for _idx, n in ipairs(plan.asked) do
+                if not n.required then rec[n.kind] = false end
+            end
+            return rec
+        end
         if choice == "once" then
-            -- a set of books: an allowance for the run, not for one book
-            local once_path = opts.path
-            if opts.books then once_path = nil end
             Gates.grantOnce(features, once_path, asked_kinds)
-            run_fn({ once = asked_kinds })
+            run_fn({ once = asked_kinds, asked = true })
+        elseif choice == "once_without" then
+            local rec = declined()
+            for _idx, n in ipairs(plan.asked) do
+                if n.required then rec[#rec + 1] = n.kind end
+            end
+            Gates.grantOnce(features, once_path, rec)
+            run_fn({ once = rec, asked = true })
         elseif choice == "book" then
             local stored, once = {}, {}
             for _idx, kind in ipairs(asked_kinds) do
@@ -421,29 +543,49 @@ function DataAccess.withAccess(plugin, action, opts, run_fn)
                 for _idx, kind in ipairs(stored) do once[#once + 1] = kind end
             end
             if #once > 0 then Gates.grantOnce(features, opts.path, once) end
-            run_fn({ once = #once > 0 and once or nil })
+            run_fn({ once = #once > 0 and once or nil, asked = true })
         elseif choice == "not_book" then
             local stored = {}
             for _idx, kind in ipairs(asked_kinds) do
                 if Gates.BOOK_KINDS[kind] then stored[#stored + 1] = kind end
             end
             writeBookValues(opts.path, opts.ui, stored, false)
-            run_fn({})
+            run_fn({ asked = true })
         elseif choice == "without" then
-            run_fn({})
+            -- recorded on the run's own settings, so a run that passes the
+            -- question again (the dispatch's re-entry) is not asked twice
+            local rec = declined()
+            Gates.grantOnce(features, once_path, rec)
+            run_fn({ once = rec, asked = true })
         elseif choice == "always" then
-            writeGlobalAllow(plugin, asked_kinds)
-            run_fn({})
+            writeAlwaysAllow(plugin, plan.asked, features)
+            run_fn({ asked = true })
         elseif choice == "more" then
-            if plan.per_book and opts.path then
-                openBookPrivacy(plugin, opts.path, opts.ui, function()
-                    -- the screen may have set a value: resolve again
-                    opts.needs, opts.never_books = nil, nil
-                    DataAccess.withAccess(plugin, action, opts, run_fn)
-                end)
-            elseif plugin and plugin.onKOAssistantSettings then
+            -- the screen may set a value, for the book or for all books: the
+            -- run's own settings take the file's values, then the question is
+            -- asked again (it may find nothing left to ask)
+            local function again()
+                refreshPrivacyKeys(plugin, features)
+                opts.needs, opts.never_books = nil, nil
+                DataAccess.withAccess(plugin, action, opts, run_fn)
+            end
+            local trusted_asked = false
+            for _idx, n in ipairs(plan.asked) do
+                if n.layer == "trusted" then trusted_asked = true end
+            end
+            if not plugin then
+                if opts.on_cancel then opts.on_cancel() end
+            elseif plan.per_book and opts.path then
+                openBookPrivacy(plugin, opts.path, opts.ui, again)
+            elseif trusted_asked and plugin.onKOAssistantSettings then
+                -- judged in the trusted providers' column, which only the
+                -- settings menu holds: open it; the run does not go on
                 plugin:onKOAssistantSettings()
                 if opts.on_cancel then opts.on_cancel() end
+            else
+                require("koassistant.books.book_settings").showPrivacyConfig({
+                    plugin = plugin, ui = opts.ui, all_books = true, on_close = again,
+                })
             end
         elseif opts.on_cancel then
             opts.on_cancel()
@@ -592,10 +734,13 @@ function DataAccess.refuseNoTitle(plugin, spec)
                 plugin = plugin, ui = spec.ui, document_path = spec.path, target_override = "book",
             })
         end } }
-    elseif spec.layer == "global" and plugin and plugin.onKOAssistantSettings then
+    elseif spec.layer == "global" and plugin then
+        -- Book info lives under Settings → Privacy & Data
         rows[#rows + 1] = { { text = _("Open Settings"), callback = function()
             UIManager:close(dialog)
-            plugin:onKOAssistantSettings()
+            require("koassistant.books.book_settings").showPrivacyConfig({
+                plugin = plugin, ui = spec.ui, all_books = true,
+            })
         end } }
     end
     rows[#rows + 1] = { { text = _("Close"), id = "close", callback = function() UIManager:close(dialog) end } }
@@ -726,11 +871,46 @@ function DataAccess.askForDispatch(plugin, action, features, ui, config, run_fn)
         amounts.highlights = T(_("your highlights (%1)"), n)
         amounts.annotations = T(_("your notes on highlights (%1)"), notes)
     end
-    amounts.book_list = _("your book list (titles, authors, reading status)")
-    amounts.habits = _("your reading habits (books read a lot, stalled, barely started)")
+    -- What the run has to send (2026-10-20): an optional kind with nothing
+    -- behind it is not asked (Gates.needs opts.exists). The book list needs a
+    -- scan folder (the library dialog's pick for a run started there, else the
+    -- permanent ones), the reading habits KOReader's statistics too.
+    local exists = {}
+    local folders = DataAccess.scanFolders(plugin, cf.is_library_context == true, cf)
+    if #folders == 0 then
+        exists.book_list, exists.habits = false, false
+    elseif action.use_advanced_stats then
+        local okS, StatsReader = pcall(require, "koassistant.books.stats_reader")
+        if not (okS and StatsReader and StatsReader.isAvailable and StatsReader.isAvailable()) then
+            exists.habits = false
+        end
+    end
+    amounts.book_list, amounts.habits = DataAccess.libraryAmounts(folders)
+    if live and ui.annotation and type(ui.annotation.annotations) == "table" then
+        local n, notes = 0, 0
+        for _idx, a in ipairs(ui.annotation.annotations) do
+            if type(a) == "table" and type(a.text) == "string" and a.text ~= "" then
+                n = n + 1
+                if type(a.note) == "string" and a.note ~= "" then notes = notes + 1 end
+            end
+        end
+        -- (an action that updates its own result keeps asking: the result
+        -- may carry highlights deleted since)
+        if not action.use_response_caching then
+            if n == 0 then exists.highlights = false end
+            if notes == 0 then exists.annotations = false end
+        end
+    end
+    if path and action.use_notebook then
+        local okN, Notebook = pcall(require, "koassistant.chat.notebook")
+        if okN and Notebook and Notebook.exists then
+            local okE, has = pcall(Notebook.exists, path)
+            if okE and has == false then exists.notebook = false end
+        end
+    end
     local opts = { features = cf, provider = provider, path = path, ui = ui, books = books,
         action_name = action.text or action.id, source = sm, stamps = stamps, nearby = nearby,
-        amounts = amounts, hint = action.blocked_hint }
+        amounts = amounts, hint = action.blocked_hint, exists = exists }
     local needs, never_books = DataAccess.needsFor(action, opts)
     local plan = DataAccess.plan(needs)
     if not plan.refused and #plan.asked == 0 then return false end

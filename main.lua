@@ -1290,6 +1290,10 @@ function AskGPT:compareSelectedBooks(selected_files)
   configuration.features.is_book_context = nil
   configuration.features.is_library_context = true
   configuration.features._group_launch = nil
+  -- A fresh library dialog starts from the permanent folders: the last
+  -- dialog's folder pick ends with it (2026-10-20)
+  configuration.features._session_library = nil
+  self._session_scan_folders = nil
 
   -- Store the books list as context
   configuration.features.book_context = prompt_text
@@ -8298,16 +8302,21 @@ function AskGPT:_checkRequirements(action, target_file, run_provider)
       end
       local state, layer = Gates.resolve("book_list", gate)
       if state == "never" then return refuse("book_list", layer) end
-      -- Folder gate: need permanent folders or session folders
-      local has_session = self._session_scan_folders and #self._session_scan_folders > 0
-      if not has_session then
-        local lib_folders = features.library_scan_folders
-        if not lib_folders or #lib_folders == 0 then
+      -- Folder gate: the folders in effect (the library dialog's pick for an
+      -- action run from it, an empty pick included; else the permanent ones)
+      local library_run = action.context == "library"
+      local folders = require("koassistant.ui.data_access").scanFolders(self, library_run, features)
+      if #folders == 0 then
+        if library_run and type(self._session_scan_folders) == "table" then
+          UIManager:show(InfoMessage:new{
+            text = _("No scan folder is ticked in this library dialog.\n\nTick one under Library Scan.") .. hint,
+          })
+        else
           UIManager:show(InfoMessage:new{
             text = _("No scan folders configured.\n\nAdd folders in Settings → Reading & Library → Permanent Scan Folders.") .. hint,
           })
-          return true
         end
+        return true
       end
     elseif req == "highlights" then
       -- Per-action gate: are both highlight flags explicitly disabled?
@@ -9730,7 +9739,13 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
               da_opts.needs = da_needs
               DA.withAccess(self_ref, action, da_opts, function(granted)
                 state.data_once = granted and granted.once or nil
-                afterConsent()
+                -- an answered question carried the unread note; one that found
+                -- nothing left to ask after More… did not: the confirm then
+                if granted and granted.asked then
+                  afterConsent()
+                else
+                  confirmUnreadScope(covers_unread, afterConsent)
+                end
               end)
             else
               confirmUnreadScope(covers_unread, afterConsent)
@@ -14341,11 +14356,11 @@ function AskGPT:onEndOfBook()
   -- Otherwise, suggest a next read (requires library scanning).
   -- Setting defaults to true (opt-out), requires library scanning to be useful
   if features.enable_end_of_book_suggestion == false then return end
-  -- The suggestion sends the book list: the gates module's answer for the
-  -- provider it goes to (trust counts here as everywhere since slice 1)
-  -- standing-only: an unattended suggestion needs a standing Allow, nothing asks here
-  if not require("koassistant.request.privacy_gates").allows("book_list",
-      { features = features, provider = features.provider }) then return end
+  -- The suggestion sends the book list: offered unless it is Never for the
+  -- provider it goes to; on Ask the action's own run asks (ruled 2026-10-20:
+  -- the standing Allow it needed kept it silent for every reader on Ask)
+  local NextGates = require("koassistant.request.privacy_gates")
+  if not NextGates.usable("book_list", NextGates.context(features, features.provider, {})) then return end
   if not features.library_scan_folders or #features.library_scan_folders == 0 then return end
   if not self.ui or not self.ui.document then return end
 
@@ -15019,8 +15034,13 @@ function AskGPT:_fireXrayAutoUpdate(opts)
       local self_ref = self
       local Gates = require("koassistant.request.privacy_gates")
       local cf = configuration and configuration.features or features
+      -- The question's Allow once rides opts.data_once into the run, never the
+      -- shared settings, where the next chat about this book would pass
+      -- unasked (2026-10-20): the question writes on a private copy
+      local da_feats = {}
+      for k, v in pairs(cf) do da_feats[k] = v end
       require("koassistant.ui.data_access").withAccess(self, action, {
-        features = cf, path = file, ui = self.ui,
+        features = da_feats, path = file, ui = self.ui,
         provider = Gates.dispatchProvider(cf, action,
           (opts.run_variant and opts.run_variant.provider) or action.provider or cf.provider),
         action_name = action.text or _("X-Ray"), kinds = { "book_text" }, required = true,
@@ -15734,8 +15754,11 @@ function AskGPT:_startXrayLadderBuild(build_opts)
     local run_provider = build_opts and build_opts.one_shot
       and build_opts.run_variant and build_opts.run_variant.provider or nil
     local DA = require("koassistant.ui.data_access")
+    -- a private copy: the Allow once rides build_opts.data_once (2026-10-20)
+    local da_feats = {}
+    for k, v in pairs(cf) do da_feats[k] = v end
     local da_opts = {
-      features = cf, path = file, ui = self.ui,
+      features = da_feats, path = file, ui = self.ui,
       provider = Gates.dispatchProvider(cf, action, run_provider or action.provider or cf.provider),
       action_name = action.text or _("X-Ray"), kinds = { "book_text" }, required = true,
       amounts = { book_text = (build_opts and build_opts.one_shot)
@@ -19343,6 +19366,10 @@ function AskGPT:openLibraryDialog()
   -- then set library context. Books start unselected — user adds via presets/picker.
   self:_scrubContextFeatures(configuration.features)
   configuration.features.is_library_context = true
+  -- A fresh library dialog starts from the permanent folders: the last
+  -- dialog's folder pick ends with it (2026-10-20)
+  configuration.features._session_library = nil
+  self._session_scan_folders = nil
 
   self:ensureInitialized()
   self:updateConfigFromSettings()
@@ -19368,6 +19395,10 @@ function AskGPT:openLibraryDialogForGroup(group_id)
   configuration.features = configuration.features or {}
   self:_scrubContextFeatures(configuration.features)
   configuration.features.is_library_context = true
+  -- A fresh library dialog starts from the permanent folders: the last
+  -- dialog's folder pick ends with it (2026-10-20)
+  configuration.features._session_library = nil
+  self._session_scan_folders = nil
   -- Same shapes mergeBooks (koassistant/ui/dialogs.lua) writes, so the dialog's
   -- selected-books editor and Add Books menu work on this list seamlessly
   local books_list = {}

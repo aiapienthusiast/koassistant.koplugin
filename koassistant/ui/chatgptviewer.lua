@@ -3264,6 +3264,9 @@ function ChatGPTViewer:askAnotherQuestion()
     local attach_menu = D.showAttachMenu({
       configuration = cfg,
       ui = self._ui,
+      -- the plugin, for the data question's More… and its provider's name
+      -- (the plugin sits on ui under its folder name)
+      plugin = self._ui and self._ui.koassistant or nil,
       document_path = hold_document_path,
       enable_emoji = enable_emoji,
       chips_book_or_highlight = not (cfg_features.is_general_context or cfg_features.is_library_context),

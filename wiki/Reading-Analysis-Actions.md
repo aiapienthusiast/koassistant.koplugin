@@ -182,7 +182,7 @@ It skips books you haven't started and books past 95%. For a book with no record
 
 When you reach the end of a book, KOAssistant offers to suggest what to read next from your library ("Would you like an AI suggestion for what to read next from your library?"), just after KOReader's own end-of-book popup. **Suggest** runs **Suggest from Library**, which suggests three to five books you already own, based on the book you are reading and your reading patterns.
 
-- **Settings → Reading & Library → Suggest Next Read on Finish** (default: On). It only activates when the book list is on Allow for your provider (a trusted provider follows its own value) and at least one permanent scan folder is configured (it has no moment to ask): **Settings → Reading & Library → Book list** and **Permanent Scan Folders**.
+- **Settings → Reading & Library → Suggest Next Read on Finish** (default: On). It is offered unless the book list is set to Never for your provider (a trusted provider follows its own value), and needs at least one permanent scan folder; on Ask, the suggestion asks before your list is read: **Settings → Reading & Library → Book list** and **Permanent Scan Folders**.
 - When the book's last chapter has a quiz to offer, the quiz takes the end-of-book moment and the suggestion is skipped that time.
 
 Suggest from Library is also an ordinary book action, in Quick Actions by default. It sends your library catalog (title, author, series when it has one, reading status, and progress for books you are reading or have on hold; last-read dates only order the list and are not sent): see [Privacy and Data](Privacy-and-Data).

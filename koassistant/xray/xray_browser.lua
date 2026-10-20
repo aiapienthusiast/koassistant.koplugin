@@ -4488,6 +4488,9 @@ function XrayBrowser:chatAboutItem(detail_text, entity)
     -- B396 d). Set or cleared on every open: this config is the chat's own copy,
     -- so a copy taken from an earlier X-Ray chat never names a stale block.
     config.features._xray_chat_highlights = entity and entity.highlights or nil
+    -- the kinds this X-Ray was built from, for the chat's record (a resume
+    -- checks them; the Send writes the record, 2026-10-20)
+    config.features._xray_chat_kinds = require("koassistant.request.privacy_gates").stampedList(self.metadata or {})
     -- When no book is open, exclude actions that need document data (text extraction, annotations)
     if not self.ui or not self.ui.document then
         config.features._exclude_action_flags = {"use_book_text", "use_annotations"}

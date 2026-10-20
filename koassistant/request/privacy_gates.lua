@@ -147,11 +147,12 @@ function Gates.columnState(features, kind, trusted)
 end
 
 --- The kinds a run was allowed once, for this book: features._data_once =
---- { book = <path or nil>, kinds = { kind = true } } rides the request's own
+--- { book = <path or nil>, kinds = { kind = true | false } } rides the request's own
 --- config copy (koassistant/ui/data_access.lua grants it; the dispatch consumes
 --- it from the source config). A record without a book covers every book of
 --- the run (a request over many picked books); one with a book covers that
---- book alone. Never persisted.
+--- book alone. A kind mapped to false was declined for this run ("Continue
+--- without"): resolve reads it as Never for the run alone. Never persisted.
 --- @return table|nil the set of kinds, nil when nothing stands
 function Gates.onceFor(features, path)
     local once = type(features) == "table" and features._data_once
@@ -163,7 +164,11 @@ end
 
 --- Record an allowance for this run on a features table (the config copy the
 --- run uses). Merges into a record for the same book; a different book's
---- record is replaced.
+--- record is replaced. `kinds` lists the kinds allowed and may also map a
+--- kind to false: declined for this run (the question's Continue without),
+--- so a run that passes the question again (the dispatch's re-entry) is not
+--- asked twice and its gather leaves the kind out. An allowance beats a
+--- decline of the same kind.
 function Gates.grantOnce(features, path, kinds)
     if type(features) ~= "table" or type(kinds) ~= "table" then return end
     local once = features._data_once
@@ -172,7 +177,13 @@ function Gates.grantOnce(features, path, kinds)
         features._data_once = once
     end
     for k, v in pairs(kinds) do
-        if type(k) == "number" then once.kinds[v] = true elseif v then once.kinds[k] = true end
+        if type(k) == "number" then
+            once.kinds[v] = true
+        elseif v == false then
+            if once.kinds[k] ~= true then once.kinds[k] = false end
+        elseif v then
+            once.kinds[k] = true
+        end
     end
 end
 
@@ -183,16 +194,19 @@ end
 --- ctx.book      the book's own values, BookSettings.effectivePrivacyOverrides
 ---               (nil = none known); its Never beats everything, its Allow
 ---               needs no switch
---- ctx.once      the kinds allowed for this run (Gates.onceFor), nil = none
+--- ctx.once      the kinds allowed for this run (Gates.onceFor), nil = none;
+---               a kind mapped to false was declined for this run
 --- @return string state "allow" | "ask" | "never"; string layer "book" | "once" | "trusted" | "global"
+---   ("never" with layer "once" = declined for this run)
 function Gates.resolve(kind, ctx)
     ctx = ctx or {}
     local book = ctx.book
     if type(book) == "table" and book[kind] == false then
         return "never", "book"
     end
-    if type(ctx.once) == "table" and ctx.once[kind] then
-        return "allow", "once"
+    if type(ctx.once) == "table" then
+        if ctx.once[kind] == false then return "never", "once" end
+        if ctx.once[kind] then return "allow", "once" end
     end
     if type(book) == "table" and book[kind] == true then
         return "allow", "book"
@@ -313,11 +327,18 @@ end
 ---               = its stamps; nil = nothing stored, nothing to ask)
 --- opts.nearby   true when the run carries text around a selection or the
 ---               current page
+--- opts.exists   what the run has to send, where the caller knows it: a kind
+---               mapped to false has nothing behind it (book_list: no scan
+---               folder; habits: no reading statistics; highlights,
+---               annotations, notebook: none in the book). An optional kind
+---               with nothing behind it is not asked (nothing would go); a
+---               required one stays (its own check refuses), and so does one
+---               a stored artifact the run reads was built from. nil = unknown.
 --- @return table list of { kind, state, layer, required = boolean }, in KINDS order
 function Gates.needs(action, ctx, opts)
     action = action or {}
     opts = opts or {}
-    local wanted, required = {}, {}
+    local wanted, required, stored = {}, {}, {}
     local function want(kind, req)
         wanted[kind] = true
         if req then required[kind] = true end
@@ -354,25 +375,34 @@ function Gates.needs(action, ctx, opts)
     if opts.nearby then want("nearby_text", false) end
     -- Stored material the run will read: its stamps are the kinds it needs
     local stamps = opts.stamps or {}
+    -- (stored[kind]: the stored material carries the kind whatever the book
+    -- holds now, so opts.exists never drops it)
     if action.use_xray_cache and stamps.xray then
         local k = Gates.stampedKinds(stamps.xray)
-        if k.book_text then want("book_text", false) end
-        if k.highlights then want("highlights", false) end
-        if k.annotations then want("annotations", false) end
+        if k.book_text then want("book_text", false); stored.book_text = true end
+        if k.highlights then want("highlights", false); stored.highlights = true end
+        if k.annotations then want("annotations", false); stored.annotations = true end
     end
     if action.use_analyze_cache and stamps.analyze and Gates.stampedKinds(stamps.analyze).book_text then
-        want("book_text", false)
+        want("book_text", false); stored.book_text = true
     end
     -- The summary goes only where the dispatch sends it: the "summary" source,
     -- or an action without a source pick that reads it (another source drops it)
     local summary_read = source == "summary" or (action.use_summary_cache and source == nil)
     if summary_read and stamps.summary and Gates.stampedKinds(stamps.summary).book_text then
-        want("book_text", false)
+        want("book_text", false); stored.book_text = true
     end
+    local exists = opts.exists or {}
     local out = {}
     for _idx, kind in ipairs(Gates.KINDS) do
-        if wanted[kind] and kind ~= "position" then
+        if wanted[kind] and kind ~= "position"
+                and not (exists[kind] == false and not required[kind] and not stored[kind]) then
             local state, layer = Gates.resolve(kind, ctx)
+            -- declined for this run where it was optional: a use that needs it
+            -- asks again (an Allow once then beats the decline)
+            if state == "never" and layer == "once" and required[kind] then
+                state, layer = "ask", Gates.isTrusted(ctx.features, ctx.provider) and "trusted" or "global"
+            end
             out[#out + 1] = { kind = kind, state = state, layer = layer,
                 required = required[kind] == true }
         end

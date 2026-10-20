@@ -4719,7 +4719,10 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
                 provider = effective_provider,
                 -- Library scanning (session folders from library dialog override permanent config)
                 library_scan_folders = config.features and config.features.library_scan_folders,
-                _session_scan_folders = plugin and plugin._session_scan_folders,
+                -- the library dialog's pick, for a run started there only: a book
+                -- action reads the permanent folders (2026-10-20)
+                _session_scan_folders = (temp_config.features and temp_config.features.is_library_context)
+                    and plugin and plugin._session_scan_folders or nil,
                 -- Ladder rung 1 (create from nothing): bound {book_text} extraction at
                 -- the rung boundary instead of the reader's position (§6 slice 1)
                 _ladder_target_ratio = message_data._ladder_target,
@@ -4811,12 +4814,9 @@ if prune_book_text then
         local lib_toggle = require("koassistant.request.privacy_gates").allows("book_list", lib_gate)
         local scan_folders_to_use
         if lib_toggle then
-            scan_folders_to_use = plugin and plugin._session_scan_folders
-            if not scan_folders_to_use then
-                if lib_features.library_scan_folders and #lib_features.library_scan_folders > 0 then
-                    scan_folders_to_use = lib_features.library_scan_folders
-                end
-            end
+            -- the folder rule: the library dialog's pick for a run started there
+            scan_folders_to_use = require("koassistant.ui.data_access").scanFolders(plugin,
+                (temp_config.features and temp_config.features.is_library_context) == true, lib_features)
         end
         if scan_folders_to_use and #scan_folders_to_use > 0 then
             local scan_ok, LibraryScanner = pcall(require, "koassistant.books.library_scanner")
@@ -8150,7 +8150,9 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
     local function syncLibraryState()
         if plugin then
             local folders = getEffectiveScanFolders()
-            plugin._session_scan_folders = #folders > 0 and folders or nil
+            -- every pick is kept, the empty one included: an empty pick means
+            -- no list, never the permanent folders (2026-10-20)
+            plugin._session_scan_folders = folders
         end
     end
 
@@ -9562,7 +9564,14 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                             da_kinds[#da_kinds + 1] = "book_text"
                             da_amounts.book_text = _("text from this book, the scope you picked")
                         end
-                    elseif session_book_tools and ui_instance and ui_instance.document then
+                    elseif session_book_tools and ui_instance and ui_instance.document
+                            and not xray_context_prefix
+                            -- the chip's own rule: eligible (book text not Never, a model
+                            -- that calls tools) and not switched off by Quick (2026-10-20)
+                            and require("koassistant.tools.book_tool_runner").sessionEligible(
+                                configuration, ui_instance, { offer = true })
+                            and not require("koassistant.ui.dialogs").quickPresetForces("tools",
+                                configuration.features._session_quick_answer, configuration.features) then
                         da_kinds[#da_kinds + 1] = "book_text"
                         da_amounts.book_text = _("the passages the book tools look up in this book")
                     end
@@ -9582,10 +9591,15 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         da_amounts.nearby_text = _("the text around your selection")
                     end
                     if configuration.features.is_library_context and library_toggle_on then
-                        -- optional: a book list left out of this chat lets the
-                        -- Send go without it
-                        da_kinds[#da_kinds + 1] = { kind = "book_list", required = false }
-                        da_amounts.book_list = _("your book list (titles, authors, reading status)")
+                        -- optional: Continue without sends the message without it;
+                        -- asked only when a folder is in effect (the dialog's pick,
+                        -- else the permanent ones), naming them (2026-10-20)
+                        local DAl = require("koassistant.ui.data_access")
+                        local lib_folders_now = DAl.scanFolders(plugin, true, configuration.features)
+                        if #lib_folders_now > 0 then
+                            da_kinds[#da_kinds + 1] = { kind = "book_list", required = false }
+                            da_amounts.book_list = DAl.libraryAmounts(lib_folders_now)
+                        end
                     end
                     if #da_kinds > 0 then
                         local DA = require("koassistant.ui.data_access")
@@ -9628,7 +9642,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                             })
                             return
                         end
-                        scope_block = { label = "Text of the reader's current page:", text = text }
+                        scope_block = { label = "Text of the reader's current page:", text = text, kind = "nearby_text" }
                     else
                         -- Judged for the provider this Send really goes to (a pending
                         -- pick re-points it at bake time), for the book's own value and
@@ -9720,7 +9734,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                             label = string.format('Text of the section "%s" from the book:',
                                 scope_pick.title or "")
                         end
-                        scope_block = { label = label, text = text }
+                        scope_block = { label = label, text = text, kind = "book_text" }
                         if scope_pick.spoiler_consented then
                             -- One-shot stand-down for THIS request: the reader
                             -- explicitly included a beyond-position span, so the
@@ -9758,6 +9772,10 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                     -- Create history WITHOUT system prompt (system is in config.system)
                     -- No prompt_action for Send — title uses user question or highlight directly
                     local history = MessageHistory:new(nil, nil)
+                    -- The kinds this Send's context carries, recorded on the chat
+                    -- (history.data_kinds, as an action's chat records them): a
+                    -- resume checks them (B395 slice 5, for the Send since 2026-10-20)
+                    local sent_kinds = {}
 
                     -- Store source data for title generation
                     if highlighted_text and highlighted_text ~= "" then
@@ -9839,9 +9857,11 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                                     scan_folders_to_use = lib_features.library_scan_folders
                                 end
                             end
-                        elseif library_toggle_on then
+                        elseif library_toggle_on
+                                and (require("koassistant.request.privacy_gates").onceFor(configuration.features, nil) or {}).book_list ~= false then
                             -- The dialog offered the list for its own provider; say why
                             -- this Send goes without it rather than drop it silently
+                            -- (not after the question's Continue without: the reader chose)
                             UIManager:show(require("ui/widget/notification"):new{
                                 text = _("Your book list was left out: it is not allowed for this provider."),
                                 timeout = 3,
@@ -9855,6 +9875,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                                 if scan_result and scan_result.books and #scan_result.books > 0 then
                                     local formatted = LibraryScanner.format(scan_result)
                                     if formatted and formatted ~= "" then
+                                        sent_kinds.book_list = true
                                         table.insert(parts, "My library:")
                                         table.insert(parts, formatted)
                                         table.insert(parts, "")
@@ -9888,6 +9909,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         configuration.features._session_scope_block = nil
                         if sb then
                             scope_attached = true
+                            sent_kinds[sb.kind or "book_text"] = true
                             table.insert(parts, sb.label)
                             table.insert(parts, sb.text)
                             table.insert(parts, "")
@@ -9929,6 +9951,18 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         end
                         table.insert(parts, '"' .. sel_text .. '"')
                         table.insert(parts, "")
+                        if xray_context_prefix then
+                            -- the X-Ray's own kinds, and the highlights block when it
+                            -- was kept for this provider: the chat's record
+                            for _k, kind in ipairs(configuration.features._xray_chat_kinds or {}) do
+                                sent_kinds[kind] = true
+                            end
+                            local hl = configuration.features._xray_chat_highlights
+                            if type(hl) == "table" and type(hl.block) == "string" and hl.block ~= ""
+                                    and #sel_text >= #hl.block and sel_text:sub(-#hl.block) == hl.block then
+                                sent_kinds.highlights = true
+                            end
+                        end
                         -- Ambient surrounding context (surrounding_context_plan.md): freeform
                         -- Send follows the per-book > global mode. The window was pre-extracted
                         -- at the entry point (the live selection is long gone) and consumed
@@ -9991,6 +10025,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                                         after_limit = sc_after,
                                     })
                                 if sc_text ~= "" then
+                                    sent_kinds.nearby_text = true
                                     table.insert(parts, require("koassistant.prompts.templates").SURROUNDING_CONTEXT_LABEL)
                                     table.insert(parts, sc_text)
                                     table.insert(parts, "")
@@ -10004,6 +10039,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         configuration.features._session_scope_block = nil
                         if hsb then
                             scope_attached = true
+                            sent_kinds[hsb.kind or "book_text"] = true
                             table.insert(parts, hsb.label)
                             table.insert(parts, hsb.text)
                             table.insert(parts, "")
@@ -10044,12 +10080,25 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                         local A = require("koassistant.request.attachments")
                         -- The notebook's consent, again, for the provider this Send
                         -- goes to (a pending ⚡ preset model re-points it at bake)
-                        local attach_msg = A.buildMessage(A.forProvider(A.getList(),
+                        -- what the attachments that pass carry, for the chat's record
+                        local function carried(kept)
+                            for _idx, e in ipairs(kept or {}) do
+                                if e.type == "notebook" then
+                                    sent_kinds.notebook = true
+                                elseif e.type == "artifact" then
+                                    for _k, kind in ipairs(require("koassistant.request.privacy_gates").stampedList(e)) do
+                                        sent_kinds[kind] = true
+                                    end
+                                end
+                            end
+                            return kept
+                        end
+                        local attach_msg = A.buildMessage(carried(A.forProvider(A.getList(),
                             configuration.features,
                             send_rv and send_rv.provider
                                 or require("koassistant.ui.dialogs").effectiveDispatchProvider(
                                     configuration.features, nil, configuration.provider),
-                            ui_instance))
+                            ui_instance)))
                         if attach_msg then
                             history:addUserMessage(attach_msg, true)
                         end
@@ -10167,6 +10216,25 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
                     -- Launch tag (device round 2): lets future surfaces group
                     -- X-Ray-launched chats; persisted with the chat, restored on resume
                     history.launched_from = is_xray_chat and "xray_chat" or nil
+                    -- The chat's record: the kinds its context carried (a tools run
+                    -- reads the book's text) and the provider it goes to
+                    do
+                        if configuration.features._tools_active
+                                and require("koassistant.tools.book_tool_runner").sessionEligible(
+                                    configuration, ui_instance, { offer = true })
+                                and not require("koassistant.ui.dialogs").quickPresetForces("tools",
+                                    configuration.features._session_quick_answer, configuration.features) then
+                            sent_kinds.book_text = true
+                        end
+                        local kinds = {}
+                        for _idx, kind in ipairs(require("koassistant.request.privacy_gates").KINDS) do
+                            if sent_kinds[kind] then kinds[#kinds + 1] = kind end
+                        end
+                        history.data_kinds = #kinds > 0 and kinds or nil
+                        history.provider = send_rv and send_rv.provider
+                            or require("koassistant.ui.dialogs").effectiveDispatchProvider(
+                                configuration.features, nil, configuration.provider)
+                    end
 
                     -- Build unified request config for ALL providers
                     -- No action specified, uses global behavior setting
@@ -13866,6 +13934,19 @@ local function launchArtifactChat(user_question, artifact_content, artifact_type
     -- the stable "came from an artifact viewer" marker for future grouping surfaces
     history.launched_from = "artifact"
     history.source_input = user_question
+    -- The kinds this chat's context carries (the artifact's stamps, or the
+    -- notebook) and its provider: a resume checks them (B395 slice 5; the
+    -- artifact chat since 2026-10-20)
+    do
+        local kinds
+        if opts and opts.notebook then
+            kinds = { "notebook" }
+        elseif opts and opts.stamps then
+            kinds = require("koassistant.request.privacy_gates").stampedList(opts.stamps)
+        end
+        history.data_kinds = (kinds and #kinds > 0) and kinds or nil
+        history.provider = configuration.provider or configuration.default_provider
+    end
 
     -- Build consolidated message: book context + artifact framing + artifact content + user question
     local parts = {}

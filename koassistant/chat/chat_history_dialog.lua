@@ -2462,8 +2462,12 @@ function ChatHistoryDialog:continueChat(ui, document_path, chat, chat_history_ma
     local resume_path = (document_path ~= "__GENERAL_CHATS__" and document_path ~= "__LIBRARY_CHATS__")
         and document_path or nil
     local DataAccess = require("koassistant.ui.data_access")
-    local resume = DataAccess.resumeNeeds(chat, config.features,
-        config.provider or config.default_provider, resume_path, ui)
+    -- The provider the chat's replies go to: the model the chat restored
+    -- (its control state) before the main provider (2026-10-20)
+    local resume_provider = (type(config.features._session_model) == "table"
+        and config.features._session_model.provider)
+        or config.provider or config.default_provider
+    local resume = DataAccess.resumeNeeds(chat, config.features, resume_provider, resume_path, ui)
     if resume.refused then
         local ButtonDialog = require("ui/widget/buttondialog")
         local dlg
@@ -2483,7 +2487,7 @@ function ChatHistoryDialog:continueChat(ui, document_path, chat, chat_history_ma
         return
     elseif #resume.asked > 0 then
         DataAccess.withAccess(ui and ui.koassistant, nil, {
-            features = config.features, provider = config.provider or config.default_provider,
+            features = config.features, provider = resume_provider,
             path = resume_path, ui = ui, kinds = resume.asked, action_name = _("Continue this chat"),
             amounts = {
                 book_text = _("the book text this chat was given"),

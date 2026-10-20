@@ -40,14 +40,16 @@ Every kind of data has one value, for all books, in **Settings → Privacy & Dat
 
 ### The question
 
-It names the action, the provider the request goes to, and every kind of data the run wants that is still on Ask, with the amount where it is known ("text from this book, up to your position (42%)", "your highlights (12)"):
+It names the action, the provider the request goes to, and every kind of data the run wants that is still on Ask, with the amount or the source where it is known ("text from this book, up to your position (42%)", "your highlights (12)", "your book list: the books in Fiction, Non-fiction"). Data the run has nothing of is not asked: the book list with no scan folder, your reading habits without KOReader's reading statistics, highlights, notes or a notebook the book does not have.
 
 - **Allow once**: this run and the replies of the chat it opens. Nothing is stored.
 - **Allow for this book**: sets the book's own value to Allow (Book Settings → Privacy & Data), so this book is never asked again for that kind.
-- **Not for this book** (only when nothing asked is required): the run goes on without those kinds, and the book's own value becomes Never for them. Change it on the book's Privacy & Data screen.
-- **Always allow** replaces "Allow for this book" for the two kinds no book can hold, the book list and your reading habits: it sets the value for all books.
+- **Continue without** (when nothing asked is required): the run goes on without those kinds, this time only. Nothing is stored.
+- **Allow once, without …** (when a run asks a required kind and an optional one, as Next Read asks your book list and your reading habits): the required kind goes this time, the optional one stays out.
+- **Not for this book** (only when nothing asked is required): the run goes on without those kinds, and the book's own value becomes Never for them, so later runs leave them out too. Change it on the book's Privacy & Data screen.
+- **Always allow** replaces "Allow for this book" for the two kinds no book can hold, the book list and your reading habits: it sets the value for all books (with a trusted provider, the trusted providers' own value).
 - A request about no book (an image made outside a book, for instance) has neither "Allow for this book" nor "Not for this book": there is no book to keep the answer.
-- **More…**: opens the book's Privacy & Data screen, and asks again when you come back. With no book, or when only the book list or reading habits are asked, it opens the settings instead, and the run does not go on.
+- **More…**: opens the book's Privacy & Data screen, or the one for all books when there is no book or only the book list or reading habits are asked, and asks again when you come back (or goes on, when nothing is left to ask). A question judged by a trusted provider's own values opens the settings, where those values live.
 - **Cancel**: nothing is sent.
 
 Generate Image with its prompt writer on sends the text around the passage and X-Ray descriptions to two providers: the one that writes the prompt and the one that draws it, which receives a prompt made from them. Each kind must be allowed for both, and the question names both ("Generate Image will send to Anthropic, to write the prompt, and to OpenAI, to draw it"). Its **Continue without** (in place of Not for this book) makes this picture without them and stores nothing, since a Never for the book's text would also stop its X-Ray updates; see [Image Generation](Image-Generation#the-prompt-writer). **Illustrate…** on an X-Ray entry asks the same way for the kinds the entry's description was made from, without Continue without: the description is the picture's subject, so a Never refuses it ([Image Generation](Image-Generation#illustrate-from-x-ray)). A kept image remembers what its prompt carried: drawing that prompt again from the gallery (**Regenerate**, **Regenerate and replace** or **Edit prompt…**) asks the same way for the provider drawing now, and for the prompt writer's provider too when a new Style has it restyle the prompt ("Regenerate will send to Anthropic, to restyle the prompt, and to OpenAI, to draw it"), without Continue without (what a written prompt took from them cannot be taken out), and a Never refuses it ([Image Generation](Image-Generation#the-gallery)).
@@ -98,7 +100,7 @@ The rows sit under the presets in **Settings → Privacy & Data**, each with Ask
 In **Settings → Reading & Library**, under Library:
 
 - **Book list** (default: Ask): the same value as in Privacy & Data. Needed by the scan-based library actions (Next Read, Discover New, Analyze Library, Challenge My Taste) and the Suggest from Library book action. Find Similar and Recommend add your library to their answer when the book list is allowed, but don't need it.
-- **Permanent Scan Folders**: folders always scanned for library actions (grayed out while the book list is Never). You can also pick folders on the fly in the input dialog.
+- **Permanent Scan Folders**: folders always scanned for library actions (grayed out while the book list is Never). You can also pick folders on the fly in the library dialog: the pick lasts while that dialog is open, and with every folder unticked no list is sent. Book actions (Suggest from Library, Find Similar) read the permanent folders.
 
 A library action needs three things: the book list's value (Ask asks the first time, with **Always allow** for all books), at least one folder, permanent or picked on the fly, and the action's "Allow library use" flag (see [Design Choices](#design-choices)).
 
