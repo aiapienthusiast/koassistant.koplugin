@@ -22,7 +22,7 @@ local function getDefaultModel(provider)
         xai = "grok-4.7",
         openrouter = "anthropic/claude-sonnet-5.5",
         requesty = "openai/gpt-4o-mini",
-        opencode = "deepseek-v4-flash",
+        opencode = "deepseek-v4.1-flash",
         opencode_go = "kimi-k3",
         a2agent = "deepseek-v4-flash",
         qwen = "qwen3.8-max",

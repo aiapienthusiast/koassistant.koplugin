@@ -101,6 +101,19 @@ TestRunner:test("the Quick mark and the smart retrieval badge under Quick (2026-
     TestRunner:has(DT(plain, IND, { quick_on = true, tools_allowed = true, quick_tools_strip = true }), "(🔍)")
 end)
 
+TestRunner:test("the input dialog's (🔍) counts book text on Ask: offer = true (2026-10-20)", function()
+    local info = debug.getinfo(1, "S")
+    local unit_dir = info.source:match("@?(.*)"):match("(.+)/[^/]+$") or "."
+    local tests_dir = unit_dir:match("(.+)/[^/]+$") or "."
+    local plugin_dir = tests_dir:match("(.+)/[^/]+$") or "."
+    local f = assert(io.open(plugin_dir .. "/koassistant/ui/dialogs.lua", "r"))
+    local src = f:read("*a"); f:close()
+    local block = src:match("local indicator_opts = {(.-)\n        }")
+    assert(block, "the input dialog's indicator_opts block is found")
+    TestRunner:has(block, "smartRetrievalAllowed(configuration, ui_instance, { offer = true })",
+        "the mark asks the offer gate (Ask counts, only Never hides it), like the Tools chip")
+end)
+
 print("")
 print(string.rep("-", 50))
 print(string.format("  Results: %d passed, %d failed", TestRunner.passed, TestRunner.failed))

@@ -95,6 +95,18 @@ TestRunner:test("resolveModelRefresh — safe no-ops", function()
         "empty known list never triggers a reset")
 end)
 
+TestRunner:test("opencode: the baked deepseek-v4-flash default moves, an explicit pick stays (2026-10-20)", function()
+    local args = { model = "deepseek-v4-flash", current_default = ModelLists.opencode[1],
+        known_models = ModelLists.opencode, shipped_defaults = ModelLists._shipped_defaults.opencode,
+        retired = ModelLists._retired.opencode }
+    local action, to = ModelLists.resolveModelRefresh(args)
+    TestRunner:assertEqual(action, "refresh", "the old Zen default was auto-baked: it moves")
+    TestRunner:assertEqual(to, "deepseek-v4.1-flash", "to the current default")
+    args.explicit = true
+    TestRunner:assertEqual((ModelLists.resolveModelRefresh(args)), "keep",
+        "a deliberate pick is kept (served where the workspace enables it)")
+end)
+
 TestRunner:test("_shipped_defaults data integrity", function()
     local shipped = ModelLists._shipped_defaults
     TestRunner:assertTrue(type(shipped) == "table", "_shipped_defaults exists")

@@ -541,34 +541,34 @@ local ModelLists = {
     -- "Fetch models" will import them and they fail politely. Meta router:
     -- NO tier placements (the 2026-08-17 openrouter/requesty ruling).
     opencode = {
-        "deepseek-v4-flash",                        -- default: fast, strong, the only fully controllable reasoning ladder (none..max)
-        "deepseek-v4.1-flash",                      -- third sweep 2026-09-28
+        -- 2026-10-20 (the maintainer's new Zen key): the console's Models tab
+        -- decides which models a workspace may use, and a new workspace has the
+        -- older versions OFF. Its keyed /v1/models then lists 44 of the public
+        -- catalog's 85 ids, and a request for any other id answers "Upstream
+        -- request failed: Model access is disabled". The list below = the
+        -- open-weight ids a new workspace serves, every one green on the full
+        -- battery that day (eight batteries, about half a cent). deepseek-v4-flash
+        -- (the default since 2026-09-05), glm-5.2, glm-5.1, minimax-m2.7,
+        -- minimax-m2.5, qwen3.5-plus and qwen3.8-max left the picker: off on a
+        -- new workspace, still served where a workspace enables them, so an
+        -- explicit pick is kept and the baked default moves via _shipped_defaults
+        -- ("Fetch models" lists what a workspace serves).
+        "deepseek-v4.1-flash",                      -- default: the v4-flash line's current model; ladder none..max, tools, SSE
         "deepseek-v4-pro",
         "glm-5.3-flash",
         "glm-5.3",
-        "kimi-k3",
-        "qwen3.8-max",                              -- third sweep 2026-09-28 (forced tools OK here)
+        "kimi-k3",                                  -- effort low/high/max on this door (minimal, medium, xhigh refused 2026-10-20)
         "qwen3.8-flash",                            -- B368 2026-10-14: book tools without a forced call
         "minimax-m3",
-        "minimax-m2.7",
-        -- Second sweep 2026-09-05 (every remaining open-weight Zen id ran the
-        -- battery on the Zen endpoint): all green below. Left out: the Muse
-        -- and Grok ids (server errors on this wire), kimi-k2.7-code (not
-        -- found), deepseek-v4-flash-free (unavailable), big-pickle and
-        -- mimo-v2.5-free (the shared FREE pool rate-limited them mid-battery),
-        -- ling-3.0-flash-fin-free (finance model), nemotron-3-ultra-free
-        -- (free pool too slow to finish a battery).
-        "glm-5.2",
-        "glm-5.1",
-        "minimax-m2.5",
         "qwen3.6-plus",                             -- effort low..xhigh, off = none; rejects temperature 2.0
-        "qwen3.5-plus",                             -- effort minimal..xhigh, off = none; rejects temperature 2.0
-        -- Third sweep 2026-09-28. Stopped serving on this door (saved picks move via
+        -- Earlier sweeps (2026-09-05, 2026-09-28) left out: the Muse and Grok ids
+        -- (server errors on this wire), kimi-k2.7-code (not found), the free ids
+        -- (answer only inside OpenCode's own client), ling-3.0-flash-fin-free
+        -- (finance model), jev-1.13 ("does not support this protocol" on the
+        -- chat door). Stopped serving on this door (saved picks move via
         -- _retired): glm-5 ("deprecated, use glm-5.3"), kimi-k2.6 + kimi-k2.5
-        -- ("Endpoint is unavailable", twice), deepseek-v4-flash-vision-exp (no chat
-        -- route), nemotron-3.5-lightning-free (free models now answer only inside
-        -- OpenCode's own client). Left out: jev-1.13 ("does not support this
-        -- protocol" on the chat door).
+        -- ("Endpoint is unavailable"), deepseek-v4-flash-vision-exp (no chat
+        -- route), nemotron-3.5-lightning-free.
     },
     -- OpenCode Go (the subscription catalog; CURATED 2026-09-05: all 35
     -- /zen/go/v1/models ids ran the model_audit battery on the Go endpoint
@@ -579,6 +579,9 @@ local ModelLists = {
     -- until the reader opts in at the OpenCode console). Left out: ids this
     -- wire does not serve (gpt-5.6-luna, grok-4.6/4.5, omen-alpha,
     -- kimi-k2.7-code, kimi-k2.5, minimax-m2.7, mimo-v2-pro/omni, hy3-preview).
+    -- deepseek-v4-flash and deepseek-v4-flash-vision-exp left Go's catalog by
+    -- 2026-10-20 (retired here, to deepseek-v4.1-flash, which the catalog
+    -- lists in their place).
     -- Meta router: NO tier placements. Facts per id: koassistant/request/model_constraints.lua.
     opencode_go = {
         "kimi-k3",                                  -- default: every battery leg green, full reasoning ladder incl. off
@@ -588,7 +591,6 @@ local ModelLists = {
         "glm-5.3-flash",                            -- green; effort low/high/max only on this endpoint
         "glm-5.3",
         "glm-5.2",
-        "deepseek-v4-flash-vision-exp",
         "mimo-v2.5-pro",
         "mimo-v2.5",
         "hy3",
@@ -598,8 +600,8 @@ local ModelLists = {
         "qwen3.8-max",                              -- book tools without a forced call (B368; unverified here)
         "qwen3.8-flash",                            -- same
         "qwen3.7-plus",                             -- same
-        "deepseek-v4-flash",                        -- OPT-IN (China-hosted; enable in the OpenCode console)
-        "deepseek-v4-pro",                          -- OPT-IN (same)
+        "deepseek-v4.1-flash",                      -- the v4-flash line's successor, in Go's catalog 2026-10-20; unprobed here (no Go subscription): no grants, no profile
+        "deepseek-v4-pro",                          -- OPT-IN (China-hosted; enable in the OpenCode console)
         "muse-spark-1.3-contributor",               -- OPT-IN (data-collection consent)
         "muse-spark-1.2-contributor",               -- OPT-IN (same)
     },
@@ -692,6 +694,7 @@ local ModelLists = {
         doubao     = { "doubao-seed-2.0-pro-32k", "doubao-1.8-pro-32k" },
         perplexity = { "perplexity/sonar", "fast", "sonar-pro", "sonar" },
         zai        = { "glm-5.2", "glm-5.1", "glm-5-turbo", "glm-5" },
+        opencode   = { "deepseek-v4.1-flash", "deepseek-v4-flash" },
     },
 
     -- Ids a provider no longer serves, mapped to their replacement. The startup
@@ -740,13 +743,17 @@ local ModelLists = {
             ["qwen3.6-plus"] = "qwen3.7-plus",
             ["qwen3.5-plus"] = "qwen3.7-plus",
             ["kimi-k2.6"] = "kimi-k3",
+            -- left Go's catalog by 2026-10-20; deepseek-v4.1-flash is listed in their place
+            ["deepseek-v4-flash"] = "deepseek-v4.1-flash",
+            ["deepseek-v4-flash-vision-exp"] = "deepseek-v4.1-flash",
         },
         opencode = {
             ["glm-5"] = "glm-5.3",
             ["kimi-k2.6"] = "kimi-k3",
             ["kimi-k2.5"] = "kimi-k3",
-            ["deepseek-v4-flash-vision-exp"] = "deepseek-v4-flash",
-            ["nemotron-3.5-lightning-free"] = "deepseek-v4-flash",
+            -- their earlier replacement deepseek-v4-flash is off on a new workspace (2026-10-20)
+            ["deepseek-v4-flash-vision-exp"] = "deepseek-v4.1-flash",
+            ["nemotron-3.5-lightning-free"] = "deepseek-v4.1-flash",
         },
         fireworks = {
             ["accounts/fireworks/models/deepseek-v4-pro"] = "accounts/fireworks/models/glm-5p3",

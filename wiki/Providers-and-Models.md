@@ -100,7 +100,7 @@ This is an unofficial integration: KOAssistant identifies itself honestly, and i
 
 ### OpenCode Go
 
-**Available now.** OpenCode's monthly subscription has its own model list and is a built-in provider (see the [table](#supported-providers)). Enter your OpenCode account key under `opencode_go`: the same key as OpenCode Zen, entered separately. GPT, Claude and Gemini through OpenCode are not supported yet. A few models in its list answer only after you opt in to them in the OpenCode console: `deepseek-v4-flash` and `deepseek-v4-pro` (hosted in China) and the two `muse-spark` models (data-collection consent).
+**Available now.** OpenCode's monthly subscription has its own model list and is a built-in provider (see the [table](#supported-providers)). Enter your OpenCode account key under `opencode_go`: the same key as OpenCode Zen, entered separately. GPT, Claude and Gemini through OpenCode are not supported yet. A few models in its list answer only after you opt in to them in the OpenCode console: `deepseek-v4-pro` (hosted in China) and the two `muse-spark` models (data-collection consent); `deepseek-v4.1-flash`, new in Go's catalog in place of `deepseek-v4-flash`, is listed unverified.
 
 ### Claude Max and Team API credits
 
@@ -295,8 +295,8 @@ The first model in each provider's list is its default. These tables are generat
 | **Ollama** | `llama4` | `llama3.3`, `llama3.3:70b`, `llama3.2`, `llama3.2:3b`, `qwen3.5`, `qwen3`, `qwen3:8b`, `qwen3:32b` and 12 more |
 | **Fireworks** | `accounts/fireworks/models/gpt-oss-120b` | `accounts/fireworks/models/glm-5p3`, `accounts/fireworks/models/glm-5p3-flash`, `accounts/fireworks/models/kimi-k3`, `accounts/fireworks/models/deepseek-v4p1-flash`, `accounts/fireworks/models/minimax-m3`, `accounts/fireworks/models/qwen3p8-max` |
 | **NVIDIA** | `nvidia/nemotron-3-super-120b-a12b` | `nvidia/nemotron-3-ultra-550b-a55b`, `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`, `openai/gpt-oss-20b` |
-| **OpenCode Zen** | `deepseek-v4-flash` | `deepseek-v4.1-flash`, `deepseek-v4-pro`, `glm-5.3-flash`, `glm-5.3`, `kimi-k3`, `qwen3.8-max`, `qwen3.8-flash`, `minimax-m3` and 6 more |
-| **OpenCode Go** | `kimi-k3` | `hy4-preview`, `longcat-2.0`, `minimax-m3`, `glm-5.3-flash`, `glm-5.3`, `glm-5.2`, `deepseek-v4-flash-vision-exp`, `mimo-v2.5-pro` and 9 more |
+| **OpenCode Zen** | `deepseek-v4.1-flash` | `deepseek-v4-pro`, `glm-5.3-flash`, `glm-5.3`, `kimi-k3`, `qwen3.8-flash`, `minimax-m3`, `qwen3.6-plus` |
+| **OpenCode Go** | `kimi-k3` | `hy4-preview`, `longcat-2.0`, `minimax-m3`, `glm-5.3-flash`, `glm-5.3`, `glm-5.2`, `mimo-v2.5-pro`, `mimo-v2.5` and 8 more |
 | **A2Agent** | `deepseek-v4-flash` | `deepseek-v4-pro`, `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3`, `qwen3.8-max`, `qwen3.8-flash`, `MiniMax-M3` |
 <!-- /generated: defaults -->
 
@@ -305,7 +305,8 @@ A few of these ids come with conditions:
 - **OpenAI Subscription:** the Sol and Astra models need a paid ChatGPT plan; a free account is refused with a note saying so.
 - **Gemini:** `gemini-4-argon` and `gemini-3.1-pro-preview` are paid only. The 2.5 models left the list (Google serves them only to accounts that used them before); a 2.5 model you picked keeps working, and **Fetch models from provider...** adds one back. Since 2026-10-08 Google answers `gemini-3.7-flash` with 3.8 Flash and `gemini-3.5-flash` with 3.6 Flash, so a setting that names either moves to the model that answers, with a one-time note.
 - **Ollama:** the menu lists the models installed on your server, not this list. `llama4` is the default when it is installed, otherwise your server's first installed model.
-- **OpenCode Go:** `deepseek-v4-flash`, `deepseek-v4-pro` and the `muse-spark` models need an opt-in at the OpenCode console.
+- **OpenCode Zen:** the list holds the open-weight models a new workspace serves (October 2026). The OpenCode console's Models tab decides which models a workspace may use, and a model switched off there answers "Model access is disabled"; on a new workspace the older versions are off, so `deepseek-v4-flash` (the previous default), `glm-5.2`, `glm-5.1`, `minimax-m2.7`, `minimax-m2.5`, `qwen3.5-plus` and `qwen3.8-max` left the list. A saved default moves to `deepseek-v4.1-flash` with a one-time note; a model you picked yourself keeps working where it is enabled, and **Fetch models from provider...** lists what your workspace serves.
+- **OpenCode Go:** `deepseek-v4-pro` and the `muse-spark` models need an opt-in at the OpenCode console, and `deepseek-v4.1-flash`, which took the place of `deepseek-v4-flash` in Go's catalog, was not verified by a request (the maintainer has no Go subscription). A saved pick of `deepseek-v4-flash` or `deepseek-v4-flash-vision-exp` moves to `deepseek-v4.1-flash` with a one-time note.
 
 The community hosts ship short built-in lists (the first id is the default). Some of these ids were never confirmed with a request, since the maintainer has no key for these providers; if the first request fails, fetch the live list.
 

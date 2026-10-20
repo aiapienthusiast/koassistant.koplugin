@@ -717,6 +717,7 @@ ModelConstraints._max_output_tokens = {
         ["qwen3.6-plus"] = 65536,
         ["qwen3.5-plus"] = 65536,
         ["qwen3.8-flash"] = 131072,   -- battery 2026-10-14
+        ["deepseek-v4-pro"] = 1048576,   -- battery 2026-10-20 (stated; accepted silently in 2026-09)
         ["nemotron-3.5-lightning-free"] = 1000000,
     },
     opencode_go = {
@@ -1599,6 +1600,14 @@ ModelConstraints.reasoning_profiles = {
         -- purpose: an unprobed id (GPT/Claude/Gemini ids from the Zen list, a
         -- future model) resolves to axis "none" = nothing on the wire, which is
         -- always safe; a catch-all's "none" would 400 on a GLM-like backend.
+        -- Battery 2026-10-20 (the new Zen key, the eight listed ids): kimi-k3 now
+        -- refuses minimal, medium and xhigh (low/high/max and "none" stay);
+        -- deepseek-v4.1-flash and deepseek-v4-pro take minimal; glm-5.3 and
+        -- glm-5.3-flash take minimal too (still never "none"), hence the glm-5.3
+        -- entry before the family one.
+        { match = "glm-5.3", axis = "effort", default_state = "on", can_disable = false, can_enable = true,
+          options = { "minimal", "low", "medium", "high", "xhigh", "max" }, default_option = "high",
+          stance_map = { minimal = { state = "on", option = "minimal" }, maximum = { state = "on", option = "max" } } },
         { match = "glm-", axis = "effort", default_state = "on", can_disable = false, can_enable = true,
           options = { "low", "medium", "high", "xhigh", "max" }, default_option = "high",
           stance_map = { minimal = { state = "on", option = "low" }, maximum = { state = "on", option = "max" } } },
@@ -1606,10 +1615,10 @@ ModelConstraints.reasoning_profiles = {
           options = { "minimal", "low", "medium", "high", "xhigh", "max" }, default_option = "high", off_option = "none",
           stance_map = { minimal = { state = "off" }, maximum = { state = "on", option = "max" } } },
         { match = "kimi-k3", axis = "effort", default_state = "on", can_disable = true, can_enable = true,
-          options = { "minimal", "low", "medium", "high", "xhigh", "max" }, default_option = "high", off_option = "none",
+          options = { "low", "high", "max" }, default_option = "high", off_option = "none",
           stance_map = { minimal = { state = "off" }, maximum = { state = "on", option = "max" } } },
         { match = "deepseek-v4-pro", axis = "effort", default_state = "on", can_disable = true, can_enable = true,
-          options = { "low", "medium", "high", "xhigh", "max" }, default_option = "high", off_option = "none",
+          options = { "minimal", "low", "medium", "high", "xhigh", "max" }, default_option = "high", off_option = "none",
           stance_map = { minimal = { state = "off" }, maximum = { state = "on", option = "max" } } },
         { match = "kimi-k2.", axis = "effort", default_state = "on", can_disable = true, can_enable = true,
           options = { "low", "medium", "high", "xhigh", "max" }, default_option = "high", off_option = "none",
@@ -1630,10 +1639,10 @@ ModelConstraints.reasoning_profiles = {
           options = { "minimal", "low", "medium", "high", "xhigh", "max" }, default_option = "high", off_option = "none",
           stance_map = { minimal = { state = "off" }, maximum = { state = "on", option = "max" } } },
         -- Third sweep 2026-09-28: both reason by default and take none + low..max
-        -- ("minimal" rejected). ("deepseek-v4-flash" above does not prefix-match
-        -- the dotted v4.1 id.)
+        -- ("minimal" rejected then; v4.1-flash took it on 2026-10-20).
+        -- ("deepseek-v4-flash" above does not prefix-match the dotted v4.1 id.)
         { match = "deepseek-v4.1-flash", axis = "effort", default_state = "on", can_disable = true, can_enable = true,
-          options = { "low", "medium", "high", "xhigh", "max" }, default_option = "high", off_option = "none",
+          options = { "minimal", "low", "medium", "high", "xhigh", "max" }, default_option = "high", off_option = "none",
           stance_map = { minimal = { state = "off" }, maximum = { state = "on", option = "max" } } },
         { match = "qwen3.8-max", axis = "effort", default_state = "on", can_disable = true, can_enable = true,
           options = { "low", "medium", "high", "xhigh", "max" }, default_option = "high", off_option = "none",

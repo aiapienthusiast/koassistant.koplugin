@@ -176,8 +176,25 @@ TestRunner:test("opencode: Minimal stance disables deepseek-v4-flash with 'none'
     local g = ModelConstraints.resolveReasoning("opencode", "glm-5.3-flash", { global_stance = "minimal" })
     local gp = {}
     ModelConstraints.applyReasoningParams("opencode", gp, g)
-    TestRunner:assertEqual(gp.opencode_reasoning and gp.opencode_reasoning.effort, "low",
-        "GLM cannot disable: Minimal = lowest effort, never 'none' (rejected upstream)")
+    TestRunner:assertEqual(gp.opencode_reasoning and gp.opencode_reasoning.effort, "minimal",
+        "GLM-5.3 cannot disable: Minimal = its lowest level (minimal since 2026-10-20), never 'none' (rejected upstream)")
+    local older = ModelConstraints.resolveReasoning("opencode", "glm-5.2", { global_stance = "minimal" })
+    TestRunner:assertEqual(older.effort, "low", "the glm- family entry still gives the older ids low")
+end)
+
+TestRunner:test("opencode Zen facts of 2026-10-20: the default, kimi-k3's ladder, the DeepSeek minimal", function()
+    local ModelLists = require("koassistant.request.model_lists")
+    TestRunner:assertEqual(ModelLists.opencode[1], "deepseek-v4.1-flash",
+        "the Zen default is deepseek-v4.1-flash (deepseek-v4-flash is off on a new workspace)")
+    TestRunner:assertEqual(ModelLists._retired.opencode_go["deepseek-v4-flash"], "deepseek-v4.1-flash",
+        "Go: deepseek-v4-flash left the catalog, retired to v4.1-flash")
+    local k = ModelConstraints.getReasoningProfile("opencode", "kimi-k3")
+    TestRunner:assertEqual(table.concat(k.options, ","), "low,high,max",
+        "kimi-k3 on Zen: low/high/max only (minimal, medium, xhigh refused)")
+    local kmax = ModelConstraints.resolveReasoning("opencode", "kimi-k3", { global_stance = "maximum" })
+    TestRunner:assertEqual(kmax.effort, "max", "kimi-k3 Maximum = max")
+    local d = ModelConstraints.getReasoningProfile("opencode", "deepseek-v4.1-flash")
+    TestRunner:assertEqual(d.options[1], "minimal", "deepseek-v4.1-flash takes minimal (2026-10-20)")
 end)
 
 TestRunner:test("opencode_go: its own facts (glm-5.3-flash ladder low/high/max, kimi-k3 off = none)", function()
@@ -196,7 +213,7 @@ TestRunner:test("opencode_go: its own facts (glm-5.3-flash ladder low/high/max, 
     TestRunner:assertTrue(ModelConstraints.supportsCapability("opencode", "qwen3.8-max", "tools"), "qwen3.8-max tools on Zen (forced calls accepted there)")
     TestRunner:assertTrue(ModelConstraints.supportsCapability("opencode_go", "qwen3.8-max", "no_forced_tool_choice"),
         "qwen3.8-max on Go: tools asked with auto (forced calls rejected there, B368)")
-    local opt = ModelConstraints.resolveReasoning("opencode_go", "deepseek-v4-flash", { global_stance = "maximum" })
+    local opt = ModelConstraints.resolveReasoning("opencode_go", "deepseek-v4.1-flash", { global_stance = "maximum" })
     TestRunner:assertEqual(opt.axis, "none", "opt-in unprobed id on Go: axis none")
 end)
 
