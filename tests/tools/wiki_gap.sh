@@ -12,7 +12,8 @@ tag=$(git describe --tags --abbrev=0 --match 'v[0-9]*')
 problems=0
 named=""
 # bullets are the lines starting with "- ", up to the standing "How You Can Help" section
-awk '/^## How You Can Help/{exit} /^- /{print NR":"$0}' "$draft" | while IFS= read -r line; do
+# or an earlier release's notes appended below (a point release: "## vX Release Notes")
+awk '/^## How You Can Help/{exit} /^## v[0-9][^ ]* Release Notes/{exit} /^- /{print NR":"$0}' "$draft" | while IFS= read -r line; do
     n=${line%%:*}
     text=${line#*:}
     case "$text" in
