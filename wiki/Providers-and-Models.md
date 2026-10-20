@@ -294,7 +294,7 @@ The first model in each provider's list is its default. These tables are generat
 | **Qwen** | `qwen3.8-max` | `qwen3.8-flash`, `qwen3.5-plus`, `qwen3.5-flash` |
 | **Ollama** | `llama4` | `llama3.3`, `llama3.3:70b`, `llama3.2`, `llama3.2:3b`, `qwen3.5`, `qwen3`, `qwen3:8b`, `qwen3:32b` and 12 more |
 | **Fireworks** | `accounts/fireworks/models/gpt-oss-120b` | `accounts/fireworks/models/glm-5p3`, `accounts/fireworks/models/glm-5p3-flash`, `accounts/fireworks/models/kimi-k3`, `accounts/fireworks/models/deepseek-v4p1-flash`, `accounts/fireworks/models/minimax-m3`, `accounts/fireworks/models/qwen3p8-max` |
-| **NVIDIA** | `nvidia/nemotron-3-super-120b-a12b` | `nvidia/nemotron-3-ultra-550b-a55b`, `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`, `openai/gpt-oss-20b` |
+| **NVIDIA** | `nvidia/nemotron-3.5-super-vl-120b-a12b` | `nvidia/nemotron-3-ultra-550b-a55b`, `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`, `openai/gpt-oss-20b` |
 | **OpenCode Zen** | `deepseek-v4.1-flash` | `deepseek-v4-pro`, `glm-5.3-flash`, `glm-5.3`, `kimi-k3`, `qwen3.8-flash`, `minimax-m3`, `qwen3.6-plus` |
 | **OpenCode Go** | `kimi-k3` | `hy4-preview`, `longcat-2.0`, `minimax-m3`, `glm-5.3-flash`, `glm-5.3`, `glm-5.2`, `mimo-v2.5-pro`, `mimo-v2.5` and 8 more |
 | **A2Agent** | `deepseek-v4-flash` | `deepseek-v4-pro`, `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3`, `qwen3.8-max`, `qwen3.8-flash`, `MiniMax-M3` |
@@ -383,7 +383,7 @@ The built-in picks, generated from the plugin's tier table when the page is publ
 | **Qwen** |  | `qwen3.8-max` | `qwen3.5-plus` | `qwen3.5-flash` | `qwen3.5-flash` |
 | **Ollama** |  | `llama4` | `llama3.3` | `llama3.2:3b` | `tinyllama` |
 | **Fireworks** |  | `accounts/fireworks/models/glm-5p3` | `accounts/fireworks/models/gpt-oss-120b` | `accounts/fireworks/models/gpt-oss-120b` | `accounts/fireworks/models/deepseek-v4p1-flash` |
-| **NVIDIA** |  | `nvidia/nemotron-3-ultra-550b-a55b` | `nvidia/nemotron-3-super-120b-a12b` | `openai/gpt-oss-20b` | `openai/gpt-oss-20b` |
+| **NVIDIA** |  | `nvidia/nemotron-3-ultra-550b-a55b` | `nvidia/nemotron-3.5-super-vl-120b-a12b` | `openai/gpt-oss-20b` | `openai/gpt-oss-20b` |
 | **Together** |  | `deepseek-ai/DeepSeek-V4-Pro-0813` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` |
 | **SambaNova** |  | `gpt-oss-120b` | `Meta-Llama-3.3-70B-Instruct` | `Meta-Llama-3.3-70B-Instruct` | `Meta-Llama-3.3-70B-Instruct` |
 | **Doubao** |  | `doubao-seed-2.0-pro-32k` | `doubao-seed-2.0-pro-32k` | `doubao-seed-2.0-lite` | `doubao-seed-2.0-lite` |

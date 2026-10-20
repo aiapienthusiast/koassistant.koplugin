@@ -107,6 +107,16 @@ TestRunner:test("opencode: the baked deepseek-v4-flash default moves, an explici
         "a deliberate pick is kept (served where the workspace enables it)")
 end)
 
+TestRunner:test("nvidia: the super-120b default stopped serving, saved picks move to the 3.5 Super VL (2026-10-20)", function()
+    local action, to = ModelLists.resolveModelRefresh({ model = "nvidia/nemotron-3-super-120b-a12b", explicit = true,
+        current_default = ModelLists.nvidia[1], known_models = ModelLists.nvidia,
+        shipped_defaults = ModelLists._shipped_defaults.nvidia, retired = ModelLists._retired.nvidia })
+    TestRunner:assertEqual(action, "retired", "not served any more: even a deliberate pick moves")
+    TestRunner:assertEqual(to, "nvidia/nemotron-3.5-super-vl-120b-a12b", "to the model that answers")
+    TestRunner:assertEqual(ModelLists._retired.nvidia["minimaxai/minimax-m3"], "nvidia/nemotron-3.5-super-vl-120b-a12b",
+        "the older mapping no longer lands on the dead id")
+end)
+
 TestRunner:test("_shipped_defaults data integrity", function()
     local shipped = ModelLists._shipped_defaults
     TestRunner:assertTrue(type(shipped) == "table", "_shipped_defaults exists")

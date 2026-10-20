@@ -94,7 +94,7 @@ local CASES = {
     { "perplexity", "koassistant.api.perplexity",        "perplexity/sonar",            nil },
     -- No curated ceiling: NVIDIA states none and any real cap is learned by the
     -- max_tokens self-heal. Exercises the no-ceiling resolve+clamp path.
-    { "nvidia",     "koassistant.api.nvidia",            "nvidia/nemotron-3-super-120b-a12b", nil },
+    { "nvidia",     "koassistant.api.nvidia",            "nvidia/nemotron-3-ultra-550b-a55b", nil },
     -- OpenCode (#107): no curated ceiling either; the 16384 fallback was probed accepted.
     { "opencode",   "koassistant.api.opencode",          "glm-5.3-flash",               nil },
     { "opencode_go", "koassistant.api.opencode_go",      "glm-5.3-flash",               nil },

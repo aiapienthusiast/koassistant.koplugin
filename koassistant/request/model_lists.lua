@@ -483,8 +483,12 @@ local ModelLists = {
     -- meta/llama-3.3-70b-instruct). ONLY add ids here after they answer live;
     -- their catalog is aspirational and "Fetch models" will re-import the dead.
     nvidia = {
-        "nvidia/nemotron-3-super-120b-a12b",        -- default: tools + forced tools + effort all probed
+        "nvidia/nemotron-3.5-super-vl-120b-a12b",   -- default since 2026-10-20: the full battery green that day (reasoning on by default, every effort level, forced tool calls + the replay once, SSE, 1M out)
         "nvidia/nemotron-3-ultra-550b-a55b",
+        -- nvidia/nemotron-3-super-120b-a12b, the default from 2026-08-20, answered
+        -- 404 "Function not found for account" on 2026-10-20 (three requests, fine
+        -- the day before, the other three ids answering): listed, not served, the
+        -- same way nemotron-nano-3-30b-a3b went. Saved picks move via _retired.
         "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", -- ~1.2s 2026-08-29 (effort low/none ok, SSE ok, 65536 ok; forced tools 503 ~1 in 3, so no tools grant); answered 2026-09-28 15:47 then HUNG (3 x 90 s) at 16:40 while the rest answered in 0-2 s, so it lost the fast/ultrafast picks
         "openai/gpt-oss-20b",                       -- fast + ultrafast (1 s, 2026-09-28); reasons by default, 131072 out
         -- RETIRED BY NVIDIA 2026-09-01 (HTTP 410 Gone, recheck 2026-09-28):
@@ -695,6 +699,7 @@ local ModelLists = {
         perplexity = { "perplexity/sonar", "fast", "sonar-pro", "sonar" },
         zai        = { "glm-5.2", "glm-5.1", "glm-5-turbo", "glm-5" },
         opencode   = { "deepseek-v4.1-flash", "deepseek-v4-flash" },
+        nvidia     = { "nvidia/nemotron-3.5-super-vl-120b-a12b", "nvidia/nemotron-3-super-120b-a12b" },
     },
 
     -- Ids a provider no longer serves, mapped to their replacement. The startup
@@ -733,7 +738,10 @@ local ModelLists = {
         nvidia = {
             ["nvidia/nemotron-3-nano-30b-a3b"] = "openai/gpt-oss-20b",
             ["openai/gpt-oss-120b"] = "openai/gpt-oss-20b",
-            ["minimaxai/minimax-m3"] = "nvidia/nemotron-3-super-120b-a12b",
+            -- 2026-10-20: the super-120b default stopped serving (404 "Function not
+            -- found"); it and the earlier mapping onto it go to the 3.5 Super VL
+            ["nvidia/nemotron-3-super-120b-a12b"] = "nvidia/nemotron-3.5-super-vl-120b-a12b",
+            ["minimaxai/minimax-m3"] = "nvidia/nemotron-3.5-super-vl-120b-a12b",
         },
         opencode_go = {   -- the server's own "use ..." where we list it (kimi-k2.7-code is not curated here)
             ["glm-5.1"] = "glm-5.3",
@@ -855,7 +863,7 @@ local ModelLists = {
             kimi = "kimi-k2.6",
             doubao = "doubao-seed-2.0-pro-32k",
             zai = "glm-5",
-            nvidia = "nvidia/nemotron-3-super-120b-a12b",
+            nvidia = "nvidia/nemotron-3.5-super-vl-120b-a12b",   -- super-120b stopped serving 2026-10-20
         },
 
         -- Optimized for speed and lower cost

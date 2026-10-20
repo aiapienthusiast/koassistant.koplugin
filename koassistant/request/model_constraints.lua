@@ -552,6 +552,10 @@ ModelConstraints.capabilities = {
         -- The one grant, nvidia/nemotron-3-nano-30b-a3b, was retired 2026-09-01
         -- (410); nemotron-3.5-lightning passes forced calls but stays excluded
         -- (see the model list note), so no curated NVIDIA model has tools now.
+        -- 2026-10-20: nvidia/nemotron-3.5-super-vl-120b-a12b (the new default) and
+        -- openai/gpt-oss-20b each returned real tool_calls under auto, forced and
+        -- the replay in ONE battery; a grant waits for the repeated samples this
+        -- note asks for (gpt-oss-20b answered prose under auto before).
         tools = {},
     },
     perplexity = {
@@ -672,6 +676,7 @@ ModelConstraints._max_output_tokens = {
     },
     nvidia = {
         ["openai/gpt-oss-20b"] = 131072,  -- oversized-request error text (recheck 2026-09-28)
+        ["nvidia/nemotron-3.5-super-vl-120b-a12b"] = 1048576,  -- stated by the oversized-request refusal (battery 2026-10-20)
     },
     openrouter = {
         -- All values = top_provider.max_completion_tokens from the public
@@ -1531,9 +1536,12 @@ ModelConstraints.reasoning_profiles = {
         { match = "nvidia/nemotron-3", axis = "effort", default_state = "on", can_disable = true, can_enable = true,
           options = { "low", "medium", "high" }, default_option = "high", off_option = "none",
           stance_map = { minimal = { option = "low" }, maximum = { option = "high" } } },
-        -- gpt-oss-20b reasons by default (recheck 2026-09-28); its effort ladder on
-        -- this host is unprobed, so it reads as always-on with no control.
-        { match = "openai/gpt-oss-20b", axis = "none", default_state = "on", can_disable = false, can_enable = false },
+        -- gpt-oss-20b reasons by default (recheck 2026-09-28); battery 2026-10-20:
+        -- effort low/medium/high accepted, "none", "minimal", "xhigh" and "max"
+        -- refused (literal_error), so no off (Groq's gpt-oss shape).
+        { match = "openai/gpt-oss-20b", axis = "effort", default_state = "on", can_disable = false, can_enable = true,
+          options = { "low", "medium", "high" }, default_option = "high",
+          stance_map = { minimal = { option = "low" }, maximum = { option = "high" } } },
     },
     groq = {
         -- Both gpt-oss entries probed live 2026-09-07: default ON, effort
