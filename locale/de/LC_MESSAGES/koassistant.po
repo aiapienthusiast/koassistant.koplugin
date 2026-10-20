@@ -786,9 +786,9 @@ msgid ""
 "\n"
 "Unmarked providers are the curated set."
 msgstr ""
-"Mit * markierte Anbieter gehören zur Community-Auswahl: Sie wurden anhand von Dokumentation und Community-Berichten eingebunden und nicht vollständig vom Maintainer getestet. Ihre Modelllisten sind Startlisten: Nutze „Modelle vom Anbieter abrufen…“ im Anbieter für die aktuelle Liste und „Anbieter testen…“, um deinen Schlüssel und die Verbindung zu prüfen.\n"
+"Mit * markierte Anbieter gehören zum Community-Set: Sie wurden anhand von Dokumentation und Community-Berichten eingebunden, aber nicht vom Maintainer durchgängig getestet. Ihre Modelllisten sind Startlisten: Nutzen Sie \"Modelle vom Anbieter abrufen…\" im jeweiligen Anbieter für die aktuelle Liste und \"Anbieter testen…\", um Ihren Schlüssel und Ihre Verbindung zu prüfen.\n"
 "\n"
-"Anbieter ohne Markierung gehören zur kuratierten Auswahl."
+"Anbieter ohne Markierung gehören zum kuratierten Set."
 
 #: main.lua:3513 koassistant/ui/dialogs.lua:1192
 #: koassistant/ui/prompts_manager.lua:3321
@@ -1932,7 +1932,7 @@ msgstr "Benutzerdefinierter Stil"
 #, fuzzy
 msgid ""
 "How the pictures should look, in your words (for example: a 1920s travel poster)."
-msgstr "Wie die Bilder aussehen sollen, in deinen eigenen Worten (zum Beispiel: ein Reiseplakat aus den 1920er-Jahren)."
+msgstr "Wie die Bilder aussehen sollen, in Ihren Worten (zum Beispiel: ein Reiseplakat aus den 1920er-Jahren)."
 
 #: main.lua:7003
 #, fuzzy
@@ -2551,12 +2551,12 @@ msgstr "die Textstellen, die es in diesem Buch nachschlägt"
 #: main.lua:9713 koassistant/ui/data_access.lua:715
 #, fuzzy
 msgid "text from this book, up to your position (%1)"
-msgstr "Text aus diesem Buch bis zu deiner Position (%1)"
+msgstr "Text aus diesem Buch, bis zu Ihrer Position (%1)"
 
 #: main.lua:9715 main.lua:15027 koassistant/ui/data_access.lua:716
 #, fuzzy
 msgid "text from this book, up to your reading position"
-msgstr "Text aus diesem Buch bis zu deiner Leseposition"
+msgstr "Text aus diesem Buch, bis zu Ihrer Leseposition"
 
 #: main.lua:9952 main.lua:13796 main.lua:15682 main.lua:20818 main.lua:23653
 #: koassistant/books/book_groups_ui.lua:1153
@@ -2685,7 +2685,7 @@ msgstr "Der installierte X-Ray reicht bis %1 %, weiter als Ihre Leseposition"
 #: main.lua:10237 main.lua:10686
 #, fuzzy
 msgid "Spoiler protection is on: checkpoints follow your position"
-msgstr "Spoilerschutz ist aktiv: Checkpoints folgen deiner Position"
+msgstr "Spoiler-Schutz ist aktiv: Checkpoints folgen Ihrer Position"
 
 #: main.lua:10258 main.lua:10708
 #, fuzzy
@@ -3600,7 +3600,7 @@ msgstr "Wird der automatische Aufbau diesen Rasterpunkt erneut benötigen, wird 
 #, fuzzy
 msgid ""
 "This checkpoint is currently installed as your X-Ray. Deleting it from the list alone keeps it installed."
-msgstr "Dieser Checkpoint ist derzeit als dein X-Ray installiert. Wenn du ihn nur aus der Liste löschst, bleibt er installiert."
+msgstr "Dieser Checkpoint ist derzeit als Ihr X-Ray installiert. Wenn Sie ihn nur aus der Liste löschen, bleibt er installiert."
 
 #: main.lua:13740
 #, fuzzy
@@ -4877,7 +4877,7 @@ msgstr "Übersetzungsaktion nicht gefunden"
 #: main.lua:19481 koassistant/ui/dialogs.lua:9560
 #, fuzzy
 msgid "the text of your current page"
-msgstr "der Text deiner aktuellen Seite"
+msgstr "der Text Ihrer aktuellen Seite"
 
 #: main.lua:19482 main.lua:23541 koassistant/core/constants.lua:143
 #, fuzzy
@@ -5183,9 +5183,9 @@ msgid ""
 "\n"
 "Run the Setup Wizard now? It walks through the connection, privacy, language, icons, button marks and gestures again."
 msgstr ""
-"Neustart abgeschlossen. Deine API-Schlüssel, Sprachen und Chats bleiben erhalten.\n"
+"Neustart abgeschlossen. Ihre API-Schlüssel, Sprachen und Chats bleiben erhalten.\n"
 "\n"
-"Den Einrichtungsassistenten jetzt ausführen? Er führt erneut durch Verbindung, Datenschutz, Sprache, Symbole, Schaltflächenmarkierungen und Gesten."
+"Den Einrichtungsassistenten jetzt ausführen? Er führt erneut durch Verbindung, Datenschutz, Sprache, Symbole, Tastenmarkierungen und Gesten."
 
 #: main.lua:21697
 #, fuzzy
@@ -5218,7 +5218,7 @@ msgstr "Vertrauenswürdige Anbieter, %1: %2 → %3"
 #: main.lua:21741
 #, fuzzy
 msgid "Nothing changed: your values already matched it."
-msgstr "Nichts geändert: Deine Werte stimmten bereits überein."
+msgstr "Nichts geändert: Ihre Werte stimmten bereits damit überein."
 
 #: main.lua:21750
 #, fuzzy
@@ -5241,7 +5241,7 @@ msgstr "Buchinfos sind nicht Teil einer Voreinstellung: %1 wird weiterhin mit je
 #, fuzzy
 msgid ""
 "Reading position is off, so spoiler protection no longer knows where you are."
-msgstr "Die Leseposition ist deaktiviert, daher weiß der Spoiler-Schutz nicht mehr, wo du dich befindest."
+msgstr "Die Leseposition ist deaktiviert, daher weiß der Spoiler-Schutz nicht mehr, wo Sie sich befinden."
 
 #: main.lua:21801
 #, fuzzy
@@ -5264,7 +5264,7 @@ msgstr "Alles erlauben: Jede Art von Daten wird ohne Nachfrage gesendet, einschl
 #, fuzzy
 msgid ""
 "Block everything: every kind is Never; only your question, the selected text and the book info go (and the behavior, domain and Background texts, which no preset touches)."
-msgstr "Alles blockieren: Jede Art von Daten steht auf „Nie“; nur deine Frage, der ausgewählte Text und die Buchinfos werden gesendet (sowie die Texte für Verhalten, Domäne und Hintergrund, die keine Voreinstellung berührt)."
+msgstr "Alles blockieren: Jede Art ist auf „Nie“ gesetzt; nur Ihre Frage, der ausgewählte Text und die Buchinfos werden gesendet (sowie die Verhaltens-, Domänen- und Hintergrundtexte, die keine Voreinstellung berührt)."
 
 #: main.lua:21827
 #, fuzzy
@@ -5294,9 +5294,9 @@ msgid ""
 "\n"
 "A trusted provider follows its own column of values (What trusted providers may use), Allow for everything unless you change it; a book's Never still wins."
 msgstr ""
-"Vertrauenswürdige Anbieter auswählen\n"
+"Anbieter auswählen, denen vertraut wird\n"
 "\n"
-"Ein vertrauenswürdiger Anbieter folgt seiner eigenen Spalte mit Werten (Was vertrauenswürdige Anbieter verwenden dürfen), standardmäßig „Erlauben“ für alles, sofern du nichts änderst; ein „Nie“ eines Buchs gilt weiterhin."
+"Ein vertrauenswürdiger Anbieter folgt seiner eigenen Wertespalte (Was vertrauenswürdige Anbieter verwenden dürfen), standardmäßig „Erlauben“ für alles, sofern Sie es nicht ändern; ein „Nie“ eines Buches gilt trotzdem weiterhin."
 
 #: main.lua:21979
 #, fuzzy
@@ -5806,7 +5806,7 @@ msgid ""
 msgstr ""
 "Aus Sicherung wiederherstellen?\n"
 "\n"
-"⚠ Es wird automatisch ein Wiederherstellungspunkt erstellt. Er ist eine vollständige Kopie deines aktuellen Stands, einschließlich API-Schlüsseln und Chats, sodass diese Wiederherstellung rückgängig gemacht werden kann.\n"
+"⚠ Es wird automatisch ein Wiederherstellungspunkt erstellt. Er ist eine vollständige Kopie Ihres aktuellen Stands, einschließlich API-Schlüsseln und Chats, sodass diese Wiederherstellung rückgängig gemacht werden kann.\n"
 "\n"
 "⚠ KOReader sollte nach der Wiederherstellung neu gestartet werden, damit die Änderungen vollständig wirksam werden."
 
@@ -6297,9 +6297,9 @@ msgid ""
 msgstr ""
 "Nur ein Teil dieser Anfrage erreicht das Modell.\n"
 "\n"
-"Sie umfasst etwa %1 Token, und dein Ollama-Server erlaubt %2, sodass ungefähr %3 % davon durchkommen. Der Rest, meist der früheste Buchtext, wird von Ollama abgeschnitten.\n"
+"Sie umfasst etwa %1 Tokens, und Ihr Ollama-Server erlaubt %2, sodass ungefähr %3 % davon durchkommen. Der Rest, meist der früheste Buchtext, wird von Ollama abgeschnitten.\n"
 "\n"
-"Erhöhe das Kontextfenster von Ollama (OLLAMA_CONTEXT_LENGTH oder PARAMETER num_ctx beim Modell) oder lass KOAssistant es pro Anfrage im Modellmenü („Kontextfenster“) festlegen."
+"Erhöhen Sie das Kontextfenster von Ollama (OLLAMA_CONTEXT_LENGTH oder PARAMETER num_ctx beim Modell) oder lassen Sie KOAssistant es pro Anfrage im Modellmenü festlegen („Kontextfenster“)."
 
 #: koassistant/api/openai_codex_oauth.lua:304
 #: koassistant/api/openai_codex_oauth.lua:497
@@ -7063,7 +7063,7 @@ msgstr "Die X-Rays der Gruppe per KI in welches Buch zusammenführen?"
 #, fuzzy
 msgid ""
 "Knowledge flows INTO the book you pick. The others are not changed. One request per other book."
-msgstr "Das Wissen fließt IN das Buch, das du auswählst. Die anderen bleiben unverändert. Eine Anfrage pro weiterem Buch."
+msgstr "Wissen fließt IN das Buch, das Sie auswählen. Die anderen werden nicht verändert. Eine Anfrage pro weiterem Buch."
 
 #: koassistant/books/book_groups_ui.lua:444
 #, fuzzy
@@ -7396,13 +7396,13 @@ msgstr "Hintergrund (dieses Buch)"
 #, fuzzy
 msgid ""
 "Standing context for every book in this group: why you're reading them, the stance you bring. Books that follow the group send it with every request about them, alongside your domain and behavior settings. Only the first %1 characters are sent. Leave empty to remove."
-msgstr "Dauerhafter Kontext für jedes Buch in dieser Gruppe: warum du sie liest, die Haltung, die du mitbringst. Bücher, die der Gruppe folgen, senden ihn bei jeder Anfrage zu ihnen mit, zusammen mit deinen Einstellungen für Fachgebiet und Verhalten. Es werden nur die ersten %1 Zeichen gesendet. Leer lassen, um ihn zu entfernen."
+msgstr "Dauerhafter Kontext für jedes Buch dieser Gruppe: warum Sie sie lesen, welche Haltung Sie mitbringen. Bücher, die der Gruppe folgen, senden ihn bei jeder Anfrage zu ihnen mit, zusammen mit Ihren Domänen- und Verhaltenseinstellungen. Es werden nur die ersten %1 Zeichen gesendet. Leer lassen, um ihn zu entfernen."
 
 #: koassistant/books/book_settings.lua:1084
 #, fuzzy
 msgid ""
 "Standing context for this book: why you're reading it, the stance you bring, anything the book's own description gets wrong. It is kept with this book and sent with every request about it, alongside your domain and behavior settings. Only the first %1 characters are sent. Leave empty to remove."
-msgstr "Dauerhafter Kontext für dieses Buch: warum du es liest, die Haltung, die du mitbringst, alles, was die Beschreibung des Buches falsch darstellt. Er wird bei diesem Buch gespeichert und bei jeder Anfrage dazu mitgesendet, zusammen mit deinen Einstellungen für Fachgebiet und Verhalten. Es werden nur die ersten %1 Zeichen gesendet. Leer lassen, um ihn zu entfernen."
+msgstr "Dauerhafter Kontext für dieses Buch: warum Sie es lesen, welche Haltung Sie mitbringen, alles, was die Beschreibung des Buches falsch darstellt. Er wird bei diesem Buch gespeichert und bei jeder Anfrage dazu mitgesendet, zusammen mit Ihren Domänen- und Verhaltenseinstellungen. Es werden nur die ersten %1 Zeichen gesendet. Leer lassen, um ihn zu entfernen."
 
 #: koassistant/books/book_settings.lua:1086
 #, fuzzy
@@ -8448,46 +8448,46 @@ msgstr "Fragen"
 #: koassistant/books/book_settings.lua:3787
 #, fuzzy
 msgid "The book's own text: up to your position, a part of it, or all of it."
-msgstr "Der Text des Buches selbst: bis zu deiner Position, ein Teil davon oder alles."
+msgstr "Der Text des Buches selbst: bis zu Ihrer Position, ein Teil davon oder der gesamte Text."
 
 #: koassistant/books/book_settings.lua:3788
 #, fuzzy
 msgid "Your highlighted passages, without the notes."
-msgstr "Deine markierten Textstellen, ohne die Notizen."
+msgstr "Ihre markierten Passagen, ohne die Notizen."
 
 #: koassistant/books/book_settings.lua:3789
 #, fuzzy
 msgid "Your notes on highlights. Allowing them allows the highlights too."
-msgstr "Deine Notizen zu Markierungen. Wenn du sie erlaubst, erlaubst du auch die Markierungen."
+msgstr "Ihre Notizen zu Markierungen. Wenn Sie diese erlauben, erlauben Sie auch die Markierungen."
 
 #: koassistant/books/book_settings.lua:3790
 #, fuzzy
 msgid "Your notebook for the book."
-msgstr "Dein Notizbuch zum Buch."
+msgstr "Ihr Notizbuch zum Buch."
 
 #: koassistant/books/book_settings.lua:3791
 #, fuzzy
 msgid ""
 "The few sentences around what you select or look up, and your current page."
-msgstr "Die wenigen Sätze rund um das, was du markierst oder nachschlägst, und deine aktuelle Seite."
+msgstr "Die wenigen Sätze um die ausgewählte oder nachgeschlagene Stelle sowie Ihre aktuelle Seite."
 
 #: koassistant/books/book_settings.lua:3792
 #, fuzzy
 msgid ""
 "Your reading progress, the chapter and the time since you last read. Spoiler protection relies on it."
-msgstr "Dein Lesefortschritt, das Kapitel und die Zeit seit deiner letzten Lektüre. Der Spoilerschutz stützt sich darauf."
+msgstr "Ihr Lesefortschritt, das Kapitel und die Zeit seit Ihrem letzten Lesen. Der Spoiler-Schutz stützt sich darauf."
 
 #: koassistant/books/book_settings.lua:3793
 #, fuzzy
 msgid ""
 "The titles, authors and reading status of the books in your scan folders."
-msgstr "Die Titel, Autoren und der Lesestatus der Bücher in deinen Scan-Ordnern."
+msgstr "Die Titel, Autoren und der Lesestatus der Bücher in Ihren Scan-Ordnern."
 
 #: koassistant/books/book_settings.lua:3794
 #, fuzzy
 msgid ""
 "Lists made from your reading statistics: books read a lot, stalled, barely started."
-msgstr "Listen aus deinen Lesestatistiken: viel gelesene, ins Stocken geratene und kaum begonnene Bücher."
+msgstr "Aus Ihren Lesestatistiken erstellte Listen: viel gelesene, ins Stocken geratene und kaum begonnene Bücher."
 
 #: koassistant/books/book_settings.lua:3815
 #, fuzzy
@@ -8568,9 +8568,9 @@ msgid ""
 "\n"
 "Book info is not asked: it is what the AI is told about the book with every request (the title, the author, your position). None sends nothing that names the book."
 msgstr ""
-"Jede Datenart hat einen Wert für alle Bücher (der Tab „Global“, auch Einstellungen → Datenschutz & Daten), und ein Buch kann einen eigenen haben (Für dieses Buch) oder dem einer Gruppe folgen (Gruppeneinstellungen → Datenschutz & Daten). „Fragen“ bedeutet, dass KOAssistant beim ersten Mal fragt, wenn eine Aktion es braucht, und „Für dieses Buch erlauben“ in dieser Frage setzt hier „Erlauben“. „Nie“ hat Vorrang vor allem, auch vor vertrauenswürdigen Anbietern. „Erlauben“ lässt die Daten ohne Nachfrage hinaus; Aktionen nehmen weiterhin nur die Arten, die sie angeben. Das Erlauben von Anmerkungsnotizen erlaubt Markierungen; „Nie“ für Markierungen ist „Nie“ für Notizen.\n"
+"Jede Datenart hat einen Wert für alle Bücher (der Reiter „Global“, auch Einstellungen → Datenschutz & Daten), und ein Buch kann einen eigenen haben (Für dieses Buch) oder dem einer Gruppe folgen (Gruppeneinstellungen → Datenschutz & Daten). „Fragen“ bedeutet, dass KOAssistant beim ersten Mal nachfragt, wenn eine Aktion die Daten braucht, und „Für dieses Buch erlauben“ in dieser Frage setzt hier „Erlauben“. „Nie“ gilt vor allem anderen, auch vor vertrauenswürdigen Anbietern. „Erlauben“ lässt die Daten ohne Nachfrage durch; Aktionen nehmen trotzdem nur die Arten, die sie angeben. Das Erlauben von Anmerkungsnotizen erlaubt Markierungen; „Nie“ für Markierungen ist „Nie“ für Notizen.\n"
 "\n"
-"Buchinfo wird nicht abgefragt: Sie ist das, was der KI bei jeder Anfrage über das Buch mitgeteilt wird (der Titel, der Autor, deine Position). „Keine“ sendet nichts, was das Buch benennt."
+"Buchinfos werden nicht abgefragt: Sie sind das, was der KI bei jeder Anfrage über das Buch mitgeteilt wird (der Titel, der Autor, Ihre Position). „Keine“ sendet nichts, was das Buch benennt."
 
 #: koassistant/books/book_settings.lua:4019
 #, fuzzy
@@ -10064,7 +10064,7 @@ msgstr "Prompt bearbeiten"
 #, fuzzy
 msgid ""
 "The picture is drawn from this text as it stands, by the image provider and model now in effect. Your edit is saved with the new picture; this one stays."
-msgstr "Das Bild wird aus diesem Text, so wie er ist, vom jetzt gültigen Bildanbieter und Modell gezeichnet. Deine Änderung wird mit dem neuen Bild gespeichert; dieses hier bleibt erhalten."
+msgstr "Das Bild wird aus diesem Text in seiner jetzigen Form gezeichnet, vom aktuell gültigen Bildanbieter und Modell. Ihre Änderung wird mit dem neuen Bild gespeichert; dieses hier bleibt bestehen."
 
 #: koassistant/images/image_browser.lua:213
 #, fuzzy
@@ -10153,7 +10153,7 @@ msgstr "%1 kann keine Bilder erstellen. Erstelle sie mit:"
 #, fuzzy
 msgid ""
 "Your answer is saved as the image provider (Settings → Advanced → Image Generation → Provider)."
-msgstr "Deine Antwort wird als Bildanbieter gespeichert (Einstellungen → Erweitert → Bildgenerierung → Anbieter)."
+msgstr "Ihre Antwort wird als Bildanbieter gespeichert (Einstellungen → Erweitert → Bilderzeugung → Anbieter)."
 
 #: koassistant/images/image_generator.lua:224
 #, fuzzy
@@ -10220,15 +10220,15 @@ msgid ""
 "\n"
 "%3"
 msgstr ""
-"„Prompt mit KI schreiben“ ist aktiviert: Das schnelle Modell deines Chat-Anbieters liest das Material unten und schreibt den Prompt, den das Bildmodell erhält (ergänzt um „The picture contains no text, letters, titles or captions.“). Seine Anweisungen:\n"
+"„Prompt mit KI schreiben“ ist aktiviert: Das schnelle Modell Ihres Chat-Anbieters liest das folgende Material und schreibt den Prompt, den das Bildmodell erhält (ergänzt um „Das Bild enthält keinen Text, keine Buchstaben, Titel oder Beschriftungen.“). Seine Anweisungen:\n"
 "\n"
 "%1\n"
 "\n"
-"Das Material (jeder Block nur, wenn es dafür etwas gibt):\n"
+"Das Material (jeder Block nur, wenn es etwas dafür gibt):\n"
 "\n"
 "%2\n"
 "\n"
-"Falls der Verfasser fehlschlägt, wird stattdessen dieser Prompt gesendet:\n"
+"Wenn der Schreiber fehlschlägt, wird stattdessen dieser Prompt gesendet:\n"
 "\n"
 "%3"
 
@@ -10322,9 +10322,9 @@ msgid ""
 "\n"
 "Supported: OpenAI, xAI (Grok), Gemini, OpenRouter. You can also pick a dedicated image provider in KOAssistant settings (Advanced)."
 msgstr ""
-"Bildgenerierung ist für den aktuellen Anbieter nicht verfügbar.\n"
+"Die Bilderzeugung ist für den aktuellen Anbieter nicht verfügbar.\n"
 "\n"
-"Unterstützt: OpenAI, xAI (Grok), Gemini, OpenRouter. Du kannst in den KOAssistant-Einstellungen (Erweitert) auch einen eigenen Bildanbieter auswählen."
+"Unterstützt: OpenAI, xAI (Grok), Gemini, OpenRouter. Sie können in den KOAssistant-Einstellungen (Erweitert) auch einen eigenen Bildanbieter auswählen."
 
 #: koassistant/images/image_generator.lua:1592
 #, fuzzy
@@ -10339,7 +10339,7 @@ msgstr "Der Prompt ist leer."
 #: koassistant/images/image_generator.lua:1656
 #, fuzzy
 msgid "Drawn from your edit of an earlier picture's prompt."
-msgstr "Erstellt aus deiner Bearbeitung des Prompts eines früheren Bildes."
+msgstr "Gezeichnet nach Ihrer Änderung am Prompt eines früheren Bildes."
 
 #: koassistant/images/image_generator.lua:1658
 #, fuzzy
@@ -10371,13 +10371,13 @@ msgstr "was X-Ray-Beschreibungen aus dem Text des Buches zum Prompt dieses Bilde
 #, fuzzy
 msgid ""
 "what X-Ray descriptions made with your highlights gave this picture's prompt"
-msgstr "was X-Ray-Beschreibungen mit deinen Markierungen zum Prompt dieses Bildes beigetragen haben"
+msgstr "was X-Ray-Beschreibungen, die mit Ihren Markierungen erstellt wurden, zum Prompt dieses Bildes beigetragen haben"
 
 #: koassistant/images/image_generator.lua:1700
 #, fuzzy
 msgid ""
 "what X-Ray descriptions made with your notes gave this picture's prompt"
-msgstr "was X-Ray-Beschreibungen mit deinen Notizen zum Prompt dieses Bildes beigetragen haben"
+msgstr "was X-Ray-Beschreibungen, die mit Ihren Notizen erstellt wurden, zum Prompt dieses Bildes beigetragen haben"
 
 #: koassistant/images/image_generator.lua:1761
 #: koassistant/images/image_generator.lua:1863
@@ -10398,12 +10398,12 @@ msgstr "die X-Ray-Beschreibungen von %1 (aus dem Text des Buches erstellt)"
 #: koassistant/images/image_generator.lua:1775
 #, fuzzy
 msgid "X-Ray descriptions made with your highlights"
-msgstr "X-Ray-Beschreibungen mit deinen Markierungen"
+msgstr "X-Ray-Beschreibungen, die mit Ihren Markierungen erstellt wurden"
 
 #: koassistant/images/image_generator.lua:1776
 #, fuzzy
 msgid "X-Ray descriptions made with your notes on highlights"
-msgstr "X-Ray-Beschreibungen mit deinen Notizen zu Markierungen"
+msgstr "X-Ray-Beschreibungen, die mit Ihren Notizen zu Markierungen erstellt wurden"
 
 #: koassistant/images/image_generator.lua:1794
 #, fuzzy
@@ -10431,13 +10431,13 @@ msgstr "Bild erzeugen"
 #, fuzzy
 msgid ""
 "This picture's prompt can't be sent: it carries data your privacy settings keep from this provider."
-msgstr "Der Prompt dieses Bildes kann nicht gesendet werden: Er enthält Daten, die deine Datenschutzeinstellungen diesem Anbieter vorenthalten."
+msgstr "Der Prompt dieses Bildes kann nicht gesendet werden: Er enthält Daten, die Ihre Datenschutzeinstellungen diesem Anbieter vorenthalten."
 
 #: koassistant/images/image_generator.lua:1869
 #, fuzzy
 msgid ""
 "This entry's description can't be sent: its X-Ray was made from data your privacy settings keep from these providers."
-msgstr "Die Beschreibung dieses Eintrags kann nicht gesendet werden: Ihr X-Ray wurde aus Daten erstellt, die deine Datenschutzeinstellungen diesen Anbietern vorenthalten."
+msgstr "Die Beschreibung dieses Eintrags kann nicht gesendet werden: Sein X-Ray wurde aus Daten erstellt, die Ihre Datenschutzeinstellungen diesen Anbietern vorenthalten."
 
 #: koassistant/images/image_generator.lua:1872
 #, fuzzy
@@ -10673,7 +10673,7 @@ msgstr "den Hintergrund des Buches"
 #: koassistant/images/prompt_writer.lua:433
 #, fuzzy
 msgid "your note"
-msgstr "deine Notiz"
+msgstr "Ihre Notiz"
 
 #: koassistant/images/prompt_writer.lua:434
 #, fuzzy
@@ -10683,7 +10683,7 @@ msgstr "Prompt von %1 verfasst anhand von: %2."
 #: koassistant/images/prompt_writer.lua:437
 #, fuzzy
 msgid "Left out by your privacy settings: %1."
-msgstr "Aufgrund deiner Datenschutzeinstellungen weggelassen: %1."
+msgstr "Durch Ihre Datenschutzeinstellungen ausgelassen: %1."
 
 #: koassistant/prompts/actions.lua:269
 #, fuzzy
@@ -10860,7 +10860,7 @@ msgstr "Ein Bild der ausgewählten Passage erzeugen."
 #, fuzzy
 msgid ""
 "This action skips the chat pipeline. With Write the prompt with AI on (the default) it sends two requests: your chat provider's fast model writes the prompt from the material below, then the image provider draws it; with it off, the framed prompt goes straight to the image provider. Provider, model, shape, detail, style and the prompt writer are set in Settings → Advanced → Image Generation."
-msgstr "Diese Aktion überspringt die Chat-Pipeline. Ist „Prompt mit KI verfassen“ aktiviert (Standard), werden zwei Anfragen gesendet: Das schnelle Modell deines Chat-Anbieters verfasst den Prompt aus dem unten stehenden Material, anschließend zeichnet der Bildanbieter ihn; ist die Option deaktiviert, geht der vorbereitete Prompt direkt an den Bildanbieter. Anbieter, Modell, Format, Detailgrad, Stil und der Prompt-Verfasser werden unter Einstellungen → Erweitert → Bilderzeugung festgelegt."
+msgstr "Diese Aktion umgeht die Chat-Pipeline. Bei aktiviertem „Prompt mit KI schreiben“ (Standard) sendet sie zwei Anfragen: Das schnelle Modell Ihres Chat-Anbieters schreibt den Prompt aus dem folgenden Material, dann zeichnet der Bildanbieter ihn; bei deaktivierter Option geht der gerahmte Prompt direkt an den Bildanbieter. Anbieter, Modell, Format, Detailgrad, Stil und der Prompt-Schreiber werden unter Einstellungen → Erweitert → Bilderzeugung festgelegt."
 
 #: koassistant/prompts/actions.lua:728
 #, fuzzy
@@ -11448,7 +11448,7 @@ msgstr "Für dieses Buch ist kein Notizbuch verfügbar."
 #: koassistant/request/attachments.lua:194
 #, fuzzy
 msgid "Your notebook was left out: it is not allowed for this provider."
-msgstr "Dein Notizbuch wurde weggelassen: Es ist für diesen Anbieter nicht erlaubt."
+msgstr "Ihr Notizbuch wurde ausgelassen: Es ist für diesen Anbieter nicht erlaubt."
 
 #: koassistant/request/attachments.lua:195
 #, fuzzy
@@ -12183,7 +12183,7 @@ msgstr "Update-Suche fehlgeschlagen (Zeitüberschreitung). Bitte versuche es ern
 #: koassistant/storage/update_checker.lua:2014
 #, fuzzy
 msgid "Failed to check for updates. Please check your internet connection."
-msgstr "Update-Suche fehlgeschlagen. Bitte überprüfe deine Internetverbindung."
+msgstr "Die Suche nach Updates ist fehlgeschlagen. Bitte prüfen Sie Ihre Internetverbindung."
 
 #: koassistant/storage/update_checker.lua:2029
 #, fuzzy
@@ -12219,12 +12219,12 @@ msgstr "Keine Versionshinweise verfügbar."
 #: koassistant/storage/update_checker.lua:2171
 #, fuzzy
 msgid "You are running the latest version (%1)"
-msgstr "Du verwendest die neueste Version (%1)"
+msgstr "Sie verwenden die neueste Version (%1)"
 
 #: koassistant/storage/update_checker.lua:2179
 #, fuzzy
 msgid "You are running a development version (%1)"
-msgstr "Du verwendest eine Entwicklungsversion (%1)"
+msgstr "Sie verwenden eine Entwicklungsversion (%1)"
 
 #: koassistant/tools/book_tool_runner.lua:1158
 #, fuzzy
@@ -13162,9 +13162,9 @@ msgid ""
 "\n"
 "They need a provider and model that support tool calls (Test provider shows whether yours does)."
 msgstr ""
-"Buch-Werkzeuge sind für %1 nicht verfügbar.\n"
+"Buchwerkzeuge sind für %1 nicht verfügbar.\n"
 "\n"
-"Sie benötigen einen Anbieter und ein Modell, die Werkzeugaufrufe unterstützen (Anbieter testen zeigt, ob deiner dies tut)."
+"Sie benötigen einen Anbieter und ein Modell, die Tool-Aufrufe unterstützen (Mit „Anbieter testen“ sehen Sie, ob Ihrer das tut)."
 
 #: koassistant/ui/chatgptviewer.lua:3185 koassistant/ui/dialogs.lua:8838
 #, fuzzy
@@ -13546,32 +13546,32 @@ msgstr "Text aus diesem Buch"
 #: koassistant/ui/data_access.lua:45
 #, fuzzy
 msgid "your highlights"
-msgstr "deine Markierungen"
+msgstr "Ihre Markierungen"
 
 #: koassistant/ui/data_access.lua:46
 #, fuzzy
 msgid "your notes on highlights"
-msgstr "deine Notizen zu Markierungen"
+msgstr "Ihre Notizen zu Markierungen"
 
 #: koassistant/ui/data_access.lua:47
 #, fuzzy
 msgid "your notebook"
-msgstr "dein Notizbuch"
+msgstr "Ihr Notizbuch"
 
 #: koassistant/ui/data_access.lua:48
 #, fuzzy
 msgid "your reading position"
-msgstr "deine Leseposition"
+msgstr "Ihre Leseposition"
 
 #: koassistant/ui/data_access.lua:49
 #, fuzzy
 msgid "your reading habits"
-msgstr "deine Lesegewohnheiten"
+msgstr "Ihre Lesegewohnheiten"
 
 #: koassistant/ui/data_access.lua:50
 #, fuzzy
 msgid "your book list"
-msgstr "deine Bücherliste"
+msgstr "Ihre Bücherliste"
 
 #: koassistant/ui/data_access.lua:51
 #, fuzzy
@@ -13647,7 +13647,7 @@ msgstr "Diese Aktion"
 #: koassistant/ui/data_access.lua:110 koassistant/ui/data_access.lua:227
 #, fuzzy
 msgid "your AI provider"
-msgstr "dein KI-Anbieter"
+msgstr "Ihr KI-Anbieter"
 
 #: koassistant/ui/data_access.lua:147
 #, fuzzy
@@ -13733,7 +13733,7 @@ msgstr "%1 antwortet aus dem, was die KI über das Buch weiß, was ohne den Tite
 #: koassistant/ui/data_access.lua:697
 #, fuzzy
 msgid "text from this book, the part you chose"
-msgstr "Text aus diesem Buch, den Teil, den du ausgewählt hast"
+msgstr "Text aus diesem Buch, der von Ihnen gewählte Abschnitt"
 
 #: koassistant/ui/data_access.lua:701
 #, fuzzy
@@ -13743,22 +13743,22 @@ msgstr "eine aus dem Text dieses Buches erstellte Zusammenfassung"
 #: koassistant/ui/data_access.lua:726
 #, fuzzy
 msgid "your highlights (%1)"
-msgstr "deine Markierungen (%1)"
+msgstr "Ihre Markierungen (%1)"
 
 #: koassistant/ui/data_access.lua:727
 #, fuzzy
 msgid "your notes on highlights (%1)"
-msgstr "deine Notizen zu Markierungen (%1)"
+msgstr "Ihre Notizen zu Markierungen (%1)"
 
 #: koassistant/ui/data_access.lua:729 koassistant/ui/dialogs.lua:9588
 #, fuzzy
 msgid "your book list (titles, authors, reading status)"
-msgstr "deine Bücherliste (Titel, Autoren, Lesestatus)"
+msgstr "Ihre Bücherliste (Titel, Autoren, Lesestatus)"
 
 #: koassistant/ui/data_access.lua:730
 #, fuzzy
 msgid "your reading habits (books read a lot, stalled, barely started)"
-msgstr "deine Lesegewohnheiten (viel gelesene, stockende, kaum begonnene Bücher)"
+msgstr "Ihre Lesegewohnheiten (viel gelesene, abgebrochene, kaum begonnene Bücher)"
 
 #: koassistant/ui/data_access.lua:755
 #, fuzzy
@@ -13769,7 +13769,7 @@ msgstr "Der Datenschutz wurde überarbeitet."
 #, fuzzy
 msgid ""
 "KOAssistant now asks before it sends your highlights, notes, notebook, book text, book list or reading habits for the first time, and remembers your answer for the book. Every sharing switch in Settings → Privacy & Data is set to Ask; your per-book settings and trusted providers are kept."
-msgstr "KOAssistant fragt jetzt nach, bevor es deine Markierungen, Notizen, dein Notizbuch, Buchtext, deine Bücherliste oder Lesegewohnheiten zum ersten Mal sendet, und merkt sich deine Antwort für das Buch. Jeder Freigabeschalter in Einstellungen → Datenschutz & Daten ist auf „Fragen“ gesetzt; deine Einstellungen pro Buch und vertrauenswürdigen Anbieter bleiben erhalten."
+msgstr "KOAssistant fragt jetzt nach, bevor es Ihre Markierungen, Notizen, Ihr Notizbuch, den Buchtext, Ihre Bücherliste oder Ihre Lesegewohnheiten zum ersten Mal sendet, und merkt sich Ihre Antwort für das Buch. Jeder Freigabeschalter unter Einstellungen → Datenschutz & Daten steht auf Fragen; Ihre Einstellungen pro Buch und vertrauenswürdigen Anbieter bleiben erhalten."
 
 #: koassistant/ui/data_access.lua:757
 #, fuzzy
@@ -14204,9 +14204,9 @@ msgid ""
 "\n"
 "Sending anyway means the AI answers from general knowledge, not this book's text."
 msgstr ""
-"Aus diesem Dokument konnte kein Text extrahiert werden. Es handelt sich möglicherweise um eine gescannte oder reine Bilddatei.\n"
+"Aus diesem Dokument konnte kein Text extrahiert werden. Möglicherweise handelt es sich um eine gescannte oder reine Bilddatei.\n"
 "\n"
-"Wenn du trotzdem sendest, antwortet die KI aus allgemeinem Wissen und nicht aus dem Text dieses Buches."
+"Wenn Sie trotzdem senden, antwortet die KI aus ihrem Allgemeinwissen und nicht aus dem Text dieses Buches."
 
 #: koassistant/ui/dialogs.lua:6606
 #, fuzzy
@@ -14296,7 +14296,7 @@ msgstr "Angehängt (%1): verwalten…"
 #: koassistant/ui/dialogs.lua:6878 koassistant/ui/dialogs.lua:13817
 #, fuzzy
 msgid "your notebook for this book"
-msgstr "dein Notizbuch für dieses Buch"
+msgstr "Ihr Notizbuch für dieses Buch"
 
 #: koassistant/ui/dialogs.lua:6884
 #, fuzzy
@@ -14311,17 +14311,17 @@ msgstr "dieses Artefakt, erstellt aus dem Text des Buches"
 #: koassistant/ui/dialogs.lua:6905
 #, fuzzy
 msgid "this artifact, built with your highlights"
-msgstr "dieses Artefakt, erstellt mit deinen Markierungen"
+msgstr "dieses Artefakt, erstellt mit Ihren Markierungen"
 
 #: koassistant/ui/dialogs.lua:6906
 #, fuzzy
 msgid "this artifact, built with your notes"
-msgstr "dieses Artefakt, erstellt mit deinen Notizen"
+msgstr "dieses Artefakt, erstellt mit Ihren Notizen"
 
 #: koassistant/ui/dialogs.lua:6907
 #, fuzzy
 msgid "this artifact, built with your notebook"
-msgstr "dieses Artefakt, erstellt mit deinem Notizbuch"
+msgstr "dieses Artefakt, erstellt mit Ihrem Notizbuch"
 
 #: koassistant/ui/dialogs.lua:6923
 #, fuzzy
@@ -14616,7 +14616,7 @@ msgstr "Aktuelle Seite"
 #, fuzzy
 msgid ""
 "The current page counts as text around what you tap, which is set to Never for this book or for all books (Book Settings → Privacy & Data, or Settings → Privacy & Data)."
-msgstr "Die aktuelle Seite zählt als Text um die Stelle, die du antippst, was für dieses Buch oder für alle Bücher auf „Nie“ gesetzt ist (Buch-Einstellungen → Datenschutz & Daten oder Einstellungen → Datenschutz & Daten)."
+msgstr "Die aktuelle Seite zählt als Text rund um die angetippte Stelle, was für dieses Buch oder für alle Bücher auf Nie gesetzt ist (Buch-Einstellungen → Datenschutz & Daten oder Einstellungen → Datenschutz & Daten)."
 
 #: koassistant/ui/dialogs.lua:9212 koassistant/ui/dialogs.lua:9435
 #, fuzzy
@@ -14702,7 +14702,7 @@ msgstr "Geben Sie zuerst eine Nachricht ein oder tippen Sie auf eine Aktionsscha
 #: koassistant/ui/dialogs.lua:9563
 #, fuzzy
 msgid "text from this book, the scope you picked"
-msgstr "Text aus diesem Buch, den Bereich, den du ausgewählt hast"
+msgstr "Text aus diesem Buch, der von Ihnen gewählte Umfang"
 
 #: koassistant/ui/dialogs.lua:9567
 #, fuzzy
@@ -14712,7 +14712,7 @@ msgstr "die Textstellen, die die Buch-Werkzeuge in diesem Buch nachschlagen"
 #: koassistant/ui/dialogs.lua:9582
 #, fuzzy
 msgid "the text around your selection"
-msgstr "der Text um deine Auswahl"
+msgstr "der Text rund um Ihre Auswahl"
 
 #: koassistant/ui/dialogs.lua:9626
 #, fuzzy
@@ -14746,7 +14746,7 @@ msgstr "Der Text für den gewählten Umfang konnte nicht extrahiert werden. Entf
 #: koassistant/ui/dialogs.lua:9846
 #, fuzzy
 msgid "Your book list was left out: it is not allowed for this provider."
-msgstr "Deine Bücherliste wurde weggelassen: Sie ist für diesen Anbieter nicht erlaubt."
+msgstr "Ihre Bücherliste wurde weggelassen: Sie ist für diesen Anbieter nicht erlaubt."
 
 #: koassistant/ui/dialogs.lua:10224
 #, fuzzy
@@ -14804,9 +14804,9 @@ msgid ""
 "\n"
 "If you don't need these actions, you can hide this section from the gear menu."
 msgstr ""
-"Die Aktionen zum Bibliotheksscan sind ausgeschaltet: Deine Bücherliste ist auf „Nie“ gesetzt (Einstellungen → Datenschutz & Daten → Bücherliste).\n"
+"Die Aktionen zum Bibliotheks-Scan sind deaktiviert: Ihre Bücherliste ist auf Nie gesetzt (Einstellungen → Datenschutz & Daten → Bücherliste).\n"
 "\n"
-"Wenn du diese Aktionen nicht brauchst, kannst du diesen Bereich im Zahnradmenü ausblenden."
+"Wenn Sie diese Aktionen nicht benötigen, können Sie diesen Abschnitt im Zahnradmenü ausblenden."
 
 #: koassistant/ui/dialogs.lua:10744
 #, fuzzy
@@ -15363,17 +15363,17 @@ msgstr "dieses %1, erstellt aus dem Text des Buches"
 #: koassistant/ui/dialogs.lua:13847
 #, fuzzy
 msgid "this %1, built with your highlights"
-msgstr "dieses %1, erstellt mit deinen Markierungen"
+msgstr "dieses %1, erstellt mit Ihren Markierungen"
 
 #: koassistant/ui/dialogs.lua:13848
 #, fuzzy
 msgid "this %1, built with your notes"
-msgstr "dieses %1, erstellt mit deinen Notizen"
+msgstr "dieses %1, erstellt mit Ihren Notizen"
 
 #: koassistant/ui/dialogs.lua:13849
 #, fuzzy
 msgid "this %1, built with your notebook"
-msgstr "dieses %1, erstellt mit deinem Notizbuch"
+msgstr "dieses %1, erstellt mit Ihrem Notizbuch"
 
 #: koassistant/ui/domain_manager.lua:127
 #, fuzzy
@@ -15426,11 +15426,11 @@ msgid ""
 "\n"
 "A domain is selected globally or per book, like a project you switch between."
 msgstr ""
-"Domänen geben der KI spezialisierten Wissenskontext.\n"
+"Fachgebiete liefern der KI spezialisierten Wissenskontext.\n"
 "\n"
-"Anders als Verhaltensweisen (die den Kommunikationsstil festlegen) verleihen Domänen der KI Fachwissen in bestimmten Themenbereichen.\n"
+"Anders als Verhaltensweisen (die den Kommunikationsstil festlegen) verleihen Fachgebiete der KI Expertise in bestimmten Themenbereichen.\n"
 "\n"
-"Eine Domäne wird global oder pro Buch ausgewählt, wie ein Projekt, zwischen denen du wechselst."
+"Ein Fachgebiet wird global oder pro Buch ausgewählt, wie ein Projekt, zwischen denen Sie wechseln."
 
 #: koassistant/ui/domain_manager.lua:258
 #, fuzzy
@@ -18616,7 +18616,7 @@ msgstr "Modell-Override: %1"
 #, fuzzy
 msgid ""
 "Optionally switch models while Quick Answer is on (that chat only: your default model is untouched): the active provider's fastest listed model, a tier of the active provider, or a pinned specific model. Custom providers keep the current model unless custom_models.lua gives them tier placements. A model picked for one run (a long press on Send) overrides it."
-msgstr "Optional die Modelle wechseln, während Schnellantwort aktiv ist (nur für diesen Chat: dein Standardmodell bleibt unberührt): das schnellste aufgeführte Modell des aktiven Anbieters, eine Stufe des aktiven Anbieters oder ein festgelegtes bestimmtes Modell. Benutzerdefinierte Anbieter behalten das aktuelle Modell, sofern custom_models.lua ihnen keine Stufenzuordnungen gibt. Ein für einen einzelnen Durchlauf gewähltes Modell (langes Drücken auf Senden) hat Vorrang."
+msgstr "Optional das Modell wechseln, solange die Schnellantwort aktiv ist (nur für diesen Chat: Ihr Standardmodell bleibt unverändert): das schnellste aufgeführte Modell des aktiven Anbieters, eine Stufe des aktiven Anbieters oder ein fest gewähltes Modell. Eigene Anbieter behalten das aktuelle Modell, sofern custom_models.lua ihnen keine Stufenzuordnungen gibt. Ein für einen Durchlauf gewähltes Modell (langes Drücken auf Senden) hat Vorrang."
 
 #: koassistant/ui/settings_schema.lua:737
 #, fuzzy
@@ -18853,9 +18853,9 @@ msgid ""
 "\n"
 "Spend guards: a cooldown before retrying a step that was declined, failed or cancelled, WiFi only, and the book's text allowed for the book, or a trusted provider (a book on Ask is asked once); background runs extract book text and use API tokens without a per-request tap. Leave off if every request should be explicit."
 msgstr ""
-"Die von dir gestarteten X-Rays beim Lesen aktuell halten (nur bei fließenden Formaten wie EPUB): Checkpoints in kapitelgroßen Schritten, wobei der nächste Checkpoint immer schon vor dir bereitsteht; sobald du ihn erreichst, wird er sofort installiert und der nächste beginnt zu entstehen. Bücher ohne X-Ray bleiben unberührt: Starte eines über das X-Ray-Popup mit „In Checkpoints, beim Lesen (automatisch)“ oder stelle ein Buch einzeln auf Automatisch (X-Ray-Popup oder Buch-Einstellungen → X-Ray → Automatisches X-Ray), was auch bei deaktivierter Option funktioniert; ein buchspezifisches Aus hat immer Vorrang.\n"
+"Hält die von Ihnen gestarteten X-Rays beim Lesen aktuell (nur bei fließenden Formaten wie EPUB): Checkpoints in kapitelgroßen Schritten, wobei der nächste Checkpoint immer vor Ihnen bereitgehalten wird; sobald Sie ihn erreichen, wird er sofort installiert und der darauffolgende wird erstellt. Bücher ohne X-Ray bleiben unberührt: Starten Sie eines über das X-Ray-Popup mit „In Checkpoints, beim Lesen (automatisch)“ oder stellen Sie ein Buch einzeln auf Automatisch (X-Ray-Popup oder Buch-Einstellungen → X-Ray → Automatisches X-Ray), was auch bei ausgeschalteter Option funktioniert; ein Aus pro Buch hat immer Vorrang.\n"
 "\n"
-"Ausgabenschutz: eine Wartezeit, bevor ein abgelehnter, fehlgeschlagener oder abgebrochener Schritt wiederholt wird, nur WLAN, und der Buchtext muss für das Buch erlaubt sein oder ein vertrauenswürdiger Anbieter verwendet werden (ein Buch auf „Fragen“ wird einmal gefragt); Hintergrundläufe extrahieren den Buchtext und verbrauchen API-Tokens ohne Tippen pro Anfrage. Lass die Option aus, wenn jede Anfrage ausdrücklich erfolgen soll."
+"Kostenschutz: eine Wartezeit, bevor ein abgelehnter, fehlgeschlagener oder abgebrochener Schritt wiederholt wird, nur WLAN, und der Buchtext muss für das Buch oder einen vertrauenswürdigen Anbieter erlaubt sein (ein Buch auf Fragen wird einmal gefragt); Hintergrundläufe extrahieren Buchtext und verbrauchen API-Tokens ohne Tippen pro Anfrage. Lassen Sie die Option aus, wenn jede Anfrage ausdrücklich erfolgen soll."
 
 #: koassistant/ui/settings_schema.lua:1023
 #, fuzzy
@@ -18954,7 +18954,7 @@ msgstr "X-Ray-Eintrag bei übereinstimmender Auswahl"
 #, fuzzy
 msgid ""
 "When a tapped word or selected text exactly matches an X-Ray entity's name or alias, open that X-Ray entry directly, skipping ahead of the dictionary and the highlight menu (including any bypass actions you have set there). Anything that doesn't match falls through to your normal dictionary/highlight behavior. Only does anything for books that have an X-Ray. A very long press at the end of a selection always shows the normal highlight menu."
-msgstr "Wenn ein angetipptes Wort oder ein ausgewählter Text exakt mit dem Namen oder Alias einer X-Ray-Entität übereinstimmt, wird dieser X-Ray-Eintrag direkt geöffnet, noch vor dem Wörterbuch und dem Markierungsmenü (einschließlich aller dort festgelegten Umgehungsaktionen). Alles, was nicht übereinstimmt, fällt auf dein normales Wörterbuch-/Markierungsverhalten zurück. Wirkt nur bei Büchern mit X-Ray. Ein sehr langes Drücken am Ende einer Auswahl zeigt immer das normale Markierungsmenü."
+msgstr "Wenn ein angetipptes Wort oder ein markierter Text genau dem Namen oder Alias einer X-Ray-Entität entspricht, wird dieser X-Ray-Eintrag direkt geöffnet, noch vor dem Wörterbuch und dem Markierungsmenü (einschließlich aller dort festgelegten Umgehungsaktionen). Alles, was nicht übereinstimmt, läuft wie gewohnt über Ihr normales Wörterbuch-/Markierungsverhalten. Wirkt nur bei Büchern mit X-Ray. Ein sehr langes Drücken am Ende einer Auswahl zeigt immer das normale Markierungsmenü."
 
 #: koassistant/ui/settings_schema.lua:1114
 #, fuzzy
@@ -19020,7 +19020,7 @@ msgstr "Entitätskarte zuerst"
 #, fuzzy
 msgid ""
 "Exact entity hits (tapping a marked word, or selecting text that matches an entity) open a compact card first: the name, category and role, and a one-line identification, with the full entry a tap on the card away. The identification may come from the newest built checkpoint, so newly appearing names are known on sight; the full entry stays at your reading position, behind a confirmation, while spoiler protection is on. Off = open the full entry directly."
-msgstr "Exakte Entitätstreffer (Antippen eines markierten Worts oder Auswählen von Text, der zu einer Entität passt) öffnen zuerst eine kompakte Karte: Name, Kategorie und Rolle sowie eine einzeilige Identifikation, der vollständige Eintrag ist ein Tippen auf die Karte entfernt. Die Identifikation kann vom neuesten erstellten Checkpoint stammen, sodass neu auftauchende Namen sofort bekannt sind; der vollständige Eintrag bleibt bei aktivem Spoilerschutz an deiner Leseposition, hinter einer Bestätigung. Aus = den vollständigen Eintrag direkt öffnen."
+msgstr "Exakte Entitätstreffer (Antippen eines markierten Wortes oder Auswählen von Text, der zu einer Entität passt) öffnen zuerst eine kompakte Karte: Name, Kategorie und Rolle sowie eine einzeilige Identifikation; der vollständige Eintrag ist einen Tipp auf die Karte entfernt. Die Identifikation kann aus dem neuesten erstellten Checkpoint stammen, sodass neu auftauchende Namen sofort bekannt sind; der vollständige Eintrag bleibt bei Ihrer Leseposition, hinter einer Bestätigung, solange der Spoilerschutz aktiv ist. Aus = den vollständigen Eintrag direkt öffnen."
 
 #: koassistant/ui/settings_schema.lua:1215
 #, fuzzy
@@ -19229,13 +19229,13 @@ msgstr "Nächste Lektüre bei Abschluss vorschlagen"
 #, fuzzy
 msgid ""
 "When you reach the end of a book, offer to suggest what to read next from your library. Requires your book list allowed (Ask asks first) and at least one permanent scan folder."
-msgstr "Wenn du das Ende eines Buchs erreichst, anbieten, aus deiner Bibliothek vorzuschlagen, was du als Nächstes lesen könntest. Erfordert, dass deine Bücherliste erlaubt ist (Fragen fragt zuerst) und mindestens ein dauerhafter Scan-Ordner."
+msgstr "Wenn Sie das Ende eines Buches erreichen, wird angeboten, aus Ihrer Bibliothek vorzuschlagen, was Sie als Nächstes lesen könnten. Erfordert, dass Ihre Bücherliste erlaubt ist (Fragen fragt zuerst nach) und mindestens ein permanenter Scan-Ordner."
 
 #: koassistant/ui/settings_schema.lua:1402
 #, fuzzy
 msgid ""
 "The same value as in Privacy & Data: whether the titles, authors and reading status of the books in your scan folders may go to the AI for the library actions. Ask (the default) asks the first time; Allow sends without a question; Never refuses those actions. Add permanent scan folders below, or pick folders on the fly in the input dialog."
-msgstr "Derselbe Wert wie unter Datenschutz & Daten: ob die Titel, Autoren und der Lesestatus der Bücher in deinen Scan-Ordnern für die Bibliotheksaktionen an die KI gehen dürfen. „Fragen“ (der Standard) fragt beim ersten Mal; „Erlauben“ sendet ohne Rückfrage; „Nie“ lehnt diese Aktionen ab. Füge unten dauerhafte Scan-Ordner hinzu oder wähle Ordner spontan im Eingabedialog."
+msgstr "Derselbe Wert wie unter Datenschutz & Daten: ob die Titel, Autoren und der Lesestatus der Bücher in Ihren Scan-Ordnern für die Bibliotheksaktionen an die KI gehen dürfen. Fragen (die Standardeinstellung) fragt beim ersten Mal nach; Erlauben sendet ohne Nachfrage; Nie verweigert diese Aktionen. Fügen Sie unten permanente Scan-Ordner hinzu oder wählen Sie Ordner spontan im Eingabedialog aus."
 
 #: koassistant/ui/settings_schema.lua:1411
 #, fuzzy
@@ -19831,9 +19831,9 @@ msgid ""
 "\n"
 "A standing Allow is also what background features (Automatic X-Ray, checkpoint builds) need: with a trusted provider they build without a question."
 msgstr ""
-"Anbieter, denen du vertraust (z. B. ein lokales Ollama), folgen ihrer eigenen Wertespalte, „Was vertrauenswürdige Anbieter nutzen dürfen“, standardmäßig „Erlauben“ für alles, sofern du es nicht änderst, sodass bei Anfragen an sie nichts gefragt wird. Das „Nie“ eines Buchs hat weiterhin Vorrang.\n"
+"Anbieter, denen Sie vertrauen (etwa ein lokales Ollama), folgen ihrer eigenen Wertespalte, „Was vertrauenswürdige Anbieter verwenden dürfen“, die für alles auf Erlauben steht, solange Sie sie nicht ändern, sodass bei Anfragen an sie nichts nachgefragt wird. Das Nie eines Buches hat weiterhin Vorrang.\n"
 "\n"
-"Ein dauerhaftes „Erlauben“ brauchen auch Hintergrundfunktionen (Automatisches X-Ray, Checkpoint-Erstellung): Mit einem vertrauenswürdigen Anbieter werden sie ohne Rückfrage erstellt."
+"Ein dauerhaftes Erlauben brauchen auch Hintergrundfunktionen (Automatisches X-Ray, Checkpoint-Erstellung): Mit einem vertrauenswürdigen Anbieter laufen sie ohne Nachfrage."
 
 #: koassistant/ui/settings_schema.lua:2148
 #, fuzzy
@@ -19850,7 +19850,7 @@ msgstr "Der Wert jeder Datenart für Anfragen, die an einen vertrauenswürdigen 
 #, fuzzy
 msgid ""
 "Your reading progress, the current chapter and the time since you last read. Sent or not; never asked."
-msgstr "Dein Lesefortschritt, das aktuelle Kapitel und die Zeit seit deinem letzten Lesen. Wird gesendet oder nicht; nie gefragt."
+msgstr "Ihr Lesefortschritt, das aktuelle Kapitel und die Zeit seit Ihrem letzten Lesen. Wird gesendet oder nicht; es wird nie gefragt."
 
 #: koassistant/ui/settings_schema.lua:2177
 #, fuzzy
@@ -21544,7 +21544,7 @@ msgstr "Willkommen bei KOAssistant!"
 #, fuzzy
 msgid ""
 "Let's set up five things: how you connect to an AI provider, what the plugin may read, your language and icons, the (KOA) mark on its buttons, and how you open it fast."
-msgstr "Wir richten fünf Dinge ein: wie du dich mit einem KI-Anbieter verbindest, was das Plugin lesen darf, deine Sprache und Symbole, die Kennzeichnung (KOA) auf seinen Schaltflächen und wie du es schnell öffnest."
+msgstr "Richten wir fünf Dinge ein: wie Sie sich mit einem KI-Anbieter verbinden, was das Plugin lesen darf, Ihre Sprache und Symbole, die (KOA)-Kennzeichnung auf den Schaltflächen und wie Sie es schnell öffnen."
 
 #: koassistant/ui/setup_wizard.lua:755
 #, fuzzy
@@ -21666,7 +21666,7 @@ msgstr "ANBIETER VERBINDEN"
 #, fuzzy
 msgid ""
 "KOAssistant sends your questions to an AI provider of your choice. Pick yours and paste its API key next. Ollama runs on your own computer and needs no key."
-msgstr "KOAssistant sendet deine Fragen an einen KI-Anbieter deiner Wahl. Wähle deinen aus und füge anschließend seinen API-Schlüssel ein. Ollama läuft auf deinem eigenen Computer und benötigt keinen Schlüssel."
+msgstr "KOAssistant sendet Ihre Fragen an einen KI-Anbieter Ihrer Wahl. Wählen Sie Ihren aus und fügen Sie als Nächstes seinen API-Schlüssel ein. Ollama läuft auf Ihrem eigenen Computer und benötigt keinen Schlüssel."
 
 #: koassistant/ui/setup_wizard.lua:1004
 #, fuzzy
@@ -21682,7 +21682,7 @@ msgstr "DATENSCHUTZ & DATEN"
 #, fuzzy
 msgid ""
 "This version changed how privacy works. Every kind of data is now set to Ask: the first action that needs your highlights, notes, notebook, book text, book list or reading habits asks you first. Your books' own settings and your trusted providers were kept."
-msgstr "Diese Version hat die Funktionsweise des Datenschutzes geändert. Jede Datenart ist jetzt auf „Fragen“ gesetzt: Die erste Aktion, die deine Markierungen, Notizen, dein Notizbuch, den Buchtext, die Bücherliste oder deine Lesegewohnheiten benötigt, fragt dich zuerst. Die eigenen Einstellungen deiner Bücher und deine vertrauenswürdigen Anbieter wurden beibehalten."
+msgstr "Diese Version hat die Funktionsweise des Datenschutzes geändert. Jede Art von Daten steht jetzt auf Fragen: Die erste Aktion, die Ihre Markierungen, Notizen, Ihr Notizbuch, den Buchtext, Ihre Bücherliste oder Ihre Lesegewohnheiten benötigt, fragt Sie zuerst. Die Einstellungen Ihrer Bücher und Ihre vertrauenswürdigen Anbieter wurden beibehalten."
 
 #: koassistant/ui/setup_wizard.lua:1021
 #, fuzzy
@@ -21698,13 +21698,13 @@ msgstr "Datenschutz: Standard (Fragen)"
 #, fuzzy
 msgid ""
 "What may KOAssistant send to your AI provider? Your highlights, notes, notebook, book text, book list and reading habits each have one setting: Ask, Allow or Never."
-msgstr "Was darf KOAssistant an deinen KI-Anbieter senden? Für deine Markierungen, Notizen, dein Notizbuch, den Buchtext, die Bücherliste und deine Lesegewohnheiten gibt es jeweils eine Einstellung: Fragen, Erlauben oder Nie."
+msgstr "Was darf KOAssistant an Ihren KI-Anbieter senden? Ihre Markierungen, Notizen, Ihr Notizbuch, der Buchtext, Ihre Bücherliste und Ihre Lesegewohnheiten haben jeweils eine Einstellung: Fragen, Erlauben oder Nie."
 
 #: koassistant/ui/setup_wizard.lua:1040
 #, fuzzy
 msgid ""
 "With Ask, the first action that needs a kind of data asks you, and your answer can be kept for the book. A book can have its own settings, and a book's Never always wins."
-msgstr "Bei „Fragen“ fragt dich die erste Aktion, die eine Datenart benötigt, und deine Antwort kann für das Buch gespeichert werden. Ein Buch kann eigene Einstellungen haben, und „Nie“ bei einem Buch hat immer Vorrang."
+msgstr "Bei Fragen fragt die erste Aktion, die eine Art von Daten benötigt, bei Ihnen nach, und Ihre Antwort kann für das Buch gespeichert werden. Ein Buch kann eigene Einstellungen haben, und das Nie eines Buches hat immer Vorrang."
 
 #: koassistant/ui/setup_wizard.lua:1041
 #, fuzzy
@@ -22709,18 +22709,18 @@ msgstr "dieser X-Ray-Eintrag, erstellt aus dem Buchtext"
 #: koassistant/xray/xray_browser.lua:4552
 #, fuzzy
 msgid "your highlights that mention this entry"
-msgstr "deine Markierungen, die diesen Eintrag erwähnen"
+msgstr "Ihre Markierungen, die diesen Eintrag erwähnen"
 
 #: koassistant/xray/xray_browser.lua:4553
 #: koassistant/xray/xray_browser.lua:4618
 #, fuzzy
 msgid "this X-Ray entry, built with your notes"
-msgstr "dieser X-Ray-Eintrag, erstellt mit deinen Notizen"
+msgstr "dieser X-Ray-Eintrag, erstellt mit Ihren Notizen"
 
 #: koassistant/xray/xray_browser.lua:4617
 #, fuzzy
 msgid "this X-Ray entry, built with your highlights"
-msgstr "dieser X-Ray-Eintrag, erstellt mit deinen Markierungen"
+msgstr "dieser X-Ray-Eintrag, erstellt mit Ihren Markierungen"
 
 #: koassistant/xray/xray_browser.lua:4833
 #: koassistant/xray/xray_browser.lua:5254
