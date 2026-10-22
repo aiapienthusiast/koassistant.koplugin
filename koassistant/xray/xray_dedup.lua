@@ -580,6 +580,13 @@ function XrayDedup.absorbAliases(user_aliases, keep_name, drop_name, drop_item)
                 end
             end
         end
+        -- Names set to capitals only stay so on the kept one (B533 S2)
+        if type(drop_entry.case) == "table" then
+            entry.case = type(entry.case) == "table" and entry.case or {}
+            for term, how in pairs(drop_entry.case) do
+                if entry.case[term] == nil then entry.case[term] = how end
+            end
+        end
         user_aliases[drop_name] = nil
     end
     user_aliases[keep_name] = entry

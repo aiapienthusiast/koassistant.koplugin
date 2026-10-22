@@ -42,6 +42,11 @@ at 70%): see the plan doc §6.2. Short form:
   Saltmere         place, vol-3 ledger stub (family = places)
   Warden           vol-3 live LEXICON term + ledger CHARACTER stub (chooser)
   Vex              vol-3 ledger stub WITH alias "the grey cat" (alias hit)
+  The Drowned      vol-3 live faction (and in the 70% rung), the #120 shape
+                   (B533 S2): the text writes the faction "the Drowned" (ch 4)
+                   and the everyday "the drowned trees" (ch 4) and "the drowned
+                   rows" (ch 9). Any case marks all three; capitals only marks
+                   the faction alone
   Jory / Jory Pell THE NAME-DRIFT PAIR (2026-10-03, picture doc section 10): vol 2
                    names her Jory Pell; vol 3's live X-Ray and its 70% rung hold
                    an entry "Jory" (the bare first name, in vol-3 text at ~15%)
@@ -146,6 +151,7 @@ local VOL3_XRAY = [[{
     {"name": "Gil Rook", "role": "Grafter", "description": "Gil Rook grafts the salt-apple rows and talks to the trees more than to people."},
     {"name": "Oswin Tarr", "role": "Lock keeper", "description": "Oswin Tarr kept the river lock below the ferry landing and knew every boat by its wake.", "background": [{"source": "Mock Series 2 - The Ferry", "text": "Oswin Tarr kept the river lock below the ferry landing and knew every boat by its wake.", "file": "]] .. V2 .. [["}]},
     {"name": "Jory", "role": "Carter", "description": "Jory drives the supply cart up from the shore road and counts the sacks aloud."},
+    {"name": "The Drowned", "role": "River faction", "description": "The Drowned live on reed boats over the flooded rows and light fires on the water at dusk."},
     {"name": "高橋美咲", "role": "Orchard clerk", "description": "高橋美咲 keeps the orchard tally sheets and corrects Gil's arithmetic without comment."},
     {"name": "ミラ・エル・ソーン", "aliases": ["ミラ"], "role": "Survey apprentice", "description": "ミラ・エル・ソーン carries the survey chain and asks more questions than the valley can answer."}
   ],
@@ -186,6 +192,7 @@ local VOL3_RUNG_70 = [[{
     {"name": "Jory", "role": "Carter", "description": "Jory drives the supply cart up from the shore road and counts the sacks aloud."},
     {"name": "Orrin Blackwood", "role": "Ferry master, retired", "description": "Orrin Blackwood arrives at Hollowmere without his ferry and will not say why.", "background": [{"source": "Mock Series 2 - The Ferry", "text": "Ran the night ferry and never asked for fares twice.", "file": "]] .. V2 .. [["}]},
     {"name": "Hester Lune", "role": "Surveyor", "description": "Hester Lune walks the salt line with brass instruments and writes to someone nightly."},
+    {"name": "The Drowned", "role": "River faction", "description": "The Drowned live on reed boats over the flooded rows and light fires on the water at dusk."},
     {"name": "高橋美咲", "role": "Orchard clerk", "description": "高橋美咲 keeps the orchard tally sheets and corrects Gil's arithmetic without comment."},
     {"name": "ミラ・エル・ソーン", "aliases": ["ミラ"], "role": "Survey apprentice", "description": "ミラ・エル・ソーン carries the survey chain and asks more questions than the valley can answer."}
   ],
@@ -342,7 +349,7 @@ local VOL3_CHAPTERS = {
     ch("The Orchard Post", "Tamsin Vael came inland to Hollowmere to mind the sea-orchard. The quiet felt rented."),
     ch("The Grafter", "Gil Rook was up a ladder in the salt-apple rows, talking to the graft. He handed Tamsin the knife by way of hello. The supply cart came up the lane behind her, and the carter, Jory, counted the sacks aloud."),
     ch("The Salt Line", "Gil showed Tamsin the white line climbing the trunks. A warden's first job, he said, is to notice. 高橋美咲 kept the tally at the gate and corrected his count; Gil only ever said 美咲. Behind them ミラ・エル・ソーン dragged the survey chain through the wet grass, and Gil called her ミラ when she asked what the white line meant."),
-    ch("Rented Quiet", "Tamsin walked the flooded rows at dusk. Whatever was wrong with Hollowmere had not introduced itself yet."),
+    ch("Rented Quiet", "Tamsin walked the flooded rows at dusk, past the drowned trees. Out on the water the Drowned had lit their reed fires again. Whatever was wrong with Hollowmere had not introduced itself yet."),
     ch("A Face From the Water", "A poleman stood at the orchard gate, hat in hand. Elias Penrose had come a long way from the crossing, and Tamsin could not place him at first. He asked after work, then after the road to Saltmere, and left before the answer. A woman with rope over one shoulder waited by the wall, and Elias called her リオ.", 4),
     ch("The Inn Sign", "A painted sign came upriver on the cart: an inn changing hands. Dorrit Hale, the letters said, was selling. The Warden was named in the small print, and Gil read it twice. That evening a grey cat crossed the orchard wall as if it owned the deed. Behind the cart walked Orrin Blackwood, carrying nothing, and he would not say why he had come inland.", 4),
     ch("Old Ledgers", "A tide ledger arrived wrapped in oilcloth, in a hand Tamsin knew: Cass Merrow's. No note. Later a stranger asked at the gate for salvage work and gave the name Zeph Umber; Gil sent him upvalley. By dark a surveyor's lamp burned on the ridge, and someone said the name Hester Lune.", 4),

@@ -264,9 +264,27 @@ end
 --- the exact same term rules.
 local collectSearchTerms = XrayParser.collectSearchTerms
 
+-- A case-sensitive pattern longer than this falls back to the any-case one
+local CASED_PATTERN_MAX = 2000
+
 --- EPUB regex-OR of every term (so the native search session walks name AND
 --- aliases with its own prev/next). nil when a single plain term suffices.
+--- With a name set to capitals only (B533 S2) the pattern is for a
+--- case-sensitive session (second return true): each term in letters of
+--- either case except the capitals it requires, so prev/next stops where
+--- the counts do.
 local function buildSearchPattern(terms)
+    for _idx, t in ipairs(terms) do
+        if t.caps then
+            local parts = {}
+            for _j, u in ipairs(terms) do
+                parts[#parts + 1] = u.regex or XrayParser.caseSearchRegex(u.text, u.caps)
+            end
+            local pattern = table.concat(parts, "|")
+            if #pattern <= CASED_PATTERN_MAX then return pattern, true end
+            break
+        end
+    end
     if #terms == 1 and not terms[1].regex then return nil end
     local function one(term)
         return term.regex
@@ -320,6 +338,12 @@ local function gatherMentionHits(ui, terms, exclude)
                 else
                     page = ui.document:getPageFromXPointer(r.start)
                     key = tostring(r.start)
+                end
+                -- A name set to capitals only counts a hit with its
+                -- capitals (B533 S2); another term may still claim the spot
+                if term.caps and not XrayParser.textCapsOk(r.matched_text or term.text,
+                        term.caps, term.words) then
+                    page = nil
                 end
                 if page and not seen[key] and exclude
                     and XrayParser.hitInsideHandle(r.prev_text,
@@ -401,7 +425,8 @@ end
 --- Open KOReader's native search session for the term at the CURRENT
 --- position, then float the "Back to X-Ray" button. The built-in search owns
 --- highlighting and prev/next — no custom overlay (maintainer 2026-08-13).
-local function launchSearchSession(ui, term, use_regex, return_info)
+--- case_sensitive: the pattern spells out its own case (buildSearchPattern).
+local function launchSearchSession(ui, term, use_regex, return_info, case_sensitive)
     UIManager:scheduleIn(0.2, function()
         if use_regex then
             -- The session runs ENTIRELY on onShowSearchDialog's args (its
@@ -432,7 +457,7 @@ local function launchSearchSession(ui, term, use_regex, return_info)
                 -- Legacy boolean API read the module field, not the arg
                 ui.search.use_regex = true
             end
-            ui.search:onShowSearchDialog(term, 0, regex_arg, true)
+            ui.search:onShowSearchDialog(term, 0, regex_arg, not case_sensitive)
         else
             ui.search:searchCallback(0, term)
         end
@@ -4219,11 +4244,12 @@ local NAME_KINDS = {
 
 --- The rows of an entry's names screen (B533), pure: the main name, the
 --- aliases it matches (the AI's, the AI's own name after a rename, the names
---- the reader typed or added), then the names set to not matched.
+--- the reader typed or added), then the names set to not matched; `caps` on
+--- a name set to capitals only (S2).
 --- @param item table The entry as the browser holds it (the overlay merged)
 --- @param category_key string
 --- @param rec table|nil The entry's record in the user-aliases sidecar
---- @return table rows { { name, kind = "main"|"ai"|"ai_name"|"typed"|"added", matched } }
+--- @return table rows { { name, kind = "main"|"ai"|"ai_name"|"typed"|"added", matched, caps } }
 function XrayBrowser.nameRows(item, category_key, rec)
     rec = type(rec) == "table" and rec or {}
     local function set(list)
@@ -4242,14 +4268,16 @@ function XrayBrowser.nameRows(item, category_key, rec)
         if k == ai_name then return "ai_name" end
         return "ai"
     end
+    local case = type(rec.case) == "table" and rec.case or {}
+    local function capsOf(n) return case[n:lower()] == "capitals" or nil end
     local main = XrayParser.getItemName(item, category_key)
-    local rows = { { name = main, kind = "main", matched = not item._name_off } }
+    local rows = { { name = main, kind = "main", matched = not item._name_off, caps = capsOf(main) } }
     local seen = { [main:lower()] = true }
     local function add(list, matched)
         for _idx, n in ipairs(type(list) == "table" and list or {}) do
             if type(n) == "string" and n ~= "" and not seen[n:lower()] then
                 seen[n:lower()] = true
-                rows[#rows + 1] = { name = n, kind = kindOf(n), matched = matched }
+                rows[#rows + 1] = { name = n, kind = kindOf(n), matched = matched, caps = capsOf(n) }
             end
         end
     end
@@ -4259,12 +4287,13 @@ function XrayBrowser.nameRows(item, category_key, rec)
 end
 
 --- Whether anything differs from the AI's names: a rename, the reader's own
---- names, a name set to not matched (Reset's row). Pure.
+--- names, a name set to not matched or to capitals only (Reset's row). Pure.
 function XrayBrowser.namesDiffer(item, rec)
     rec = type(rec) == "table" and rec or {}
     local function count(list) return type(list) == "table" and #list or 0 end
     return (type(rec.ai_name) == "string" and rec.ai_name ~= "") or count(rec.typed) > 0
         or count(rec.add) > 0 or count(rec.ignore) > 0 or item._name_off == true
+        or (type(rec.case) == "table" and next(rec.case) ~= nil)
 end
 
 --- The names screen (B533; docs/xray_names_matching_plan.md section 4.1):
@@ -4283,9 +4312,10 @@ function XrayBrowser:editSearchTerms(item, category_key, item_title, source, nav
     local buttons = {}
     for _idx, row in ipairs(XrayBrowser.nameRows(item, category_key, rec)) do
         local captured = row
+        local state = not row.matched and _("not matched")
+            or row.caps and _("capitals only") or _("matched")
         table.insert(buttons, {{
-            text = T(_("%1 · %2 · %3"), row.name, NAME_KINDS[row.kind],
-                row.matched and _("matched") or _("not matched")),
+            text = T(_("%1 · %2 · %3"), row.name, NAME_KINDS[row.kind], state),
             callback = function()
                 UIManager:close(self_ref._edit_dialog)
                 self_ref._edit_dialog = nil
@@ -4359,6 +4389,23 @@ function XrayBrowser:_showNameOptions(item, category_key, item_title, source, na
         add(_("Make it the main name"), function()
             self_ref:_commitRename(category_key, item_name, row.name, self_ref._detail_viewer)
         end)
+    end
+    -- Capitals only (S2): the option names its own example
+    if matchable and row.matched then
+        if row.caps then
+            add(_("Match any case"), function()
+                self_ref:_editSearchTermAction(item, category_key, item_title, source, item_name,
+                    row.name, "anycase", nav_context)
+            end)
+        else
+            local shown, lower = XrayParser.capsExample(row.name)
+            if shown then
+                add(T(_("Match capitals only (\"%1\", not \"%2\")"), shown, lower), function()
+                    self_ref:_editSearchTermAction(item, category_key, item_title, source, item_name,
+                        row.name, "capitals", nav_context)
+                end)
+            end
+        end
     end
     -- A name the reader added is deleted rather than set aside
     if matchable and row.kind ~= "added" then
@@ -4445,7 +4492,7 @@ function XrayBrowser:_confirmResetNames(item, category_key, item_title, source, 
     local self_ref = self
     local ConfirmBox = require("ui/widget/confirmbox")
     UIManager:show(ConfirmBox:new{
-        text = T(_("Give \"%1\" the AI's names again?\nThe names you typed or added are deleted, and every name the AI gave it is matched again."),
+        text = T(_("Give \"%1\" the AI's names again?\nThe names you typed or added are deleted, and every name the AI gave it is matched again, with or without capitals."),
             XrayParser.getItemName(item, category_key)),
         ok_text = _("Reset"),
         ok_callback = function()
@@ -4490,7 +4537,7 @@ function XrayBrowser:_resetNames(item, category_key, item_title, source, nav_con
         self:_rebuildToDetail(category_key, ai_name)
         return
     end
-    item._name_off = nil
+    item._name_off, item._caps = nil, nil
     self:_refreshNames(item, category_key, item_title, source, nav_context)
 end
 
@@ -4501,7 +4548,7 @@ end
 --- @param source table|nil Navigation source
 --- @param item_name string The item display name (storage key)
 --- @param alias string The alias being acted on
---- @param action string "remove"|"ignore"|"restore"
+--- @param action string "remove"|"ignore"|"restore"|"capitals"|"anycase"
 --- @param nav_context table|nil Category navigation context
 function XrayBrowser:_editSearchTermAction(item, category_key, item_title, source, item_name, alias, action, nav_context)
     local ActionCache = require("koassistant.artifacts.action_cache")
@@ -4563,6 +4610,16 @@ function XrayBrowser:_editSearchTermAction(item, category_key, item_title, sourc
             end
             table.insert(item.aliases, alias)
         end
+
+    elseif action == "capitals" or action == "anycase" then
+        -- B533 S2: the record by the name as written, lowered; the view's
+        -- `_caps` the same way (mergeUserAliases)
+        local case = type(entry.case) == "table" and entry.case or {}
+        case[alias_lower] = action == "capitals" and "capitals" or nil
+        entry.case = next(case) and case or nil
+        local caps = type(item._caps) == "table" and item._caps or {}
+        caps[alias_lower] = action == "capitals" or nil
+        item._caps = next(caps) and caps or nil
     end
 
     -- Save
@@ -6736,7 +6793,9 @@ local function indexMentionRows(document, pages, set, handles)
         if text ~= "" then
             local pieces = XrayParser.textPieces(text)
             local norm, ranges = XrayParser.normalizePieces(pieces)
-            for k, o in ipairs(XrayParser.occurrencesIn(norm, set, handles)) do
+            -- A name set to capitals only reads the capitals (B533 S2)
+            local keep = set.caps and XrayParser.normalizePieces(pieces, true) or nil
+            for k, o in ipairs(XrayParser.occurrencesIn(norm, set, handles, keep)) do
                 local f, l = XrayParser.piecesForSpan(ranges, o[1], o[2])
                 if f then
                     local before, match, after = XrayParser.snippetFromPieces(pieces, f, l)
@@ -6770,8 +6829,15 @@ function XrayBrowser:_mentionXPointer(mention)
     if not ok or not pieces then return nil end
     local ranges = {}
     for i, pc in ipairs(pieces) do ranges[i] = pc.range or false end
+    -- Counted as the row was (capitals only, B533 S2)
+    local keep
+    if mention.set.caps then
+        local kb = XrayParser.newPieceNormalizer(true)
+        for _q, pc in ipairs(pieces) do kb.add(pc.text) end
+        keep = kb.result()
+    end
     local n = 0
-    for _idx, o in ipairs(XrayParser.occurrencesIn(norm, mention.set, mention.handles)) do
+    for _idx, o in ipairs(XrayParser.occurrencesIn(norm, mention.set, mention.handles, keep)) do
         local f, l = XrayParser.piecesForSpan(ranges, o[1], o[2])
         if f then
             for q = f, l do
@@ -7047,9 +7113,9 @@ function XrayBrowser:_gotoMentionAndSearch(category_key, item_title, mention, te
         launchSearchSession(ui, mention.term.text, false, return_info)
     else
         -- EPUB: regex-OR of every term so prev/next walks aliases too
-        local pattern = buildSearchPattern(terms)
+        local pattern, cased = buildSearchPattern(terms)
         if pattern then
-            launchSearchSession(ui, pattern, true, return_info)
+            launchSearchSession(ui, pattern, true, return_info, cased)
         else
             launchSearchSession(ui, terms[1].text, false, return_info)
         end

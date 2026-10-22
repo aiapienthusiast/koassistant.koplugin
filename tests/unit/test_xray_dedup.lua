@@ -377,6 +377,36 @@ TestRunner:test("B533: a rename record round-trips, alone or beside search terms
     ActionCache.setUserAliases(DOC_PATH, clean)
 end)
 
+TestRunner:test("B533 S2: names set to capitals only round-trip, alone or beside the rest, and follow a rename", function()
+    local all = ActionCache.getUserAliases(DOC_PATH)
+    all["The Reed Folk"] = { case = { ["the reed folk"] = "capitals" } }
+    all["Marrow"] = { add = { "the Marrow" }, case = { ["marrow"] = "capitals", ['the "old" marrow'] = "capitals" } }
+    TestRunner:assertEqual(ActionCache.setUserAliases(DOC_PATH, all), true, "save")
+    local back = ActionCache.getUserAliases(DOC_PATH)
+    TestRunner:assertEqual(back["The Reed Folk"].case["the reed folk"], "capitals", "a record with only capitals is kept")
+    TestRunner:assertEqual(#(back["The Reed Folk"].add or {}), 0, "never read as the old list format")
+    TestRunner:assertEqual(back["Marrow"].case['the "old" marrow'], "capitals", "quotes survive")
+    TestRunner:assertEqual(back["Marrow"].add[1], "the Marrow", "search terms beside it")
+    -- the record follows a rename, merged into one already there
+    back["Old Marrow"] = { case = { ["old marrow"] = "capitals" } }
+    ActionCache.setUserAliases(DOC_PATH, back)
+    ActionCache.renameEntityKeys(DOC_PATH, "characters", "Marrow", "Old Marrow")
+    local moved = ActionCache.getUserAliases(DOC_PATH)["Old Marrow"]
+    TestRunner:assertEqual(moved.case["marrow"], "capitals", "the old name's choice moves")
+    TestRunner:assertEqual(moved.case["old marrow"], "capitals", "beside the one already there")
+    -- the view: mergeUserAliases marks the names, matchTermSet asks their capitals
+    local XrayParser = require("koassistant.xray.xray_parser")
+    local data = { characters = { { name = "The Reed Folk" } } }
+    XrayParser.mergeUserAliases(data, ActionCache.getUserAliases(DOC_PATH))
+    TestRunner:assertEqual(data.characters[1]._caps["the reed folk"], true, "marked on the entry")
+    TestRunner:assertEqual(XrayParser.matchTermSet(data.characters[1]).caps["the reed folk"], 6,
+        "Reed and Folk required, The free")
+    -- leave the file as the next tests expect it
+    local clean = ActionCache.getUserAliases(DOC_PATH)
+    clean["The Reed Folk"], clean["Old Marrow"] = nil, nil
+    ActionCache.setUserAliases(DOC_PATH, clean)
+end)
+
 TestRunner:test("second pair appends; quotes in names survive %q escaping", function()
     TestRunner:assertEqual(ActionCache.addNeverMergePair(DOC_PATH, 'The "Duke"', "El Duque"), true, "add quoted")
     local pairs_list = ActionCache.getNeverMergePairs(DOC_PATH)

@@ -531,9 +531,20 @@ local function computeMarks(state, ui, pageno, last, stamp, dbg)
   if not pieces or #pieces == 0 then return {} end
   local ranges = {}
   for k, pc in ipairs(pieces) do ranges[k] = pc.range or false end
+  -- The run with its capitals, when a name on it is set to capitals only
+  -- (B533 S2): the walk's pieces again, through the builder's unfolded twin
+  local keep
+  for _k, i in ipairs(candidates) do
+    if state.entities[i].set.caps then
+      local kb = XrayParser.newPieceNormalizer(true)
+      for _q, pc in ipairs(pieces) do kb.add(pc.text) end
+      keep = kb.result()
+      break
+    end
+  end
   local occ_by = {}
   for _k, i in ipairs(candidates) do
-    local occ = XrayParser.occurrencesIn(norm, state.entities[i].set, nil)
+    local occ = XrayParser.occurrencesIn(norm, state.entities[i].set, nil, keep)
     if #occ > 0 then occ_by[i] = occ end
   end
   -- B266: an occurrence strictly inside a longer entity's occurrence is that

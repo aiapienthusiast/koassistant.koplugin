@@ -585,6 +585,153 @@ TestRunner:test("once per page, and spacing from the index", function()
     TestRunner:eq(markNames(XrayMarks._computeMarks(first_only, ui, 2, 2, "unbuilt"))["Albert Einstein"], 1)
 end)
 
+-- ── Capitals only (B533 S2) ────────────────────────────────────────────
+TestRunner:suite("capitals only (B533 S2)")
+local function required(name) return XrayParser.capsRequired(XrayParser.matchNormalizeKeepCase(name), true) end
+local function passes(name, text)
+    return XrayParser.capsPass(XrayParser.capsMask(XrayParser.matchNormalizeKeepCase(text)), required(name))
+end
+TestRunner:test("the rule: the name's capitals in the text, its first word free, all-caps passes", function()
+    TestRunner:ok(passes("The Pale Ones", "the Pale Ones"), "a small the mid-sentence")
+    TestRunner:ok(passes("The Pale Ones", "The Pale Ones"))
+    TestRunner:ok(passes("The Pale Ones", "THE PALE ONES"), "all-caps")
+    TestRunner:ok(not passes("The Pale Ones", "the pale ones"), "the everyday phrase")
+    TestRunner:ok(passes("Tide", "Tide"))
+    TestRunner:ok(not passes("Tide", "tide"))
+    TestRunner:ok(not passes("Red Fen", "red fen"), "the second word decides")
+    TestRunner:ok(passes("Red Fen", "red Fen"), "the first word is free")
+    TestRunner:ok(passes("Ana-Lis", "Ana-lis"), "a word's first letter only")
+    TestRunner:eq(required("the grafter"), 0, "a name with no capital requires nothing")
+    TestRunner:eq(required("李白"), 0, "nor one in a script without case")
+    TestRunner:ok(passes("Tide", "李白"), "a word without case counts as capitalized")
+end)
+TestRunner:test("matchTermSet: the forms a capitals-only name requires; any case wins a shared form", function()
+    local item = { name = "The Wise Old Man", aliases = { "the wise old man" },
+        _caps = { ["the wise old man"] = true } }
+    -- the alias as written is lowercase, but the record is by the lowered
+    -- name, so both are capitals only: the name's capitals rule its forms
+    local set = XrayParser.matchTermSet(item)
+    TestRunner:eq(set.caps["the wise old man"], 14, "Wise, Old and Man; The free")
+    TestRunner:eq(set.caps["wise old man"], 7, "the article-dropped form keeps every capital left")
+    local mixed = XrayParser.matchTermSet({ name = "The Drowned", aliases = { "the drowned" },
+        _caps = { ["the drowned"] = true } })
+    TestRunner:eq(mixed.caps["the drowned"], 2, "one record covers both spellings")
+    local open = XrayParser.matchTermSet({ name = "Warden", aliases = { "warden" }, _caps = {} })
+    TestRunner:eq(open.caps, nil, "nothing set: no caps table")
+    local any = { name = "Gil Rook", aliases = { "Gil" }, _caps = { ["gil rook"] = true } }
+    TestRunner:eq(XrayParser.matchTermSet(any).caps["gil"], nil, "the alias stays any case")
+    any._caps = nil
+    TestRunner:eq(XrayParser.matchTermSet(any).caps, nil, "the memo follows the record")
+end)
+TestRunner:test("occurrencesIn: a capitals-only form counts with the twin, every case without it", function()
+    local set = XrayParser.matchTermSet({ name = "The Drowned", _caps = { ["the drowned"] = true } })
+    local text = "Past the drowned trees, the Drowned lit fires. THE DROWNED came."
+    local norm, keep = XrayParser.matchNormalize(text), XrayParser.matchNormalizeKeepCase(text)
+    TestRunner:eq(#XrayParser.occurrencesIn(norm, set), 3, "no twin: as before")
+    local occ = XrayParser.occurrencesIn(norm, set, nil, keep)
+    TestRunner:eq(#occ, 2)
+    TestRunner:eq(keep:sub(occ[1][1], occ[1][2]), "the Drowned")
+    -- a twin that does not fold back (a piece the fold changed) passes
+    TestRunner:eq(#XrayParser.occurrencesIn(norm, set, nil, ("\1"):rep(#norm)), 3, "unreadable: counted")
+end)
+TestRunner:test("the piece builder's twin: same bytes as the folded run", function()
+    local pieces = XrayParser.textPieces("Out on the water the Drowned lit fires, past the drowned trees.")
+    local norm = XrayParser.normalizePieces(pieces)
+    local keep = XrayParser.normalizePieces(pieces, true)
+    TestRunner:eq(#keep, #norm)
+    TestRunner:eq(XrayParser.foldCase(keep), norm)
+    TestRunner:ok(keep:find("the Drowned", 1, true) ~= nil)
+end)
+
+local CAPS_PARAS = {
+    "Out on the water the Drowned lit fires past the drowned trees.",
+    "Tamsin counted the drowned rows.",
+    "THE DROWNED came at night.",
+}
+local caps_doc = newMockDoc(CAPS_PARAS, { { 1, 0 }, { 2, 0 }, { 3, 0 } })
+caps_doc.file = "/books/caps.epub"
+local CAPS_DATA = { characters = { { name = "The Drowned" } } }
+local CAPS_SCANNED = XrayIndex.scan(caps_doc, { "the drowned" }, 1, 3)
+local CAPS_LAYOUT = { stamp = "C1", forms = CAPS_SCANNED }
+local function drownedSet(capitals)
+    local data = { characters = { { name = "The Drowned" } } }
+    if capitals then
+        XrayParser.mergeUserAliases(data, { ["The Drowned"] = { case = { ["the drowned"] = "capitals" } } })
+    end
+    return XrayParser.matchTermSet(data.characters[1]), data
+end
+TestRunner:test("the index records each occurrence's capitals", function()
+    TestRunner:eq(CAPS_SCANNED["the drowned"], "1:18m2.45m0,1:16m0,1:1",
+        "the Drowned, the drowned; the drowned; THE DROWNED (every word capitalized: no mark)")
+    local d = XrayIndex.decode(CAPS_LAYOUT, "the drowned")
+    TestRunner:eq(table.concat(d.pages, ","), "1,2,3")
+    TestRunner:eq(d.caps[1][1], 2)
+    TestRunner:eq(d.caps[1][2], 0)
+    TestRunner:eq(d.caps[3], nil)
+end)
+TestRunner:test("counts and spacing follow capitals only, with no new pass", function()
+    local any = drownedSet(false)
+    local counts, total = XrayIndex.entityPages(CAPS_LAYOUT, any, nil)
+    TestRunner:eq(total, 4, "any case: all four")
+    TestRunner:eq(counts[2], 1)
+    local caps = drownedSet(true)
+    counts, total = XrayIndex.entityPages(CAPS_LAYOUT, caps, nil)
+    TestRunner:eq(total, 2, "capitals only: the faction twice")
+    TestRunner:eq(counts[1], 1)
+    TestRunner:eq(counts[2], nil, "the drowned rows are not a mention")
+    TestRunner:eq(counts[3], 1)
+    TestRunner:eq(XrayIndex.prevPage(CAPS_LAYOUT, caps, nil, 3), 1, "the spacing skips page 2")
+    TestRunner:eq(XrayIndex.prevPage(CAPS_LAYOUT, any, nil, 3), 2)
+end)
+TestRunner:test("the marks: a capitals-only name underlines only where the text has its capitals", function()
+    local caps_ui = { document = caps_doc }
+    caps_doc.current_page = 1
+    local _any_set, any_data = drownedSet(false)
+    local any_state = { entities = XrayParser.buildMarkEntities(any_data), spacing = 0, file = caps_doc.file }
+    TestRunner:eq(markNames(XrayMarks._computeMarks(any_state, caps_ui, 1, 1, "none"))["The Drowned"], 2)
+    local _caps_set, caps_data = drownedSet(true)
+    local caps_state = { entities = XrayParser.buildMarkEntities(caps_data), spacing = 0, file = caps_doc.file }
+    local marks = XrayMarks._computeMarks(caps_state, caps_ui, 1, 1, "none")
+    TestRunner:eq(markNames(marks)["The Drowned"], 1, "the faction, not the drowned trees")
+    caps_doc.current_page = 2
+    TestRunner:eq(markNames(XrayMarks._computeMarks(caps_state, caps_ui, 2, 2, "none"))["The Drowned"], nil)
+    caps_doc.current_page = 3
+    TestRunner:eq(markNames(XrayMarks._computeMarks(caps_state, caps_ui, 3, 3, "none"))["The Drowned"], 1,
+        "all-caps text passes")
+end)
+TestRunner:test("a selection routes to the entry only with its capitals; a typed search still lists it", function()
+    local _set, data = drownedSet(true)
+    local route = {}
+    XrayParser.foldExactHandles(data, route)
+    TestRunner:ok(not XrayParser.matchExactHandle(route, "the drowned"), "the everyday phrase opens the dictionary")
+    TestRunner:ok(XrayParser.matchExactHandle(route, "the Drowned"))
+    TestRunner:ok(XrayParser.matchExactHandle(route, "THE DROWNED"))
+    TestRunner:eq(#XrayParser.searchAll(data, "the drowned", { exact = true }), 0, "no direct hit")
+    TestRunner:eq(#XrayParser.searchAll(data, "the Drowned", { exact = true }), 1)
+    TestRunner:eq(#XrayParser.searchAll(data, "the drowned"), 1, "the list finds it")
+    -- an any-case handle of another entry under the same key still routes
+    XrayParser.foldExactHandles({ characters = { { name = "the drowned" } } }, route)
+    TestRunner:ok(XrayParser.matchExactHandle(route, "the drowned"))
+end)
+TestRunner:test("the PDF hits and KOReader's search: the same capitals", function()
+    local _set, data = drownedSet(true)
+    local terms = XrayParser.collectSearchTerms(data.characters[1])
+    TestRunner:eq(terms[1].caps, 2)
+    TestRunner:eq(terms[1].words, 2)
+    TestRunner:ok(not XrayParser.textCapsOk("the drowned", terms[1].caps, terms[1].words))
+    TestRunner:ok(XrayParser.textCapsOk("the Drowned,", terms[1].caps, terms[1].words), "punctuation rides along")
+    TestRunner:ok(XrayParser.textCapsOk("the drowned rows", terms[1].caps, terms[1].words),
+        "another word count: unreadable, counted")
+    TestRunner:eq(XrayParser.caseSearchRegex("The Drowned", 2), "[tT][hH][eE]\\s+D[rR][oO][wW][nN][eE][dD]")
+    TestRunner:eq(XrayParser.caseSearchRegex("Élodie", 1), "\\u00C9[lL][oO][dD][iI][eE]",
+        "non-ASCII as code points (crengine's regex)")
+    TestRunner:eq(XrayParser.caseSearchRegex("St. Vale", 0), "[sS][tT]\\.\\s+[vV][aA][lL][eE]", "any case, escaped")
+    local example, lower = XrayParser.capsExample("The Drowned")
+    TestRunner:eq(example, "the Drowned")
+    TestRunner:eq(lower, "the drowned")
+    TestRunner:eq(XrayParser.capsExample("the grafter"), nil, "nothing to offer")
+end)
+
 os.execute('rm -rf "' .. SIDECAR .. '"')
 print(string.format("  Results: %d passed, %d failed", TestRunner.passed, TestRunner.failed))
 return TestRunner.failed == 0

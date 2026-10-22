@@ -840,12 +840,13 @@ end
 --- @param text_lower string matchNormalize'd text (plain lowered text works for Latin)
 --- @param exclude_handles table|nil XrayParser.containingMatchHandles output: spans inside an
 ---   occurrence of another entity's longer handle are not counted (B266)
+--- @param keep string|nil the text through matchNormalizeKeepCase (capitals only, B533 S2)
 --- @return number count Unique match count across name and all aliases (0 if not found or name ≤2 chars)
-function XrayParser.countItemOccurrences(item, text_lower, exclude_handles)
+function XrayParser.countItemOccurrences(item, text_lower, exclude_handles, keep)
     if type(text_lower) ~= "string" or text_lower == "" then return 0 end
     local set = XrayParser.matchTermSet(item)
     if not set then return 0 end
-    return #XrayParser.occurrencesIn(text_lower, set, exclude_handles)
+    return #XrayParser.occurrencesIn(text_lower, set, exclude_handles, keep)
 end
 
 --- Singleton categories not useful for chapter text matching
@@ -1214,7 +1215,7 @@ function XrayParser.mergeUserAliases(data, user_aliases)
         if name and type(entry) == "table" then
             local add = entry.add or {}
             local ignore = entry.ignore or {}
-            if #add > 0 or #ignore > 0 then
+            if #add > 0 or #ignore > 0 or (type(entry.case) == "table" and next(entry.case)) then
                 -- Keys stored before the separator repair keep attaching (#90)
                 lookup[repairSeparators(name):lower()] = entry
             end
@@ -1253,6 +1254,17 @@ function XrayParser.mergeUserAliases(data, user_aliases)
                     -- foldExactHandles, searchAll exact). A view-only mark:
                     -- merged data is never written back.
                     item._name_off = ignore_set[item_name:lower()] or nil
+                    -- B533 S2: the names set to capitals only, by the name
+                    -- as written, lowered (matchTermSet, collectSearchTerms,
+                    -- the exact lookups read it); view-only like the above
+                    local caps
+                    for term, how in pairs(type(user_entry.case) == "table" and user_entry.case or {}) do
+                        if how == "capitals" and type(term) == "string" then
+                            caps = caps or {}
+                            caps[term:lower()] = true
+                        end
+                    end
+                    item._caps = caps
 
                     -- Add user aliases (dedup, case-insensitive)
                     local existing_lower = {}
@@ -1788,6 +1800,10 @@ function XrayParser.searchAll(data, query, opts)
     -- name answers to the name without its gloss and to a bracketed name in
     -- another script
     local qkeys = exact and XrayParser.exactQueryKeys(query)
+    local function capsHit(item, h)
+        local req, words = XrayParser.handleCaps(h, item._caps)
+        return not req or XrayParser.textCapsOk(query, req, words)
+    end
 
     local categories = XrayParser.getCategories(data)
     -- A pasted "_" spelling finds the dotted entry (#90)
@@ -1812,8 +1828,10 @@ function XrayParser.searchAll(data, query, opts)
                 if name ~= "" then
                     if exact then
                         -- a main name set to not matched gives no direct hit
-                        -- (B533); the substring search below still lists it
-                        if not item._name_off and XrayParser.exactHandleHit(name, qkeys) then
+                        -- (B533); the substring search below still lists it.
+                        -- One set to capitals only hits with its capitals (S2)
+                        if not item._name_off and XrayParser.exactHandleHit(name, qkeys)
+                                and capsHit(item, name) then
                             match_field = "name"
                         end
                     else
@@ -1829,7 +1847,7 @@ function XrayParser.searchAll(data, query, opts)
                 if not match_field and i_aliases then
                     for _idx3, alias in ipairs(i_aliases) do
                         if exact then
-                            if XrayParser.exactHandleHit(alias, qkeys) then
+                            if XrayParser.exactHandleHit(alias, qkeys) and capsHit(item, alias) then
                                 match_field = "alias"
                                 break
                             end
@@ -1966,21 +1984,33 @@ end
 --- raw-handle-only set refused the selection). Skips the
 --- singleton categories searchAll skips. Feeds the memoized route index
 --- behind the selection intercept (slice 2, ref #63).
+--- A handle set to capitals only (B533 S2) folds { required, words } pairs
+--- instead of true: a selection then routes only with those capitals, so a
+--- long-press on the everyday word opens the dictionary, not the entry.
 --- @param data table Parsed X-Ray data (user aliases already merged)
---- @param set table Accumulator: normalized handle -> true
+--- @param set table Accumulator: normalized handle -> true | { {required, words}, ... }
 function XrayParser.foldExactHandles(data, set)
-    local function fold(h)
-        for _i, k in ipairs(XrayParser.exactKeys(h)) do set[k] = true end
+    local function fold(h, caps_on)
+        local req, words = XrayParser.handleCaps(h, caps_on)
+        for _i, k in ipairs(XrayParser.exactKeys(h)) do
+            if not req then
+                set[k] = true
+            elseif set[k] ~= true then
+                set[k] = set[k] or {}
+                table.insert(set[k], { req, words })
+            end
+        end
     end
     for _idx, cat in ipairs(XrayParser.getCategories(data) or {}) do
         if cat.key ~= "current_state" and cat.key ~= "current_position"
             and cat.key ~= "reader_engagement" and cat.key ~= "conclusion" then
             for _idx2, item in ipairs(cat.items) do
-                if not item._name_off then fold(item.name or item.term or item.event) end
+                local caps_on = type(item._caps) == "table" and item._caps or nil
+                if not item._name_off then fold(item.name or item.term or item.event, caps_on) end
                 local aliases = ensure_array(item.aliases)
                 if aliases then
                     for _idx3, a in ipairs(aliases) do
-                        fold(a)
+                        fold(a, caps_on)
                     end
                 end
             end
@@ -1997,7 +2027,13 @@ end
 --- @return boolean
 function XrayParser.matchExactHandle(set, query)
     for _i, k in ipairs(XrayParser.exactQueryKeys(query)) do
-        if set[k] then return true end
+        local v = set[k]
+        if v == true then return true end
+        if type(v) == "table" then
+            for _j, c in ipairs(v) do
+                if XrayParser.textCapsOk(query, c[1], c[2]) then return true end
+            end
+        end
     end
     return false
 end
@@ -2042,8 +2078,10 @@ end
 --- @return table dropped Longer variants removed by minimization
 function XrayParser.collectSearchTerms(item, item_title)
     local terms, seen = {}, {}
+    local caps_on = type(item._caps) == "table" and item._caps or nil
     local function add(t)
         if type(t) ~= "string" then return end
+        local capitals = caps_on and caps_on[t:lower()]
         -- Strip parenthetical: "Theosis (Deification)" → "Theosis"
         t = t:gsub("%s*%(.-%)%s*", " ")
         t = t:match("^%s*(.-)%s*$") or ""
@@ -2051,10 +2089,22 @@ function XrayParser.collectSearchTerms(item, item_title)
             local k = t:lower()
             if not seen[k] then
                 seen[k] = true
-                table.insert(terms, {
+                local term = {
                     text = t,
                     regex = XrayParser.buildArabicSearchRegex(t),
-                })
+                }
+                -- B533 S2: a name set to capitals only carries what it
+                -- requires (the PDF pass and KOReader's search session)
+                if capitals then
+                    local kept = XrayParser.matchNormalizeKeepCase(t)
+                    local req = XrayParser.capsRequired(kept, true)
+                    if req > 0 then
+                        local n = 0
+                        for _w in kept:gmatch("[^ ]+") do n = n + 1 end
+                        term.caps, term.words = req, n
+                    end
+                end
+                table.insert(terms, term)
             end
         end
     end
@@ -2219,13 +2269,14 @@ function XrayParser.findItemsInChapter(data, chapter_text)
     if not categories or #categories == 0 then return {} end
 
     local text_lower = XrayParser.matchNormalize(chapter_text)
+    local keep = XrayParser.matchNormalizeKeepCase(chapter_text)
     local results = {}
 
     for _idx, cat in ipairs(categories) do
         if not TEXT_MATCH_EXCLUDED[cat.key] then
             for _idx2, item in ipairs(cat.items) do
                 local count = XrayParser.countItemOccurrences(item, text_lower,
-                    XrayParser.containingMatchHandles(data, item))
+                    XrayParser.containingMatchHandles(data, item), keep)
                 if count > 0 then
                     table.insert(results, {
                         item = item,
@@ -2257,11 +2308,12 @@ function XrayParser.findCharactersInChapter(data, chapter_text)
     if not characters or #characters == 0 then return {} end
 
     local text_lower = XrayParser.matchNormalize(chapter_text)
+    local keep = XrayParser.matchNormalizeKeepCase(chapter_text)
     local results = {}
 
     for _idx, char in ipairs(characters) do
         local best_count = XrayParser.countItemOccurrences(char, text_lower,
-            XrayParser.containingMatchHandles(data, char))
+            XrayParser.containingMatchHandles(data, char), keep)
         if best_count > 0 then
             table.insert(results, { item = char, count = best_count })
         end
@@ -2532,6 +2584,194 @@ function XrayParser.matchNormalize(s)
     return (s:gsub("\194\160", " "):gsub("%s+", " "))
 end
 
+-- ── Capitals only (B533 S2, docs/xray_names_matching_plan.md 4.5) ─────────
+-- A name set to capitals only matches where every word of it that starts
+-- with a capital starts with one in the text too. The first word of a name
+-- of two words or more is free ("the Drowned" mid-sentence), all-caps text
+-- passes, and a word in a script without case counts as capitalized. The
+-- matcher finds a span in folded text; the capitals are read at the same
+-- bytes of the text normalized WITHOUT the fold, and a span whose bytes do
+-- not fold back to the match (a character the fold changed in length)
+-- counts as capitalized: as before, never a mention lost.
+
+-- Composition only (the fold also composes, so decomposed accents keep
+-- their length on both sides); identity in unit tests
+local composeNFC = function(s) return s end
+local upperChar, lowerChar = string.upper, string.lower
+do
+    local ok, Utf8Proc = pcall(require, "ffi/utf8proc")
+    if ok and type(Utf8Proc) == "table" then
+        if type(Utf8Proc.normalize_NFC) == "function" then
+            composeNFC = function(text)
+                if not text:find("[\128-\255]") then return text end
+                local nok, out = pcall(Utf8Proc.normalize_NFC, text)
+                if nok and type(out) == "string" then return out end
+                return text
+            end
+        end
+        if type(Utf8Proc.uppercase_dumb) == "function" and type(Utf8Proc.lowercase_dumb) == "function" then
+            upperChar = function(ch)
+                if #ch == 1 then return ch:upper() end
+                local cok, out = pcall(Utf8Proc.uppercase_dumb, ch)
+                return cok and out or ch
+            end
+            lowerChar = function(ch)
+                if #ch == 1 then return ch:lower() end
+                local cok, out = pcall(Utf8Proc.lowercase_dumb, ch)
+                return cok and out or ch
+            end
+        end
+    end
+end
+
+--- matchNormalize without the case fold: the same bytes wherever folding
+--- keeps a character's length, so a span found in the folded text reads here
+--- with its capitals.
+function XrayParser.matchNormalizeKeepCase(s)
+    if type(s) ~= "string" or s == "" then return "" end
+    s = composeNFC(s)
+    s = s:gsub("\194\173", ""):gsub("\226\128[\139-\143]", "")
+        :gsub("\226\129\160", ""):gsub("\239\187\191", "")
+    s = arabicMatchSkeleton(s)
+    return (s:gsub("\194\160", " "):gsub("%s+", " "))
+end
+
+XrayParser.foldCase = foldCase
+
+local function firstChar(word)
+    local c = word:byte(1)
+    if not c then return "" end
+    local n = c < 0x80 and 1 or c < 0xE0 and 2 or c < 0xF0 and 3 or 4
+    return word:sub(1, n)
+end
+
+-- A word that starts with a letter which has an uppercase form other than
+-- itself (a lowercase letter); and one that starts with an uppercase letter
+local function startsLower(word)
+    local ch = firstChar(word)
+    return ch ~= "" and upperChar(ch) ~= ch
+end
+local function startsUpper(word)
+    local ch = firstChar(word)
+    return ch ~= "" and lowerChar(ch) ~= ch
+end
+
+--- Which words of a span start with a capital: bit k (from 0) for word k+1,
+--- set unless that word starts with a lowercase letter.
+--- @param span string matchNormalizeKeepCase text (single spaces)
+function XrayParser.capsMask(span)
+    local mask, bit = 0, 1
+    for word in span:gmatch("[^ ]+") do
+        if not startsLower(word) then mask = mask + bit end
+        bit = bit * 2
+    end
+    return mask
+end
+
+--- The capitals a form of a name requires: bit k for its word k+1 when that
+--- word starts with a capital; the first word free when `first_free` and the
+--- form has two words or more. 0 = nothing to require.
+--- @param kept string the form as written, matchNormalizeKeepCase'd
+function XrayParser.capsRequired(kept, first_free)
+    local words = {}
+    for word in kept:gmatch("[^ ]+") do words[#words + 1] = word end
+    local mask, bit = 0, 1
+    for i, word in ipairs(words) do
+        if not (first_free and i == 1 and #words > 1) and startsUpper(word) then
+            mask = mask + bit
+        end
+        bit = bit * 2
+    end
+    return mask
+end
+
+--- Whether a span's capitals hold every capital the form requires.
+function XrayParser.capsPass(mask, required)
+    while required > 0 do
+        if required % 2 == 1 and mask % 2 == 0 then return false end
+        required = math.floor(required / 2)
+        mask = math.floor(mask / 2)
+    end
+    return true
+end
+
+--- Whether the span [s, e] of folded text `norm` holds the required capitals,
+--- read in its unfolded twin `keep`. A span whose bytes do not fold back to
+--- the match is unreadable and passes.
+function XrayParser.spanCapsOk(norm, keep, s, e, required)
+    local seg = keep:sub(s, e)
+    if foldCase(seg) ~= norm:sub(s, e) then return true end
+    return XrayParser.capsPass(XrayParser.capsMask(seg), required)
+end
+
+--- Whether a text (a hit as the book has it, a selection) holds the capitals
+--- `required` asks of a form of `words` words; a text of another word count
+--- is unreadable and passes.
+function XrayParser.textCapsOk(text, required, words)
+    local kept = (XrayParser.matchNormalizeKeepCase(text):match("^%s*(.-)%s*$")) or ""
+    local n = 0
+    for _w in kept:gmatch("[^ ]+") do n = n + 1 end
+    if words and n ~= words then return true end
+    return XrayParser.capsPass(XrayParser.capsMask(kept), required)
+end
+
+--- The capitals-only label's example pair for a name: as the text writes it
+--- mid-sentence (a leading "The" lowercased) and all lowercase; nil when the
+--- name has no capital to require.
+function XrayParser.capsExample(name)
+    if type(name) ~= "string" or name == "" then return nil end
+    local kept = XrayParser.matchNormalizeKeepCase(name):match("^%s*(.-)%s*$") or ""
+    if XrayParser.capsRequired(kept, true) == 0 then return nil end
+    local shown = kept:gsub("^The (%S)", "the %1")
+    return shown, foldCase(kept)
+end
+
+-- One character as a regex atom for crengine's search (SRELL, which reads
+-- code points: the Arabic pattern's \uXXXX convention): ASCII escaped where
+-- special, other BMP characters as \uXXXX
+local function regexAtom(ch)
+    if #ch == 1 then return (ch:gsub("([%.%+%*%?%[%]%^%$%(%)%{%}%|\\])", "\\%1")) end
+    local c = ch:byte(1)
+    local len = #ch
+    local cp = c % (len == 4 and 8 or len == 3 and 16 or 32)
+    for k = 2, len do cp = cp * 64 + ch:byte(k) % 64 end
+    if cp > 0xFFFF then return ch end
+    return string.format("\\u%04X", cp)
+end
+
+--- KOReader's search pattern for one name, for a case-sensitive session, as
+--- the matcher reads it: the first letter of each word `required` names
+--- exact, every other letter in either case (B533: prev/next then stops where
+--- the counts do).
+--- @param text string the name as written (brackets stripped)
+--- @param required number|nil capsRequired of the name (nil/0 = any case)
+function XrayParser.caseSearchRegex(text, required)
+    local out, word, at_word_start, req = {}, 0, true, required or 0
+    local i, n = 1, #text
+    while i <= n do
+        local c = text:byte(i)
+        local len = c < 0x80 and 1 or c < 0xE0 and 2 or c < 0xF0 and 3 or 4
+        local ch = text:sub(i, i + len - 1)
+        if ch:find("^%s$") then
+            out[#out + 1] = "\\s+"
+            while text:sub(i + 1, i + 1):find("^%s$") do i = i + 1 end
+            at_word_start = true
+        else
+            if at_word_start then word = word + 1 end
+            local exact = at_word_start and math.floor(req / 2 ^ (word - 1)) % 2 == 1
+            local up, low = upperChar(ch), lowerChar(ch)
+            if exact or up == low then
+                out[#out + 1] = regexAtom(ch)
+            else
+                out[#out + 1] = "[" .. regexAtom(low) .. regexAtom(up) .. "]"
+            end
+            at_word_start = false
+        end
+        i = i + len
+    end
+    return table.concat(out)
+end
+
 -- Alef-optional forms of an Arabic name: each alef inside a word kept or
 -- dropped (Uthmani spelling writes a long vowel as a dagger alef, which the
 -- skeleton drops). A word's first alef is always written, so it stays (B339:
@@ -2699,6 +2939,19 @@ function XrayParser.exactHandleHit(h, qkeys)
     return false
 end
 
+--- What a handle set to capitals only requires (B533 S2), read from its name
+--- without brackets: required, word count; nil when it is not set to
+--- capitals only (`caps_on` = an entry's `_caps`) or requires nothing.
+function XrayParser.handleCaps(h, caps_on)
+    if not (caps_on and type(h) == "string" and caps_on[h:lower()]) then return nil end
+    local kept = trimSpaces(XrayParser.matchNormalizeKeepCase(handleNames(h)[1]))
+    local req = XrayParser.capsRequired(kept, true)
+    if req == 0 then return nil end
+    local n = 0
+    for _w in kept:gmatch("[^ ]+") do n = n + 1 end
+    return req, n
+end
+
 -- matchTermSet memo: the same item table asks many times per view (every
 -- other entity's containment check), keyed weakly with a name+aliases
 -- signature so an alias edited in place is never served stale
@@ -2709,26 +2962,49 @@ local term_set_memo = setmetatable({}, { __mode = "k" })
 --- alias, normalized, plus the article-dropped (Arabic; English "the" while
 --- two words remain) and Arabic alef-optional forms. `all` is longest first (the widest form present paints), `minimal`
 --- the forms that contain no other form, `source` maps each form to the name
---- or alias as written (what a tap on it opens). nil when the name is two
---- bytes or shorter (the counting rule since the Mentions view shipped).
+--- or alias as written (what a tap on it opens), `caps` the forms of a name
+--- set to capitals only with the capitals each requires (capsRequired; nil
+--- when none). nil when the name is two bytes or shorter (the counting rule
+--- since the Mentions view shipped).
 --- @param item table X-Ray entry
 --- @param item_title string|nil name fallback
---- @return table|nil { all, minimal, source }
+--- @return table|nil { all, minimal, source, caps }
 function XrayParser.matchTermSet(item, item_title)
     if type(item) ~= "table" then return nil end
     local name = getItemSearchName(item) or item_title
     if type(name) ~= "string" or #name <= 2 then return nil end
     local aliases = ensure_array(item.aliases)
+    -- B533 S2: the names set to capitals only (the reader's record, merged
+    -- by mergeUserAliases as `_caps`, keyed by the name as written, lowered)
+    local caps_on = type(item._caps) == "table" and next(item._caps) and item._caps or nil
+    local caps_sig = ""
+    if caps_on then
+        local ks = {}
+        for k in pairs(caps_on) do ks[#ks + 1] = k end
+        table.sort(ks)
+        caps_sig = "\0caps\0" .. table.concat(ks, "\0")
+    end
     local sig = name .. "\0" .. (aliases and table.concat(aliases, "\0") or "")
-        .. (item._name_off and "\0off" or "")
+        .. (item._name_off and "\0off" or "") .. caps_sig
     local memo = term_set_memo[item]
     if memo and memo.sig == sig then return memo.set end
 
-    local all, seen, source = {}, {}, {}
-    local function addForm(text)
+    local all, seen, source, caps, anycase = {}, {}, {}, {}, {}
+    local function addForm(text, capitals)
         local norm = trimSpaces(XrayParser.matchNormalize(text))
         if #norm <= 2 then return end
-        local forms = { norm }
+        -- The capitals each form requires (the article-dropped form keeps
+        -- every capital of what remains: its free word was the article)
+        local req_full, req_rest
+        if capitals then
+            local kept = trimSpaces(XrayParser.matchNormalizeKeepCase(text))
+            if foldCase(kept) == norm then
+                req_full = XrayParser.capsRequired(kept, true)
+                local kept_rest = kept:match("^%S+ (.+)$")
+                req_rest = kept_rest and XrayParser.capsRequired(kept_rest, false)
+            end
+        end
+        local forms, reqs = { norm }, { req_full }
         if XrayParser.containsArabic(norm) then
             local stripped = trimSpaces(stripArabicArticle(norm))
             if stripped ~= norm and #stripped > 4 then forms[2] = stripped end
@@ -2746,25 +3022,39 @@ function XrayParser.matchTermSet(item, item_title)
             -- matches too while two words or more remain ("The Sun" keeps
             -- its article: "sun" alone would match every sun).
             local rest = norm:match("^the (.+)$")
-            if rest and rest:find(" ", 1, true) then forms[#forms + 1] = rest end
+            if rest and rest:find(" ", 1, true) then
+                forms[#forms + 1] = rest
+                reqs[#forms] = req_rest
+            end
         end
-        for _f, form in ipairs(forms) do
+        for f_idx, form in ipairs(forms) do
+            local req = reqs[f_idx]
             for _v, v in ipairs(alefVariants(form)) do
                 v = trimSpaces(v)
                 -- An Arabic form of two letters sits inside countless words
                 -- (a pronoun, a dropped-alef skeleton): three letters at least
                 local letters = arabicLetterCount(v)
-                if #v > 2 and not seen[v] and (letters == 0 or letters >= 3) then
-                    seen[v] = true
-                    all[#all + 1] = v
-                    source[v] = text
+                if #v > 2 and (letters == 0 or letters >= 3) then
+                    if not seen[v] then
+                        seen[v] = true
+                        all[#all + 1] = v
+                        source[v] = text
+                    end
+                    if not capitals then
+                        -- a name in any case shares the form: any case wins
+                        anycase[v] = true
+                        caps[v] = nil
+                    elseif not anycase[v] and not caps[v] and req and req > 0 then
+                        caps[v] = req
+                    end
                 end
             end
         end
     end
     local function addName(t)
         if type(t) ~= "string" then return end
-        for _i, n in ipairs(handleNames(t)) do addForm(n) end
+        local capitals = caps_on and caps_on[t:lower()] or nil
+        for _i, n in ipairs(handleNames(t)) do addForm(n, capitals) end
     end
     -- B533: a main name set to not matched matches nothing; the aliases still do
     if not item._name_off then addName(name) end
@@ -2788,7 +3078,7 @@ function XrayParser.matchTermSet(item, item_title)
             end
             if not contains then minimal[#minimal + 1] = t end
         end
-        set = { all = all, minimal = minimal, source = source }
+        set = { all = all, minimal = minimal, source = source, caps = next(caps) and caps or nil }
     end
     term_set_memo[item] = { sig = sig, set = set }
     return set
@@ -2845,17 +3135,24 @@ end
 --- Occurrences of one entity in a normalized text: the spans of every form,
 --- minus those inside an occurrence of a containing form (B266), merged so a
 --- longer form covering a shorter one is one occurrence. Each occurrence
---- keeps its widest form (`form`) for the tap text.
+--- keeps its widest form (`form`) for the tap text. With `keep` (the same
+--- text through matchNormalizeKeepCase, or a piece builder's twin) a form
+--- of a name set to capitals only counts only where the text has its
+--- capitals (B533 S2); without it every form matches in any case.
 --- @param norm string matchNormalize output
 --- @param set table matchTermSet output
 --- @param handles table|nil containing forms
+--- @param keep string|nil the unfolded twin of norm
 --- @return table array of { s, e, form = string } in text order
-function XrayParser.occurrencesIn(norm, set, handles)
+function XrayParser.occurrencesIn(norm, set, handles, keep)
     local spans = {}
     for _idx, t in ipairs(set.all) do
         if norm:find(t, 1, true) then
+            local req = keep and set.caps and set.caps[t]
             for _idx2, sp in ipairs(XrayParser._collectMatchSpans(norm, t)) do
-                spans[#spans + 1] = { sp[1], sp[2], t }
+                if not req or XrayParser.spanCapsOk(norm, keep, sp[1], sp[2], req) then
+                    spans[#spans + 1] = { sp[1], sp[2], t }
+                end
             end
         end
     end
@@ -2915,9 +3212,13 @@ end
 --- before them), recording each piece's byte range in it, so a span found in
 --- the string maps back to whole words. Whitespace runs collapse across
 --- pieces exactly as matchNormalize collapses them in one string.
+--- @param keep_case boolean|nil build the unfolded twin instead (B533 S2):
+---   the same bytes wherever the fold keeps a piece's length; a piece it
+---   does not is filled with bytes that never fold back, so a span over it
+---   reads as unknown and passes
 --- @return table builder: add(text, sep) → { first, last } or false (the
 ---   piece normalizes to nothing, e.g. a lone Quranic sign); len; result()
-function XrayParser.newPieceNormalizer()
+function XrayParser.newPieceNormalizer(keep_case)
     local b = { out = {}, len = 0, ends_space = true }
     local function push(chunk)
         if chunk == "" then return end
@@ -2934,9 +3235,22 @@ function XrayParser.newPieceNormalizer()
         text = text or ""
         -- Fast path: ASCII (most pieces of Latin-script books)
         if not text:find("[\128-\255]") then
-            text = text:lower():gsub("%s+", " ")
+            if keep_case then
+                text = text:gsub("%s+", " ")
+            else
+                text = text:lower():gsub("%s+", " ")
+            end
         else
-            text = XrayParser.matchNormalize(text)
+            local folded = XrayParser.matchNormalize(text)
+            if keep_case then
+                local kept = XrayParser.matchNormalizeKeepCase(text)
+                if #kept == #folded and foldCase(kept) == folded then
+                    folded = kept
+                else
+                    folded = folded:gsub("[^ ]", "\1")
+                end
+            end
+            text = folded
         end
         local before = b.len
         push(text)
@@ -2953,9 +3267,10 @@ end
 --- own: none between CJK characters, an apostrophe inside "friend’s".
 --- @param pieces array of { text = word (and the separator after it),
 ---   sep = text before it (optional) }
+--- @param keep_case boolean|nil the unfolded twin instead (newPieceNormalizer)
 --- @return string norm, table ranges
-function XrayParser.normalizePieces(pieces)
-    local b = XrayParser.newPieceNormalizer()
+function XrayParser.normalizePieces(pieces, keep_case)
+    local b = XrayParser.newPieceNormalizer(keep_case)
     local ranges = {}
     for i, p in ipairs(pieces) do ranges[i] = b.add(p.text, p.sep) end
     return b.result(), ranges

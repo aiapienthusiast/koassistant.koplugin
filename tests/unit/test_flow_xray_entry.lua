@@ -411,6 +411,51 @@ TestRunner:test("a rename keeps the AI's name matched, asks nothing, and Reset u
     if not ok then error(err, 0) end
 end)
 
+TestRunner:test("capitals only: the option names its example, the row says it, Reset clears it (S2)", function()
+    local h = namesHarness()
+    local ok, err = pcall(function()
+        local CAPS = "Match capitals only (\"the Drowned\", not \"the drowned\")"
+        ui.stack = {}
+        h.b:editSearchTerms(entry(h.b.xray_data, "characters", "The Drowned"), "characters", "The Drowned")
+        ui:tap("The Drowned · main name · matched")
+        ui:tap(CAPS)
+        TestRunner:assertEqual(h.store()["The Drowned"].case["the drowned"], "capitals", "written to the alias file")
+        TestRunner:assertTrue(ui:has("The Drowned · main name · capitals only"), rowsOf())
+        TestRunner:assertTrue(ui:has("Reset to the AI's names"), rowsOf())
+        -- a fresh read of the book, as every surface does: the matcher asks the capitals
+        local fresh = XrayParser.parse(XrayParser.serialize(h.disk))
+        XrayParser.mergeUserAliases(fresh, h.store())
+        TestRunner:assertEqual(XrayParser.matchTermSet(entry(fresh, "characters", "The Drowned")).caps["the drowned"], 2)
+        -- and back
+        ui:tap("The Drowned · main name · capitals only")
+        TestRunner:assertTrue(ui:has("Match any case") and ui:has("Stop matching"), rowsOf())
+        ui:tap("Match any case")
+        TestRunner:assertTrue(ui:has("The Drowned · main name · matched"), rowsOf())
+        TestRunner:assertEqual(h.store()["The Drowned"].case, nil, "out of the alias file")
+        -- Reset clears it with the rest
+        ui:tap("The Drowned · main name · matched")
+        ui:tap(CAPS)
+        ui:tap("Reset to the AI's names")
+        ui:tap("Reset")
+        TestRunner:assertEqual(h.store()["The Drowned"], nil, "the record cleared")
+        TestRunner:assertTrue(ui:has("The Drowned · main name · matched") and not ui:has("Reset to the AI's names"),
+            rowsOf())
+        -- a one-word term names itself; a name with no capital is offered nothing
+        ui.stack = {}
+        h.b:editSearchTerms(entry(h.b.xray_data, "lexicon", "Warden"), "lexicon", "Warden")
+        ui:tap("Warden · main name · matched")
+        TestRunner:assertTrue(ui:has("Match capitals only (\"Warden\", not \"warden\")"), rowsOf())
+        ui.stack = {}
+        h.b:editSearchTerms(entry(h.b.xray_data, "characters", "Gil Rook"), "characters", "Gil Rook")
+        ui:tap("the grafter · from the AI · matched")
+        for _idx, t in ipairs(ui:texts()) do
+            TestRunner:assertTrue(not t:find("capitals", 1, true), "no capital to require: " .. rowsOf())
+        end
+    end)
+    h.restore()
+    if not ok then error(err, 0) end
+end)
+
 TestRunner:test("a rebuild that names the entry as the AI did gets the reader's name back", function()
     local rebuilt = KoaMock.xray("Mock Series 3")
     local records = { ["Gil Rookwood"] = { ai_name = "Gil Rook", typed = { "Gil Rookwood", "Rook the Younger" } } }

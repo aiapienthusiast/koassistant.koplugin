@@ -1193,7 +1193,7 @@ function ActionCache.getUserAliases(document_path)
             and name ~= ActionCache.REMOVED_STUBS_KEY
             and name ~= ActionCache.PROMOTED_STUBS_KEY
             and type(entry) == "table" and not entry.add and not entry.ignore
-            and not entry.ai_name and not entry.typed then
+            and not entry.ai_name and not entry.typed and not entry.case then
             -- Old format: plain array of strings
             data[name] = { add = entry }
         end
@@ -1226,7 +1226,8 @@ function ActionCache.setUserAliases(document_path, aliases_table)
             local ignore = entry.ignore or {}
             local typed = entry.typed or {}
             local renamed = type(entry.ai_name) == "string" and entry.ai_name ~= ""
-            if #add == 0 and #ignore == 0 and #typed == 0 and not renamed then
+            local cased = type(entry.case) == "table" and next(entry.case) ~= nil
+            if #add == 0 and #ignore == 0 and #typed == 0 and not renamed and not cased then
                 aliases_table[name] = nil
             end
         end
@@ -1303,6 +1304,21 @@ function ActionCache.setUserAliases(document_path, aliases_table)
             if type(entry.typed) == "table" and #entry.typed > 0 then
                 file:write(", typed = ")
                 write_array(file, entry.typed)
+            end
+            -- B533 S2: the names set to capitals only
+            if type(entry.case) == "table" and next(entry.case) then
+                local terms = {}
+                for term, how in pairs(entry.case) do
+                    if type(term) == "string" and how == "capitals" then terms[#terms + 1] = term end
+                end
+                table.sort(terms)
+                if #terms > 0 then
+                    file:write(", case = {")
+                    for _ti, term in ipairs(terms) do
+                        file:write(string.format(" [%q] = \"capitals\",", term))
+                    end
+                    file:write(" }")
+                end
             end
             file:write(" },\n")
         end
@@ -1545,6 +1561,13 @@ function ActionCache.renameEntityKeys(document_path, category_key, old_name, new
         if type(new_rec) == "table" then
             -- B533's rename record: the AI's name and the reader's typed names
             new_rec.ai_name = new_rec.ai_name or old_rec.ai_name
+            -- and the names set to capitals only (S2)
+            if type(old_rec.case) == "table" then
+                new_rec.case = type(new_rec.case) == "table" and new_rec.case or {}
+                for term, how in pairs(old_rec.case) do
+                    if new_rec.case[term] == nil then new_rec.case[term] = how end
+                end
+            end
             for _idx, list_key in ipairs({ "add", "ignore", "typed" }) do
                 local src = old_rec[list_key]
                 if type(src) == "table" then
