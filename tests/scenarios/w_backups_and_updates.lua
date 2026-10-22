@@ -64,4 +64,37 @@ S.tap({ "^koassistant_backup_20261021" })
 S.tap({ "^Restore" })
 S.note("restore:", table.concat(S.texts(), " | "))
 S.wiki("restore_options.png")
+S.closeAll()
+
+-- The release notes dialog of an install one version behind, a non-English
+-- language set (the Translate button), with the published notes of that
+-- release when the local docs hold them
+local body_path = S.PLUGIN .. "/docs/release_body_v0.24.1.md"
+local f = io.open(body_path, "r")
+if f then
+    local notes = f:read("*a")
+    f:close()
+    W.features({ interaction_languages = { "English", "German" } })
+    local UpdateChecker = require("koassistant.storage.update_checker")
+    UpdateChecker.pending_update = {
+        current_version = "0.24.0", latest_version = "0.24.1", release_notes = notes,
+        download_url = "https://github.com/zeeyado/koassistant.koplugin/releases/tag/v0.24.1",
+        zip_url = "https://github.com/zeeyado/koassistant.koplugin/releases/download/v0.24.1/koassistant.koplugin.zip",
+    }
+    -- an installed copy, not this run's working tree (a git checkout, which
+    -- the updater never replaces, so it would leave Update Now out)
+    local lfs = require("libs/libkoreader-lfs")
+    local real_attributes = lfs.attributes
+    lfs.attributes = function(path, ...)
+        if type(path) == "string" and path:match("/%.git$") then return nil end
+        return real_attributes(path, ...)
+    end
+    UpdateChecker.showPendingUpdate()
+    S.settle()
+    lfs.attributes = real_attributes
+    S.note("update dialog:", table.concat(S.texts(), " | "))
+    S.wiki("update_dialog.png")
+else
+    S.note("no local release body: the update dialog is not shot")
+end
 S.finish()

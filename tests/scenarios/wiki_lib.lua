@@ -35,6 +35,15 @@ return function(S)
         return f
     end
 
+    --- A top-level setting of the plugin's settings file, before the plugin
+    --- loads (an action list, the built-in action edits)
+    function W.preSetting(key, value)
+        local DataStorage = require("datastorage")
+        local s = require("luasettings"):open(DataStorage:getSettingsDir() .. "/koassistant_settings.lua")
+        s:saveSetting(key, value)
+        s:flush()
+    end
+
     --- Keys "in apikeys.lua" (the boot's stand-in table, filled in memory)
     function W.fileKeys(keys)
         local t = package.loaded["apikeys"]
@@ -56,7 +65,7 @@ return function(S)
         local n = doc:getPageCount()
         for p = from or 1, math.min(n - 1, (from or 1) + 60) do
             local ok, text = pcall(doc.getTextFromXPointers, doc, doc:getPageXPointer(p), doc:getPageXPointer(p + 1))
-            if ok and type(text) == "string" and #text >= (min_chars or 1100)
+            if ok and type(text) == "string" and #text >= (min_chars or 850)
                     and not text:find("CHAPTER [IVX]+%..-CHAPTER [IVX]+%.") then
                 return p
             end
@@ -148,6 +157,21 @@ return function(S)
             end
         end
         return false
+    end
+
+    --- Turn the list on top (a full-screen Menu) to the page holding the row
+    --- that matches this Lua pattern; returns the page
+    function W.listPageWith(pattern)
+        local list = S.top()
+        for i, it in ipairs(list and list.item_table or {}) do
+            if type(it.text) == "string" and it.text:find(pattern) then
+                local page = math.floor((i - 1) / list.perpage) + 1
+                list:onGotoPage(page)
+                S.settle()
+                UIManager:forceRePaint()
+                return page
+            end
+        end
     end
 
     --- The book's settings object, as the plugin reads it

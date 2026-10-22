@@ -32,7 +32,7 @@ for s in "$@"; do
     code=$?
     printf '%s\n' "$out" | tee -a "$LOG"
     [ $code -ne 0 ] && failed=$((failed + 1))
-    run=$(printf '%s\n' "$out" | sed -n 's/^run folder: //p' | tail -1)
+    run=$(printf "%s\n" "$out" | LC_ALL=C sed -n "s/^run folder: //p" | tail -1)
     [ -n "$run" ] && runs="$runs $run"
 done
 

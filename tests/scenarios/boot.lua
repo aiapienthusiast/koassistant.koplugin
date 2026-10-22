@@ -58,6 +58,8 @@ do
         local name = entry:match("^(.+)%.koplugin$")
         if name then disabled[name] = true end
     end
+    -- a wiki shot shows a device, where KOReader's Gestures plugin runs
+    if os.getenv("KOA_SCREEN") then disabled.gestures = nil end
     G_reader_settings:saveSetting("plugins_disabled", disabled)
     G_reader_settings:saveSetting("koassistant_last_update_check", os.time())
 end
@@ -172,6 +174,23 @@ do
             "resolveForSubprocess", "connectSSLInSubprocess" }) do
         if BaseHandler[fn] then BaseHandler[fn] = block("BaseHandler." .. fn) end
     end
+end
+
+-- Wiki shots: the plugin is linked from the working tree, whose own
+-- behaviors/ and domains/ folders hold the maintainer's files; a wiki run
+-- loads none of them, only what a scenario stages in S.userBehaviors /
+-- S.userDomains (id -> { name, text, external = true, source = "folder" })
+if os.getenv("KOA_SCREEN") then
+    S.userBehaviors, S.userDomains = {}, {}
+    local function staged(t)
+        return function()
+            local out = {}
+            for k, v in pairs(t) do out[k] = v end
+            return out
+        end
+    end
+    require("koassistant.prompts.behavior_loader").load = staged(S.userBehaviors)
+    require("koassistant.prompts.domain_loader").load = staged(S.userDomains)
 end
 
 --- The plugin's settings before it loads (features merged over its defaults)
@@ -443,12 +462,30 @@ function S.tap(text, w)
         .. "; there: " .. table.concat(seen, " | "))
 end
 
---- Close every window above the reader
+--- Long-press the button with this text (or a { pattern }) in the window on
+--- top, or the first window from the top that has it
+function S.hold(text)
+    local stack = UIManager._window_stack
+    for i = #stack, 1, -1 do
+        for _j, b in ipairs(S.buttons(stack[i].widget)) do
+            local t = b.text
+            if (type(text) == "table" and type(t) == "string" and t:find(text[1])) or t == text then
+                b.button:onHoldSelectButton()
+                S.settle()
+                UIManager:forceRePaint()
+                return t
+            end
+        end
+    end
+    error("nothing to hold named " .. tostring(type(text) == "table" and text[1] or text))
+end
+
+--- Close every window above the reader (or the file browser)
 function S.closeAll()
     local stack = UIManager._window_stack
     for i = #stack, 1, -1 do
         local w = stack[i] and stack[i].widget
-        if w and w ~= current_ui then UIManager:close(w) end
+        if w and w ~= current_ui and w ~= current_fm then UIManager:close(w) end
     end
     -- what the closes scheduled runs now, not over the next window
     S.settle()

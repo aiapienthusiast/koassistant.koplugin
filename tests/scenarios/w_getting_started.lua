@@ -3,7 +3,7 @@ local S = dofile(os.getenv("KOA_PLUGIN") .. "/tests/scenarios/boot.lua")
 local W = dofile(S.PLUGIN .. "/tests/scenarios/wiki_lib.lua")(S)
 -- One key entered in the plugin ([set]) and one in apikeys.lua ((file)); fakes
 S.features({ provider = "anthropic", api_keys = { anthropic = W.FAKE.anthropic } })
-W.fileKeys({ gemini = W.FAKE.gemini_file })
+W.fileKeys({ deepseek = W.FAKE.deepseek })
 
 S.open(S.shotsBook("standalone") or "Mock Series 3")
 W.prose()
