@@ -44,6 +44,8 @@ Why it asks: extraction sends the book's content to the provider, raises token u
 
 **Quick check:** if a Recap or a context-aware highlight action answers from the book's title and author alone, the book's text was not allowed for that run. X-Ray shows the refusal with a button to the screen that holds the value.
 
+**A scanned PDF has no text to send.** A PDF made of page images (a scan without a text layer) gives no text even with Book text allowed: before an action sends, "No text could be extracted from this document" asks whether to send anyway, in which case the AI answers from its general knowledge, not the book. An X-Ray building checkpoints in the background stops instead. A copy of the PDF run through an OCR tool has a text layer the plugin can read.
+
 ## Emoji font setup
 
 Emoji icons in the plugin's menus and buttons (Emoji Menu Icons, Emoji Data Access Indicators) need an emoji font installed in KOReader, which ships none. The icons work in menus, the action manager, the X-Ray browser and chat-window buttons; they do not render inside the Markdown chat view, whose renderer (MuPDF) has no per-glyph font fallback. That is a KOReader limitation.

@@ -18,6 +18,15 @@ local T = require("ffi/util").template
 local ScopeResolver = require("koassistant.request.scope_resolver")
 
 local ContextExtractor = {}
+
+-- Text that is only whitespace is no text: a scanned PDF's pages each read
+-- as "", and joined by newlines they made N-1 newlines that passed for the
+-- book's text, so the empty-extraction ask and the text-fallback nudge never
+-- fired (docs/research/2026-08-14/T5_vision.md section 3.2)
+local function realText(s)
+    if type(s) ~= "string" or not s:find("%S") then return "" end
+    return s
+end
 ContextExtractor.__index = ContextExtractor
 
 --- Get contiguous ranges of visible (flow 0) pages within a page range.
@@ -643,8 +652,8 @@ function ContextExtractor:getBookText(options)
         book_text = notice .. "\n\n" .. ScopeResolver.utf8Tail(book_text, max_chars)
     end
 
-    result.text = book_text
-    result.char_count = #book_text
+    result.text = realText(book_text)
+    result.char_count = #result.text
 
     return result
 end
@@ -815,8 +824,8 @@ function ContextExtractor:getBookTextRange(from_progress, to_progress, options)
         book_text = notice .. "\n\n" .. ScopeResolver.utf8Tail(book_text, max_chars)
     end
 
-    result.text = book_text
-    result.char_count = #book_text
+    result.text = realText(book_text)
+    result.char_count = #result.text
 
     logger.dbg("ContextExtractor:getBookTextRange - extracted", result.char_count, "chars")
     return result
@@ -964,8 +973,8 @@ function ContextExtractor:getFullDocumentText(options)
         book_text = notice .. "\n\n" .. ScopeResolver.utf8Tail(book_text, max_chars)
     end
 
-    result.text = book_text
-    result.char_count = #book_text
+    result.text = realText(book_text)
+    result.char_count = #result.text
 
     logger.dbg("ContextExtractor:getFullDocumentText - extracted", result.char_count, "chars")
     return result
@@ -1090,8 +1099,8 @@ function ContextExtractor:getPageRangeText(start_page, end_page, options)
         book_text = notice .. "\n\n" .. ScopeResolver.utf8Tail(book_text, max_chars)
     end
 
-    result.text = book_text
-    result.char_count = #book_text
+    result.text = realText(book_text)
+    result.char_count = #result.text
 
     logger.dbg("ContextExtractor:getPageRangeText - extracted", result.char_count, "chars from pages", start_page, "-", end_page)
     return result
