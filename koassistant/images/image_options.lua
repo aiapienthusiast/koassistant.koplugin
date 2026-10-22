@@ -238,7 +238,6 @@ function ImageOptions.show(plugin, spec)
     local RadioButtonTable = require("ui/widget/radiobuttontable")
     local ScrollableContainer = require("ui/widget/container/scrollablecontainer")
     local Size = require("ui/size")
-    local TextBoxWidget = require("ui/widget/textboxwidget")
     local TextWidget = require("ui/widget/textwidget")
     local TitleBar = require("ui/widget/titlebar")
     local VerticalGroup = require("ui/widget/verticalgroup")
@@ -278,10 +277,12 @@ function ImageOptions.show(plugin, spec)
                 })
                 table.insert(vgroup, VerticalSpan:new{ width = Size.padding.small })
             end
+            -- The passage on one line, cut with an ellipsis: a reminder of what
+            -- is drawn, never the line that makes the popup scroll
             if type(spec.subtitle) == "string" and spec.subtitle ~= "" then
                 table.insert(vgroup, VerticalSpan:new{ width = Size.padding.default })
-                table.insert(vgroup, TextBoxWidget:new{
-                    text = spec.subtitle, face = info_face, width = width,
+                table.insert(vgroup, TextWidget:new{
+                    text = spec.subtitle, face = info_face, max_width = width,
                     fgcolor = Blitbuffer.COLOR_DARK_GRAY,
                 })
             end
@@ -368,7 +369,7 @@ function ImageOptions.show(plugin, spec)
         -- Taller than the screen (a landscape screen): the rows scroll, the
         -- title and the buttons that draw stay
         local fixed_h = title_bar:getSize().h + (actions and actions:getSize().h or 0) + 2 * Size.padding.default
-        local max_body = math.floor(screen_h * 0.96) - fixed_h
+        local max_body = math.floor(screen_h * 0.98) - fixed_h
         local body_h = vgroup:getSize().h
         local scroll
         if body_h > max_body then

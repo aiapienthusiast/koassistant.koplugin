@@ -59,6 +59,18 @@ S.check(frame.dimen.h <= S.Screen:getHeight() and S.top()._scroll == nil,
     "the popup fits a portrait screen without scrolling")
 S.shot("popup")
 
+-- ── A long passage stays on one line: the popup still fits without scrolling ──
+S.closeAll()
+local long_passage = string.rep("He handed Tamsin the knife by way of hello, and the cart came up the lane. ", 4)
+Dialogs.executeDirectAction(ui, Actions.highlight.image_gen, long_passage, S.plugin.configuration, S.plugin)
+S.settle()
+S.check(S.top()._scroll == nil and S.top()._frame.dimen.h <= S.Screen:getHeight(),
+    "a 300-character passage: one line, no scrolling")
+S.shot("long_passage")
+S.closeAll()
+Dialogs.executeDirectAction(ui, Actions.highlight.image_gen, passage, S.plugin.configuration, S.plugin)
+S.settle()
+
 -- ── A pick is the setting ──
 S.tap("Watercolor")
 S.check(features().image_gen_style == "watercolor", "Watercolor is saved as the style")
@@ -68,8 +80,13 @@ S.check(features().image_gen_shape == "portrait", "Portrait is saved as the shap
 
 -- ── The note, for this picture ──
 S.tap("Add a note…")
-local box = S.top()
-S.check(box and box.title == "Note for the picture", "the note box opens over the popup")
+-- (on a device without a keyboard, KOReader's on-screen one sits above it)
+local box
+for i = #S.UIManager._window_stack, 1, -1 do
+    local w = S.UIManager._window_stack[i].widget
+    if not box and w.title == "Note for the picture" then box = w end
+end
+S.check(box ~= nil, "the note box opens over the popup")
 box:setInputText("at dusk, one lit window")
 S.tap("OK")
 S.check(S.find("Note: at dusk, one lit window") ~= nil, "the popup shows the note")
@@ -126,9 +143,15 @@ S.check(not S.UIManager:isWidgetShown(popup), "a tap outside closes it")
 Dialogs.executeDirectAction(ui, Actions.highlight.image_gen, passage, S.plugin.configuration, S.plugin)
 S.settle()
 popup = S.top()
-S.UIManager:sendEvent(Event:new("KeyPress", require("device/key"):new("Back", {})))
-S.settle()
-S.check(not S.UIManager:isWidgetShown(popup), "Back closes it")
+if require("device"):hasKeys() then
+    S.UIManager:sendEvent(Event:new("KeyPress", require("device/key"):new("Back", {})))
+    S.settle()
+    S.check(not S.UIManager:isWidgetShown(popup), "Back closes it")
+else
+    -- a device without keys (the wiki runs' e-reader) has no Back to bind
+    popup._frame[1][1].right_button.callback()
+    S.settle()
+end
 S.check(drawn == nil, "no exit draws anything")
 
 -- ── A picker's late callback never reopens a popup that drew ──
