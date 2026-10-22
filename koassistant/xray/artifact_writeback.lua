@@ -573,6 +573,14 @@ function WriteBack.aliasEdit(cat_key, item_name, names)
     end
 end
 
+--- Names taken out of an entry's aliases (B533: a typed name deleted, or the
+--- reader's names at Reset).
+function WriteBack.dropAliasesEdit(cat_key, item_name, names)
+    return function(data)
+        return require("koassistant.xray.xray_parser").dropAliases(data, cat_key, item_name, names)
+    end
+end
+
 function WriteBack.applyXray(opts)
     if not (opts and opts.document_path and opts.answer) then
         return false, "missing document_path or answer"

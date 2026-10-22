@@ -34,6 +34,11 @@ at 70%): see the plan doc §6.2. Short form:
   Dorrit Hale      vol 2 active, DELIBERATELY absent from vol 3 (S2 tier)
   Zeph Umber       vol 1 active only, absent from vol 2 (S2 whole-chain tier)
   Hester Lune      70% rung only (ahead-only control)
+  Oswin Tarr       vol-3 entry ADDED BY HAND from the carried list (B400's
+                   record in vol 3's alias file; a carried row in the 70% rung,
+                   so the install keeps him): the one entry whose More… offers
+                   Move back to carried list (B534); Tamsin's history line
+                   alone does not
   Saltmere         place, vol-3 ledger stub (family = places)
   Warden           vol-3 live LEXICON term + ledger CHARACTER stub (chooser)
   Vex              vol-3 ledger stub WITH alias "the grey cat" (alias hit)
@@ -139,6 +144,7 @@ local VOL3_XRAY = [[{
   "characters": [
     {"name": "Tamsin Vael", "role": "Orchard warden", "description": "Tamsin Vael has come inland to mind the sea-orchard. She distrusts the quiet.", "background": [{"source": "Mock Series 1 - The Lantern", "text": "Kept the harbor lantern and read the tide ledgers.", "file": "]] .. V1 .. [["}]},
     {"name": "Gil Rook", "role": "Grafter", "description": "Gil Rook grafts the salt-apple rows and talks to the trees more than to people."},
+    {"name": "Oswin Tarr", "role": "Lock keeper", "description": "Oswin Tarr kept the river lock below the ferry landing and knew every boat by its wake.", "background": [{"source": "Mock Series 2 - The Ferry", "text": "Oswin Tarr kept the river lock below the ferry landing and knew every boat by its wake.", "file": "]] .. V2 .. [["}]},
     {"name": "Jory", "role": "Carter", "description": "Jory drives the supply cart up from the shore road and counts the sacks aloud."},
     {"name": "高橋美咲", "role": "Orchard clerk", "description": "高橋美咲 keeps the orchard tally sheets and corrects Gil's arithmetic without comment."},
     {"name": "ミラ・エル・ソーン", "aliases": ["ミラ"], "role": "Survey apprentice", "description": "ミラ・エル・ソーン carries the survey chain and asks more questions than the valley can answer."}
@@ -204,6 +210,7 @@ local VOL3_RUNG_70 = [[{
     {"name": "the Warden", "category": "characters", "role": "Harbor official", "aliases": ["Warden"], "description": "The Warden inspects the ferry manifests and is never seen eating. First name unknown.", "source": "Mock Series 2 - The Ferry", "file": "]] .. V2 .. [["},
     {"name": "Vex", "aliases": ["the grey cat"], "category": "characters", "role": "Ship's cat", "description": "Vex, the grey cat, boards whichever boat is warmest and answers to no one.", "source": "Mock Series 2 - The Ferry", "file": "]] .. V2 .. [["},
     {"name": "Jory Pell", "category": "characters", "role": "Toll keeper", "description": "Jory Pell keeps the toll chain at the ferry landing and counts every coin aloud.", "source": "Mock Series 2 - The Ferry", "file": "]] .. V2 .. [["},
+    {"name": "Oswin Tarr", "category": "characters", "role": "Lock keeper", "description": "Oswin Tarr kept the river lock below the ferry landing and knew every boat by its wake.", "source": "Mock Series 2 - The Ferry", "file": "]] .. V2 .. [["},
     {"name": "Saltmere", "category": "locations", "description": "Saltmere is the drowned market town across the bay, visited at low tide.", "source": "Mock Series 2 - The Ferry", "file": "]] .. V2 .. [["}
   ]
 }]]
@@ -425,6 +432,8 @@ local BOOKS = {
             { label = "Chapter 2", json = VOL3_SECTION_CH2,
                 start_page = 5, end_page = 9, timestamp = 1755000310 },
         },
+        -- Oswin Tarr was added by hand from the carried list (B400, B534)
+        aliases = { ["__dormant_promoted"] = { "Oswin Tarr" } },
         sidecar = { koassistant_book_xray_auto = false },
     },
     {

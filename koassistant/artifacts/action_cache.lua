@@ -1192,7 +1192,8 @@ function ActionCache.getUserAliases(document_path)
             and name ~= ActionCache.DEDUP_OFFERED_KEY
             and name ~= ActionCache.REMOVED_STUBS_KEY
             and name ~= ActionCache.PROMOTED_STUBS_KEY
-            and type(entry) == "table" and not entry.add and not entry.ignore then
+            and type(entry) == "table" and not entry.add and not entry.ignore
+            and not entry.ai_name and not entry.typed then
             -- Old format: plain array of strings
             data[name] = { add = entry }
         end
@@ -1223,7 +1224,9 @@ function ActionCache.setUserAliases(document_path, aliases_table)
         else
             local add = entry.add or {}
             local ignore = entry.ignore or {}
-            if #add == 0 and #ignore == 0 then
+            local typed = entry.typed or {}
+            local renamed = type(entry.ai_name) == "string" and entry.ai_name ~= ""
+            if #add == 0 and #ignore == 0 and #typed == 0 and not renamed then
                 aliases_table[name] = nil
             end
         end
@@ -1292,6 +1295,14 @@ function ActionCache.setUserAliases(document_path, aliases_table)
             if entry.ignore and #entry.ignore > 0 then
                 file:write(", ignore = ")
                 write_array(file, entry.ignore)
+            end
+            -- B533's rename record: the AI's name, the reader's typed names
+            if type(entry.ai_name) == "string" and entry.ai_name ~= "" then
+                file:write(string.format(", ai_name = %q", entry.ai_name))
+            end
+            if type(entry.typed) == "table" and #entry.typed > 0 then
+                file:write(", typed = ")
+                write_array(file, entry.typed)
             end
             file:write(" },\n")
         end
@@ -1532,7 +1543,9 @@ function ActionCache.renameEntityKeys(document_path, category_key, old_name, new
     if type(old_rec) == "table" then
         local new_rec = all[new_name]
         if type(new_rec) == "table" then
-            for _idx, list_key in ipairs({ "add", "ignore" }) do
+            -- B533's rename record: the AI's name and the reader's typed names
+            new_rec.ai_name = new_rec.ai_name or old_rec.ai_name
+            for _idx, list_key in ipairs({ "add", "ignore", "typed" }) do
                 local src = old_rec[list_key]
                 if type(src) == "table" then
                     new_rec[list_key] = new_rec[list_key] or {}
@@ -2306,8 +2319,11 @@ function ActionCache.promoteXrayLadderRung(document_path, rung, limit, opts)
             -- checkpoint was built from the text and does not hold it)
             local kept = XrayParser.keepPromoted(parsed,
                 ActionCache.getPromotedStubs(document_path))
+            -- B533: a checkpoint built from scratch names a renamed entry as
+            -- the AI did; the reader's name comes back
+            local renamed = XrayParser.keepRenames(parsed, ActionCache.getUserAliases(document_path))
             if u_added == 0 and u_refreshed == 0 and n == 0 and #woken == 0
-                    and dropped == 0 and kept == 0 then
+                    and dropped == 0 and kept == 0 and renamed == 0 then
                 return nil
             end
             return XrayParser.serialize(parsed), n, #woken, u_added + u_refreshed

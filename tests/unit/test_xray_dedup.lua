@@ -349,6 +349,34 @@ TestRunner:test("addNeverMergePair round-trips with alias entries intact", funct
     TestRunner:assertEqual(reread["Jack Torrance"].ignore[1], "caretaker", "ignore list intact")
 end)
 
+TestRunner:test("B533: a rename record round-trips, alone or beside search terms", function()
+    local all = ActionCache.getUserAliases(DOC_PATH)
+    all["Grey Host"] = { ai_name = "The Pale Ones", typed = { "Grey Host" } }
+    all["Corin Vale"] = { add = { "Cor" }, ignore = { "the boy" }, ai_name = "the boy", typed = { 'Corin "Wren" Vale' } }
+    TestRunner:assertEqual(ActionCache.setUserAliases(DOC_PATH, all), true, "save")
+    local back = ActionCache.getUserAliases(DOC_PATH)
+    TestRunner:assertEqual(back["Grey Host"].ai_name, "The Pale Ones", "a record with only a rename is kept")
+    TestRunner:assertEqual(back["Grey Host"].typed[1], "Grey Host")
+    TestRunner:assertEqual(#(back["Grey Host"].add or {}), 0, "never read as the old list format")
+    TestRunner:assertEqual(back["Corin Vale"].ai_name, "the boy")
+    TestRunner:assertEqual(back["Corin Vale"].typed[1], 'Corin "Wren" Vale', "quotes survive")
+    TestRunner:assertEqual(back["Corin Vale"].add[1], "Cor", "search terms beside it")
+    TestRunner:assertEqual(back["Corin Vale"].ignore[1], "the boy")
+    TestRunner:assertEqual(#ActionCache.getNeverMergePairs(DOC_PATH), 1, "the pairs stay")
+    -- the record follows a rename, merged into one already there
+    back["Corin Wren"] = { add = { "Wren" } }
+    ActionCache.setUserAliases(DOC_PATH, back)
+    ActionCache.renameEntityKeys(DOC_PATH, "characters", "Corin Vale", "Corin Wren")
+    local moved = ActionCache.getUserAliases(DOC_PATH)["Corin Wren"]
+    TestRunner:assertEqual(moved.ai_name, "the boy", "the AI's name moves")
+    TestRunner:assertEqual(moved.typed[1], 'Corin "Wren" Vale', "the typed names move")
+    TestRunner:assertEqual(#moved.add, 2, "the search terms merge")
+    -- leave the file as the next tests expect it
+    local clean = ActionCache.getUserAliases(DOC_PATH)
+    clean["Grey Host"], clean["Corin Wren"], clean["Danny"] = nil, nil, clean["Danny"]
+    ActionCache.setUserAliases(DOC_PATH, clean)
+end)
+
 TestRunner:test("second pair appends; quotes in names survive %q escaping", function()
     TestRunner:assertEqual(ActionCache.addNeverMergePair(DOC_PATH, 'The "Duke"', "El Duque"), true, "add quoted")
     local pairs_list = ActionCache.getNeverMergePairs(DOC_PATH)

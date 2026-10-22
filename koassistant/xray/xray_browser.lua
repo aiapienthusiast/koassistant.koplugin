@@ -3771,23 +3771,15 @@ function XrayBrowser:_showEntityManagePopup(item, category_key, title, source, n
     -- ButtonTable already rules between every row, so a disabled row reads as
     -- the double line asked for, and labelling it says WHY the split is there.
     local ops_start = #buttons
-    if can_edit_terms then
+    -- B533: the entry's names, what each matches, Rename… and Reset in one
+    -- screen (Rename is on live main views only: its commit writes the MAIN
+    -- artifact; the screen offers what the view allows)
+    if can_edit_terms or (live_main and named) then
         table.insert(buttons, {{
-            text = _("Edit search terms"),
+            text = _("Names and matching…"),
             callback = function()
                 UIManager:close(dialog)
                 self_ref:editSearchTerms(item, category_key, title, source, nav_context)
-            end,
-        }})
-    end
-    -- Rename (2026-08-09): live main views only — the commit path writes the
-    -- MAIN artifact, so a section/checkpoint view must not offer it
-    if live_main and named then
-        table.insert(buttons, {{
-            text = _("Rename…"),
-            callback = function()
-                UIManager:close(dialog)
-                self_ref:_renameEntity(item, category_key, viewer)
             end,
         }})
     end
@@ -4130,142 +4122,366 @@ end
 
 --- Commit a rename: artifact via the dedup commit pattern (ring-archive =
 --- built-in undo), then re-key the name-keyed side stores (wiki, search
---- terms, never-merge), then the matching follow-up — the old name stays
---- model-visible as an alias either way; whether it keeps matching THE TEXT
---- is the reader's call (the "Andy" case: a nickname that would match
---- strangers in the running text).
+--- terms, never-merge), then the rename record (B533): the AI's name, which
+--- Reset restores and a rebuild renames again, and the names the reader
+--- typed, which stay theirs to delete. The old name stays an alias the model
+--- sees and keeps matching; the names screen shows it as a row, where the
+--- reader can stop matching it (the "Andy" case: a nickname that would match
+--- strangers in the running text). Then the names screen of the renamed entry.
 function XrayBrowser:_commitRename(category_key, old_name, new_name, viewer)
     local book_file = self.metadata.book_file
+    local ActionCache = require("koassistant.artifacts.action_cache")
+    -- Read before the record moves: the AI's name (the first rename's old
+    -- name) and the names the reader typed so far
+    local before = ActionCache.getUserAliases(book_file)[old_name] or {}
+    local typed_before = {}
+    for _idx, t in ipairs(type(before.typed) == "table" and before.typed or {}) do
+        if type(t) == "string" then typed_before[t:lower()] = true end
+    end
+    -- One of the AI's names: an alias in the artifact the reader did not type
+    local new_is_ai = false
     if not self:_commitDormantOp(
         function(data)
+            for _idx, it in ipairs(type(data[category_key]) == "table" and data[category_key] or {}) do
+                if type(it) == "table" and XrayParser.getItemName(it, category_key) == old_name then
+                    for _j, a in ipairs(type(it.aliases) == "table" and it.aliases or {}) do
+                        if type(a) == "string" and a:lower() == new_name:lower() then
+                            new_is_ai = not typed_before[a:lower()]
+                        end
+                    end
+                end
+            end
             return XrayParser.renameItem(data, category_key, old_name, new_name)
         end,
         T(_("\"%1\" renamed to \"%2\"."), old_name, new_name)) then
         return
     end
-    local ActionCache = require("koassistant.artifacts.action_cache")
     ActionCache.renameEntityKeys(book_file, category_key, old_name, new_name)
     -- B267 (B394 slice 6): checkpoints built before the rename take it too.
     -- Without this the next install brought the old name back (the duplicate
     -- review's merge has replayed since round 18; rename and link did not).
     local WriteBack = require("koassistant.xray.artifact_writeback")
     WriteBack.replayIntoRungs(book_file, WriteBack.renameEdit(category_key, old_name, new_name))
+    local all = ActionCache.getUserAliases(book_file)
+    local rec = type(all[new_name]) == "table" and all[new_name] or {}
+    local ai_name = (type(before.ai_name) == "string" and before.ai_name ~= "") and before.ai_name or old_name
+    rec.ai_name = ai_name ~= new_name and ai_name or nil
+    local typed, have = {}, false
+    for _idx, t in ipairs(type(rec.typed) == "table" and rec.typed or {}) do
+        typed[#typed + 1] = t
+        if type(t) == "string" and t:lower() == new_name:lower() then have = true end
+    end
+    if not new_is_ai and new_name ~= ai_name and not have then typed[#typed + 1] = new_name end
+    rec.typed = #typed > 0 and typed or nil
+    -- The main name is matched and is nobody's added name
+    for _idx, key in ipairs({ "add", "ignore" }) do
+        local list = type(rec[key]) == "table" and rec[key] or {}
+        for i = #list, 1, -1 do
+            if type(list[i]) == "string" and list[i]:lower() == new_name:lower() then table.remove(list, i) end
+        end
+        rec[key] = list
+    end
+    all[new_name] = rec
+    ActionCache.setUserAliases(book_file, all)
+    -- The commit's view merged the record under the old name; read it again
+    self:reloadLiveMain(book_file)
     -- STAY IN PLACE (maintainer 2026-08-09, replacing the unwind-to-root):
     -- rebuild the path to the renamed detail synchronously, so no page in the
     -- fresh stack holds pre-rename item tables
     self:_dismissDetail(viewer)
     self:_rebuildToDetail(category_key, new_name)
-    local ConfirmBox = require("ui/widget/confirmbox")
-    local self_ref = self
-    UIManager:show(ConfirmBox:new{
-        text = T(_("Keep matching \"%1\" in the book text?\nThe AI keeps the old name either way. This only affects occurrence counts, search and highlight matching."), old_name),
-        ok_text = _("Keep matching"),
-        cancel_text = _("Stop matching"),
-        cancel_callback = function()
-            local ua = ActionCache.getUserAliases(book_file)
-            local rec = ua[new_name]
-            if type(rec) ~= "table" then
-                rec = {}
-                ua[new_name] = rec
-            end
-            rec.ignore = rec.ignore or {}
-            for _idx, term in ipairs(rec.ignore) do
-                if type(term) == "string" and term:lower() == old_name:lower() then return end
-            end
-            table.insert(rec.ignore, old_name)
-            ActionCache.setUserAliases(book_file, ua)
-            -- The open root menu shows counts built from the pre-ignore
-            -- aliases; a reload picks the ignore up
-            self_ref:reloadLiveMain(book_file)
-        end,
-    })
+    for _idx, it in ipairs((self.xray_data and self.xray_data[category_key]) or {}) do
+        if XrayParser.getItemName(it, category_key) == new_name then
+            self:editSearchTerms(it, category_key, new_name)
+            break
+        end
+    end
 end
 
+-- The names screen's words (B533): what a name is, and what it matches
+local NAME_KINDS = {
+    main = _("main name"),
+    ai = _("from the AI"),
+    ai_name = _("the AI's name"),
+    typed = _("your name"),
+    added = _("added by you"),
+}
+
+--- The rows of an entry's names screen (B533), pure: the main name, the
+--- aliases it matches (the AI's, the AI's own name after a rename, the names
+--- the reader typed or added), then the names set to not matched.
+--- @param item table The entry as the browser holds it (the overlay merged)
+--- @param category_key string
+--- @param rec table|nil The entry's record in the user-aliases sidecar
+--- @return table rows { { name, kind = "main"|"ai"|"ai_name"|"typed"|"added", matched } }
+function XrayBrowser.nameRows(item, category_key, rec)
+    rec = type(rec) == "table" and rec or {}
+    local function set(list)
+        local s = {}
+        for _idx, v in ipairs(type(list) == "table" and list or {}) do
+            if type(v) == "string" then s[v:lower()] = true end
+        end
+        return s
+    end
+    local added, typed = set(rec.add), set(rec.typed)
+    local ai_name = type(rec.ai_name) == "string" and rec.ai_name:lower() or nil
+    local function kindOf(n)
+        local k = n:lower()
+        if added[k] then return "added" end
+        if typed[k] then return "typed" end
+        if k == ai_name then return "ai_name" end
+        return "ai"
+    end
+    local main = XrayParser.getItemName(item, category_key)
+    local rows = { { name = main, kind = "main", matched = not item._name_off } }
+    local seen = { [main:lower()] = true }
+    local function add(list, matched)
+        for _idx, n in ipairs(type(list) == "table" and list or {}) do
+            if type(n) == "string" and n ~= "" and not seen[n:lower()] then
+                seen[n:lower()] = true
+                rows[#rows + 1] = { name = n, kind = kindOf(n), matched = matched }
+            end
+        end
+    end
+    add(type(item.aliases) == "table" and item.aliases or { item.aliases }, true)
+    add(rec.ignore, false)
+    return rows
+end
+
+--- Whether anything differs from the AI's names: a rename, the reader's own
+--- names, a name set to not matched (Reset's row). Pure.
+function XrayBrowser.namesDiffer(item, rec)
+    rec = type(rec) == "table" and rec or {}
+    local function count(list) return type(list) == "table" and #list or 0 end
+    return (type(rec.ai_name) == "string" and rec.ai_name ~= "") or count(rec.typed) > 0
+        or count(rec.add) > 0 or count(rec.ignore) > 0 or item._name_off == true
+end
+
+--- The names screen (B533; docs/xray_names_matching_plan.md section 4.1):
+--- every name the entry goes by, each with what it is and whether it is
+--- matched in the book text; a tap opens that name's options. Replaces Edit
+--- search terms and Rename… (More… → Names and matching…); the add, ignore
+--- and restore helpers below reopen it.
 function XrayBrowser:editSearchTerms(item, category_key, item_title, source, nav_context)
     local ActionCache = require("koassistant.artifacts.action_cache")
     local item_name = XrayParser.getItemName(item, category_key)
     local self_ref = self
-
-    -- Load stored user edits
-    local all_data = ActionCache.getUserAliases(self.metadata.book_file)
-    local user_entry = all_data[item_name] or { add = {}, ignore = {} }
-    local user_add = user_entry.add or {}
-    local user_ignore = user_entry.ignore or {}
-
-    -- Build lookup sets for classification
-    local add_set = {}
-    for _idx, a in ipairs(user_add) do add_set[a:lower()] = true end
-    local ignore_set = {}
-    for _idx, a in ipairs(user_ignore) do ignore_set[a:lower()] = true end
-
-    -- Current in-memory aliases (post-merge: includes user-added, excludes ignored)
-    local current_aliases = type(item.aliases) == "table" and item.aliases
-        or (item.aliases and { item.aliases } or {})
-
+    local rec = ActionCache.getUserAliases(self.metadata.book_file)[item_name]
+    local live_main = not self.scope and not self.metadata.checkpoint and self.metadata.book_file
+    -- Search terms belong to the categories matched in the text
+    local matchable = not DISTRIBUTION_EXCLUDED[category_key]
     local buttons = {}
-
-    -- Active aliases: show with Ignore (AI) or Remove (user-added) action
-    for _idx, alias in ipairs(current_aliases) do
-        local captured_alias = alias
-        local is_user_added = add_set[alias:lower()]
+    for _idx, row in ipairs(XrayBrowser.nameRows(item, category_key, rec)) do
+        local captured = row
         table.insert(buttons, {{
-            text = is_user_added
-                and T(_("Remove \"%1\""), alias)
-                or T(_("Ignore \"%1\""), alias),
+            text = T(_("%1 · %2 · %3"), row.name, NAME_KINDS[row.kind],
+                row.matched and _("matched") or _("not matched")),
             callback = function()
                 UIManager:close(self_ref._edit_dialog)
                 self_ref._edit_dialog = nil
-                self_ref:_editSearchTermAction(item, category_key, item_title, source,
-                    item_name, captured_alias, is_user_added and "remove" or "ignore", nav_context)
+                self_ref:_showNameOptions(item, category_key, item_title, source, nav_context, captured)
             end,
         }})
     end
-
-    -- Ignored aliases: show with Restore action
-    for _idx, alias in ipairs(user_ignore) do
-        local captured_alias = alias
+    buttons[#buttons][1].separator = true
+    if matchable then
         table.insert(buttons, {{
-            text = T(_("Restore \"%1\" (ignored)"), alias),
-            callback = function()
-                UIManager:close(self_ref._edit_dialog)
-                self_ref._edit_dialog = nil
-                self_ref:_editSearchTermAction(item, category_key, item_title, source,
-                    item_name, captured_alias, "restore", nav_context)
-            end,
-        }})
-    end
-
-    -- Add separator before action buttons
-    if #buttons > 0 then
-        buttons[#buttons][1].separator = true
-    end
-
-    -- Add new + Close row
-    table.insert(buttons, {
-        {
-            text = _("Add new"),
+            text = _("Add a name…"),
             callback = function()
                 UIManager:close(self_ref._edit_dialog)
                 self_ref._edit_dialog = nil
                 self_ref:_addSearchTermInput(item, category_key, item_title, source, item_name, nav_context)
             end,
-        },
-        {
-            text = _("Close"),
-            id = "close",
+        }})
+    end
+    -- Reset may rename: on the live X-Ray only, unless nothing was renamed
+    local renamed = type(rec) == "table" and ((type(rec.ai_name) == "string" and rec.ai_name ~= "")
+        or (type(rec.typed) == "table" and #rec.typed > 0))
+    if XrayBrowser.namesDiffer(item, rec) and (live_main or not renamed) then
+        table.insert(buttons, {{
+            text = _("Reset to the AI's names"),
             callback = function()
                 UIManager:close(self_ref._edit_dialog)
                 self_ref._edit_dialog = nil
-                -- Detail viewer already refreshed by each action; just close the dialog
+                self_ref:_confirmResetNames(item, category_key, item_title, source, nav_context)
             end,
-        },
-    })
-
+        }})
+    end
+    table.insert(buttons, {{
+        text = _("Close"),
+        id = "close",
+        callback = function()
+            UIManager:close(self_ref._edit_dialog)
+            self_ref._edit_dialog = nil
+        end,
+    }})
     self._edit_dialog = ButtonDialog:new{
-        title = T(_("Search terms for \"%1\""), item_name),
+        title = T(_("Names of \"%1\""), item_name),
         buttons = buttons,
     }
     UIManager:show(self._edit_dialog)
+end
+
+--- One name's options on the names screen (B533). Nothing the AI wrote is
+--- deleted (R4): its names are renamed away or set to not matched, and Reset
+--- brings them back; the reader's own names delete.
+function XrayBrowser:_showNameOptions(item, category_key, item_title, source, nav_context, row)
+    local item_name = XrayParser.getItemName(item, category_key)
+    local self_ref = self
+    local live_main = not self.scope and not self.metadata.checkpoint and self.metadata.book_file
+    local matchable = not DISTRIBUTION_EXCLUDED[category_key]
+    local dialog
+    local buttons = {}
+    local function add(text, fn)
+        table.insert(buttons, {{ text = text, callback = function()
+            UIManager:close(dialog)
+            fn()
+        end }})
+    end
+    local function back()
+        self_ref:editSearchTerms(item, category_key, item_title, source, nav_context)
+    end
+    if row.kind == "main" then
+        if live_main then
+            add(_("Rename…"), function() self_ref:_renameEntity(item, category_key, self_ref._detail_viewer) end)
+        end
+    elseif live_main then
+        add(_("Make it the main name"), function()
+            self_ref:_commitRename(category_key, item_name, row.name, self_ref._detail_viewer)
+        end)
+    end
+    -- A name the reader added is deleted rather than set aside
+    if matchable and row.kind ~= "added" then
+        if row.matched then
+            add(_("Stop matching"), function()
+                self_ref:_editSearchTermAction(item, category_key, item_title, source, item_name,
+                    row.name, "ignore", nav_context)
+            end)
+        else
+            add(_("Match again"), function()
+                self_ref:_editSearchTermAction(item, category_key, item_title, source, item_name,
+                    row.name, "restore", nav_context)
+            end)
+        end
+    end
+    if row.kind == "added" and matchable then
+        add(_("Delete"), function()
+            self_ref:_editSearchTermAction(item, category_key, item_title, source, item_name,
+                row.name, "remove", nav_context)
+        end)
+    elseif row.kind == "typed" and live_main then
+        add(_("Delete"), function()
+            self_ref:_deleteTypedName(item, category_key, item_title, source, nav_context, row.name)
+        end)
+    end
+    table.insert(buttons, {{ text = _("Cancel"), id = "close", callback = function()
+        UIManager:close(dialog)
+        back()
+    end }})
+    dialog = ButtonDialog:new{
+        title = row.name,
+        buttons = buttons,
+        tap_close_callback = back,
+    }
+    UIManager:show(dialog)
+end
+
+--- Delete a name the reader typed (B533): out of the live X-Ray's aliases and
+--- the built checkpoints', out of the record.
+function XrayBrowser:_deleteTypedName(item, category_key, item_title, source, nav_context, name)
+    local book_file = self.metadata.book_file
+    local item_name = XrayParser.getItemName(item, category_key)
+    local WriteBack = require("koassistant.xray.artifact_writeback")
+    local ActionCache = require("koassistant.artifacts.action_cache")
+    local edit = WriteBack.dropAliasesEdit(category_key, item_name, { name })
+    if not self:_commitDormantOp(edit, T(_("\"%1\" deleted."), name)) then return end
+    WriteBack.replayIntoRungs(book_file, edit)
+    local all = ActionCache.getUserAliases(book_file)
+    local rec = type(all[item_name]) == "table" and all[item_name] or {}
+    for _idx, key in ipairs({ "typed", "ignore" }) do
+        local list = type(rec[key]) == "table" and rec[key] or {}
+        for i = #list, 1, -1 do
+            if type(list[i]) == "string" and list[i]:lower() == name:lower() then table.remove(list, i) end
+        end
+        rec[key] = list
+    end
+    all[item_name] = rec
+    ActionCache.setUserAliases(book_file, all)
+    self:_refreshNames(item, category_key, item_title, source, nav_context)
+end
+
+--- After an edit that rewrote the X-Ray: the view read again, the entry page
+--- and the names screen shown for the entry as it is now.
+function XrayBrowser:_refreshNames(item, category_key, item_title, source, nav_context)
+    local item_name = XrayParser.getItemName(item, category_key)
+    self:reloadLiveMain(self.metadata.book_file)
+    local fresh = item
+    for _idx, it in ipairs((self.xray_data and self.xray_data[category_key]) or {}) do
+        if XrayParser.getItemName(it, category_key) == item_name then
+            fresh = it
+            break
+        end
+    end
+    if self._dist_cache then self._dist_cache[tostring(item)] = nil end
+    if self._detail_viewer then
+        UIManager:close(self._detail_viewer)
+        self._detail_viewer = nil
+    end
+    self:showItemDetail(fresh, category_key, item_title, source, nav_context)
+    self:editSearchTerms(fresh, category_key, item_title, source, nav_context)
+end
+
+function XrayBrowser:_confirmResetNames(item, category_key, item_title, source, nav_context)
+    local self_ref = self
+    local ConfirmBox = require("ui/widget/confirmbox")
+    UIManager:show(ConfirmBox:new{
+        text = T(_("Give \"%1\" the AI's names again?\nThe names you typed or added are deleted, and every name the AI gave it is matched again."),
+            XrayParser.getItemName(item, category_key)),
+        ok_text = _("Reset"),
+        ok_callback = function()
+            self_ref:_resetNames(item, category_key, item_title, source, nav_context)
+        end,
+        cancel_callback = function()
+            self_ref:editSearchTerms(item, category_key, item_title, source, nav_context)
+        end,
+    })
+end
+
+--- Reset to the AI's names (B533 R4): the AI's main name back (the rename
+--- undone, in the built checkpoints too), the names the reader typed out of
+--- the aliases, the record cleared (added names, names not matched).
+function XrayBrowser:_resetNames(item, category_key, item_title, source, nav_context)
+    local book_file = self.metadata.book_file
+    local ActionCache = require("koassistant.artifacts.action_cache")
+    local WriteBack = require("koassistant.xray.artifact_writeback")
+    local name = XrayParser.getItemName(item, category_key)
+    local all = ActionCache.getUserAliases(book_file)
+    local rec = type(all[name]) == "table" and all[name] or {}
+    local ai_name = (type(rec.ai_name) == "string" and rec.ai_name ~= "") and rec.ai_name or name
+    local typed = type(rec.typed) == "table" and rec.typed or {}
+    if ai_name ~= name or #typed > 0 then
+        local function edit(data)
+            local changed = false
+            if ai_name ~= name then
+                changed = WriteBack.renameEdit(category_key, name, ai_name)(data)
+            end
+            return XrayParser.dropAliases(data, category_key, ai_name, typed) or changed
+        end
+        if not self:_commitDormantOp(edit, T(_("\"%1\" has the AI's names again."), ai_name)) then return end
+        if ai_name ~= name then ActionCache.renameEntityKeys(book_file, category_key, name, ai_name) end
+        WriteBack.replayIntoRungs(book_file, edit)
+    end
+    all = ActionCache.getUserAliases(book_file)
+    all[ai_name] = nil
+    ActionCache.setUserAliases(book_file, all)
+    self:reloadLiveMain(book_file)
+    if ai_name ~= name then
+        self:_dismissDetail(self._detail_viewer)
+        self:_rebuildToDetail(category_key, ai_name)
+        return
+    end
+    item._name_off = nil
+    self:_refreshNames(item, category_key, item_title, source, nav_context)
 end
 
 --- Handle add/remove/ignore/restore actions on search terms
@@ -4318,6 +4534,8 @@ function XrayBrowser:_editSearchTermAction(item, category_key, item_title, sourc
                 end
             end
         end
+        -- B533: the main name stays the entry's; it only stops matching
+        if alias_lower == item_name:lower() then item._name_off = true end
 
     elseif action == "restore" then
         -- Remove from ignore list
@@ -4326,11 +4544,15 @@ function XrayBrowser:_editSearchTermAction(item, category_key, item_title, sourc
                 table.remove(entry.ignore, i)
             end
         end
-        -- Add back to in-memory aliases
-        if type(item.aliases) ~= "table" then
-            item.aliases = item.aliases and { item.aliases } or {}
+        if alias_lower == item_name:lower() then
+            item._name_off = nil
+        else
+            -- Add back to in-memory aliases
+            if type(item.aliases) ~= "table" then
+                item.aliases = item.aliases and { item.aliases } or {}
+            end
+            table.insert(item.aliases, alias)
         end
-        table.insert(item.aliases, alias)
     end
 
     -- Save
@@ -4366,7 +4588,7 @@ function XrayBrowser:_addSearchTermInput(item, category_key, item_title, source,
 
     local input_dialog
     input_dialog = InputDialog:new{
-        title = T(_("Add search term for \"%1\""), item_name),
+        title = T(_("Add a name for \"%1\""), item_name),
         input = "",
         input_hint = _("Enter alternate name or spelling"),
         buttons = {
@@ -4399,12 +4621,15 @@ function XrayBrowser:_addSearchTermInput(item, category_key, item_title, source,
                         entry.ignore = entry.ignore or {}
                         local new_lower = new_alias:lower()
 
-                        -- Check existing aliases (both AI and user)
-                        local current = type(item.aliases) == "table" and item.aliases or {}
+                        -- Check existing names (the main name, the AI's and the reader's aliases)
+                        local current = { item_name }
+                        for _idx, alias in ipairs(type(item.aliases) == "table" and item.aliases or {}) do
+                            current[#current + 1] = alias
+                        end
                         for _idx, alias in ipairs(current) do
                             if alias:lower() == new_lower then
                                 UIManager:show(InfoMessage:new{
-                                    text = _("This search term already exists."),
+                                    text = _("This name is already there."),
                                     timeout = 2,
                                 })
                                 self_ref:editSearchTerms(item, category_key, item_title, source, nav_context)

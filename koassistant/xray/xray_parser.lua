@@ -1247,6 +1247,12 @@ function XrayParser.mergeUserAliases(data, user_aliases)
                         end
                         existing = filtered
                     end
+                    -- B533: the main name not matched. The entry keeps it
+                    -- (shown, its identity); the matchers and the exact
+                    -- lookups skip it (matchTermSet, collectSearchTerms,
+                    -- foldExactHandles, searchAll exact). A view-only mark:
+                    -- merged data is never written back.
+                    item._name_off = ignore_set[item_name:lower()] or nil
 
                     -- Add user aliases (dedup, case-insensitive)
                     local existing_lower = {}
@@ -1805,7 +1811,9 @@ function XrayParser.searchAll(data, query, opts)
                 local name = item.name or item.term or item.event or ""
                 if name ~= "" then
                     if exact then
-                        if XrayParser.exactHandleHit(name, qkeys) then
+                        -- a main name set to not matched gives no direct hit
+                        -- (B533); the substring search below still lists it
+                        if not item._name_off and XrayParser.exactHandleHit(name, qkeys) then
                             match_field = "name"
                         end
                     else
@@ -1968,7 +1976,7 @@ function XrayParser.foldExactHandles(data, set)
         if cat.key ~= "current_state" and cat.key ~= "current_position"
             and cat.key ~= "reader_engagement" and cat.key ~= "conclusion" then
             for _idx2, item in ipairs(cat.items) do
-                fold(item.name or item.term or item.event)
+                if not item._name_off then fold(item.name or item.term or item.event) end
                 local aliases = ensure_array(item.aliases)
                 if aliases then
                     for _idx3, a in ipairs(aliases) do
@@ -2050,7 +2058,7 @@ function XrayParser.collectSearchTerms(item, item_title)
             end
         end
     end
-    add(item.name or item.term or item.event or item_title)
+    if not item._name_off then add(item.name or item.term or item.event or item_title) end
     local aliases = item.aliases
     if type(aliases) == "string" then aliases = { aliases } end
     if type(aliases) == "table" then
@@ -2712,6 +2720,7 @@ function XrayParser.matchTermSet(item, item_title)
     if type(name) ~= "string" or #name <= 2 then return nil end
     local aliases = ensure_array(item.aliases)
     local sig = name .. "\0" .. (aliases and table.concat(aliases, "\0") or "")
+        .. (item._name_off and "\0off" or "")
     local memo = term_set_memo[item]
     if memo and memo.sig == sig then return memo.set end
 
@@ -2757,7 +2766,8 @@ function XrayParser.matchTermSet(item, item_title)
         if type(t) ~= "string" then return end
         for _i, n in ipairs(handleNames(t)) do addForm(n) end
     end
-    addName(name)
+    -- B533: a main name set to not matched matches nothing; the aliases still do
+    if not item._name_off then addName(name) end
     if aliases then
         for _idx, a in ipairs(aliases) do addName(a) end
     end
@@ -4558,6 +4568,71 @@ function XrayParser.renameItem(data, cat_key, old_name, new_name)
     end
     item.aliases = aliases
     return true
+end
+
+--- Take names out of an entry's aliases (B533: a name the reader typed, at
+--- Delete or at Reset), compared without case. Pure.
+--- @return boolean changed
+function XrayParser.dropAliases(data, cat_key, item_name, names)
+    if type(data) ~= "table" or type(data[cat_key]) ~= "table" or type(names) ~= "table" then return false end
+    local drop = {}
+    for _idx, n in ipairs(names) do
+        if type(n) == "string" and n ~= "" then drop[n:lower()] = true end
+    end
+    if not next(drop) then return false end
+    for _idx, item in ipairs(data[cat_key]) do
+        if type(item) == "table" and XrayParser.getItemName(item, cat_key) == item_name then
+            if type(item.aliases) ~= "table" then return false end
+            local kept = {}
+            for _j, a in ipairs(item.aliases) do
+                if not (type(a) == "string" and drop[a:lower()]) then kept[#kept + 1] = a end
+            end
+            if #kept == #item.aliases then return false end
+            item.aliases = #kept > 0 and kept or nil
+            return true
+        end
+    end
+    return false
+end
+
+--- The reader's renames held across a rebuild (B533). A create names an entry
+--- as the model does, so a renamed entry comes back under the AI's name and
+--- the reader's record (keyed by the reader's name) no longer attaches. After
+--- the wake-pass of every create and install, an entry whose name is a
+--- record's `ai_name` takes the reader's name again, with the reader's other
+--- typed names as aliases. Nothing happens when an entry of the reader's name
+--- is already there (an update carried it) or the AI's name is on more than
+--- one entry. Pure on parsed data.
+--- @param user_aliases table ActionCache.getUserAliases output
+--- @return number renamed
+function XrayParser.keepRenames(data, user_aliases)
+    if type(data) ~= "table" or type(user_aliases) ~= "table" then return 0 end
+    local renamed = 0
+    for reader_name, rec in pairs(user_aliases) do
+        if type(reader_name) == "string" and reader_name:sub(1, 2) ~= "__" and type(rec) == "table"
+            and type(rec.ai_name) == "string" and rec.ai_name ~= "" and rec.ai_name ~= reader_name then
+            local hit_cat, hits, taken = nil, 0, false
+            for _idx, cat in ipairs(XrayParser.getCategories(data) or {}) do
+                for _j, item in ipairs(cat.items or {}) do
+                    local name = XrayParser.getItemName(item, cat.key)
+                    if name == reader_name then taken = true end
+                    if name == rec.ai_name then
+                        hit_cat = cat.key
+                        hits = hits + 1
+                    end
+                end
+            end
+            if not taken and hits == 1 and XrayParser.renameItem(data, hit_cat, rec.ai_name, reader_name) then
+                local others = {}
+                for _k, t in ipairs(type(rec.typed) == "table" and rec.typed or {}) do
+                    if type(t) == "string" and t ~= reader_name then others[#others + 1] = t end
+                end
+                if #others > 0 then XrayParser.addItemAliases(data, hit_cat, reader_name, others) end
+                renamed = renamed + 1
+            end
+        end
+    end
+    return renamed
 end
 
 function XrayParser.demoteToStub(data, cat_key, item_name)

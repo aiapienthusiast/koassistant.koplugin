@@ -193,7 +193,7 @@ Entries of Story Arc, Argument Development, Arguments, Findings and Figures & Da
 - **List connections (N)…**.
 - **Your highlights (N)…**: the passages you highlighted that mention this entry, while the book is open. Matched on your device whatever your highlights value, and not sent anywhere.
 - **Illustrate…**: a picture of this entry, drawn from its description: the image settings first, then **Illustrate** or **Illustrate with a note…**. On the book's own installed X-Ray, while an image provider is available; see [Image Generation](Image-Generation#illustrate-from-x-ray).
-- Under the **Edit this entry** divider: **Edit search terms**, **Rename…**, **Merge with another entry…**, and **Link with a group member's entry…** in a book group. See [Managing entries](#managing-entries). An entry you added from the carried list (**Add as a new entry**) also has **Move back to carried list** (see [Book Groups and Series](Book-Groups-and-Series)).
+- Under the **Edit this entry** divider: **Names and matching…**, **Merge with another entry…**, and **Link with a group member's entry…** in a book group. See [Managing entries](#managing-entries). An entry you added from the carried list (**Add as a new entry**) also has **Move back to carried list** (see [Book Groups and Series](Book-Groups-and-Series)).
 
 In a book group, an entry page also lists what the group's other X-Rays say about it, under "In other books of the group:" (one line per book, display only; a later volume appears only once every book before it is read or has spoiler protection off).
 
@@ -247,8 +247,10 @@ A version you are viewing gets **Install or delete this version…** (**Install 
 
 ### Managing entries
 
-- **Rename…**: the old name becomes an alias, so matching keeps working.
-- **Edit search terms**: add your own terms (other spellings, transliterations, nicknames), or ignore an AI-made alias that produces false matches. Your terms are saved per book in a file that survives rebuilding the X-Ray; they count in Chapter Appearances and go into the KOReader text search. Ignored terms are hidden from the alias list and not counted. Adding, removing, ignoring and restoring all happen in this one dialog.
+- **Names and matching…**: every name the entry goes by, one row each, saying what it is (the main name, a name from the AI, the AI's own name after you renamed the entry, a name you typed or added) and whether it is matched in the book text. Tap a row for its options:
+  - the main name: **Rename…**, and **Stop matching** / **Match again**;
+  - another name: **Make it the main name**, **Stop matching** / **Match again**, and **Delete** for a name of your own.
+  A name that is not matched gives no underline, no count in Chapter Appearances and Mentions, and no direct hit when you select it or look it up; the entry keeps it (the main name stays its title) and the AI still knows it. That is how a name that is also an everyday phrase stops marking ordinary sentences. A name the AI gave is never deleted, only renamed away or set to not matched. **Add a name…** adds another spelling, transliteration or nickname. **Reset to the AI's names** gives the entry its AI name back and clears what you changed. Your names and choices are saved per book and survive rebuilding the X-Ray: a rebuild that names the entry as the AI first did gets your name back. After a rename the old name stays matched, as one row on the same screen.
 - **Merge with another entry…**: pick the entry that is the same person or thing; the choices are those of the duplicate review below.
 - **Find duplicate entities…** (in **Link and merge…**) is Merge duplicates: a mechanical scan for the same entity under two names in this X-Ray. For each pair: **Merge: keep "…"** (the other name becomes an alias), **Merge, keep both texts**, **AI merge: combined description, keep "…"** (one request), or **Never suggest this pair** (remembered for the book, and undone under **Never-merge pairs (N)…**). **Merge two entities manually…** lets you pick a pair yourself.
 - After an update or an install you start yourself, the X-Ray may ask once whether to review possible duplicates (**Review** or **Not now**). Each pair is asked about only once, and never while a checkpoint build runs: the build asks when it finishes.

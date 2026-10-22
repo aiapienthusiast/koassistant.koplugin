@@ -5593,6 +5593,12 @@ if prune_book_text then
                         if kept > 0 then
                             logger.dbg("KOAssistant: X-Ray create kept", kept, "hand-added entit(y/ies)")
                         end
+                        -- B533: an entry the reader renamed keeps the reader's name
+                        local renamed = XrayParser.keepRenames(parsed,
+                            require("koassistant.artifacts.action_cache").getUserAliases(cache_file))
+                        if renamed > 0 then
+                            logger.dbg("KOAssistant: X-Ray create kept", renamed, "renamed entit(y/ies)")
+                        end
                     end
                     -- Round 28 (#90): reconcile mechanical background against the
                     -- book's group — backfill file identities onto legacy labeled

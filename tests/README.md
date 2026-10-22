@@ -401,6 +401,22 @@ local new_config = ConstraintUtils.buildRetryConfig(original_config, constraint)
 - ✅ No drift between test expectations and plugin behavior
 - ✅ Adding new constraints automatically updates all tests
 
+### Flow tests: `tests/lib/ui_recorder.lua` and `tests/lib/koamock.lua`
+
+A flow test drives the plugin's real dialog code the way a device round would, without KOReader: open a popup, read its buttons, tap one, type into the box it opens, check what ran. `ui_recorder` replaces `UIManager:show/close` and the dialog widgets' `:new` with recorders (patched in place, put back by `restore()`); `koamock` hands a test the invented books of the device fixture (`tests/fixtures/mock_series/spec.lua`) as parsed data, the same X-Rays `gen.lua` writes to disk. The example is `tests/unit/test_flow_xray_entry.lua`.
+
+```lua
+local Recorder = require("ui_recorder")
+local KoaMock = require("koamock")
+local ui = Recorder.install()               -- before loading the module under test
+local data, path = KoaMock.xray("Mock Series 3")
+-- ... open something ...
+ui:texts()                                  -- the top dialog's buttons
+ui:tap("Illustrate with a note…")           -- run that button's callback
+ui:type("at dusk"); ui:tap("Illustrate")    -- type into the note box, confirm
+ui:restore()                                -- at the end of the file
+```
+
 ## Prerequisites
 
 Lua 5.3+ with LuaSocket, LuaSec, and dkjson.
@@ -563,10 +579,12 @@ tests/
 ├── fixtures/
 │   ├── sample_context.lua     # Sample context data for tests
 │   └── mock_series/           # Offline mock-book generator (X-Ray/groups device fixture):
-│                              #   lua tests/fixtures/mock_series/gen.lua --out <dir> [--base <target>]
-│                              # 7 tiny invented EPUBs + real-API sidecar data (see gen.lua header)
+│                              #   lua tests/fixtures/mock_series/gen.lua --out <dir> [--base <target>] [--home <KOReader home>]
+│                              # 8 tiny invented EPUBs + real-API sidecar data; --home also writes the three groups (see gen.lua header)
 ├── lib/
 │   ├── mock_koreader.lua      # KOReader module mocks
+│   ├── ui_recorder.lua        # Flow tests: records shown dialogs, taps their buttons
+│   ├── koamock.lua            # The mock_series fixture as parsed test data
 │   ├── test_runner.lua        # Assertion/reporting harness every unit file uses
 │   ├── test_helpers.lua       # Integration-test helpers (sync HTTP instead of KOReader subprocesses)
 │   ├── constraint_utils.lua   # Plugin constraint utilities wrapper
