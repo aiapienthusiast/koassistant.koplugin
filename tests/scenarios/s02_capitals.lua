@@ -94,6 +94,34 @@ if hits[1] then
     S.note("the hit:", tostring(hits[1].matched_text or hits[1].text))
 end
 
+-- ── A mention's search window: its magnifier opens on the entry's name ──
+-- (not on the reader's own last search, and never on the pattern)
+ui.search.last_search_text = "orchard"
+local own_type = ui.search.current_search_type
+local data = XrayParser.parse(ActionCache.getXrayCache(file).result)
+XrayParser.mergeUserAliases(data, ActionCache.getUserAliases(file))
+XrayBrowser:show(data, { title = "Mock Series 3 - The Orchard", book_file = file, plugin = S.plugin,
+    configuration = S.plugin.configuration, enable_emoji = false }, ui)
+S.settle()
+XrayBrowser:_gotoMentionAndSearch("characters", "The Drowned", { page = rented },
+    XrayParser.collectSearchTerms(item), nil)
+S.settle()
+local window = ui.search.search_dialog
+S.check(window ~= nil and S.UIManager:isWidgetShown(window), "a mention opens KOReader's search window")
+local magnifier
+for _idx, b in ipairs(window and S.buttons(window) or {}) do
+    if b.button.icon == "appbar.search" then magnifier = b.button end
+end
+S.check(magnifier ~= nil, "the search window has its magnifier")
+if magnifier then magnifier.callback() end
+S.settle()
+local box = ui.search.input_dialog
+S.note("the search box:", tostring(box and box:getInputText()))
+S.check(box ~= nil and box:getInputText() == "The Drowned", "the magnifier opens the search box on \"The Drowned\"")
+S.check(ui.search.current_search_type == own_type, "the search type stays the reader's own")
+S.shot("search_box")
+S.closeAll()
+
 -- ── Match any case puts both back ──
 entry.case = nil
 all["The Drowned"] = entry

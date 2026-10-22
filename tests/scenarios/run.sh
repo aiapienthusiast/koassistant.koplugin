@@ -5,7 +5,8 @@
 #   sh tests/scenarios/run.sh [base folder] [scenario ...]
 #
 # base folder: where the run folder is made (default: $TMPDIR/koa_scenarios).
-# scenario: a file name in tests/scenarios without .lua (default: all s*.lua).
+# scenario: a file name in tests/scenarios without .lua (default: all s*.lua),
+# or the path of a scenario file elsewhere (a one-off probe in a scratch folder).
 # Each run: <base>/run-<time>-<pid>/ with home/ (a fresh KOReader home, this
 # plugin linked into its plugins/), Books/ (the fixture, groups written into
 # the home), shots/ (screenshots) and one log per scenario. Nothing is
@@ -38,9 +39,13 @@ fi
 echo "run folder: $RUN"
 failed=0
 for s in "$@"; do
+    case "$s" in
+        */*|*.lua) file="$(cd "$(dirname "$s")" && pwd)/$(basename "$s")"; s="$(basename "$s" .lua)" ;;
+        *) file="$TREE/tests/scenarios/$s.lua" ;;
+    esac
     echo "== $s"
     (cd "$APP" && KO_HOME="$RUN/home" KOA_RUN="$RUN" KOA_PLUGIN="$TREE" \
-        ./luajit "$TREE/tests/scenarios/$s.lua") > "$RUN/$s.log" 2>&1
+        ./luajit "$file") > "$RUN/$s.log" 2>&1
     code=$?
     grep -E '^  (PASS|FAIL)|^    |: [0-9]+ passed' "$RUN/$s.log"
     if [ $code -ne 0 ]; then

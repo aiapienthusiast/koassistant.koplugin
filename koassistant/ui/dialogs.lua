@@ -12032,6 +12032,36 @@ local function predLookupHandled(ui, query, config, plugin, book_metadata,
     return true
 end
 
+-- Where "Add as alias…" lands at the lookup's own seams (the no-results
+-- dialog, the list across X-Rays): the entry in a browser on `data`, stacked
+-- on its category, or the carried row's page. Returns the picker's
+-- on_stub_committed and on_committed.
+local function aliasLandings(ui, data, cached, config, plugin, book_metadata, best, cw, document_path)
+    local XrayParser = require("koassistant.xray.xray_parser")
+    local function onStub(stub, new_data)
+        if not new_data then return end
+        local s2, i2 = XrayParser.findDormantByIdentity(new_data, { stub.name })
+        if s2 then
+            openCarriedStubDetail(ui, new_data, config, plugin,
+                book_metadata, cw, document_path, i2, s2)
+        end
+    end
+    local function onEntry(target_item, target_cat_key, target_name)
+        local XrayBrowser = openXrayBrowserFromCache(ui, data, cached, config, plugin,
+            book_metadata, best, cw, document_path)
+        for _c_idx, cat in ipairs(XrayParser.getCategories(data) or {}) do
+            if cat.key == target_cat_key then
+                XrayBrowser:showCategoryItems(cat)
+                break
+            end
+        end
+        -- Q6: direct entry — one X exits the browser
+        XrayBrowser._direct_entry_exit = true
+        XrayBrowser:showItemDetail(target_item, target_cat_key, target_name)
+    end
+    return onStub, onEntry
+end
+
 -- Show cross-section X-Ray search results as a standalone picker Menu.
 -- @param grouped_results table From ActionCache.searchAllXrays()
 -- @param query string The search query
@@ -12050,6 +12080,34 @@ local function showCrossSectionResults(grouped_results, query, ui, config, plugi
     end
 
     local items = {}
+    -- "Add as alias…" first, as on the browser's results list (ref #63): a
+    -- book with section X-Rays lands here instead, and a name worth adding
+    -- usually hits the entry it belongs to (a first name inside a full name).
+    -- It targets the main X-Ray, as the no-results dialog does; the alias is
+    -- the book's, so every X-Ray of it matches the name.
+    local q_trim = query and query:match("^%s*(.-)%s*$") or ""
+    local main_data = #q_trim > 2 and #q_trim <= 120 and mainLedgerData(document_path, nil, nil)
+    if main_data then
+        table.insert(items, {
+            text = T(_("Add \"%1\" as an alias…"), query),
+            bold = true,
+            separator = true,
+            callback = function()
+                local main = require("koassistant.artifacts.action_cache").getXrayCache(document_path)
+                if not (main and main.result) then return end
+                local on_stub, on_entry = aliasLandings(ui, main_data, main, config, plugin,
+                    book_metadata, { entry = main }, cleanup_widgets, document_path)
+                -- Defined further down; reached through the module's export
+                require("koassistant.ui.dialogs").showAliasTargetPicker{
+                    data = main_data,
+                    query = query,
+                    document_path = document_path,
+                    on_stub_committed = on_stub,
+                    on_committed = on_entry,
+                }
+            end,
+        })
+    end
     for _idx, group in ipairs(grouped_results) do
         -- Section header (non-tappable separator)
         local header_label
@@ -12492,31 +12550,14 @@ local function showLookupNoResults(opts)
         nores_buttons[#nores_buttons + 1] =
             { { text = _("Add as alias of an entry…"), callback = function()
                 UIManager:close(nores)
+                local on_stub, on_entry = aliasLandings(ui, data, cached, config, plugin,
+                    book_metadata, best, cw, document_path)
                 showAliasTargetPicker{
                     data = data,
                     query = query,
                     document_path = document_path,
-                    on_stub_committed = function(stub, new_data)
-                        if not new_data then return end
-                        local s2, i2 = XrayParser.findDormantByIdentity(new_data, { stub.name })
-                        if s2 then
-                            openCarriedStubDetail(ui, new_data, config, plugin,
-                                book_metadata, cw, document_path, i2, s2)
-                        end
-                    end,
-                    on_committed = function(target_item, target_cat_key, target_name)
-                        local XrayBrowser = openXrayBrowserFromCache(ui, data, cached, config, plugin,
-                            book_metadata, best, cw, document_path)
-                        for _c_idx, cat in ipairs(XrayParser.getCategories(data) or {}) do
-                            if cat.key == target_cat_key then
-                                XrayBrowser:showCategoryItems(cat)
-                                break
-                            end
-                        end
-                        -- Q6: direct entry — one X exits the browser
-                        XrayBrowser._direct_entry_exit = true
-                        XrayBrowser:showItemDetail(target_item, target_cat_key, target_name)
-                    end,
+                    on_stub_committed = on_stub,
+                    on_committed = on_entry,
                 }
             end } }
     end

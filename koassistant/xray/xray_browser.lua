@@ -426,17 +426,26 @@ end
 --- position, then float the "Back to X-Ray" button. The built-in search owns
 --- highlighting and prev/next — no custom overlay (maintainer 2026-08-13).
 --- case_sensitive: the pattern spells out its own case (buildSearchPattern).
-local function launchSearchSession(ui, term, use_regex, return_info, case_sensitive)
+--- name: the entry's name as typed, for the search window's own input.
+local function launchSearchSession(ui, term, use_regex, return_info, case_sensitive, name)
     UIManager:scheduleIn(0.2, function()
         if use_regex then
             -- The session runs ENTIRELY on onShowSearchDialog's args (its
-            -- prev/next closures capture them) — write NOTHING onto the
-            -- search module. Setting last_search_text leaked our pipes
-            -- pattern into the user's regular search-input prefill, and a
-            -- synthesized current_search_type table read as "no type
-            -- selected" there (the type checkboxes compare by TABLE
-            -- IDENTITY), so a later manual search ran the pattern literally
-            -- and found nothing (device 2026-08-13).
+            -- prev/next closures capture them). Setting last_search_text to
+            -- the pattern leaked our pipes into the user's regular
+            -- search-input prefill, and a synthesized current_search_type
+            -- table read as "no type selected" there (the type checkboxes
+            -- compare by TABLE IDENTITY), so a later manual search ran the
+            -- pattern literally and found nothing (device 2026-08-13).
+            -- What the search window's magnifier opens on is the entry's
+            -- name, plain, as KOReader's own Search from a selection leaves
+            -- it (in memory; its find-all list dropped, as that search
+            -- does); never the pattern or a search type (device 2026-10-22:
+            -- the box showed the reader's own last search).
+            if name then
+                ui.search.last_search_text = name
+                ui.search.last_search_hash = nil
+            end
             -- KOReader master changed onShowSearchDialog's 3rd arg from a
             -- boolean `regex` to a `search_type` table ({flags, regex}); the
             -- master handler does `search_type.regex`, so a bare boolean
@@ -7145,7 +7154,7 @@ function XrayBrowser:_gotoMentionAndSearch(category_key, item_title, mention, te
         -- EPUB: regex-OR of every term so prev/next walks aliases too
         local pattern, cased = buildSearchPattern(terms)
         if pattern then
-            launchSearchSession(ui, pattern, true, return_info, cased)
+            launchSearchSession(ui, pattern, true, return_info, cased, terms[1] and terms[1].text)
         else
             launchSearchSession(ui, terms[1].text, false, return_info)
         end

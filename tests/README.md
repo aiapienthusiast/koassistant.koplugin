@@ -425,6 +425,7 @@ What a flow test cannot reach (the text on a real page: marks, the name index, K
 ```bash
 sh tests/scenarios/run.sh /path/to/a/scratch/folder              # every s*.lua
 sh tests/scenarios/run.sh /path/to/a/scratch/folder s02_capitals # one
+sh tests/scenarios/run.sh /path/to/a/scratch/folder /elsewhere/probe.lua # a one-off probe file
 ```
 
 Each run makes a NEW folder under the one given (`run-<time>-<pid>/`): `home/` is a fresh KOReader home with this plugin linked into its `plugins/`, `Books/` the fixture with its groups written into that home, `shots/` the screenshots a scenario takes, one log per scenario. Nothing is deleted and nothing of a real KOReader home is read. `boot.lua` refuses to start unless the home sits inside the run folder, stands an empty table in for `apikeys.lua` before the plugin loads, blocks the network (LuaSocket, LuaSec, child processes, the plugin's request functions; a blocked call fails the scenario), turns KOReader's other plugins off and skips the update check. Needs the macOS app at `/Applications/KOReader.app`. The exit code is the number of scenarios that failed.
