@@ -1,8 +1,7 @@
--- B486 and B535 on the real widgets: a picture that records Gil Rook (Mock
--- Series 3) shows as "Pictures (1)…" on his entry's More… and opens the
--- gallery on him; the note box offers "Pick X-Ray entries…", its picker
--- marks entries and hands them back. The picture is planted through the
--- plugin's own save; nothing is drawn by a provider.
+-- B486 on the real widgets: a picture that records Gil Rook (Mock Series 3)
+-- shows as "Pictures (1)…" on his entry's More… and opens the gallery on
+-- him. The picture is planted through the plugin's own save; nothing is drawn
+-- by a provider. (B535's picks are the picture popup's, s06.)
 local S = dofile(os.getenv("KOA_PLUGIN") .. "/tests/scenarios/boot.lua")
 -- An image provider with a key so Illustrate… is offered beside it (a fake
 -- key in the run's own settings; the network is blocked)
@@ -14,27 +13,9 @@ local ActionCache = require("koassistant.artifacts.action_cache")
 local XrayParser = require("koassistant.xray.xray_parser")
 local XrayBrowser = require("koassistant.xray.xray_browser")
 local ImageGenerator = require("koassistant.images.image_generator")
-local PromptWriter = require("koassistant.images.prompt_writer")
 
--- ── The note box and its picker (Generate with a note…, from a passage) ──
 local data = XrayParser.parse(ActionCache.getXrayCache(file).result)
 XrayParser.mergeUserAliases(data, ActionCache.getUserAliases(file))
-local got
-ImageGenerator.askNote(nil, function(_text, picks) got = picks end, { pickable = PromptWriter.pickable(data) })
-S.settle()
-S.check(S.find("Pick X-Ray entries…") ~= nil, "the note box offers Pick X-Ray entries…")
-S.tap("Pick X-Ray entries…")
-S.shot("picker")
-S.tap({ "Gil Rook" })
-S.tap({ "Hollowmere" })
-S.shot("picker_two")
-S.tap("Done")
-S.check(S.find("X-Ray entries picked (2)…") ~= nil, "the note box says two are picked")
-S.shot("note_box")
-S.tap("Generate")
-S.check(got and table.concat(got, "|") == "Gil Rook|Hollowmere", "the picks are handed over in the order picked")
-
-S.closeAll()
 
 -- ── A picture of Gil Rook, saved as a drawn one is ──
 local Blitbuffer = require("ffi/blitbuffer")

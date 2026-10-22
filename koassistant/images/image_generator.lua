@@ -209,23 +209,14 @@ function ImageGenerator.askProvider(main_provider, keyed, plugin, on_pick)
     return dialog
 end
 
---- "Generate with a note…" (S5, D9): the reader's note for one picture, asked
---- after the selection was taken. on_ok(text), or on_ok(nil) when the note
---- was left empty (the picture goes ahead without one); Cancel does nothing.
---- opts.confirm_text names the button.
+--- The note for one picture (S5, D9; the picture popup's Add a note…, B537).
+--- on_ok(text), or on_ok(nil) when the note was left empty (the picture goes
+--- without one); Cancel does nothing. opts.confirm_text names the button.
 function ImageGenerator.askNote(prefill, on_ok, opts)
     opts = opts or {}
     local UIManager = require("ui/uimanager")
     local InputDialog = require("ui/widget/inputdialog")
     local dialog
-    -- B535: the X-Ray entries the reader picks for the prompt writer, by name,
-    -- in the order picked (opts.pickable = PromptWriter.pickable's rows)
-    local picks = {}
-    for _idx, n in ipairs(type(opts.picked) == "table" and opts.picked or {}) do picks[#picks + 1] = n end
-    local function pickLabel()
-        if #picks == 0 then return _("Pick X-Ray entries…") end
-        return T(_("X-Ray entries picked (%1)…"), #picks)
-    end
     local buttons = { {
         {
             text = _("Cancel"),
@@ -233,31 +224,15 @@ function ImageGenerator.askNote(prefill, on_ok, opts)
             callback = function() UIManager:close(dialog) end,
         },
         {
-            text = opts.confirm_text or _("Generate"),
+            text = opts.confirm_text or _("OK"),
             is_enter_default = true,
             callback = function()
                 local text = dialog:getInputText()
                 UIManager:close(dialog)
-                on_ok((type(text) == "string" and text:match("%S")) and text or nil, picks)
+                on_ok((type(text) == "string" and text:match("%S")) and text or nil)
             end,
         },
     } }
-    if type(opts.pickable) == "table" and #opts.pickable > 0 then
-        table.insert(buttons, 1, { {
-            text = pickLabel(),
-            id = "pick",
-            callback = function()
-                ImageGenerator.pickEntries(opts.pickable, picks, function(new_picks)
-                    picks = new_picks
-                    local ok, button = pcall(function() return dialog.button_table:getButtonById("pick") end)
-                    if ok and button then
-                        button:setText(pickLabel(), button.width)
-                        UIManager:setDirty(dialog, "ui")
-                    end
-                end)
-            end,
-        } })
-    end
     dialog = InputDialog:new{
         title = _("Note for the picture"),
         description = _("What the picture should show, or how. The prompt writer follows it; with the writer off, it is added to the prompt."),

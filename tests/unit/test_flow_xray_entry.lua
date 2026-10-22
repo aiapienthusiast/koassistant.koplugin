@@ -199,38 +199,37 @@ end)
 print("")
 print("  [Illustrate (B535)]")
 
-TestRunner:test("Illustrate… opens the image settings, then the note, then the picture", function()
-    local saved_generate = ImageGenerator.generate
-    local drawn
+TestRunner:test("Illustrate… opens the picture popup: a note for this picture, then the picture", function()
+    -- the popup's own widgets are the headless scenario's (s06); here its spec
+    local ImageOptions = require("koassistant.images.image_options")
+    local saved_generate, saved_show = ImageGenerator.generate, ImageOptions.show
+    local drawn, spec
     ImageGenerator.generate = function(_text, _config, _settings, book_info, gen_opts)
         drawn = { book_info = book_info, gen_opts = gen_opts }
     end
+    ImageOptions.show = function(_plugin, s) spec = s end
     local ok, err = pcall(withKeys, function()
         local data, file = KoaMock.xray("Mock Series 3")
         local popup = moreOf(browser(data, file), entry(data, "characters", "Gil Rook"), "characters")
         ui:tap("Illustrate…", popup)
-        local panel = ui:top()
-        TestRunner:assertEqual(panel.title, "Illustrate \"Gil Rook\"")
-        local all = table.concat(ui:texts(panel), " | ")
-        TestRunner:assertTrue(all:find("Style:", 1, true) ~= nil, "the settings rows: " .. all)
-        TestRunner:assertTrue(ui:has("Illustrate", panel) and ui:has("Illustrate with a note…", panel)
-            and ui:has("Close", panel), all)
-        ui:tap("Illustrate with a note…", panel)
-        local note = ui:top()
-        TestRunner:assertEqual(note.title, "Note for the picture")
-        ui:type("up the ladder, at dusk", note)
-        ui:tap("Illustrate", note)
+        TestRunner:assertEqual(spec.title, "Illustrate \"Gil Rook\"")
+        TestRunner:assertTrue(spec.note == true and spec.writer == true, "a note row and the writer row")
+        TestRunner:assertTrue(spec.pickable == nil, "no picks: the entry is the subject")
+        TestRunner:assertEqual(#spec.actions, 1)
+        TestRunner:assertEqual(spec.actions[1].text, "Illustrate")
+        spec.state.note = "up the ladder, at dusk"
+        spec.actions[1].callback()
         TestRunner:assertTrue(drawn ~= nil, "the picture was asked for")
         TestRunner:assertEqual(drawn.gen_opts.note, "up the ladder, at dusk")
         TestRunner:assertEqual(drawn.gen_opts.entry.name, "Gil Rook")
         TestRunner:assertEqual(drawn.book_info.file, file)
-        drawn = nil
+        drawn, spec = nil, nil
         moreOf(browser(data, file), entry(data, "characters", "Gil Rook"), "characters")
         ui:tap("Illustrate…")
-        ui:tap("Illustrate")
-        TestRunner:assertTrue(drawn ~= nil and drawn.gen_opts.note == nil, "straight from the panel: no note")
+        spec.actions[1].callback()
+        TestRunner:assertTrue(drawn ~= nil and drawn.gen_opts.note == nil, "no note typed: none sent")
     end)
-    ImageGenerator.generate = saved_generate
+    ImageGenerator.generate, ImageOptions.show = saved_generate, saved_show
     if not ok then error(err, 0) end
 end)
 
@@ -321,28 +320,26 @@ TestRunner:test("a picture records what it shows: the picks, the passage's names
     if not ok then error(err, 0) end
 end)
 
-TestRunner:test("the note box: Pick X-Ray entries… when there are some, the picks handed over", function()
-    local data = KoaMock.xray("Mock Series 3")
-    local PromptWriter = require("koassistant.images.prompt_writer")
-    local saved_pick = ImageGenerator.pickEntries
-    ImageGenerator.pickEntries = function(_rows, _picks, on_done) on_done({ "Gil Rook", "Hollowmere" }) end
-    local got_text, got_picks
+TestRunner:test("the note box: OK hands the note over, a blank one as none, Cancel nothing", function()
+    local got, called = nil, 0
     local ok, err = pcall(function()
         ui.stack = {}
-        ImageGenerator.askNote(nil, function(text, picks) got_text, got_picks = text, picks end,
-            { pickable = PromptWriter.pickable(data) })
+        ImageGenerator.askNote("from behind", function(text) got, called = text, called + 1 end)
         local note = ui:top()
-        TestRunner:assertTrue(ui:has("Pick X-Ray entries…", note), table.concat(ui:texts(note), " | "))
-        ui:tap("Pick X-Ray entries…", note)
+        TestRunner:assertEqual(note.title, "Note for the picture")
+        TestRunner:assertEqual(note.input, "from behind", "opens on the note so far")
+        TestRunner:assertEqual(table.concat(ui:texts(note), " | "), "Cancel | OK")
         ui:type("at dusk", note)
-        ui:tap("Generate", note)
-        TestRunner:assertEqual(got_text, "at dusk")
-        TestRunner:assertEqual(table.concat(got_picks or {}, "|"), "Gil Rook|Hollowmere")
-        ui.stack = {}
-        ImageGenerator.askNote(nil, function() end, {})
-        TestRunner:assertTrue(not ui:has("Pick X-Ray entries…", ui:top()), "no X-Ray: no pick button")
+        ui:tap("OK", note)
+        TestRunner:assertEqual(got, "at dusk")
+        ImageGenerator.askNote(nil, function(text) got, called = text, called + 1 end)
+        ui:type("   ")
+        ui:tap("OK")
+        TestRunner:assertTrue(got == nil and called == 2, "a blank note is none")
+        ImageGenerator.askNote(nil, function() called = called + 1 end)
+        ui:tap("Cancel")
+        TestRunner:assertEqual(called, 2, "Cancel hands nothing over")
     end)
-    ImageGenerator.pickEntries = saved_pick
     if not ok then error(err, 0) end
 end)
 

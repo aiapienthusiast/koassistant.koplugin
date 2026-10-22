@@ -7559,8 +7559,8 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
         -- showChatGPTDialog, which sits near the 60-upvalue LuaJIT cap). The
         -- dialog's own book beats whatever the reader has open.
         if action.local_handler then
-            -- Generate Image takes what was typed as its note (S5, D9), and a
-            -- hold menu's "Generate with a note…" asks for one
+            -- Generate Image takes what was typed as its note (S5, D9): its
+            -- popup opens with it
             require("koassistant.ui.dialogs").executeDirectAction(
                 ui_instance, action, highlighted_text or "", configuration, plugin,
                 { document_path = document_path, run_variant = run_variant,
@@ -13014,9 +13014,9 @@ local function handleLocalXrayLookup(ui, query, document_path, book_metadata, co
 end
 
 -- Dispatch a local (non-AI) action handler. opts (optional): run_variant (a
--- hold menu's run option: { image_note = true } asks Generate Image's note,
--- { image_settings = true } opens the image settings panel first), note (the
--- text typed in the input dialog: Generate Image's note)
+-- hold menu's run option: { image_now = true } draws Generate Image's picture
+-- without its popup), note (the text typed in the input dialog: Generate
+-- Image's note)
 local function handleLocalAction(handler_name, ui, highlighted_text, document_path, book_metadata, config, plugin, opts)
     local logger = require("koassistant.core.logger")
 
@@ -13051,7 +13051,7 @@ local function handleLocalAction(handler_name, ui, highlighted_text, document_pa
         -- privacy values reach the generator's gate for the text around it. The
         -- prompt writer (S5) also reads the book's Background, the spoiler
         -- posture and the reader's note (the input dialog's text, or the one
-        -- "Generate with a note…" asks for)
+        -- typed in the popup)
         local features = (config and config.features) or {}
         local book_ds = book_info and require("koassistant.storage.doc_settings").resolve(book_info.file, ui) or nil
         local spoiler = BookSettings.resolveSpoilerFree(book_ds, features) or false
@@ -13075,35 +13075,42 @@ local function handleLocalAction(handler_name, ui, highlighted_text, document_pa
                 ImageGenerator.generate(highlighted_text, config, plugin and plugin.settings, book_info, gen_opts)
             end)
         end
-        local function runWithNote()
-            -- B535: the X-Ray entries a passage does not name can be picked by
-            -- hand for the prompt writer (only it reads them)
+        local variant = opts and type(opts.run_variant) == "table" and opts.run_variant or {}
+        if variant.image_now or not (plugin and plugin.settings) then
+            run()
+        else
+            -- B537: a tap opens the picture popup (the scope popup's shape):
+            -- a note and X-Ray entries for this picture, then the settings it
+            -- is drawn with (a pick is the setting), then Generate, from the
+            -- selection taken at the start. B535: the entries a passage does
+            -- not name can be picked by hand for the prompt writer
             local pickable
-            if features.image_gen_writer ~= false and book_info and book_info.file then
+            if book_info and book_info.file then
                 local xray = require("koassistant.artifacts.action_cache").parsedXrayFor(book_info.file)
                 if xray then pickable = require("koassistant.images.prompt_writer").pickable(xray.data) end
             end
-            ImageGenerator.askNote(gen_opts.note, function(text, picks)
-                gen_opts.note = text
-                gen_opts.picked = picks
-                run()
-            end, { pickable = pickable, picked = gen_opts.picked })
-        end
-        local variant = opts and type(opts.run_variant) == "table" and opts.run_variant or {}
-        if variant.image_note then
-            runWithNote()
-        elseif variant.image_settings and plugin and plugin.settings then
-            -- the image settings panel (S9): a pick is the setting, then the
-            -- picture from the selection taken at the start
+            local state = { note = gen_opts.note, picked = gen_opts.picked }
+            local passage = type(highlighted_text) == "string"
+                and highlighted_text:gsub("%s+", " "):match("^%s*(.-)%s*$") or ""
+            if passage ~= "" then
+                local head = require("koassistant.request.scope_resolver").utf8Head(passage, 120)
+                passage = "\u{201C}" .. head .. (#head < #passage and "…" or "") .. "\u{201D}"
+            end
             require("koassistant.images.image_options").show(plugin, {
+                title = _("Generate Image"),
+                subtitle = passage,
                 writer = true,
+                note = true,
+                pickable = pickable,
+                state = state,
                 actions = {
-                    { text = _("Generate"), callback = run },
-                    { text = _("Generate with a note…"), callback = runWithNote },
+                    { text = _("Generate"), callback = function()
+                        gen_opts.note = state.note
+                        gen_opts.picked = state.picked
+                        run()
+                    end },
                 },
             })
-        else
-            run()
         end
     else
         logger.warn("KOAssistant: Unknown local handler: " .. tostring(handler_name))

@@ -224,7 +224,9 @@ function S.top()
     return stack[#stack] and stack[#stack].widget
 end
 
---- The buttons a dialog shows, top to bottom: { { text, button }, ... }
+--- The buttons a dialog shows, top to bottom: { { text, button }, ... }; in a
+--- window built by hand (no button table of its own), every Button and
+--- CheckButton (a radio row's too) in its widget tree, `checked` set for those
 function S.buttons(w)
     w = w or S.top()
     local out = {}
@@ -235,7 +237,33 @@ function S.buttons(w)
             for _c, b in ipairs(row) do out[#out + 1] = { text = b.text, button = b } end
         end
     end
+    if #out == 0 and type(w) == "table" and not w.item_table then
+        local seen = {}
+        local function walk(node, depth)
+            if type(node) ~= "table" or seen[node] or depth > 40 then return end
+            seen[node] = true
+            if type(node.text) == "string" and (node.onTapSelectButton or node.onTapCheckButton) then
+                local checked
+                if node.onTapCheckButton then checked = node.checked == true end
+                out[#out + 1] = { text = node.text, button = node, checked = checked }
+                return
+            end
+            for i = 1, #node do walk(node[i], depth + 1) end
+            -- a scrolled body keeps its content as the first child too
+            if node.cropping_widget then walk(node.cropping_widget, depth + 1) end
+        end
+        walk(w, 0)
+    end
     return out
+end
+
+-- A tap on what S.buttons found, as a finger would
+local function press(b)
+    if b.onTapCheckButton then
+        b:onTapCheckButton()
+    else
+        b:onTapSelectButton()
+    end
 end
 
 --- The texts of S.buttons, or of a menu's rows
@@ -269,7 +297,7 @@ function S.tap(text, w)
         for _j, b in ipairs(S.buttons(win)) do
             seen[#seen + 1] = b.text
             if hit(b.text) then
-                b.button:onTapSelectButton()
+                press(b.button)
                 S.settle()
                 UIManager:forceRePaint()
                 return b.text, win

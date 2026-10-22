@@ -192,7 +192,7 @@ Entries of Story Arc, Argument Development, Arguments, Findings and Figures & Da
 - **History through checkpoints…**: how this one entry changed across the versions you have built (when the book has checkpoints). Versions past your reading position stay hidden until you confirm **Show later versions**.
 - **List connections (N)…**.
 - **Your highlights (N)…**: the passages you highlighted that mention this entry, while the book is open. Matched on your device whatever your highlights value, and not sent anywhere.
-- **Illustrate…**: a picture of this entry, drawn from its description: the image settings first, then **Illustrate** or **Illustrate with a note…**. On the book's own installed X-Ray, while an image provider is available; see [Image Generation](Image-Generation#illustrate-from-x-ray).
+- **Illustrate…**: a picture of this entry, drawn from its description: a popup with a note for this picture and the image settings, then **Illustrate**. On the book's own installed X-Ray, while an image provider is available; see [Image Generation](Image-Generation#illustrate-from-x-ray).
 - **Pictures (N)…**: beside Illustrate…, when pictures show this entry (drawn from it, or from a passage that names it): the gallery opened on them; see [Image Generation](Image-Generation#the-gallery).
 - Under the **Edit this entry** divider: **Names and matching…**, **Merge with another entry…**, and **Link with a group member's entry…** in a book group. See [Managing entries](#managing-entries). An entry you added from the carried list (**Add as a new entry**) also has **Move back to carried list** (see [Book Groups and Series](Book-Groups-and-Series)).
 

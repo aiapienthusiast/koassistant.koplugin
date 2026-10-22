@@ -412,8 +412,8 @@ local ui = Recorder.install()               -- before loading the module under t
 local data, path = KoaMock.xray("Mock Series 3")
 -- ... open something ...
 ui:texts()                                  -- the top dialog's buttons
-ui:tap("Illustrate with a note…")           -- run that button's callback
-ui:type("at dusk"); ui:tap("Illustrate")    -- type into the note box, confirm
+ui:tap("Names and matching…")               -- run that button's callback
+ui:type("at dusk"); ui:tap("OK")            -- type into the box it opens, confirm
 ui:tapOutside()                             -- a tap outside the top dialog (or the Back key)
 ui:restore()                                -- at the end of the file
 ```
@@ -430,7 +430,7 @@ sh tests/scenarios/run.sh /path/to/a/scratch/folder /elsewhere/probe.lua # a one
 
 Each run makes a NEW folder under the one given (`run-<time>-<pid>/`): `home/` is a fresh KOReader home with this plugin linked into its `plugins/`, `Books/` the fixture with its groups written into that home, `shots/` the screenshots a scenario takes, one log per scenario. Nothing is deleted and nothing of a real KOReader home is read. `boot.lua` refuses to start unless the home sits inside the run folder, stands an empty table in for `apikeys.lua` before the plugin loads, blocks the network (LuaSocket, LuaSec, child processes, the plugin's request functions; a blocked call fails the scenario), turns KOReader's other plugins off and skips the update check. Needs the macOS app at `/Applications/KOReader.app`. The exit code is the number of scenarios that failed.
 
-A scenario is a short Lua file: `local S = dofile(os.getenv("KOA_PLUGIN") .. "/tests/scenarios/boot.lua")`, then `S.features{...}` (the plugin's settings, before the book opens), `S.open("Mock Series 3")`, `S.chapter("Rented Quiet")`, `S.marks()` (the visible page's X-Ray marks with the words under each), `S.settle()` (every scheduled task now: debounces, the marks' deferred scan), `S.check(cond, "what it shows")`, `S.shot("name")`, `S.finish()`.
+A scenario is a short Lua file: `local S = dofile(os.getenv("KOA_PLUGIN") .. "/tests/scenarios/boot.lua")`, then `S.features{...}` (the plugin's settings, before the book opens), `S.open("Mock Series 3")`, `S.chapter("Rented Quiet")`, `S.marks()` (the visible page's X-Ray marks with the words under each), `S.settle()` (every scheduled task now: debounces, the marks' deferred scan), `S.check(cond, "what it shows")`, `S.shot("name")`, `S.finish()`. `S.texts()` / `S.tap(text)` read and tap a dialog's buttons or a menu's rows; in a window built by hand (the picture popup, s06) they reach every button and checkbox in its widget tree, radio rows included (`S.buttons()` gives each one's `checked`).
 
 ## Prerequisites
 

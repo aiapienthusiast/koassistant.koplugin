@@ -19954,7 +19954,7 @@ function AskGPT:registerHighlightMenuActions()
 
         if action.local_handler then
           -- Local actions don't need network (a run option reaches them too:
-          -- Generate Image's "Generate with a note…")
+          -- Generate Image's "Generate now")
           self:updateConfigFromSettings()
           self:executeQuickAction(action, selected_text, context, selection_data, sc_window, variant)
         else

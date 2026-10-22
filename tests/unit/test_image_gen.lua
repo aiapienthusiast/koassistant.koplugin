@@ -1428,7 +1428,7 @@ local function runAll()
         TestRunner:assertEquals(B.holdText({ prompt = "P" }), "P", "before S7: the prompt alone")
     end)
 
-    print("  [The image settings panel (S9)]")
+    print("  [The picture popup (S9, B537)]")
     local ImageOptions = require("koassistant.images.image_options")
     TestRunner:test("rowIds: Provider, the drawing provider's model, Style, Shape, Detail; the writer row on request", function()
         TestRunner:assertEquals(table.concat(ImageOptions.rowIds("openai", true), ","),
@@ -1445,57 +1445,102 @@ local function runAll()
             TestRunner:assert(SettingsSchema:getItemById(ImageOptions.rowIds(p, false)[2]), "a model row: " .. p)
         end
     end)
-    TestRunner:test("the panel: the settings' own rows and values, a picker that comes back, the action", function()
-        local UIManager = require("ui/uimanager")
-        local shown, popup = {}, nil
-        local real_show = UIManager.show
-        UIManager.show = function(_self, w) shown[#shown + 1] = w end
+    TestRunner:test("the picture popup's labels: the note and the picks, cut on one line", function()
+        TestRunner:assertEquals(ImageOptions.noteLabel(nil), "Add a note…")
+        TestRunner:assertEquals(ImageOptions.noteLabel("  "), "Add a note…", "a blank note is no note")
+        TestRunner:assertEquals(ImageOptions.noteLabel("at dusk,\n one lit window"), "Note: at dusk, one lit window")
+        local long = ImageOptions.noteLabel(string.rep("a", 50))
+        TestRunner:assertEquals(long, "Note: " .. string.rep("a", 40) .. "…", "a long note is cut")
+        TestRunner:assertEquals(ImageOptions.picksLabel({}), "Pick X-Ray entries…")
+        TestRunner:assertEquals(ImageOptions.picksLabel({ "Gil Rook", "Hollowmere" }), "X-Ray entries: Gil Rook, Hollowmere")
+    end)
+    TestRunner:test("the picture popup's rows (B537): this picture, then the Settings rows, a pick saved", function()
         local features = { image_gen_provider = "openai", image_gen_style = "ink" }
+        local popup
         local plugin = {
-            settings = { data = { features = features }, readSetting = function(_self, k) return k == "features" and features or nil end },
+            settings = { data = { features = features }, flush = function() end,
+                readSetting = function(_self, k) return k == "features" and features or nil end },
             updateConfigFromSettings = function() end,
-            imageStyleItems = function(_self, after) return { { text = "Watercolor", callback = function() end, after = after } } end,
+            imageStyleItems = function(_self, _after)
+                return {
+                    { text = "Book illustration", checked_func = function() return features.image_gen_style == "illustration" end,
+                      callback = function() features.image_gen_style = "illustration" end },
+                    { text = "Ink drawing", checked_func = function() return features.image_gen_style == "ink" end,
+                      callback = function() features.image_gen_style = "ink" end },
+                    { text_func = function() return "Custom…" end, opens_dialog = true,
+                      checked_func = function() return false end, callback = function() popup = "custom" end },
+                }
+            end,
             showQuickSettingsPopup = function(_self, title, items, _close, on_close)
                 popup = { title = title, items = items, on_close = on_close }
             end,
         }
-        local function texts(d)
-            local out = {}
-            for _i, row in ipairs(d.buttons) do for _j, b in ipairs(row) do out[#out + 1] = b.text end end
-            return table.concat(out, " | ")
-        end
-        local function tap(d, pattern)
-            for _i, row in ipairs(d.buttons) do
-                for _j, b in ipairs(row) do if b.text:find(pattern) then b.callback(); return true end end
-            end
-            return false
-        end
-        local ok, err = pcall(function()
-            withApikeys({ openai = "sk-real-key" }, function()
-                local drew = false
-                ImageOptions.show(plugin, { writer = true, actions = { { text = "Generate", callback = function() drew = true end } } })
-                local all = texts(shown[#shown])
-                TestRunner:assert(all:find("OpenAI model: Default (gpt-image-2.5-flare)", 1, true), all)
-                TestRunner:assert(all:find("Style: Ink drawing", 1, true), all)
-                TestRunner:assert(all:find("Write the prompt with AI: On", 1, true), all)
-                TestRunner:assert(all:find("Generate", 1, true) and all:find("Close", 1, true), all)
-                TestRunner:assert(tap(shown[#shown], "^Style:"), "the Style row")
-                TestRunner:assert(popup and popup.items[1].text == "Watercolor", "the Style picker")
-                TestRunner:assert(popup.items[1].after ~= nil, "handed the panel's reopen")
-                local before = #shown
-                popup.on_close()
-                TestRunner:assert(#shown == before + 1, "the panel comes back after the pick")
-                TestRunner:assert(tap(shown[#shown], "^Generate$"), "the action button")
-                TestRunner:assert(drew, "the action ran")
-                features.image_gen_provider = "auto"
-                features.provider = "anthropic"
-                ImageOptions.show(plugin, {})
-                TestRunner:assert(not texts(shown[#shown]):find("model:", 1, true),
-                    "a chat provider that cannot draw: no model row")
-            end)
+        withApikeys({ openai = "sk-real-key" }, function()
+            local rebuilt = 0
+            local function rebuild() rebuilt = rebuilt + 1 end
+            local state = {}
+            local spec = { writer = true, note = true, pickable = { { name = "Gil Rook" } }, state = state }
+            local rows = ImageOptions.rows(plugin, spec, rebuild)
+            local ids, by = {}, {}
+            for _idx, r in ipairs(rows) do ids[#ids + 1] = r.id; by[r.id] = r end
+            TestRunner:assertEquals(table.concat(ids, ","), "picture,style,shape,detail,drawn,writer")
+            TestRunner:assertEquals(by.picture.items[1].text, "Add a note…")
+            TestRunner:assertEquals(by.picture.items[2].text, "Pick X-Ray entries…")
+            TestRunner:assert(by.picture.items[2].enabled, "the picks row is live with the writer on")
+            local checked = {}
+            for _idx, it in ipairs(by.style.items) do if it.checked then checked[#checked + 1] = it.text end end
+            TestRunner:assertEquals(table.concat(checked, ","), "Ink drawing", "the style row on its value")
+            TestRunner:assertEquals(by.style.items[3].text, "Custom…", "a computed label")
+            TestRunner:assertEquals(by.shape.items[1].text, "Fit my screen")
+            TestRunner:assert(by.shape.items[1].checked, "Shape on its default")
+            TestRunner:assertEquals(#by.detail.items, 3)
+            TestRunner:assertEquals(by.drawn.items[1].text, "OpenAI", "the provider by its value")
+            TestRunner:assertEquals(by.drawn.items[2].text, "gpt-image-2.5-flare", "the model that draws, by its id")
+            TestRunner:assert(by.writer.item.checked, "Write the prompt with AI, on by default")
+            -- a pick is the setting, then the popup rebuilds
+            by.shape.items[2].callback()
+            TestRunner:assertEquals(features.image_gen_shape, "portrait")
+            TestRunner:assertEquals(rebuilt, 1)
+            rows = ImageOptions.rows(plugin, spec, rebuild)
+            for _idx, r in ipairs(rows) do by[r.id] = r end
+            TestRunner:assert(by.shape.items[2].checked and not by.shape.items[1].checked, "the rebuilt rows show the pick")
+            by.shape.items[2].callback()
+            TestRunner:assertEquals(rebuilt, 1, "the value already picked: nothing to do")
+            by.shape.items[1].callback()
+            TestRunner:assertEquals(rebuilt, 2, "a pick of another value")
+            by.style.items[1].callback()
+            TestRunner:assertEquals(features.image_gen_style, "illustration")
+            by.style.items[3].callback()
+            TestRunner:assertEquals(popup, "custom", "Custom… opens its own box (it rebuilds the popup itself)")
+            -- the provider's picker, titled as Settings titles the row
+            by.drawn.items[1].callback()
+            TestRunner:assertEquals(popup.title, "Provider: OpenAI")
+            TestRunner:assert(popup.on_close == rebuild, "the picker comes back to the popup")
+            -- the writer off: nothing reads the picks
+            by.writer.item.callback()
+            TestRunner:assertEquals(features.image_gen_writer, false)
+            rows = ImageOptions.rows(plugin, spec, rebuild)
+            for _idx, r in ipairs(rows) do by[r.id] = r end
+            TestRunner:assert(by.picture.items[2].enabled == false, "the picks row grays with the writer off")
+            TestRunner:assert(not by.writer.item.checked)
+            -- the picture's own state on the buttons
+            state.note, state.picked = "at dusk", { "Gil Rook" }
+            rows = ImageOptions.rows(plugin, spec, rebuild)
+            TestRunner:assertEquals(rows[1].items[1].text, "Note: at dusk")
+            TestRunner:assertEquals(rows[1].items[2].text, "X-Ray entries: Gil Rook")
+            -- the gallery's: settings only
+            rows = ImageOptions.rows(plugin, {}, rebuild)
+            ids = {}
+            for _idx, r in ipairs(rows) do ids[#ids + 1] = r.id end
+            TestRunner:assertEquals(table.concat(ids, ","), "style,shape,detail,drawn")
+            -- a chat provider that cannot draw: no model
+            features.image_gen_provider = "auto"
+            features.provider = "anthropic"
+            rows = ImageOptions.rows(plugin, {}, rebuild)
+            for _idx, r in ipairs(rows) do by[r.id] = r end
+            TestRunner:assertEquals(#by.drawn.items, 1, "no model button")
+            TestRunner:assertEquals(by.drawn.items[1].text, "Follow main provider")
         end)
-        UIManager.show = real_show
-        if not ok then error(err, 0) end
     end)
 
     print("  [The main provider (B462)]")

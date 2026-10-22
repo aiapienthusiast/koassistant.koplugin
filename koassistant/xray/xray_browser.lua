@@ -3677,11 +3677,11 @@ function XrayBrowser:_offersMoveBack(item, category_key)
     return ActionCache.getPromotedStubs(self.metadata.book_file)[name:lower()] ~= nil
 end
 
---- Illustrate… (S8): the image settings panel (B535: the settings it is drawn
---- with, as Generate Image's long-press shows them), then the picture, drawn
---- from the entry's description (the entry is the subject; the book's identity
---- per the Book info level, its Background and spoiler posture as for a
---- passage), with a note when the reader adds one.
+--- Illustrate… (S8): the picture popup (B535, B537: a note for this picture,
+--- the settings it is drawn with, as a tap of Generate Image shows them), then
+--- the picture, drawn from the entry's description (the entry is the subject;
+--- the book's identity per the Book info level, its Background and spoiler
+--- posture as for a passage), with the note when the reader adds one.
 function XrayBrowser:_illustrate(item, category_key)
     local plugin = self.metadata.plugin
     local configuration = self.metadata.configuration
@@ -3713,20 +3713,19 @@ function XrayBrowser:_illustrate(item, category_key)
         plugin = plugin,
     }
     local book_info = { file = file, title = title }
-    local function run(note)
-        gen_opts.note = note
-        require("ui/network/manager"):runWhenConnected(function()
-            if plugin.updateConfigFromSettings then plugin:updateConfigFromSettings() end
-            ImageGenerator.generate(nil, configuration, plugin.settings, book_info, gen_opts)
-        end)
-    end
+    local state = {}
     require("koassistant.images.image_options").show(plugin, {
         title = T(_("Illustrate \"%1\""), XrayParser.getItemName(item, category_key)),
         writer = true,
+        note = true,
+        state = state,
         actions = {
-            { text = _("Illustrate"), callback = function() run(nil) end },
-            { text = _("Illustrate with a note…"), callback = function()
-                ImageGenerator.askNote(nil, run, { confirm_text = _("Illustrate") })
+            { text = _("Illustrate"), callback = function()
+                gen_opts.note = state.note
+                require("ui/network/manager"):runWhenConnected(function()
+                    if plugin.updateConfigFromSettings then plugin:updateConfigFromSettings() end
+                    ImageGenerator.generate(nil, configuration, plugin.settings, book_info, gen_opts)
+                end)
             end },
         },
     })
