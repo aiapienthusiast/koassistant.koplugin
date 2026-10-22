@@ -218,6 +218,99 @@ function S.marks()
     return out
 end
 
+--- The window on top (the last shown)
+function S.top()
+    local stack = UIManager._window_stack
+    return stack[#stack] and stack[#stack].widget
+end
+
+--- The buttons a dialog shows, top to bottom: { { text, button }, ... }
+function S.buttons(w)
+    w = w or S.top()
+    local out = {}
+    -- ButtonDialog's field, then InputDialog's (either may be missing)
+    for _idx, field in ipairs({ "buttontable", "button_table" }) do
+        local bt = w and w[field]
+        for _r, row in ipairs(bt and bt.buttons_layout or {}) do
+            for _c, b in ipairs(row) do out[#out + 1] = { text = b.text, button = b } end
+        end
+    end
+    return out
+end
+
+--- The texts of S.buttons, or of a menu's rows
+function S.texts(w)
+    w = w or S.top()
+    local out = {}
+    for _idx, b in ipairs(S.buttons(w)) do out[#out + 1] = b.text end
+    if #out == 0 and w and w.item_table then
+        for _idx, it in ipairs(w.item_table) do out[#out + 1] = it.text end
+    end
+    return out
+end
+
+--- Tap the button, or the menu row, with exactly this text (or matching a
+--- Lua pattern given as { pattern }): in `w`, or in the windows from the top
+--- down (an input box sits under its keyboard); fails naming what is there
+function S.tap(text, w)
+    local function hit(t)
+        if type(text) == "table" then return type(t) == "string" and t:find(text[1]) ~= nil end
+        return t == text
+    end
+    local stack = UIManager._window_stack
+    local windows = {}
+    if w then
+        windows[1] = w
+    else
+        for i = #stack, 1, -1 do windows[#windows + 1] = stack[i].widget end
+    end
+    local seen = {}
+    for _idx, win in ipairs(windows) do
+        for _j, b in ipairs(S.buttons(win)) do
+            seen[#seen + 1] = b.text
+            if hit(b.text) then
+                b.button:onTapSelectButton()
+                S.settle()
+                UIManager:forceRePaint()
+                return b.text, win
+            end
+        end
+        for _j, it in ipairs(win and win.item_table or {}) do
+            seen[#seen + 1] = it.text
+            if hit(it.text) then
+                win:onMenuSelect(it)
+                S.settle()
+                UIManager:forceRePaint()
+                return it.text, win
+            end
+        end
+    end
+    error("nothing to tap named " .. tostring(type(text) == "table" and text[1] or text)
+        .. "; there: " .. table.concat(seen, " | "))
+end
+
+--- Close every window above the reader
+function S.closeAll()
+    local stack = UIManager._window_stack
+    for i = #stack, 1, -1 do
+        local w = stack[i] and stack[i].widget
+        if w and w ~= current_ui then UIManager:close(w) end
+    end
+    -- what the closes scheduled runs now, not over the next window
+    S.settle()
+end
+
+--- The first window from the top that shows a button or row with this text
+function S.find(text)
+    local stack = UIManager._window_stack
+    for i = #stack, 1, -1 do
+        local win = stack[i].widget
+        for _j, t in ipairs(S.texts(win)) do
+            if t == text then return win end
+        end
+    end
+end
+
 --- A screenshot for the session to view
 function S.shot(name)
     lfs.mkdir(RUN .. "/shots")

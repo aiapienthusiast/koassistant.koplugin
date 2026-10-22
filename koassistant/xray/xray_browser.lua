@@ -3189,7 +3189,8 @@ function XrayBrowser:showItemDetail(item, category_key, title, source, nav_conte
     if DISTRIBUTION_EXCLUDED[category_key] and self.metadata.book_file
         and not self.scope and not self.metadata.checkpoint
         and type(item) == "table" and (self:_offersMoveBack(item, category_key)
-        or self:_canIllustrate(item, category_key)) then
+        or self:_canIllustrate(item, category_key)
+        or ((self:_entryPictures(item, category_key) or {}).count or 0) > 0) then
         table.insert(fallback_row, {
             text = _("More…"),
             callback = function()
@@ -3639,6 +3640,21 @@ function XrayBrowser:_canIllustrate(item, category_key)
         require("koassistant.core.config_helper").mainProvider(feats), plugin.settings)
 end
 
+--- The pictures that show an entry of this book (B486), for its More… row:
+--- { count, entry = the gallery's entry set }, nil when the X-Ray is not at
+--- hand. Matched by the entry's names (ImageGenerator.picturesOf).
+function XrayBrowser:_entryPictures(item, category_key)
+    local file = self.metadata.book_file
+    if not (file and type(item) == "table" and self.xray_data) then return nil end
+    local ImageGenerator = require("koassistant.images.image_generator")
+    local names, others, main = ImageGenerator.entryNames(self.xray_data, item, category_key)
+    return {
+        count = #ImageGenerator.picturesOf(file, names, others, main),
+        entry = { book_file = file, names = names, others = others, main = main,
+            title = XrayParser.getItemName(item, category_key) },
+    }
+end
+
 --- "Move back to carried list" (B534): the way back out of "Add as a new
 --- entry", so only for an entry on the hand-added record (B400). Background
 --- lines prove nothing: every entry of this book that matches a carried name
@@ -3782,16 +3798,30 @@ function XrayBrowser:_showEntityManagePopup(item, category_key, title, source, n
         }})
     end
     -- Illustrate… (image round S8): a picture of this entry, drawn from its
-    -- description through the prompt writer (image_generator.lua)
+    -- description through the prompt writer (image_generator.lua); beside it
+    -- the pictures that show this entry (B486: drawn from it, or from a
+    -- passage that names it), in the gallery's grid
+    local picture_row = {}
+    local pictures = named and self.metadata.book_file and self:_entryPictures(item, category_key)
+    if pictures and pictures.count > 0 then
+        picture_row[#picture_row + 1] = {
+            text = T(_("Pictures (%1)…"), pictures.count),
+            callback = function()
+                UIManager:close(dialog)
+                require("koassistant.images.image_browser").show({ entry = pictures.entry })
+            end,
+        }
+    end
     if self:_canIllustrate(item, category_key) then
-        table.insert(buttons, {{
+        picture_row[#picture_row + 1] = {
             text = _("Illustrate…"),
             callback = function()
                 UIManager:close(dialog)
                 self_ref:_illustrate(item, category_key)
             end,
-        }})
+        }
     end
+    if #picture_row > 0 then table.insert(buttons, picture_row) end
     -- Split the reading rows above from the ops below (maintainer 2026-08-18).
     -- ButtonTable already rules between every row, so a disabled row reads as
     -- the double line asked for, and labelling it says WHY the split is there.

@@ -258,6 +258,128 @@ TestRunner:test("a note that names an entry brings it to the prompt writer", fun
 end)
 
 print("")
+print("  [Pictures beside their entries (B486) and picked entries (B535)]")
+
+TestRunner:test("More…: Pictures (N)… beside Illustrate…, opening the gallery on that entry", function()
+    local data, file = KoaMock.xray("Mock Series 3")
+    local saved_pics = ImageGenerator.picturesOf
+    local had_ib = package.loaded["koassistant.images.image_browser"]
+    local shown
+    package.loaded["koassistant.images.image_browser"] = { show = function(o) shown = o end }
+    ImageGenerator.picturesOf = function(book, names)
+        return (book == file and names["gil rook"]) and { "x.png", "y.png" } or {}
+    end
+    local ok, err = pcall(withKeys, function()
+        local popup = moreOf(browser(data, file), entry(data, "characters", "Gil Rook"), "characters")
+        TestRunner:assertTrue(ui:has("Pictures (2)…", popup) and ui:has("Illustrate…", popup),
+            table.concat(ui:texts(popup), " | "))
+        ui:tap("Pictures (2)…", popup)
+        TestRunner:assertTrue(shown and shown.entry, "the gallery opened on an entry")
+        TestRunner:assertEqual(shown.entry.book_file, file)
+        TestRunner:assertEqual(shown.entry.title, "Gil Rook")
+        TestRunner:assertTrue(shown.entry.names["gil rook"] == true, "matched by its names")
+        popup = moreOf(browser(data, file), entry(data, "characters", "Tamsin Vael"), "characters")
+        TestRunner:assertTrue(not table.concat(ui:texts(popup), "|"):find("Pictures", 1, true),
+            "an entry without pictures: Illustrate… alone")
+    end)
+    ImageGenerator.picturesOf = saved_pics
+    package.loaded["koassistant.images.image_browser"] = had_ib
+    if not ok then error(err, 0) end
+end)
+
+TestRunner:test("a picture records what it shows: the picks, the passage's names, the entry drawn", function()
+    local data, file = KoaMock.xray("Mock Series 3")
+    local saved_parsed, saved_run = ActionCache.parsedXrayFor, ImageGenerator._run
+    local DataAccess = require("koassistant.ui.data_access")
+    local saved_access = DataAccess.withAccess
+    local run
+    ActionCache.parsedXrayFor = function() return { data = data, entry = { used_book_text = true } } end
+    DataAccess.withAccess = function(_plugin, _action, _opts, run_fn) run_fn({}) end
+    ImageGenerator._run = function(st) run = st end
+    local book = { file = file, title = "Mock Series 3 - The Orchard" }
+    local ok, err = pcall(function()
+        ImageGenerator._askAndRun("openai", "He handed her the knife by way of hello.",
+            { provider = "anthropic", features = { image_gen_frame_context = false } }, plugin.settings,
+            book, { picked = { "Gil Rook" }, plugin = plugin })
+        TestRunner:assertEqual(run.entries[1] and run.entries[1].name, "Gil Rook", "the pick goes to the writer")
+        TestRunner:assertEqual(table.concat(run.about or {}, "|"), "Gil Rook", "and is recorded with the picture")
+        run = nil
+        ImageGenerator._askAndRun("openai", "Gil Rook was up a ladder in the salt-apple rows.",
+            { provider = "anthropic", features = { image_gen_frame_context = false, image_gen_writer = false } },
+            plugin.settings, book, { plugin = plugin })
+        TestRunner:assertEqual(#run.entries, 0, "the writer off: no entries sent")
+        TestRunner:assertEqual(table.concat(run.about or {}, "|"), "Gil Rook",
+            "but the picture still records whom the passage names")
+        run = nil
+        ImageGenerator._askAndRun("openai", nil,
+            { provider = "anthropic", features = { image_gen_frame_context = false } }, plugin.settings,
+            book, { entry = { name = "Tamsin Vael", description = "d" }, plugin = plugin })
+        TestRunner:assertEqual(table.concat(run.about or {}, "|"), "Tamsin Vael", "Illustrate: the entry drawn")
+    end)
+    ActionCache.parsedXrayFor, ImageGenerator._run = saved_parsed, saved_run
+    DataAccess.withAccess = saved_access
+    if not ok then error(err, 0) end
+end)
+
+TestRunner:test("the note box: Pick X-Ray entries… when there are some, the picks handed over", function()
+    local data = KoaMock.xray("Mock Series 3")
+    local PromptWriter = require("koassistant.images.prompt_writer")
+    local saved_pick = ImageGenerator.pickEntries
+    ImageGenerator.pickEntries = function(_rows, _picks, on_done) on_done({ "Gil Rook", "Hollowmere" }) end
+    local got_text, got_picks
+    local ok, err = pcall(function()
+        ui.stack = {}
+        ImageGenerator.askNote(nil, function(text, picks) got_text, got_picks = text, picks end,
+            { pickable = PromptWriter.pickable(data) })
+        local note = ui:top()
+        TestRunner:assertTrue(ui:has("Pick X-Ray entries…", note), table.concat(ui:texts(note), " | "))
+        ui:tap("Pick X-Ray entries…", note)
+        ui:type("at dusk", note)
+        ui:tap("Generate", note)
+        TestRunner:assertEqual(got_text, "at dusk")
+        TestRunner:assertEqual(table.concat(got_picks or {}, "|"), "Gil Rook|Hollowmere")
+        ui.stack = {}
+        ImageGenerator.askNote(nil, function() end, {})
+        TestRunner:assertTrue(not ui:has("Pick X-Ray entries…", ui:top()), "no X-Ray: no pick button")
+    end)
+    ImageGenerator.pickEntries = saved_pick
+    if not ok then error(err, 0) end
+end)
+
+TestRunner:test("the picker: a tap marks or clears, five at most, Done hands them back in order", function()
+    local saved_menu = package.loaded["ui/widget/menu"]
+    local menu
+    package.loaded["ui/widget/menu"] = { new = function(_cls, o)
+        menu = o
+        o.switchItemTable = function(self_m, title, items) self_m.title, self_m.item_table = title, items end
+        return o
+    end }
+    local done
+    local ok, err = pcall(function()
+        local rows = {}
+        for i = 1, 7 do rows[i] = { name = "Name " .. i } end
+        ImageGenerator.pickEntries(rows, { "Name 2" }, function(names) done = names end)
+        local function tap(label)
+            for _idx, it in ipairs(menu.item_table) do
+                if it.text:find(label, 1, true) then return menu.onMenuSelect(menu, it) end
+            end
+            error("no row " .. label)
+        end
+        TestRunner:assertTrue(menu.title:find("1 of 5", 1, true) ~= nil, menu.title)
+        tap("Name 4"); tap("Name 1"); tap("Name 2")
+        TestRunner:assertTrue(menu.title:find("2 of 5", 1, true) ~= nil, "Name 2 cleared: " .. menu.title)
+        tap("Name 5"); tap("Name 6"); tap("Name 7")
+        TestRunner:assertTrue(menu.title:find("5 of 5", 1, true) ~= nil, menu.title)
+        tap("Name 3")
+        TestRunner:assertTrue(menu.title:find("5 of 5", 1, true) ~= nil, "a sixth is refused")
+        tap("Done")
+        TestRunner:assertEqual(table.concat(done or {}, "|"), "Name 4|Name 1|Name 5|Name 6|Name 7")
+    end)
+    package.loaded["ui/widget/menu"] = saved_menu
+    if not ok then error(err, 0) end
+end)
+
+print("")
 print("  [Names and matching (B533)]")
 
 -- The book's alias file and its live X-Ray "on disk", in memory: the screen's

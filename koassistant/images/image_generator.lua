@@ -218,30 +218,137 @@ function ImageGenerator.askNote(prefill, on_ok, opts)
     local UIManager = require("ui/uimanager")
     local InputDialog = require("ui/widget/inputdialog")
     local dialog
+    -- B535: the X-Ray entries the reader picks for the prompt writer, by name,
+    -- in the order picked (opts.pickable = PromptWriter.pickable's rows)
+    local picks = {}
+    for _idx, n in ipairs(type(opts.picked) == "table" and opts.picked or {}) do picks[#picks + 1] = n end
+    local function pickLabel()
+        if #picks == 0 then return _("Pick X-Ray entries…") end
+        return T(_("X-Ray entries picked (%1)…"), #picks)
+    end
+    local buttons = { {
+        {
+            text = _("Cancel"),
+            id = "close",
+            callback = function() UIManager:close(dialog) end,
+        },
+        {
+            text = opts.confirm_text or _("Generate"),
+            is_enter_default = true,
+            callback = function()
+                local text = dialog:getInputText()
+                UIManager:close(dialog)
+                on_ok((type(text) == "string" and text:match("%S")) and text or nil, picks)
+            end,
+        },
+    } }
+    if type(opts.pickable) == "table" and #opts.pickable > 0 then
+        table.insert(buttons, 1, { {
+            text = pickLabel(),
+            id = "pick",
+            callback = function()
+                ImageGenerator.pickEntries(opts.pickable, picks, function(new_picks)
+                    picks = new_picks
+                    local ok, button = pcall(function() return dialog.button_table:getButtonById("pick") end)
+                    if ok and button then
+                        button:setText(pickLabel(), button.width)
+                        UIManager:setDirty(dialog, "ui")
+                    end
+                end)
+            end,
+        } })
+    end
     dialog = InputDialog:new{
         title = _("Note for the picture"),
         description = _("What the picture should show, or how. The prompt writer follows it; with the writer off, it is added to the prompt."),
         input = prefill or "",
         allow_newline = true,
-        buttons = { {
-            {
-                text = _("Cancel"),
-                id = "close",
-                callback = function() UIManager:close(dialog) end,
-            },
-            {
-                text = opts.confirm_text or _("Generate"),
-                is_enter_default = true,
-                callback = function()
-                    local text = dialog:getInputText()
-                    UIManager:close(dialog)
-                    on_ok((type(text) == "string" and text:match("%S")) and text or nil)
-                end,
-            },
-        } },
+        buttons = buttons,
     }
     UIManager:show(dialog)
     dialog:onShowKeyboard()
+end
+
+--- The X-Ray entries to give the prompt writer for a passage picture (B535),
+--- picked by hand when the passage does not name them: the installed X-Ray's
+--- people and places with a name search, each tap marks or clears one, five
+--- at most (what the writer reads). Done hands the picks back in the order
+--- picked; closing keeps the earlier picks.
+--- @param rows table PromptWriter.pickable(data)
+--- @param picks table names picked so far
+--- @param on_done function(names)
+function ImageGenerator.pickEntries(rows, picks, on_done)
+    local UIManager = require("ui/uimanager")
+    local Menu = require("ui/widget/menu")
+    local InfoMessage = require("ui/widget/infomessage")
+    local Screen = require("device").screen
+    local max = require("koassistant.images.prompt_writer").ENTRIES_MAX
+    local chosen, order = {}, {}
+    for _idx, n in ipairs(picks or {}) do
+        if type(n) == "string" and not chosen[n:lower()] then
+            chosen[n:lower()] = true
+            order[#order + 1] = n
+        end
+    end
+    local filter, menu
+    local function title()
+        return T(_("Pick X-Ray entries (%1 of %2)"), #order, max)
+    end
+    local function items()
+        local out = { {
+            text = _("Done"),
+            bold = true,
+            callback = function()
+                UIManager:close(menu)
+                on_done(order)
+            end,
+        } }
+        for _idx, row in ipairs(rows) do
+            local low = row.name:lower()
+            if not filter or low:find(filter, 1, true) then
+                out[#out + 1] = {
+                    text = (chosen[low] and "\u{2611} " or "\u{2610} ") .. row.name
+                        .. (row.role and (" \u{00B7} " .. row.role) or ""),
+                    callback = function()
+                        if chosen[low] then
+                            chosen[low] = nil
+                            for i = #order, 1, -1 do
+                                if order[i]:lower() == low then table.remove(order, i) end
+                            end
+                        elseif #order >= max then
+                            UIManager:show(InfoMessage:new{
+                                text = T(_("The prompt writer reads %1 entries at most."), max),
+                                timeout = 3,
+                            })
+                            return
+                        else
+                            chosen[low] = true
+                            order[#order + 1] = row.name
+                        end
+                        menu:switchItemTable(title(), items(), -1)
+                    end,
+                }
+            end
+        end
+        return out
+    end
+    menu = Menu:new{
+        title = title(),
+        item_table = items(),
+        is_borderless = true,
+        is_popout = false,
+        width = Screen:getWidth(),
+        height = Screen:getHeight(),
+        onMenuSelect = function(_self_menu, item)
+            if item and item.callback then item.callback() end
+            return true
+        end,
+        search_callback = function(search_string)
+            filter = (type(search_string) == "string" and search_string ~= "") and search_string:lower() or nil
+            menu:switchItemTable(title(), items(), 1)
+        end,
+    }
+    UIManager:show(menu)
 end
 
 --- Resolve the image model: explicit per-provider setting (a retired id sent
@@ -368,9 +475,74 @@ function ImageGenerator.recordImage(filename, book_info, prompt, provenance, met
         kinds = meta.kinds,
         style = type(meta.style) == "string" and meta.style or nil,
         written = type(meta.written) == "boolean" and meta.written or nil,
+        -- B486: the X-Ray entries the picture shows, by name (the entry drawn,
+        -- or the ones the passage, the note and the reader's picks name)
+        entries = type(meta.entries) == "table" and #meta.entries > 0 and meta.entries or nil,
         created = os.time(),
     }
     writeIndex(index)
+end
+
+--- The pictures of one X-Ray entry (B486), newest first: the book's pictures
+--- whose recorded entries name it. Matched by name, so a rename or a merge
+--- (the old name stays among the entry's names) keeps them: the entry's own
+--- name always, one of its other names only when no other entry is called
+--- that. Pictures gone from disk are left out.
+--- @param book_file string
+--- @param names table lowercased name -> true (the entry's name and aliases)
+--- @param others table|nil lowercased name -> true (the other entries' names)
+--- @param main string|nil the entry's own name, lowercased
+--- @param index table|nil the images index (read when nil)
+--- @return table { filename, ... }
+function ImageGenerator.picturesOf(book_file, names, others, main, index)
+    local out = {}
+    if type(book_file) ~= "string" or type(names) ~= "table" then return out end
+    index = index or ImageGenerator.readIndex()
+    local lfs = require("libs/libkoreader-lfs")
+    local dir = ImageGenerator.getImagesDir()
+    local hits = {}
+    for filename, rec in pairs(index) do
+        if type(rec) == "table" and rec.book_file == book_file and type(rec.entries) == "table" then
+            for _idx, n in ipairs(rec.entries) do
+                local low = type(n) == "string" and n:lower()
+                if low and names[low] and (low == main or not (others and others[low])) then
+                    if lfs.attributes(dir .. "/" .. filename, "mode") == "file" then
+                        hits[#hits + 1] = { name = filename, created = tonumber(rec.created) or 0 }
+                    end
+                    break
+                end
+            end
+        end
+    end
+    table.sort(hits, function(a, b)
+        if a.created ~= b.created then return a.created > b.created end
+        return a.name > b.name
+    end)
+    for _idx, h in ipairs(hits) do out[#out + 1] = h.name end
+    return out
+end
+
+--- The name sets picturesOf takes for an entry of a parsed X-Ray: its own
+--- name and other names, the other entries' names, its own name. Pure.
+--- @return table names, table others, string|nil main
+function ImageGenerator.entryNames(data, item, category_key)
+    local XrayParser = require("koassistant.xray.xray_parser")
+    local names, others = {}, {}
+    local main = XrayParser.getItemName(item, category_key)
+    main = type(main) == "string" and main:lower() or nil
+    if main then names[main] = true end
+    for _idx, a in ipairs(type(item) == "table" and type(item.aliases) == "table" and item.aliases or {}) do
+        if type(a) == "string" and a ~= "" then names[a:lower()] = true end
+    end
+    for _idx, cat in ipairs(XrayParser.getCategories(data) or {}) do
+        for _j, other in ipairs(cat.items or {}) do
+            if other ~= item then
+                local n = XrayParser.getItemName(other, cat.key)
+                if type(n) == "string" and n ~= "" then others[n:lower()] = true end
+            end
+        end
+    end
+    return names, others, main
 end
 
 -- The frame's label for the text around the passage (buildPrompt), and the
@@ -1675,6 +1847,7 @@ function ImageGenerator._regenerateImpl(spec, config_table, settings)
             restyle = writer_provider and { provider = writer_provider, model = writer_model,
                 style = style_text, default = style_default } or nil,
             kinds = kinds,
+            about = type(entry.entries) == "table" and entry.entries or nil,
         }
         if #kinds == 0 then
             ImageGenerator._run(st)
@@ -1730,11 +1903,22 @@ function ImageGenerator._askAndRun(provider, description, config_table, settings
     -- The book's own installed X-Ray: the entries the passage or the reader's
     -- note names (the writer reads them, D10; B535: "this is X" brings X), or
     -- the entry to draw; stored material, judged by the kinds it was built from
-    local xray = path and (opts.entry or writer_on)
-        and require("koassistant.artifacts.action_cache").parsedXrayFor(path) or nil
+    local xray = path and require("koassistant.artifacts.action_cache").parsedXrayFor(path) or nil
     local entries = {}
     if writer_on and not opts.entry and xray then
-        entries = PromptWriter.entriesFor(description, xray.data, nil, opts.note)
+        entries = PromptWriter.entriesFor(description, xray.data, nil, opts.note, opts.picked)
+    end
+    -- B486: what the picture shows, recorded with it (the entry drawn, or the
+    -- entries the passage, the note and the picks name; found with the writer
+    -- off too: a record on this device, nothing sent)
+    local about
+    if opts.entry then
+        about = { opts.entry.name }
+    elseif xray then
+        about = {}
+        local list = writer_on and entries
+            or PromptWriter.entriesFor(description, xray.data, nil, opts.note, opts.picked)
+        for _idx, e in ipairs(list) do about[#about + 1] = e.name end
     end
     local stored = (#entries > 0) and xray.entry or nil
     if opts.entry then
@@ -1780,7 +1964,7 @@ function ImageGenerator._askAndRun(provider, description, config_table, settings
         provider = provider, description = description, config_table = config_table, settings = settings,
         book_info = book_info, opts = opts, features = run_features, writer_on = writer_on,
         writer_provider = writer_provider, writer_model = writer_model, recipients = recipients,
-        entries = entries, stored = stored, window = window, path = path,
+        entries = entries, stored = stored, window = window, path = path, about = about,
     }
     if #kinds == 0 then
         ImageGenerator._run(st)
@@ -1972,7 +2156,8 @@ function ImageGenerator._run(st)
     -- writer's failure); kinds = what the prompt carries, written = the
     -- writer wrote it, style = its style in the prompt's words, for the index
     local function draw(final_prompt, provenance, note, kinds, written, style)
-        local meta = { provider = provider, model = resolved_model, kinds = kinds, written = written, style = style }
+        local meta = { provider = provider, model = resolved_model, kinds = kinds, written = written, style = style,
+            entries = st.about }
         local request = ImageGenerator.buildRequest(provider, resolved_model, final_prompt, features, screen)
         local request_body_str = BaseHandler.encodeBody(request.body)
         setPhase((note and (note .. "\n\n") or "")

@@ -13035,10 +13035,18 @@ local function handleLocalAction(handler_name, ui, highlighted_text, document_pa
             end)
         end
         local function runWithNote()
-            ImageGenerator.askNote(gen_opts.note, function(text)
+            -- B535: the X-Ray entries a passage does not name can be picked by
+            -- hand for the prompt writer (only it reads them)
+            local pickable
+            if features.image_gen_writer ~= false and book_info and book_info.file then
+                local xray = require("koassistant.artifacts.action_cache").parsedXrayFor(book_info.file)
+                if xray then pickable = require("koassistant.images.prompt_writer").pickable(xray.data) end
+            end
+            ImageGenerator.askNote(gen_opts.note, function(text, picks)
                 gen_opts.note = text
+                gen_opts.picked = picks
                 run()
-            end)
+            end, { pickable = pickable, picked = gen_opts.picked })
         end
         local variant = opts and type(opts.run_variant) == "table" and opts.run_variant or {}
         if variant.image_note then

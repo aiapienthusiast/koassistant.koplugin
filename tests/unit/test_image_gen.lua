@@ -1000,6 +1000,31 @@ local function runAll()
         w, h = ImageGenerator.thumbnailSize(300, 200, 1264, 1680)
         TestRunner:assertEquals(w .. "x" .. h, "300x200", "a small picture is not enlarged")
     end)
+    TestRunner:test("picturesOf: an entry's pictures by its names, newest first (B486)", function()
+        withImageIndex(function()
+            local data = { type = "fiction", characters = {
+                { name = "Gil Rook", aliases = { "the grafter", "Jory" } },
+                { name = "Jory", description = "The carter." },
+            } }
+            for _idx, n in ipairs({ "a.png", "b.png", "c.png", "d.png" }) do touchFile(n) end
+            ImageGenerator.recordImage("a.png", { file = "/b/one.epub", title = "One" }, "p", nil, { entries = { "Gil Rook" } })
+            ImageGenerator.recordImage("b.png", { file = "/b/one.epub", title = "One" }, "p", nil, { entries = { "the grafter", "Mara" } })
+            ImageGenerator.recordImage("c.png", { file = "/b/one.epub", title = "One" }, "p", nil, { entries = { "Jory" } })
+            ImageGenerator.recordImage("d.png", { file = "/b/two.epub", title = "Two" }, "p", nil, { entries = { "Gil Rook" } })
+            ImageGenerator.recordImage("gone.png", { file = "/b/one.epub", title = "One" }, "p", nil, { entries = { "Gil Rook" } })
+            local index = ImageGenerator.readIndex()
+            index["a.png"].created, index["b.png"].created = 100, 200
+            local names, others, main = ImageGenerator.entryNames(data, data.characters[1], "characters")
+            local list = ImageGenerator.picturesOf("/b/one.epub", names, others, main, index)
+            TestRunner:assertEquals(table.concat(list, "|"), "b.png|a.png",
+                "by its name and its other names, newest first; another book's and a deleted file left out")
+            names, others, main = ImageGenerator.entryNames(data, data.characters[2], "characters")
+            list = ImageGenerator.picturesOf("/b/one.epub", names, others, main, index)
+            TestRunner:assertEquals(table.concat(list, "|"), "c.png",
+                "a name that is another entry's own name belongs to that entry")
+            TestRunner:assertEquals(#ImageGenerator.picturesOf(nil, names), 0)
+        end)
+    end)
     TestRunner:test("thumbnailPath and subjectFromName", function()
         TestRunner:assertEquals(ImageGenerator.thumbnailPath("x.png"), IMAGES_DIR .. "/thumbnails/x.png.jpg")
         TestRunner:assertEquals(ImageGenerator.subjectFromName("2026-10-15 00.10.50 lighthouse keeper.jpg"), "lighthouse keeper")

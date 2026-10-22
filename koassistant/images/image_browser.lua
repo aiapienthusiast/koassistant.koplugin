@@ -107,10 +107,21 @@ function ImageBrowser.count()
     return #listImages()
 end
 
---- The pictures of one place (a groups() key).
+--- The pictures of one place (a groups() key), or of one X-Ray entry (B486:
+--- a table key { book, names, others, main }, ImageGenerator.picturesOf's).
 local function filesOf(key, files, index)
     if key == "all" then return files end
     local out = {}
+    if type(key) == "table" then
+        local wanted = {}
+        for _idx, name in ipairs(ImageGenerator.picturesOf(key.book, key.names, key.others, key.main, index)) do
+            wanted[name] = true
+        end
+        for _idx, f in ipairs(files) do
+            if wanted[f.name] then out[#out + 1] = f end
+        end
+        return out
+    end
     for _idx, f in ipairs(files) do
         local book = bookOf(index, f.name)
         if (key == "none" and not book) or (key ~= "none" and book == key) then
@@ -209,6 +220,7 @@ local function showSet(set, on_close)
     local touch = Device:isTouchDevice()
 
     local function titleFor(n)
+        if type(set.key) == "table" then return T(_("Pictures of %1 (%2)"), set.title, n) end
         if set.key == "all" then return T(_("Generated Images (%1)"), n) end
         if set.key == "none" then return T(_("Generated Images: without a book (%1)"), n) end
         return T(_("Generated Images: %1 (%2)"), set.title, n)
@@ -465,6 +477,17 @@ function ImageBrowser.show(opts)
     ImageGenerator.sweepThumbnails()
     local files = listImages()
     local index = ImageGenerator.readIndex()
+    if opts.entry then
+        -- One X-Ray entry's pictures (B486): { book_file, names, others, main, title }
+        local e = opts.entry
+        local key = { book = e.book_file, names = e.names, others = e.others, main = e.main }
+        if #filesOf(key, files, index) == 0 then
+            UIManager:show(InfoMessage:new{ text = _("No pictures of this entry yet.") })
+            return
+        end
+        showSet({ key = key, title = e.title or "" }, opts.on_close)
+        return
+    end
     if opts.book_file then
         if #filesOf(opts.book_file, files, index) == 0 then
             UIManager:show(InfoMessage:new{ text = _("No generated images for this document.") })

@@ -101,6 +101,8 @@ local TYPE_WORDS = {
 local ENTRY_MAX = 600
 -- At most this many entries the passage names
 local ENTRIES_MAX = 5
+-- The picker's cap (B535): no more than the writer reads
+PromptWriter.ENTRIES_MAX = ENTRIES_MAX
 
 local function clip(text, max_bytes)
     if type(text) ~= "string" then return "" end
@@ -176,20 +178,71 @@ local function namedIn(text, data)
     return found
 end
 
+--- The entries the reader picked by name (B535), in the order picked:
+--- { item, key }. A name the X-Ray no longer has is skipped. Pure.
+function PromptWriter.pickedIn(names, data)
+    if type(names) ~= "table" or #names == 0 or type(data) ~= "table" then return {} end
+    local XrayParser = require("koassistant.xray.xray_parser")
+    local order = {}
+    for i, n in ipairs(names) do
+        if type(n) == "string" and n ~= "" and not order[n:lower()] then order[n:lower()] = i end
+    end
+    local found = {}
+    for _idx, cat in ipairs(XrayParser.getCategories(data) or {}) do
+        for _j, item in ipairs(cat.items or {}) do
+            local name = type(item) == "table" and XrayParser.getItemName(item, cat.key)
+            local at = type(name) == "string" and order[name:lower()]
+            if at then found[#found + 1] = { item = item, key = cat.key, at = at } end
+        end
+    end
+    table.sort(found, function(a, b) return a.at < b.at end)
+    return found
+end
+
+--- What the reader can pick for a passage picture (B535): the installed
+--- X-Ray's people and places, people first, each by name. Pure.
+--- @param data table parsed X-Ray
+--- @return table { { name, role, key }, ... }
+function PromptWriter.pickable(data)
+    if type(data) ~= "table" then return {} end
+    local XrayParser = require("koassistant.xray.xray_parser")
+    local people, places = {}, {}
+    for _idx, cat in ipairs(XrayParser.getCategories(data) or {}) do
+        local family = XrayParser.CATEGORY_FAMILY[cat.key]
+        if family == "people" or family == "places" then
+            for _j, item in ipairs(cat.items or {}) do
+                local name = type(item) == "table" and XrayParser.getItemName(item, cat.key)
+                if type(name) == "string" and name ~= "" and (name == item.name or name == item.term) then
+                    local list = family == "people" and people or places
+                    list[#list + 1] = { name = name, key = cat.key,
+                        role = type(item.role) == "string" and item.role ~= "" and item.role or nil }
+                end
+            end
+        end
+    end
+    local function byName(a, b) return a.name:lower() < b.name:lower() end
+    table.sort(people, byName)
+    table.sort(places, byName)
+    for _idx, row in ipairs(places) do people[#people + 1] = row end
+    return people
+end
+
 --- The entries of an installed X-Ray that a passage names (D10), found by THE
 --- text matcher (the one the marks use: names, aliases, their forms; a name
 --- inside a longer entry's name counts for that one), in the order the passage
 --- names them, at most five. The reader's note counts too (B535: "this is X"
---- for a passage that says "she"), and its entries come first. Pure.
+--- for a passage that says "she"), and its entries come first; the entries the
+--- reader picked by name (B535) come before both. Pure.
 --- @param passage string the selection
 --- @param data table parsed X-Ray (ActionCache.parsedXrayFor(file).data)
 --- @param limit number|nil at most this many (five)
 --- @param note string|nil the reader's note for the picture
+--- @param picked table|nil names the reader picked (PromptWriter.pickable)
 --- @return table list of entryMaterial
-function PromptWriter.entriesFor(passage, data, limit, note)
+function PromptWriter.entriesFor(passage, data, limit, note, picked)
     if type(data) ~= "table" then return {} end
     local out, taken = {}, {}
-    for _idx, list in ipairs({ namedIn(note, data), namedIn(passage, data) }) do
+    for _idx, list in ipairs({ PromptWriter.pickedIn(picked, data), namedIn(note, data), namedIn(passage, data) }) do
         for _j, f in ipairs(list) do
             if #out >= (limit or ENTRIES_MAX) then return out end
             if not taken[f.item] then

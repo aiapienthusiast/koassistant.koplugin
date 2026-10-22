@@ -164,6 +164,25 @@ TestRunner:test("entriesFor: the note's entries come first (B535), never twice",
         "a note that names nobody adds nobody")
     TestRunner:assertEquals(#PromptWriter.entriesFor("Mara and Tom.", XRAY, 1, "the keeper"), 1, "the limit holds")
 end)
+TestRunner:test("pickable: the people, then the places, each by name (B535)", function()
+    local rows = PromptWriter.pickable(XRAY)
+    local names = {}
+    for _idx, r in ipairs(rows) do names[#names + 1] = r.name end
+    TestRunner:assertEquals(table.concat(names, "|"), "Elias Morrow|Mara|Tom|the Black Rocks")
+    TestRunner:assertEquals(rows[1].role, "Lighthouse keeper")
+    TestRunner:assertEquals(#PromptWriter.pickable(nil), 0)
+end)
+TestRunner:test("entriesFor: the reader's picks come first, in the order picked (B535)", function()
+    local list = PromptWriter.entriesFor("She ran down to the Black Rocks.", XRAY, nil,
+        "this is Mara", { "Tom", "Elias Morrow" })
+    local names = {}
+    for _idx, e in ipairs(list) do names[#names + 1] = e.name end
+    TestRunner:assertEquals(table.concat(names, "|"), "Tom|Elias Morrow|Mara|the Black Rocks")
+    list = PromptWriter.entriesFor("Mara waved.", XRAY, nil, nil, { "Mara", "Nobody Here" })
+    TestRunner:assertEquals(#list, 1, "a pick the passage names too is listed once; an unknown pick is skipped")
+    TestRunner:assertEquals(#PromptWriter.entriesFor("Mara and Tom.", XRAY, 2, nil, { "the Black Rocks" }), 2,
+        "the limit holds")
+end)
 TestRunner:test("entriesFor: five at most", function()
     local data = { type = "fiction", characters = {} }
     local words = {}
