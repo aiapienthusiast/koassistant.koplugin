@@ -418,6 +418,19 @@ ui:tapOutside()                             -- a tap outside the top dialog (or 
 ui:restore()                                -- at the end of the file
 ```
 
+### Headless scenarios: `tests/scenarios/` (KOReader itself, no window)
+
+What a flow test cannot reach (the text on a real page: marks, the name index, KOReader's search engine, a checkpoint install, a group hook firing) runs in KOReader's own frontend on its dummy framebuffer, on the same mock books:
+
+```bash
+sh tests/scenarios/run.sh /path/to/a/scratch/folder              # every s*.lua
+sh tests/scenarios/run.sh /path/to/a/scratch/folder s02_capitals # one
+```
+
+Each run makes a NEW folder under the one given (`run-<time>-<pid>/`): `home/` is a fresh KOReader home with this plugin linked into its `plugins/`, `Books/` the fixture with its groups written into that home, `shots/` the screenshots a scenario takes, one log per scenario. Nothing is deleted and nothing of a real KOReader home is read. `boot.lua` refuses to start unless the home sits inside the run folder, stands an empty table in for `apikeys.lua` before the plugin loads, blocks the network (LuaSocket, LuaSec, child processes, the plugin's request functions; a blocked call fails the scenario), turns KOReader's other plugins off and skips the update check. Needs the macOS app at `/Applications/KOReader.app`. The exit code is the number of scenarios that failed.
+
+A scenario is a short Lua file: `local S = dofile(os.getenv("KOA_PLUGIN") .. "/tests/scenarios/boot.lua")`, then `S.features{...}` (the plugin's settings, before the book opens), `S.open("Mock Series 3")`, `S.chapter("Rented Quiet")`, `S.marks()` (the visible page's X-Ray marks with the words under each), `S.settle()` (every scheduled task now: debounces, the marks' deferred scan), `S.check(cond, "what it shows")`, `S.shot("name")`, `S.finish()`.
+
 ## Prerequisites
 
 Lua 5.3+ with LuaSocket, LuaSec, and dkjson.
@@ -582,6 +595,9 @@ tests/
 │   └── mock_series/           # Offline mock-book generator (X-Ray/groups device fixture):
 │                              #   lua tests/fixtures/mock_series/gen.lua --out <dir> [--base <target>] [--home <KOReader home>]
 │                              # 8 tiny invented EPUBs + real-API sidecar data; --home also writes the three groups (see gen.lua header)
+├── scenarios/                 # Headless KOReader runs on the mock books: sh tests/scenarios/run.sh <scratch dir>
+│   ├── boot.lua               # The run's environment (scratch home, no network, no keys) + helpers
+│   └── s01_boot.lua …         # One scenario per file
 ├── lib/
 │   ├── mock_koreader.lua      # KOReader module mocks
 │   ├── ui_recorder.lua        # Flow tests: records shown dialogs, taps their buttons

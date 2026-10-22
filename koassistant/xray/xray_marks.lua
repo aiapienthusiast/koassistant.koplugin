@@ -650,6 +650,11 @@ end
 -- with a hand-built state (entities, spacing, families, file)
 XrayMarks._computeMarks = computeMarks
 
+-- Test seam: the headless scenarios read the visible page's marks
+function XrayMarks._pageMarks()
+  return st and st.page_marks
+end
+
 --- One deferred scan step: the visible page's marks (memoized for the last
 --- few pages), then ONE partial refresh sized to the strips — a mark-free
 --- page schedules nothing and refreshes nothing.

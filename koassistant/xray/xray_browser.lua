@@ -8532,4 +8532,7 @@ function XrayBrowser:_showReaderRequired(navigate_to)
     end
 end
 
+-- Test seam: the headless scenarios run the pattern KOReader's search gets
+XrayBrowser._buildSearchPattern = buildSearchPattern
+
 return XrayBrowser
