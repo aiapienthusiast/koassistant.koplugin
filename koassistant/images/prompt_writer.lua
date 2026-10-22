@@ -148,24 +148,18 @@ function PromptWriter.entryMaterial(item, category_key)
     }
 end
 
---- The entries of an installed X-Ray that a passage names (D10), found by THE
---- text matcher (the one the marks use: names, aliases, their forms; a name
---- inside a longer entry's name counts for that one), in the order the passage
---- names them, at most five. Pure.
---- @param passage string the selection
---- @param data table parsed X-Ray (ActionCache.parsedXrayFor(file).data)
---- @return table list of entryMaterial
-function PromptWriter.entriesFor(passage, data, limit)
-    if type(passage) ~= "string" or passage == "" or type(data) ~= "table" then return {} end
+--- The entries a text names, in the order it names them: { item, key }.
+local function namedIn(text, data)
+    if type(text) ~= "string" or text == "" then return {} end
     local XrayParser = require("koassistant.xray.xray_parser")
-    local norm = XrayParser.matchNormalize(passage)
+    local norm = XrayParser.matchNormalize(text)
     local found = {}
     for _idx, cat in ipairs(XrayParser.getCategories(data) or {}) do
         if not XrayParser.TEXT_MATCH_EXCLUDED[cat.key] then
             for _j, item in ipairs(cat.items or {}) do
                 local set = XrayParser.matchTermSet(item)
                 -- the cheap pass first: the containing forms of other entries
-                -- are worked out only for an entry the passage names
+                -- are worked out only for an entry the text names
                 if set and #XrayParser.occurrencesIn(norm, set) > 0 then
                     local occ = XrayParser.occurrencesIn(norm, set, XrayParser.containingMatchHandles(data, item))
                     if #occ > 0 then
@@ -179,10 +173,30 @@ function PromptWriter.entriesFor(passage, data, limit)
         if a.first ~= b.first then return a.first < b.first end
         return a.n > b.n
     end)
-    local out = {}
-    for _idx, f in ipairs(found) do
-        if #out >= (limit or ENTRIES_MAX) then break end
-        out[#out + 1] = PromptWriter.entryMaterial(f.item, f.key)
+    return found
+end
+
+--- The entries of an installed X-Ray that a passage names (D10), found by THE
+--- text matcher (the one the marks use: names, aliases, their forms; a name
+--- inside a longer entry's name counts for that one), in the order the passage
+--- names them, at most five. The reader's note counts too (B535: "this is X"
+--- for a passage that says "she"), and its entries come first. Pure.
+--- @param passage string the selection
+--- @param data table parsed X-Ray (ActionCache.parsedXrayFor(file).data)
+--- @param limit number|nil at most this many (five)
+--- @param note string|nil the reader's note for the picture
+--- @return table list of entryMaterial
+function PromptWriter.entriesFor(passage, data, limit, note)
+    if type(data) ~= "table" then return {} end
+    local out, taken = {}, {}
+    for _idx, list in ipairs({ namedIn(note, data), namedIn(passage, data) }) do
+        for _j, f in ipairs(list) do
+            if #out >= (limit or ENTRIES_MAX) then return out end
+            if not taken[f.item] then
+                taken[f.item] = true
+                out[#out + 1] = PromptWriter.entryMaterial(f.item, f.key)
+            end
+        end
     end
     return out
 end

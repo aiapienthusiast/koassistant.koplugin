@@ -33,7 +33,7 @@ Image models draw what a prompt describes, and a passage from the middle of a bo
 - the passage (the picture shows it),
 - your note, when you add one (it is followed),
 - a short slice of the text around the passage (the side after it cut the way chat's context is),
-- the entries of this book's X-Ray that the passage names, up to five, with their descriptions as of the X-Ray you have installed (so nothing from further ahead than it), found by the same matching the X-Ray marks use,
+- the entries of this book's X-Ray that the passage or your note names, up to five, those your note names first (so naming a character in the note helps a passage that only says "she"), with their descriptions as of the X-Ray you have installed (so nothing from further ahead than it), found by the same matching the X-Ray marks use,
 - the book's title and author, as far as Book info allows,
 - the book's Background (Book Settings), and
 - the Style and the Shape below; on a black-and-white screen it is also told the picture is for e-ink (clear shapes, strong contrast).
@@ -46,7 +46,7 @@ If the writer fails (an error, an empty answer, or one far too long for a prompt
 
 ## Illustrate from X-Ray
 
-An entry of a book's X-Ray can be drawn too: open the entry (from the X-Ray browser, or by tapping a marked name and its card), then **More… → Illustrate…**. A short dialog takes an optional note; **Illustrate** starts. The entry's description is the subject, with the book's title and author, its Background, the Style and the Shape; an abstract entry (an idea, an argument) gets a scene that carries it. It works for every entry of the book's own installed X-Ray, not for carried entries, other books' entries, upcoming entries or section X-Rays, and only while an image provider is available. The description is your stored data: it is sent only where the kinds the X-Ray was made from are allowed (book text, and your highlights and notes if it used them).
+An entry of a book's X-Ray can be drawn too: open the entry (from the X-Ray browser, or by tapping a marked name and its card), then **More… → Illustrate…**. It opens the image settings screen (Provider, the model, Style, Shape, Detail, Write the prompt with AI, as in Image settings… above), then **Illustrate** starts, or **Illustrate with a note…** asks for a note first. The entry's description is the subject, with the book's title and author, its Background, the Style and the Shape; an abstract entry (an idea, an argument) gets a scene that carries it. It works for every entry of the book's own installed X-Ray, not for carried entries, other books' entries, upcoming entries or section X-Rays, and only while an image provider is available. The description is your stored data: it is sent only where the kinds the X-Ray was made from are allowed (book text, and your highlights and notes if it used them).
 
 ## Choosing the provider and model
 

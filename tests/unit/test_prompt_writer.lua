@@ -150,6 +150,20 @@ TestRunner:test("entriesFor: the entries the passage names, in its order, aliase
     TestRunner:assertEquals(#PromptWriter.entriesFor("", XRAY), 0)
     TestRunner:assertEquals(#PromptWriter.entriesFor("Mara", nil), 0)
 end)
+TestRunner:test("entriesFor: the note's entries come first (B535), never twice", function()
+    local list = PromptWriter.entriesFor("She ran down to the Black Rocks.", XRAY, nil,
+        "this is Mara by the way")
+    TestRunner:assertEquals(#list, 2)
+    TestRunner:assertEquals(list[1].name, "Mara", "named in the note, which the passage does not")
+    TestRunner:assertEquals(list[2].name, "the Black Rocks")
+    list = PromptWriter.entriesFor("Mara waved to the keeper.", XRAY, nil, "Mara, at night")
+    TestRunner:assertEquals(#list, 2)
+    TestRunner:assertEquals(list[1].name, "Mara")
+    TestRunner:assertEquals(list[2].name, "Elias Morrow", "Mara is listed once")
+    TestRunner:assertEquals(#PromptWriter.entriesFor("Nothing here.", XRAY, nil, "from behind, at dusk"), 0,
+        "a note that names nobody adds nobody")
+    TestRunner:assertEquals(#PromptWriter.entriesFor("Mara and Tom.", XRAY, 1, "the keeper"), 1, "the limit holds")
+end)
 TestRunner:test("entriesFor: five at most", function()
     local data = { type = "fiction", characters = {} }
     local words = {}

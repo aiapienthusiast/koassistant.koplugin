@@ -3163,8 +3163,8 @@ function XrayBrowser:showItemDetail(item, category_key, title, source, nav_conte
     local fallback_row = {}
     if DISTRIBUTION_EXCLUDED[category_key] and self.metadata.book_file
         and not self.scope and not self.metadata.checkpoint
-        and type(item) == "table" and ((type(item.background) == "table"
-        and #item.background > 0) or self:_canIllustrate(item, category_key)) then
+        and type(item) == "table" and (self:_offersMoveBack(item, category_key)
+        or self:_canIllustrate(item, category_key)) then
         table.insert(fallback_row, {
             text = _("More…"),
             callback = function()
@@ -3614,9 +3614,24 @@ function XrayBrowser:_canIllustrate(item, category_key)
         require("koassistant.core.config_helper").mainProvider(feats), plugin.settings)
 end
 
---- Illustrate… (S8): an optional note, then the picture, drawn from the
---- entry's description (the entry is the subject; the book's identity per the
---- Book info level, its Background and spoiler posture as for a passage).
+--- "Move back to carried list" (B534): the way back out of "Add as a new
+--- entry", so only for an entry on the hand-added record (B400). Background
+--- lines prove nothing: every entry of this book that matches a carried name
+--- gains them. The move itself needs a history to file the entry under.
+function XrayBrowser:_offersMoveBack(item, category_key)
+    if self.scope or self.metadata.checkpoint or not self.metadata.book_file then return false end
+    if type(item) ~= "table" or type(item.background) ~= "table" or #item.background == 0 then return false end
+    local name = XrayParser.getItemName(item, category_key)
+    if type(name) ~= "string" or name == "" then return false end
+    local ActionCache = require("koassistant.artifacts.action_cache")
+    return ActionCache.getPromotedStubs(self.metadata.book_file)[name:lower()] ~= nil
+end
+
+--- Illustrate… (S8): the image settings panel (B535: the settings it is drawn
+--- with, as Generate Image's long-press shows them), then the picture, drawn
+--- from the entry's description (the entry is the subject; the book's identity
+--- per the Book info level, its Background and spoiler posture as for a
+--- passage), with a note when the reader adds one.
 function XrayBrowser:_illustrate(item, category_key)
     local plugin = self.metadata.plugin
     local configuration = self.metadata.configuration
@@ -3648,13 +3663,23 @@ function XrayBrowser:_illustrate(item, category_key)
         plugin = plugin,
     }
     local book_info = { file = file, title = title }
-    ImageGenerator.askNote(nil, function(note)
+    local function run(note)
         gen_opts.note = note
         require("ui/network/manager"):runWhenConnected(function()
             if plugin.updateConfigFromSettings then plugin:updateConfigFromSettings() end
             ImageGenerator.generate(nil, configuration, plugin.settings, book_info, gen_opts)
         end)
-    end, { optional = true, confirm_text = _("Illustrate") })
+    end
+    require("koassistant.images.image_options").show(plugin, {
+        title = T(_("Illustrate \"%1\""), XrayParser.getItemName(item, category_key)),
+        writer = true,
+        actions = {
+            { text = _("Illustrate"), callback = function() run(nil) end },
+            { text = _("Illustrate with a note…"), callback = function()
+                ImageGenerator.askNote(nil, run, { confirm_text = _("Illustrate") })
+            end },
+        },
+    })
 end
 
 --- One popup for per-entry management (2026-08-09 unified entry-management
@@ -3808,15 +3833,12 @@ function XrayBrowser:_showEntityManagePopup(item, category_key, title, source, n
     end
     -- "Move back to carried list" — the way back out of "Add as its own entry"
     -- (round 27 maintainer: "it could easily be done by accident and there is
-    -- no way back"). Offered only for entries that carry cross-book background:
-    -- those belong to an earlier book, so the carried list is an honest home.
+    -- no way back"). Offered only for entries added by hand (_offersMoveBack).
     -- A native entry of THIS book would be mislabeled there — removing one of
     -- those is the separate "edit/delete X-Ray entries" question. Undo is
     -- LOCAL: a fold that already copied this forward is not rewritten, exactly
     -- like any other later edit.
-    if not self.scope and not self.metadata.checkpoint and self.metadata.book_file
-        and type(item) == "table" and type(item.background) == "table"
-        and #item.background > 0 then
+    if self:_offersMoveBack(item, category_key) then
         local demote_name = XrayParser.getItemName(item, category_key)
         if type(demote_name) == "string" and demote_name ~= "" then
             table.insert(buttons, {{

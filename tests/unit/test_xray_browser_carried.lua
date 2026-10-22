@@ -700,6 +700,29 @@ TestRunner:test("a project has no earlier books: its own wording, titles as sour
     TestRunner:assertEqual(right(b.menu.item_table[6]), "Netmender · Volume One", "no book numbers without an order")
 end)
 
+print("")
+print("  [" .. "Move back to carried list: entries added by hand only (B534)" .. "]")
+
+TestRunner:test("history from another book is not enough; the hand-added record is", function()
+    local saved_promoted = ActionCache.getPromotedStubs
+    local promoted = {}
+    ActionCache.getPromotedStubs = function() return promoted end
+    local ok, err = pcall(function()
+        local b = browser()
+        local woken = { name = "Zora", background = { { source = "Volume One", text = "Led the fleet." } } }
+        TestRunner:assertFalse(b:_offersMoveBack(woken, "characters"),
+            "an entry the wake-pass gave history was never carried here")
+        promoted["zora"] = "Zora"
+        TestRunner:assertTrue(b:_offersMoveBack(woken, "characters"), "added with Add as a new entry")
+        TestRunner:assertFalse(b:_offersMoveBack({ name = "Zora" }, "characters"),
+            "no history to file it under")
+        b.metadata.checkpoint = true
+        TestRunner:assertFalse(b:_offersMoveBack(woken, "characters"), "never on a checkpoint view")
+    end)
+    ActionCache.getPromotedStubs = saved_promoted
+    if not ok then error(err, 0) end
+end)
+
 -- ------------------------------------------------------------------ cleanup
 SDS.resolve = saved_resolve
 ActionCache.getAvailableArtifactsWithPinned = saved_artifacts

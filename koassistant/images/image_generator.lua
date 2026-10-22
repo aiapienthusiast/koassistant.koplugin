@@ -212,20 +212,17 @@ end
 --- "Generate with a note…" (S5, D9): the reader's note for one picture, asked
 --- after the selection was taken. on_ok(text), or on_ok(nil) when the note
 --- was left empty (the picture goes ahead without one); Cancel does nothing.
---- opts.optional (Illustrate… from X-Ray): the title says the note is
---- optional and the keyboard waits for a tap. opts.confirm_text names the
---- button.
+--- opts.confirm_text names the button.
 function ImageGenerator.askNote(prefill, on_ok, opts)
     opts = opts or {}
     local UIManager = require("ui/uimanager")
     local InputDialog = require("ui/widget/inputdialog")
     local dialog
     dialog = InputDialog:new{
-        title = opts.optional and _("Note for the picture (optional)") or _("Note for the picture"),
+        title = _("Note for the picture"),
         description = _("What the picture should show, or how. The prompt writer follows it; with the writer off, it is added to the prompt."),
         input = prefill or "",
         allow_newline = true,
-        keyboard_visible = not opts.optional,
         buttons = { {
             {
                 text = _("Cancel"),
@@ -244,7 +241,7 @@ function ImageGenerator.askNote(prefill, on_ok, opts)
         } },
     }
     UIManager:show(dialog)
-    if not opts.optional then dialog:onShowKeyboard() end
+    dialog:onShowKeyboard()
 end
 
 --- Resolve the image model: explicit per-provider setting (a retired id sent
@@ -1730,14 +1727,14 @@ function ImageGenerator._askAndRun(provider, description, config_table, settings
     local recipients = { provider }
     if writer_on and writer_provider ~= provider then recipients = { writer_provider, provider } end
     local path = book_info and book_info.file
-    -- The book's own installed X-Ray: the entries the passage names (the
-    -- writer reads them, D10), or the entry to draw; stored material, judged
-    -- by the kinds it was built from
+    -- The book's own installed X-Ray: the entries the passage or the reader's
+    -- note names (the writer reads them, D10; B535: "this is X" brings X), or
+    -- the entry to draw; stored material, judged by the kinds it was built from
     local xray = path and (opts.entry or writer_on)
         and require("koassistant.artifacts.action_cache").parsedXrayFor(path) or nil
     local entries = {}
     if writer_on and not opts.entry and xray then
-        entries = PromptWriter.entriesFor(description, xray.data)
+        entries = PromptWriter.entriesFor(description, xray.data, nil, opts.note)
     end
     local stored = (#entries > 0) and xray.entry or nil
     if opts.entry then
