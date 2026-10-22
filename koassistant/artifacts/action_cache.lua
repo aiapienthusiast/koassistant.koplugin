@@ -2363,6 +2363,15 @@ function ActionCache.promoteXrayLadderRung(document_path, rung, limit, opts)
         if archived ~= nil then return archived end
         return fallback
     end
+    -- B536: the outgoing version's AI merges stay on record beside the
+    -- rung's own (the carry above brought their lines and rows across)
+    local merged_from, merged_from_books = rung.merged_from, rung.merged_from_books
+    if live and (live.merged_from or live.merged_from_books) then
+        local XrayMerge = require("koassistant.xray.xray_merge")
+        local led = XrayMerge.ledgerOf(rung)
+        for _idx, rec in ipairs(XrayMerge.ledgerOf(live)) do XrayMerge.appendMergedFrom(led, rec) end
+        if #led > 0 then merged_from, merged_from_books = led, XrayMerge.provenanceString(led) end
+    end
     local meta = {
         model = rung.model or (live and live.model),
         timestamp = rung.timestamp,
@@ -2383,8 +2392,8 @@ function ActionCache.promoteXrayLadderRung(document_path, rung, limit, opts)
         coverage_spans = rung.coverage_spans,
         producer = rung.producer,
         base_timestamp = rung.base_timestamp,
-        merged_from_books = rung.merged_from_books,
-        merged_from = rung.merged_from,
+        merged_from_books = merged_from_books,
+        merged_from = merged_from,
         -- The rung's OWN category stamp (nil = built full) — never the live
         -- entry's: the field describes the artifact it rides with
         xray_categories = rung.xray_categories,

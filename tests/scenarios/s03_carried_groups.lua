@@ -108,4 +108,22 @@ S.check(carried(PB)["Maren Kessler"] == PA,
     "deleted group: Project B keeps it, its X-Ray records an AI merge of Project A")
 S.check(from(PA, PB) == 0, "Project A, which merged nothing, carries nothing from B")
 
+-- ── A checkpoint install keeps the AI-merge record of the version it replaces ──
+local live = ActionCache.getXrayCache(V3)
+local meta = {}
+for k, v in pairs(live) do meta[k] = v end
+meta.result = nil
+meta.merged_from = { { file = V2, title = "Mock Series 2 - The Ferry", at = 1 } }
+meta.merged_from_books = "Mock Series 2 - The Ferry"
+ActionCache.setXrayCache(V3, live.result, live.progress_decimal, meta)
+local rung = (ActionCache.getXrayLadder(V3) or {})[1]
+S.check(rung ~= nil, "book 3 has a built checkpoint")
+if rung then
+    ActionCache.promoteXrayLadderRung(V3, rung, 0)
+    local after = ActionCache.getXrayCache(V3)
+    S.check(after.merged_from and after.merged_from[1] and after.merged_from[1].file == V2,
+        "the install keeps the record of the AI merge the replaced version held")
+end
+S.settle()
+
 S.finish()

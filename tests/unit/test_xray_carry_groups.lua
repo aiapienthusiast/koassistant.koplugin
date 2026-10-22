@@ -123,7 +123,8 @@ local function reset(kind, books)
 end
 
 -- The run main.lua makes after a hook: the group's members, then single books
-local function run(group_id, changed, single)
+-- (explicit = a leave or a delete asked for them, not a mere write)
+local function run(group_id, changed, single, explicit)
     writes = {}
     local memo, done = {}, {}
     local group = group_id and BookGroups.byId(group_id)
@@ -131,7 +132,7 @@ local function run(group_id, changed, single)
         XrayMerge.reseedGroup(group, {}, nil, nil, { changed = changed, memo = memo, done = done })
     end
     for _idx, p in ipairs(single or {}) do
-        XrayMerge.refreshCarried(p, {}, nil, nil, { memo = memo, done = done })
+        XrayMerge.refreshCarried(p, {}, nil, nil, { memo = memo, done = done, explicit = explicit })
     end
     return #writes
 end
@@ -188,7 +189,7 @@ TestRunner:test("a book leaves: the books after it drop its entries, and it drop
     local g = reset()
     run(g.id, true)
     BookGroups.removeBook(g.id, B)
-    run(g.id, true, { B })
+    run(g.id, true, { B }, true)
     local c = rows(C)
     TestRunner:assertTrue(c["Bryn Hale@" .. B] == nil, "book 3 no longer carries the book that left")
     TestRunner:assertTrue(c["Arlen Voss@" .. A] and c["Amber Hall@" .. A], "book 1's entries stay")
@@ -197,7 +198,7 @@ TestRunner:test("a book leaves: the books after it drop its entries, and it drop
     TestRunner:assertEqual(count(rows(B)), 0, "the book that left carries nothing")
     TestRunner:assertEqual(count(lines(B, "Shared One")), 0, "and keeps no history line from the group")
     TestRunner:assertEqual(parsed(C).characters[1].name, "Cato Mire", "the book's own entries untouched")
-    TestRunner:assertEqual(run(g.id, true, { B }), 0, "nothing more to do on a second run")
+    TestRunner:assertEqual(run(g.id, true, { B }, true), 0, "nothing more to do on a second run")
     -- Back in the group (at the end now): it carries what comes before it
     BookGroups.addBook(g.id, B)
     run(g.id, true)
@@ -243,7 +244,7 @@ TestRunner:test("the group deleted: its books stop carrying each other", functio
     local g = reset()
     run(g.id, true)
     BookGroups.remove(g.id)
-    run(nil, false, { A, B, C })
+    run(nil, false, { A, B, C }, true)
     TestRunner:assertEqual(count(rows(B)) + count(rows(C)), 0, "every carried row goes")
     TestRunner:assertEqual(count(lines(B, "Shared One")) + count(lines(C, "Shared One")), 0, "and every history line")
 end)
@@ -256,7 +257,7 @@ TestRunner:test("what an AI merge brought stays when its book leaves", function(
     run(g.id, true)
     caches[C].merged_from = { { file = B, title = "b", at = 1 } } -- book 3 AI merged book 2
     BookGroups.removeBook(g.id, B)
-    run(g.id, true, { B })
+    run(g.id, true, { B }, true)
     TestRunner:assertTrue(rows(C)["Bryn Hale@" .. B], "the merged book's entries stay on the list")
     TestRunner:assertTrue(lines(C, "Shared One")[B], "and its history line")
 end)
@@ -270,7 +271,7 @@ TestRunner:test("a row carried by hand stays; the rest of that book's carry goes
     end
     caches[B].result = json.encode(data)
     BookGroups.removeBook(g.id, B)
-    run(g.id, true, { B })
+    run(g.id, true, { B }, true)
     local b = rows(B)
     TestRunner:assertTrue(b["Arlen Voss@" .. A], "the hand-carried row stays")
     TestRunner:assertTrue(b["Amber Hall@" .. A] == nil, "the automatic one goes")
@@ -295,7 +296,7 @@ TestRunner:test("an entry added by hand from the carried list keeps its lines", 
     run(g.id, true)
     promoted[B] = { ["shared one"] = "Shared One" }
     BookGroups.removeBook(g.id, B)
-    run(g.id, true, { B })
+    run(g.id, true, { B }, true)
     TestRunner:assertTrue(lines(B, "Shared One")[A], "the hand-added entry's line stays")
 end)
 
@@ -334,6 +335,100 @@ TestRunner:test("what a source AI merged rides on; a book in two groups keeps wh
     keep = XrayMerge.carryRule(A, { entry_of = function(q) return caches[q] end })
     TestRunner:assertTrue(not keep(Y, "y"), "never through a book that comes after it in its series")
     BookGroups.remove(g.id)
+end)
+
+print("")
+print("  [the review's cases]")
+
+local orig_checkpoints = ActionCache.getXrayCheckpoints
+local orig_ladder = ActionCache.getXrayLadder
+
+TestRunner:test("an AI merge an update dropped from the record is read back from an archived version", function()
+    local g = reset()
+    run(g.id, true)
+    -- the live entry lost its record (an update wrote it without one); the
+    -- version archived before that update still has it
+    ActionCache.getXrayCheckpoints = function(file)
+        if file == C then return { { result = "{}", merged_from = { { file = B, title = "b" } } } } end
+        return {}
+    end
+    ActionCache.getXrayLadder = function() return {} end
+    BookGroups.removeBook(g.id, B)
+    run(g.id, true, { B }, true)
+    ActionCache.getXrayCheckpoints, ActionCache.getXrayLadder = orig_checkpoints, orig_ladder
+    TestRunner:assertTrue(rows(C)["Bryn Hale@" .. B], "the merged book's row stays")
+    TestRunner:assertTrue(lines(C, "Shared One")[B], "and its line")
+end)
+
+TestRunner:test("a source's own hand-carried row the target may not hold: not seeded, no rewrite every run", function()
+    local g = reset()
+    run(g.id, true)
+    local X = "/s/x.epub"
+    local data = parsed(B)
+    data[XrayParser.DORMANT_KEY] = data[XrayParser.DORMANT_KEY] or {}
+    table.insert(data[XrayParser.DORMANT_KEY], { name = "Xan Orr", category = "characters",
+        description = "From an outside book.", source = "x", file = X, by_hand = true })
+    caches[B].result = json.encode(data)
+    run(g.id, true)
+    TestRunner:assertTrue(rows(B)["Xan Orr@" .. X], "the book that carried it by hand keeps it")
+    TestRunner:assertTrue(rows(C)["Xan Orr@" .. X] == nil, "the book after it does not get it")
+    TestRunner:assertEqual(run(g.id, true), 0, "and nothing is rewritten on the next run")
+end)
+
+TestRunner:test("a source another of its groups puts after the book gives nothing", function()
+    local g = reset()
+    run(g.id, true)
+    -- a project listed first holds book 1 and book 3, which the series puts
+    -- after book 1: the project's seed would hand book 1 book 3's entries
+    local p = BookGroups.create("Shelf")
+    BookGroups.addBook(p.id, A)
+    BookGroups.addBook(p.id, C)
+    BookGroups.setKind(p.id, BookGroups.KIND_PROJECT)
+    BookGroups.moveGroupTo(p.id, 1)
+    run(g.id, true)
+    run(p.id, true)
+    TestRunner:assertEqual(run(g.id, true) + run(p.id, true), 0, "nothing rewritten on the next runs")
+    TestRunner:assertTrue(rows(A)["Cato Mire@" .. C] == nil, "book 1 never carries book 3, which comes after it in the series")
+    BookGroups.remove(p.id)
+end)
+
+TestRunner:test("a row whose book is refused keeps the lines of a book still allowed, filed under it", function()
+    local g = reset()
+    run(g.id, true)
+    local D = "/s/d.epub"
+    caches[C].merged_from = { { file = A, title = "a" } }
+    local data = parsed(C)
+    table.insert(data[XrayParser.DORMANT_KEY], { name = "Eda Moss", category = "characters",
+        description = "D's Eda.", source = "d", file = D,
+        background = { { source = "a", text = "What the AI merge of book 1 said.", file = A } } })
+    caches[C].result = json.encode(data)
+    run(g.id, true)
+    local kept
+    for _idx, s2 in ipairs(parsed(C)[XrayParser.DORMANT_KEY] or {}) do
+        if s2.name == "Eda Moss" then kept = s2 end
+    end
+    TestRunner:assertTrue(kept ~= nil, "the row stays")
+    TestRunner:assertEqual(kept and kept.file, A, "filed under the allowed book")
+    TestRunner:assertTrue(kept and kept.description == nil, "without what the refused book said")
+end)
+
+TestRunner:test("an old line whose title names no book here is kept; one naming a book a group holds goes", function()
+    reset()
+    local keep = XrayMerge.carryRule(C, { entry_of = function(p) return caches[p] end })
+    TestRunner:assertTrue(keep(nil, "A Book Renamed Long Ago"), "an unknown title: kept")
+    BookGroups.addBook(BookGroups.create("Other").id, "/s/z.epub")
+    keep = XrayMerge.carryRule(C, { entry_of = function(p) return caches[p] end })
+    TestRunner:assertTrue(not keep(nil, "z"), "the title of a book another group holds, not this one's: dropped")
+end)
+
+TestRunner:test("after a mere write, a device that keeps no groups prunes nothing (another device's books)", function()
+    local g = reset()
+    run(g.id, true)
+    BookGroups.remove(g.id)
+    TestRunner:assertEqual(run(nil, false, { B, C }, false), 0, "no write")
+    TestRunner:assertTrue(count(rows(C)) > 0, "the carried rows stay")
+    run(nil, false, { B, C }, true)
+    TestRunner:assertEqual(count(rows(C)), 0, "the delete itself (explicit) prunes")
 end)
 
 -- Restore what this file replaced

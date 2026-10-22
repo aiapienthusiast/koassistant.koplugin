@@ -7663,12 +7663,12 @@ function AskGPT:_installGroupSeedingHooks()
   local GroupSettings = require("koassistant.books.group_settings")
   BookGroups.on_leave = function(group_id, path)
     GroupSettings.onLeave(group_id, path)
-    self_ref:_scheduleCarryRefresh(path)
+    self_ref:_scheduleCarryRefresh(path, true)
   end
   BookGroups.on_removed = function(group_id, books)
     GroupSettings.onRemoved(group_id, books)
     for _idx, path in ipairs(books or {}) do
-      self_ref:_scheduleCarryRefresh(path)
+      self_ref:_scheduleCarryRefresh(path, true)
     end
   end
   require("koassistant.storage.book_store").on_marker_replaced = function(_path, key, group_id)
@@ -7701,12 +7701,13 @@ function AskGPT:_scheduleGroupReseed(group_id, changed)
 end
 
 --- One book's carried entries made current in the same debounced run (B536):
---- a book that left a group, the members of a deleted group, a book whose
---- X-Ray was just written.
-function AskGPT:_scheduleCarryRefresh(file)
+--- a book that left a group, the members of a deleted group (`explicit`: a
+--- group event asked), a book whose X-Ray was just written.
+function AskGPT:_scheduleCarryRefresh(file, explicit)
   if type(file) ~= "string" or file == "" then return end
   self._carry_pending = self._carry_pending or {}
-  self._carry_pending[file] = true
+  self._carry_pending[file] = self._carry_pending[file] == "explicit" and "explicit"
+    or (explicit and "explicit" or "written")
   self:_runCarryRefreshSoon()
 end
 
@@ -7740,9 +7741,9 @@ function AskGPT:_runCarryRefreshSoon()
         end
       end
     end
-    for file in pairs(books) do
+    for file, how in pairs(books) do
       local ok, written = pcall(XrayMerge.refreshCarried, file, features, provider, ui,
-        { memo = memo, done = done })
+        { memo = memo, done = done, explicit = how == "explicit" })
       if not ok then
         logger.warn("KOAssistant: carried entries refresh failed:", tostring(written))
       elseif written then

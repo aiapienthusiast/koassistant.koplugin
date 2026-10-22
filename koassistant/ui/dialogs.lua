@@ -6002,6 +6002,14 @@ if prune_book_text then
                     -- be the copy nothing kept.
                     local rebuilding = config.features and config.features._xray_rebuild
                     local prev_xray = ActionCache.getXrayCache(cache_file)
+                    -- The AI merges this X-Ray holds stay on record across an
+                    -- update or a rebuild (their lines and carried rows are
+                    -- carried forward): the series chain skips done merges by
+                    -- it, and it keeps them when the groups change (B536)
+                    if prev_xray and xray_metadata.merged_from == nil then
+                        xray_metadata.merged_from = prev_xray.merged_from
+                        xray_metadata.merged_from_books = prev_xray.merged_from_books
+                    end
                     -- cache_answer guard (round 28): a skipped write must not
                     -- ring-archive the survivor it is leaving in place
                     if cache_answer and prev_xray and prev_xray.result and prev_xray.result ~= cache_answer
