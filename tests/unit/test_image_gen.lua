@@ -1430,20 +1430,9 @@ local function runAll()
 
     print("  [The picture popup (S9, B537)]")
     local ImageOptions = require("koassistant.images.image_options")
-    TestRunner:test("rowIds: Provider, the drawing provider's model, Style, Shape, Detail; the writer row on request", function()
-        TestRunner:assertEquals(table.concat(ImageOptions.rowIds("openai", true), ","),
-            "image_gen_provider,image_gen_model_openai,image_gen_style,image_gen_shape,image_gen_detail,image_gen_writer")
-        TestRunner:assertEquals(table.concat(ImageOptions.rowIds(nil, false), ","),
-            "image_gen_provider,image_gen_style,image_gen_shape,image_gen_detail", "nothing draws: no model row")
+    TestRunner:test("popupItems: a computed label reaches the quick-settings popup", function()
         local items = ImageOptions.popupItems({ { text_func = function() return "Custom…" end, callback = function() end } })
-        TestRunner:assertEquals(items[1].text, "Custom…", "a computed label reaches the popup")
-        local SettingsSchema = require("koassistant.ui.settings_schema")
-        for _idx, id in ipairs(ImageOptions.rowIds("openrouter", true)) do
-            TestRunner:assert(SettingsSchema:getItemById(id), "a Settings row: " .. id)
-        end
-        for _idx, p in ipairs({ "openai", "xai", "gemini" }) do
-            TestRunner:assert(SettingsSchema:getItemById(ImageOptions.rowIds(p, false)[2]), "a model row: " .. p)
-        end
+        TestRunner:assertEquals(items[1].text, "Custom…")
     end)
     TestRunner:test("the picture popup's labels: the note and the picks, cut on one line", function()
         TestRunner:assertEquals(ImageOptions.noteLabel(nil), "Add a note…")
@@ -1533,6 +1522,24 @@ local function runAll()
             ids = {}
             for _idx, r in ipairs(rows) do ids[#ids + 1] = r.id end
             TestRunner:assertEquals(table.concat(ids, ","), "style,shape,detail,drawn")
+            -- a retired id shows as the model that draws (the request's resolver)
+            features.image_gen_provider = "xai"
+            features.image_gen_model_xai = "grok-imagine-image-pro"
+            withApikeys({ xai = "xai-real-key" }, function()
+                rows = ImageOptions.rows(plugin, {}, rebuild)
+                for _idx, r in ipairs(rows) do by[r.id] = r end
+                TestRunner:assertEquals(by.drawn.items[2].text, "grok-imagine-image-2.0")
+            end)
+            -- a long typed style is cut on its radio row
+            features.image_gen_provider = "openai"
+            local long = string.rep("a 1920s travel poster ", 8)
+            plugin.imageStyleItems = function(_self, _after)
+                return { { text_func = function() return "Custom (" .. long .. ")" end,
+                    checked_func = function() return true end, callback = function() end, opens_dialog = true } }
+            end
+            rows = ImageOptions.rows(plugin, {}, rebuild)
+            TestRunner:assert(#rows[1].items[1].text <= 44 and rows[1].items[1].text:sub(-3) == "…",
+                "cut: " .. rows[1].items[1].text)
             -- a chat provider that cannot draw: no model
             features.image_gen_provider = "auto"
             features.provider = "anthropic"
@@ -1541,6 +1548,49 @@ local function runAll()
             TestRunner:assertEquals(#by.drawn.items, 1, "no model button")
             TestRunner:assertEquals(by.drawn.items[1].text, "Follow main provider")
         end)
+    end)
+
+    TestRunner:test("providerFirst: the question before the popup only when the chat provider cannot draw", function()
+        local saved_ask = ImageGenerator.askProvider
+        local asked, picked_cb
+        ImageGenerator.askProvider = function(main, keyed, _plugin, on_pick)
+            asked = { main = main, keyed = table.concat(keyed, ",") }
+            picked_cb = on_pick
+        end
+        local features = {}
+        local plugin = {
+            settings = { data = { features = features }, flush = function() end,
+                readSetting = function(_self, k) return k == "features" and features or nil end,
+                saveSetting = function(_self, k, v) if k == "features" then features = v end end },
+            updateConfigFromSettings = function() end,
+        }
+        local ok, err = pcall(function()
+            withApikeys({ openai = "sk-real-key" }, function()
+                local ready = 0
+                features.image_gen_provider = "openai"
+                ImageGenerator.providerFirst(plugin, function() ready = ready + 1 end)
+                TestRunner:assertEquals(ready, 1, "a provider that draws: the popup at once")
+                TestRunner:assert(asked == nil, "no question")
+                features.image_gen_provider = "auto"
+                features.provider = "anthropic"
+                ImageGenerator.providerFirst(plugin, function() ready = ready + 1 end)
+                TestRunner:assertEquals(ready, 1, "the question first")
+                TestRunner:assertEquals(asked.main, "anthropic")
+                TestRunner:assertEquals(asked.keyed, "openai", "the keyed image providers")
+                picked_cb("openai")
+                TestRunner:assertEquals(features.image_gen_provider, "openai", "the answer saved as Provider")
+                TestRunner:assertEquals(ready, 2, "then the popup")
+            end)
+            withApikeys({}, function()
+                asked = nil
+                local ready = 0
+                features.image_gen_provider = "auto"
+                ImageGenerator.providerFirst(plugin, function() ready = ready + 1 end)
+                TestRunner:assert(ready == 1 and asked == nil, "no key at all: nothing to ask, the generator's notice says it")
+            end)
+        end)
+        ImageGenerator.askProvider = saved_ask
+        if not ok then error(err, 0) end
     end)
 
     print("  [The main provider (B462)]")

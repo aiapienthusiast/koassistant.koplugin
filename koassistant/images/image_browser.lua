@@ -326,13 +326,17 @@ local function showSet(set, on_close)
                             UIManager:show(InfoMessage:new{ text = _("Image generation is not available here.") })
                             return
                         end
-                        -- over the hold view: Close comes back to it
-                        require("koassistant.images.image_options").show(plugin, {
-                            actions = {
-                                { text = _("Regenerate"), callback = function() again(false) end },
-                                { text = _("Regenerate and replace"), callback = function() again(true) end },
-                            },
-                        })
+                        -- over the hold view: closing it comes back here; the
+                        -- provider question first when the chat provider
+                        -- cannot draw
+                        require("koassistant.images.image_generator").providerFirst(plugin, function()
+                            require("koassistant.images.image_options").show(plugin, {
+                                actions = {
+                                    { text = _("Regenerate"), callback = function() again(false) end },
+                                    { text = _("Regenerate and replace"), callback = function() again(true) end },
+                                },
+                            })
+                        end)
                     end },
                 },
                 {

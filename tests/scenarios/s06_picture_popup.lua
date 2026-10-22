@@ -95,6 +95,7 @@ S.tap("Write the prompt with AI")
 S.check(features().image_gen_writer ~= false, "and back on")
 
 -- ── Generate: the note and the picks go with this picture ──
+local drawn_from = S.top()
 S.tap("Generate")
 S.check(drawn ~= nil and drawn.text == passage, "Generate draws the passage")
 S.check(drawn and drawn.gen_opts.note == "at dusk, one lit window", "with the note")
@@ -108,8 +109,40 @@ S.settle()
 S.check(S.find("Add a note…") ~= nil and S.find("Pick X-Ray entries…") ~= nil,
     "the next picture starts with no note and no picks")
 S.check(checked("Watercolor") == true, "but the style stays as picked")
-S.closeAll()
-S.check(drawn == nil, "closing the popup draws nothing")
+
+-- ── Every exit closes it and draws nothing: the X, a tap outside, Back ──
+local Event = require("ui/event")
+local Geom = require("ui/geometry")
+local popup = S.top()
+popup._frame[1][1].right_button.callback()
+S.settle()
+S.check(not S.UIManager:isWidgetShown(popup), "the X closes it")
+Dialogs.executeDirectAction(ui, Actions.highlight.image_gen, passage, S.plugin.configuration, S.plugin)
+S.settle()
+popup = S.top()
+popup:onTapClose(nil, { pos = Geom:new{ x = 2, y = 2, w = 0, h = 0 } })
+S.settle()
+S.check(not S.UIManager:isWidgetShown(popup), "a tap outside closes it")
+Dialogs.executeDirectAction(ui, Actions.highlight.image_gen, passage, S.plugin.configuration, S.plugin)
+S.settle()
+popup = S.top()
+S.UIManager:sendEvent(Event:new("KeyPress", require("device/key"):new("Back", {})))
+S.settle()
+S.check(not S.UIManager:isWidgetShown(popup), "Back closes it")
+S.check(drawn == nil, "no exit draws anything")
+
+-- ── A picker's late callback never reopens a popup that drew ──
+-- (OpenRouter's catalog can arrive after Generate: its pick calls the
+-- popup's rebuild, here a row of the drawn popup's own)
+for _idx, row in ipairs(drawn_from._rows) do
+    if row.id == "shape" then
+        for _j, it in ipairs(row.items) do
+            if it.text == "Square" then it.callback() end
+        end
+    end
+end
+S.settle()
+S.check(S.top() == ui, "the drawn popup stays closed")
 
 -- ── The long-press: Generate now draws at once ──
 local ActionHold = require("koassistant.ui.action_hold")
@@ -150,8 +183,61 @@ S.tap("Illustrate")
 S.check(drawn and drawn.gen_opts.entry and drawn.gen_opts.entry.name == "Gil Rook", "Illustrate draws the entry")
 S.closeAll()
 
--- ── A gallery picture's Image settings…: the settings and the two Regenerates ──
+-- ── The chat provider cannot draw: the provider question first ──
+local f = S.plugin.settings:readSetting("features")
+f.image_gen_provider, f.provider = "auto", "anthropic"
+drawn = nil
+Dialogs.executeDirectAction(ui, Actions.highlight.image_gen, passage, S.plugin.configuration, S.plugin)
+S.settle()
+local question = S.top()
+S.check(question and question.title and question.title:find("can't make images", 1, true) ~= nil,
+    "the provider question comes before the popup")
+S.tap("Cancel")
+S.check(S.top() == ui and drawn == nil, "Cancel: no popup, nothing drawn")
+Dialogs.executeDirectAction(ui, Actions.highlight.image_gen, passage, S.plugin.configuration, S.plugin)
+S.settle()
+S.tap("OpenAI")
+S.check(title() == "Generate Image" and table.concat(S.texts(), " | "):find("OpenAI | gpt-image-2.5-flare", 1, true) ~= nil,
+    "after the answer: the popup, on the provider that draws and its model")
+S.check(S.plugin.settings:readSetting("features").image_gen_provider == "openai", "the answer saved as Provider")
+S.closeAll()
+
+-- ── The model button names the model that draws (a retired id's replacement) ──
 local ImageOptions = require("koassistant.images.image_options")
+f = S.plugin.settings:readSetting("features")
+f.image_gen_provider, f.image_gen_model_xai = "xai", "grok-imagine-image-pro"
+f.api_keys = f.api_keys or {}
+f.api_keys.xai = "xai-scenario-not-a-key"
+ImageOptions.show(S.plugin, { actions = { { text = "Regenerate", callback = function() end } } })
+S.settle()
+S.check(table.concat(S.texts(), " | "):find("grok-imagine-image-2.0", 1, true) ~= nil,
+    "a retired id shows as its replacement")
+S.closeAll()
+f.image_gen_provider = "openai"
+
+-- ── A long typed style is cut on its row, so the popup keeps its size ──
+-- (and were a row to grow, the clamp keeps the bottom on the screen)
+popup = ImageOptions.show(S.plugin, { actions = {
+    { text = "Regenerate", callback = function() end },
+    { text = "Regenerate and replace", callback = function() end },
+} })
+S.settle()
+f.image_gen_style, f.image_gen_style_custom = "custom", string.rep("a 1920s travel poster ", 9)
+S.tap("Square")
+popup = S.top()
+local fd = popup._frame.dimen
+S.note("frame with the long style:", fd.y, fd.h, "screen", S.Screen:getHeight())
+S.check(fd.y >= 0 and fd.y + fd.h <= S.Screen:getHeight(), "with a 200-character style it stays on the screen")
+S.check(S.find("Regenerate and replace") ~= nil, "the buttons stay reachable")
+local custom_text
+for _idx, b in ipairs(S.buttons()) do
+    if b.text:find("^Custom") then custom_text = b.text end
+end
+S.check(custom_text and custom_text:sub(-3) == "…", "a long typed style is cut on its row")
+S.closeAll()
+f.image_gen_style, f.image_gen_style_custom = "watercolor", nil
+
+-- ── A gallery picture's Image settings…: the settings and the two Regenerates ──
 ImageOptions.show(S.plugin, { actions = {
     { text = "Regenerate", callback = function() end },
     { text = "Regenerate and replace", callback = function() end },

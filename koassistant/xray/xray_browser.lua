@@ -3714,21 +3714,24 @@ function XrayBrowser:_illustrate(item, category_key)
     }
     local book_info = { file = file, title = title }
     local state = {}
-    require("koassistant.images.image_options").show(plugin, {
-        title = T(_("Illustrate \"%1\""), XrayParser.getItemName(item, category_key)),
-        writer = true,
-        note = true,
-        state = state,
-        actions = {
-            { text = _("Illustrate"), callback = function()
-                gen_opts.note = state.note
-                require("ui/network/manager"):runWhenConnected(function()
-                    if plugin.updateConfigFromSettings then plugin:updateConfigFromSettings() end
-                    ImageGenerator.generate(nil, configuration, plugin.settings, book_info, gen_opts)
-                end)
-            end },
-        },
-    })
+    -- the provider question first, when the chat provider cannot draw
+    ImageGenerator.providerFirst(plugin, function()
+        require("koassistant.images.image_options").show(plugin, {
+            title = T(_("Illustrate \"%1\""), XrayParser.getItemName(item, category_key)),
+            writer = true,
+            note = true,
+            state = state,
+            actions = {
+                { text = _("Illustrate"), callback = function()
+                    gen_opts.note = state.note
+                    require("ui/network/manager"):runWhenConnected(function()
+                        if plugin.updateConfigFromSettings then plugin:updateConfigFromSettings() end
+                        ImageGenerator.generate(nil, configuration, plugin.settings, book_info, gen_opts)
+                    end)
+                end },
+            },
+        })
+    end)
 end
 
 --- One popup for per-entry management (2026-08-09 unified entry-management

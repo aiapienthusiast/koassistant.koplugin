@@ -209,6 +209,43 @@ function ImageGenerator.askProvider(main_provider, keyed, plugin, on_pick)
     return dialog
 end
 
+-- The S4 question's answer, saved as Provider (the settings, the request's
+-- features, the plugin's copy)
+local function saveAskedProvider(settings, features, plugin, picked)
+    if settings then
+        local f = settings:readSetting("features") or {}
+        f.image_gen_provider = picked
+        settings:saveSetting("features", f)
+        settings:flush()
+    end
+    if features then features.image_gen_provider = picked end
+    if plugin and plugin.updateConfigFromSettings then plugin:updateConfigFromSettings() end
+    logger.info("KOAssistant: image provider set by the first-tap question:", picked)
+end
+
+--- The S4 question at the tap, before a picture's popup (B537): when Provider
+--- follows a chat provider that cannot draw and an image provider has a key,
+--- ask which one makes the images first (the answer saved as Provider), then
+--- on_ready(); otherwise on_ready() at once. The popup then shows the
+--- provider that draws and its model, and nothing typed in it waits on the
+--- question. Cancel does nothing, so the next tap asks again.
+function ImageGenerator.providerFirst(plugin, on_ready)
+    local settings = plugin and plugin.settings
+    local features = settings and settings:readSetting("features") or {}
+    local main_provider = require("koassistant.core.config_helper").mainProvider(features)
+    local provider, unavailable = ImageGenerator.effectiveProvider(features, main_provider, settings)
+    local keyed = (not provider and unavailable == "no_endpoint" and followsMain(features))
+        and ImageGenerator.keyedProviders(settings) or {}
+    if #keyed == 0 then
+        on_ready()
+        return
+    end
+    ImageGenerator.askProvider(main_provider, keyed, plugin, function(picked)
+        saveAskedProvider(settings, nil, plugin, picked)
+        on_ready()
+    end)
+end
+
 --- The note for one picture (S5, D9; the picture popup's Add a note…, B537).
 --- on_ok(text), or on_ok(nil) when the note was left empty (the picture goes
 --- without one); Cancel does nothing. opts.confirm_text names the button.
@@ -1694,15 +1731,7 @@ local function withImageProvider(config_table, settings, opts, retry, run_fn)
         if #keyed > 0 then
             local plugin = opts and opts.plugin
             ImageGenerator.askProvider(main_provider, keyed, plugin, function(picked)
-                if settings then
-                    local f = settings:readSetting("features") or {}
-                    f.image_gen_provider = picked
-                    settings:saveSetting("features", f)
-                    settings:flush()
-                end
-                features.image_gen_provider = picked
-                if plugin and plugin.updateConfigFromSettings then plugin:updateConfigFromSettings() end
-                logger.info("KOAssistant: image provider set by the first-tap question:", picked)
+                saveAskedProvider(settings, features, plugin, picked)
                 retry()
             end)
             return

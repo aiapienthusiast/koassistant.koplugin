@@ -26,21 +26,8 @@ local MODEL_ROW = {
     openrouter = "image_gen_model_openrouter",
 }
 
--- The longest a note or the picked names show on their button
+-- The longest a note, the picked names or a typed style show on their button
 local SHOWN_MAX = 40
-
---- The settings rows, by schema id: Provider, the model row of the provider
---- that draws (none when nothing can), Style, Shape, Detail, and Write the
---- prompt with AI when with_writer. Pure.
-function ImageOptions.rowIds(drawing_provider, with_writer)
-    local ids = { "image_gen_provider" }
-    if MODEL_ROW[drawing_provider] then ids[#ids + 1] = MODEL_ROW[drawing_provider] end
-    ids[#ids + 1] = "image_gen_style"
-    ids[#ids + 1] = "image_gen_shape"
-    ids[#ids + 1] = "image_gen_detail"
-    if with_writer then ids[#ids + 1] = "image_gen_writer" end
-    return ids
-end
 
 --- A picker's items as the quick-settings popup shows them: a label for an
 --- item that only computes one (Custom…). Pure.
@@ -156,7 +143,7 @@ function ImageOptions.rows(plugin, spec, rebuild)
         local s = it
         local checked = s.checked_func and s.checked_func() or false
         styles[#styles + 1] = {
-            text = s.text or (s.text_func and s.text_func()) or "",
+            text = shown(s.text or (s.text_func and s.text_func()) or ""),
             checked = checked,
             callback = function()
                 if s.opens_dialog then
@@ -199,11 +186,8 @@ function ImageOptions.rows(plugin, spec, rebuild)
     local model_id = MODEL_ROW[drawing]
     local model_mi = model_id and menuItem(model_id)
     if model_mi then
-        local ModelLists = require("koassistant.request.model_lists")
-        local value = features["image_gen_model_" .. drawing]
-        if not (type(value) == "string" and value ~= "" and value ~= "default") then
-            value = ModelLists.getDefaultImageModel(drawing)
-        end
+        local value = require("koassistant.request.model_lists").resolveImageModel(drawing,
+            features["image_gen_model_" .. drawing])
         local title = model_mi.text_func and model_mi.text_func() or model_mi.text
         drawn[#drawn + 1] = { id = "model", text = value or title, callback = function()
             local items
@@ -263,6 +247,7 @@ function ImageOptions.show(plugin, spec)
     spec = spec or {}
     spec.state = spec.state or {}
 
+    local Device = require("device")
     local current, first_frame_h, scrolled
     local function build()
         local screen_w, screen_h = Screen:getWidth(), Screen:getHeight()
@@ -271,11 +256,15 @@ function ImageOptions.show(plugin, spec)
         local label_face = Font:getFace("cfont", 18)
         local radio_face = Font:getFace("cfont", 20)
         local info_face = Font:getFace("cfont", 16)
+        -- The window first: every widget in it repaints through it, so a row
+        -- of the scrolled layout is cropped by the scroll
+        local window = InputContainer:new{ dimen = Geom:new{ x = 0, y = 0, w = screen_w, h = screen_h } }
         local function rebuild()
-            if current then
-                scrolled = current._scroll and current._scroll:getScrolledOffset() or nil
-                UIManager:close(current)
-            end
+            -- A picker's late callback (OpenRouter's catalog arrives after its
+            -- fetch) never reopens a popup the reader closed or drew from
+            if not (current and UIManager:isWidgetShown(current)) then return end
+            scrolled = current._scroll and current._scroll:getScrolledOffset() or nil
+            UIManager:close(current)
             build()
         end
         local rows = ImageOptions.rows(plugin, spec, rebuild)
@@ -314,8 +303,8 @@ function ImageOptions.show(plugin, spec)
                         no_sep = true,
                         sep_width = 0,
                         face = radio_face,
-                        show_parent = plugin,
-                        parent = plugin,
+                        show_parent = window,
+                        parent = window,
                         button_select_callback = function(btn)
                             if btn.enabled == false then return end
                             btn.entry.callback()
@@ -329,14 +318,14 @@ function ImageOptions.show(plugin, spec)
                     if #line > 0 then buttons[#buttons + 1] = line end
                     if #buttons > 0 then
                         table.insert(vgroup, ButtonTable:new{
-                            width = width, buttons = buttons, zero_sep = true, show_parent = plugin,
+                            width = width, buttons = buttons, zero_sep = true, show_parent = window,
                         })
                     end
                 elseif row.kind == "check" then
                     table.insert(vgroup, VerticalSpan:new{ width = Size.padding.default })
                     table.insert(vgroup, CheckButton:new{
                         text = row.item.text, checked = row.item.checked, face = radio_face,
-                        width = width, parent = plugin, show_parent = plugin,
+                        width = width, parent = window, show_parent = window,
                         callback = row.item.callback,
                     })
                 end
@@ -353,7 +342,7 @@ function ImageOptions.show(plugin, spec)
             line[#line + 1] = {
                 text = action.text,
                 callback = function()
-                    UIManager:close(current)
+                    UIManager:close(window)
                     action.callback()
                 end,
             }
@@ -364,7 +353,7 @@ function ImageOptions.show(plugin, spec)
         end
         if #line > 0 then action_rows[#action_rows + 1] = line end
         local actions = #action_rows > 0 and ButtonTable:new{
-            width = content_w, buttons = action_rows, zero_sep = true, show_parent = plugin,
+            width = content_w, buttons = action_rows, zero_sep = true, show_parent = window,
         } or nil
 
         local title_bar = TitleBar:new{
@@ -373,7 +362,8 @@ function ImageOptions.show(plugin, spec)
             with_bottom_line = true,
             title = spec.title or _("Image settings"),
             title_shrink_font_to_fit = true,
-            close_callback = function() UIManager:close(current) end,
+            show_parent = window,
+            close_callback = function() UIManager:close(window) end,
         }
         -- Taller than the screen (a landscape screen): the rows scroll, the
         -- title and the buttons that draw stay
@@ -386,7 +376,7 @@ function ImageOptions.show(plugin, spec)
             body_h = vgroup:getSize().h
             scroll = ScrollableContainer:new{
                 dimen = Geom:new{ w = dialog_w, h = max_body },
-                show_parent = nil, -- set below, once the window exists
+                show_parent = window,
                 CenterContainer:new{ dimen = Geom:new{ w = dialog_w - ScrollableContainer:getScrollbarWidth(), h = body_h }, vgroup },
             }
         end
@@ -406,42 +396,53 @@ function ImageOptions.show(plugin, spec)
             column,
         }
         local movable = MovableContainer:new{ frame }
-        -- The top stays where it opened while rows change (the scope popup's trick)
+        -- The top stays where it opened while rows change (the scope popup's
+        -- trick), and the bottom never leaves the screen when a row grows (the
+        -- creation form's clamp)
         local frame_h = frame:getSize().h
         if not first_frame_h then first_frame_h = frame_h end
-        movable:setMovedOffset({ x = 0, y = math.floor((frame_h - first_frame_h) / 2) })
+        local y_off = math.floor((frame_h - first_frame_h) / 2)
+        local top = math.floor((screen_h - frame_h) / 2) + y_off
+        local overflow = top + frame_h - screen_h
+        if overflow > 0 then
+            y_off = y_off - overflow
+            top = top - overflow
+        end
+        if top < 0 then y_off = y_off - top end
+        movable:setMovedOffset({ x = 0, y = y_off })
 
-        current = InputContainer:new{
-            dimen = Geom:new{ x = 0, y = 0, w = screen_w, h = screen_h },
-            CenterContainer:new{ dimen = Geom:new{ w = screen_w, h = screen_h }, movable },
-        }
-        current._frame = frame
-        current._rows = rows
+        window[1] = CenterContainer:new{ dimen = Geom:new{ w = screen_w, h = screen_h }, movable }
+        window._frame = frame
+        window._rows = rows
         if scroll then
-            current._scroll = scroll
-            current.cropping_widget = scroll
-            scroll.show_parent = current
+            window._scroll = scroll
+            window.cropping_widget = scroll
             if scrolled then scroll:setScrolledOffset(scrolled) end
         end
-        current.ges_events = {
+        window.ges_events = {
             TapClose = { GestureRange:new{ ges = "tap", range = Geom:new{ w = screen_w, h = screen_h } } },
         }
-        function current:onTapClose(_arg, ges_ev)
+        -- Back closes it, as a ButtonDialog's does
+        if Device:hasKeys() then
+            window.key_events = { Close = { { Device.input.group.Back } } }
+        end
+        function window:onTapClose(_arg, ges_ev)
             if ges_ev.pos:notIntersectWith(frame.dimen) then UIManager:close(self) end
             return true
         end
-        function current:onClose()
+        function window:onClose()
             UIManager:close(self)
             return true
         end
-        function current:onCloseWidget()
+        function window:onCloseWidget()
             UIManager:setDirty(nil, function() return "ui", frame.dimen end)
         end
-        function current:onShow()
+        function window:onShow()
             UIManager:setDirty(self, function() return "ui", frame.dimen end)
             return true
         end
-        UIManager:show(current)
+        current = window
+        UIManager:show(window)
     end
     build()
     return current

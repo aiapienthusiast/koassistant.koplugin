@@ -13102,21 +13102,24 @@ local function handleLocalAction(handler_name, ui, highlighted_text, document_pa
                 local head = require("koassistant.request.scope_resolver").utf8Head(passage, 120)
                 passage = "\u{201C}" .. head .. (#head < #passage and "…" or "") .. "\u{201D}"
             end
-            require("koassistant.images.image_options").show(plugin, {
-                title = _("Generate Image"),
-                subtitle = passage,
-                writer = true,
-                note = true,
-                pickable = pickable,
-                state = state,
-                actions = {
-                    { text = _("Generate"), callback = function()
-                        gen_opts.note = state.note
-                        gen_opts.picked = state.picked
-                        run()
-                    end },
-                },
-            })
+            -- the provider question first, when the chat provider cannot draw
+            ImageGenerator.providerFirst(plugin, function()
+                require("koassistant.images.image_options").show(plugin, {
+                    title = _("Generate Image"),
+                    subtitle = passage,
+                    writer = true,
+                    note = true,
+                    pickable = pickable,
+                    state = state,
+                    actions = {
+                        { text = _("Generate"), callback = function()
+                            gen_opts.note = state.note
+                            gen_opts.picked = state.picked
+                            run()
+                        end },
+                    },
+                })
+            end)
         end
     else
         logger.warn("KOAssistant: Unknown local handler: " .. tostring(handler_name))
