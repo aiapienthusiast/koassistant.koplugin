@@ -8,7 +8,7 @@
 # produced and which were not, and the produced PNGs copied into
 # docs/assets/screenshots-src/wiki/ for review.
 #
-#   sh tests/scenarios/wiki_shots.sh <scratch base> [w_scenario ...]
+#   KOA_BOOKS=/path/to/shots/books sh tests/scenarios/wiki_shots.sh <scratch base> [w_scenario ...]
 #
 # Exit code: the number of scenarios that failed.
 
@@ -19,7 +19,11 @@ if [ $# -eq 0 ]; then
     set -- $(cd "$TREE/tests/scenarios" && ls w_*.lua | sed 's/\.lua$//')
 fi
 BOOKS="${KOA_BOOKS:-}"
-[ -d "$BOOKS" ] || BOOKS=""
+if [ -n "$BOOKS" ] && [ ! -d "$BOOKS" ]; then
+    echo "KOA_BOOKS is not a folder: $BOOKS"
+    exit 2
+fi
+[ -z "$BOOKS" ] && echo "KOA_BOOKS unset: no shots books, the pages that need them are partial"
 mkdir -p "$BASE" || exit 2
 
 LOG="$BASE/wiki_shots_last.log"
