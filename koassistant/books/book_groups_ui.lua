@@ -914,8 +914,13 @@ function GroupsUI.deleteFlow(group_id, opts)
     local group = BookGroups.byId(group_id)
     if not group then return end
     local confirm
+    -- B536: a series or a project carried entries between its books, and
+    -- those follow the group
+    local title = BookGroups.sharesKnowledge(group)
+        and T(_("Delete the group \"%1\"?\nThe books and their artifacts stay. Their X-Rays drop the entries they carried from each other; what an AI merge added stays."), displayName(group))
+        or T(_("Delete the group \"%1\"?\nBooks and their artifacts are not touched. Only the grouping is removed."), displayName(group))
     confirm = ButtonDialog:new{
-        title = T(_("Delete the group \"%1\"?\nBooks and their artifacts are not touched. Only the grouping is removed."), displayName(group)),
+        title = title,
         buttons = {
             {{ text = _("Delete"), callback = function()
                 UIManager:close(confirm)

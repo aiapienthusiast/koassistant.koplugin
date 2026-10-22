@@ -4177,6 +4177,8 @@ function XrayParser.foldLedger(data, never_pairs)
                     keep.role = keep.role or drop.role
                     keep.source = keep.source or drop.source
                     keep.file = keep.file or drop.file
+                    -- B536: a row the reader carried by hand stays theirs
+                    keep.by_hand = keep.by_hand or drop.by_hand
                     folded = folded + 1
                 end
             end

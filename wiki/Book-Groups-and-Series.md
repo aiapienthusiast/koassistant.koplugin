@@ -99,6 +99,7 @@ Carried entries are what the other books of a group know that this book has not 
 ### How the carried list fills
 
 - On its own, at no cost: nothing is sent. Building or updating any X-Ray of the group, and any change to the group (books added, removed or moved, the kind changed), refreshes the books' carried lists in the background.
+- The carried list follows the group as it is now. When a book leaves the group, the group is deleted, the books are put in another order or the kind changes, each book drops the carried entries, and the "From" lines on its own entries, of the books it no longer takes from: a book that left, every book of a deleted group, in a series a book that now comes after it, everything in a plain group. What an AI merge added stays, and so do an entry you carried by hand (**Add to this book's carried list**), an entry you added from the carried list, and the ones you removed. Putting a book back brings its entries back.
 - In a series, a book's list comes from the nearest earlier book with an X-Ray, and that book's own carried list comes along with it, so one book passes on everything before it. In a project it comes from every other book with an X-Ray.
 - A book holds a carried list once it has its own main X-Ray. Only X-Rays your privacy settings let the AI read are used: text extraction allowed for that book, or a trusted provider (see [Privacy and Data](Privacy-and-Data)).
 - An entry this book already has gets what the other book says about it attached as a line naming that book, also at no cost.
@@ -234,7 +235,7 @@ The input dialog of a grouped book has a **Group** button that lists the group's
 
 Groups are stored in KOAssistant's settings folder, not inside the books, and are part of a backup (see [Backups and Updates](Backups-and-Updates)). They survive a book, or a folder of books, moved or renamed in KOReader's file browser, and so do the links the group's X-Rays keep to them (what was AI merged from them, their carried entries), updated a few seconds after the move. A move made outside KOReader (on a computer, say) is not followed. A copy of a book file joins no group. Deleting a book never silently edits a group: the missing book stays listed as "(missing)", so a book on a removed SD card keeps its place in the series, and removing it is up to you.
 
-A book in several groups takes its earlier books, its carried list and its lookups from the first of them in the Groups list. Keep a series above the other groups its books are in: a plain group listed first switches off, for that book, the carry and the lookups of its series.
+A book in several groups takes its earlier books, its carried list and its lookups from the first of them in the Groups list. Keep a series above the other groups its books are in: a plain group listed first switches off, for that book, the carry and the lookups of its series. What it has already carried stays as long as any of its groups would give it.
 
 ## Related
 

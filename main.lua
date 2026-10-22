@@ -7654,18 +7654,22 @@ function AskGPT:_installGroupSeedingHooks()
     return open
   end)
   BookGroups.on_change = function(group_id)
-    self_ref:_scheduleGroupReseed(group_id)
+    self_ref:_scheduleGroupReseed(group_id, true)
   end
   -- G1 group settings (docs/group_hub_plan.md §2.1): a book that leaves a
   -- group, or a deleted group, turns that group's follow markers on the
   -- book(s) into follow-global; a book's own pick replacing a marker gets
-  -- the "no longer follows" toast
+  -- the "no longer follows" toast. B536: the carried entries follow too
   local GroupSettings = require("koassistant.books.group_settings")
   BookGroups.on_leave = function(group_id, path)
     GroupSettings.onLeave(group_id, path)
+    self_ref:_scheduleCarryRefresh(path)
   end
   BookGroups.on_removed = function(group_id, books)
     GroupSettings.onRemoved(group_id, books)
+    for _idx, path in ipairs(books or {}) do
+      self_ref:_scheduleCarryRefresh(path)
+    end
   end
   require("koassistant.storage.book_store").on_marker_replaced = function(_path, key, group_id)
     local text = GroupSettings.replacedNotice(key, group_id)  -- nil = the group is gone
@@ -7677,42 +7681,77 @@ function AskGPT:_installGroupSeedingHooks()
     for _idx, group in ipairs(BookGroups.groupsFor(file)) do
       self_ref:_scheduleGroupReseed(group.id)
     end
+    -- B536: a checkpoint built while the groups were different cannot
+    -- bring back what the book no longer takes from them
+    self_ref:_scheduleCarryRefresh(file)
   end
 end
 
 --- Debounced automatic seeding of a group's carried lists (S4): every
 --- trigger within 2 s folds into one run; the run suppresses the write hook
 --- for its own writes and re-syncs the marks when it wrote anything.
-function AskGPT:_scheduleGroupReseed(group_id)
+--- `changed` = the group itself changed (members, order, kind): every member
+--- is refreshed, a plain group's too (B536).
+function AskGPT:_scheduleGroupReseed(group_id, changed)
   if type(group_id) ~= "string" or group_id == "" then return end
   self._reseed_pending = self._reseed_pending or {}
-  self._reseed_pending[group_id] = true
+  self._reseed_pending[group_id] = self._reseed_pending[group_id] == "changed" and "changed"
+    or (changed and "changed" or "written")
+  self:_runCarryRefreshSoon()
+end
+
+--- One book's carried entries made current in the same debounced run (B536):
+--- a book that left a group, the members of a deleted group, a book whose
+--- X-Ray was just written.
+function AskGPT:_scheduleCarryRefresh(file)
+  if type(file) ~= "string" or file == "" then return end
+  self._carry_pending = self._carry_pending or {}
+  self._carry_pending[file] = true
+  self:_runCarryRefreshSoon()
+end
+
+function AskGPT:_runCarryRefreshSoon()
   if self._reseed_fn then UIManager:unschedule(self._reseed_fn) end
   local self_ref = self
   self._reseed_fn = function()
     local pending = self_ref._reseed_pending or {}
-    self_ref._reseed_pending = {}
+    local books = self_ref._carry_pending or {}
+    self_ref._reseed_pending, self_ref._carry_pending = {}, {}
     local ActionCache = require("koassistant.artifacts.action_cache")
     local BookGroups = require("koassistant.books.book_groups")
     local XrayMerge = require("koassistant.xray.xray_merge")
     local ui = (self_ref.ui and self_ref.ui.document) and self_ref.ui or nil
+    local features = (configuration and configuration.features) or {}
+    local provider = configuration and configuration.provider
+    -- One run's shared reads, and each book refreshed once
+    local memo, done, wrote = {}, {}, 0
     ActionCache.suppress_write_hook = true
-    for id in pairs(pending) do
+    for id, how in pairs(pending) do
       local group = BookGroups.byId(id)
       if group then
-        local ok, written, checked = pcall(XrayMerge.reseedGroup, group,
-          (configuration and configuration.features) or {},
-          configuration and configuration.provider, ui)
+        local ok, written, checked = pcall(XrayMerge.reseedGroup, group, features, provider, ui,
+          { changed = how == "changed", memo = memo, done = done })
         if not ok then
           logger.warn("KOAssistant: group seeding failed:", tostring(written))
         elseif (written or 0) > 0 then
           logger.info("KOAssistant: group seeding wrote", written, "carried list(s) of",
             checked, "checked")
-          if self_ref.syncXrayMarks then pcall(function() self_ref:syncXrayMarks() end) end
+          wrote = wrote + written
         end
       end
     end
+    for file in pairs(books) do
+      local ok, written = pcall(XrayMerge.refreshCarried, file, features, provider, ui,
+        { memo = memo, done = done })
+      if not ok then
+        logger.warn("KOAssistant: carried entries refresh failed:", tostring(written))
+      elseif written then
+        logger.info("KOAssistant: carried entries brought in line with the groups for one book")
+        wrote = wrote + 1
+      end
+    end
     ActionCache.suppress_write_hook = false
+    if wrote > 0 and self_ref.syncXrayMarks then pcall(function() self_ref:syncXrayMarks() end) end
   end
   UIManager:scheduleIn(2, self._reseed_fn)
 end
