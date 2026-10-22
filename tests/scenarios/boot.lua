@@ -18,6 +18,17 @@ A scenario:
   S.check(cond, "what it shows")
   S.shot("name")            -- <run>/shots/<scenario>_name.png, for the session to view
   S.finish()                -- PASS/FAIL summary, exit code
+
+Wiki shots (tests/scenarios/wiki_shots.sh sets these; every one is off by
+default): KOA_SCREEN=WxH draws on a screen of that size (a Kobo Clara's
+1072x1448) instead of 600x800, grayscale as before; EMULATE_READER_DPI is
+KOReader's own; KOA_EMOJI registers the emoji font the plugin installs as a UI
+fallback when the desktop's user font folder holds it (read only); KOA_BOOKS
+names a books folder run.sh copied into <run>/Books, its roles (series,
+standalone, nonfiction) read from the koashots.lua it carries (S.shotsBook).
+S.wiki("name.png") writes <run>/wiki/name.png for a manifest name of
+docs/assets/wiki_shotlist.txt; S.openMenu / S.menuTap walk KOReader's main
+menu; S.fileManager opens the file browser on a folder.
 ]]
 
 local S = {}
@@ -50,6 +61,15 @@ do
     G_reader_settings:saveSetting("plugins_disabled", disabled)
     G_reader_settings:saveSetting("koassistant_last_update_check", os.time())
 end
+-- KOA_EMOJI: the plugin's emoji font as a UI fallback, before ui/font loads
+-- (it reads the fallbacks once); only when the user font folder has it
+if os.getenv("KOA_EMOJI") then
+    local font = (os.getenv("HOME") or "") .. "/Library/Fonts/NotoEmoji-Regular.ttf"
+    if lfs.attributes(font, "mode") == "file" then
+        G_reader_settings:saveSetting("font_ui_fallbacks", { font })
+        S.EMOJI = true
+    end
+end
 
 -- ── Results ─────────────────────────────────────────────────────────────────
 local passed, failed = 0, 0
@@ -72,7 +92,37 @@ end
 -- ── The screen and input, headless ──────────────────────────────────────────
 einkfb = require("ffi/framebuffer") --luacheck: ignore
 einkfb.dummy = true --luacheck: ignore
+-- KOA_SCREEN: the dummy buffer the SDL framebuffer makes (600x800) swapped for
+-- one of this size, in the base init its own init ends with
+do
+    local spec = os.getenv("KOA_SCREEN")
+    if spec and spec ~= "" then
+        local w, h = spec:match("^(%d+)x(%d+)$")
+        assert(w, "KOA_SCREEN must be WxH, e.g. 1072x1448")
+        w, h = tonumber(w), tonumber(h)
+        local BB = require("ffi/blitbuffer")
+        local base_init = einkfb.init --luacheck: ignore
+        einkfb.init = function(self) --luacheck: ignore
+            if self.dummy and not (self.bb and self.bb:getWidth() == w and self.bb:getHeight() == h) then
+                if self.bb then self.bb:free() end
+                self.bb = BB.new(w, h)
+                self.bb:fill(BB.COLOR_WHITE)
+            end
+            return base_init(self)
+        end
+    end
+end
 local Device = require("device")
+-- Wiki shots draw a Kobo: no keyboard, no keys, no D-pad. KOReader's Menu
+-- takes its boxed shortcut letters from hasKeyboard when it loads, and a
+-- keyed device gets a focus frame on a dialog's first button; so before
+-- anything loads ui/widget/menu
+if os.getenv("KOA_SCREEN") then
+    local no = function() return false end
+    Device.hasKeyboard, Device.hasKeys, Device.hasDPad, Device.hasScreenKB = no, no, no, no
+    local Menu = package.loaded["ui/widget/menu"]
+    if Menu then Menu.is_enable_shortcut = false end
+end
 local Screen = Device.screen
 Screen:init()
 require("document/canvascontext"):init(Device)
@@ -144,8 +194,31 @@ function S.settle(rounds)
     end
 end
 
---- A book of the run's fixture by part of its file name
+-- The EPUB files under a folder, at any depth, in a stable order
+local function epubsUnder(dir, out)
+    out = out or {}
+    if lfs.attributes(dir, "mode") ~= "directory" then return out end
+    local entries = {}
+    for entry in lfs.dir(dir) do
+        if entry ~= "." and entry ~= ".." then entries[#entries + 1] = entry end
+    end
+    table.sort(entries)
+    for _idx, entry in ipairs(entries) do
+        local path = dir .. "/" .. entry
+        local mode = lfs.attributes(path, "mode")
+        if mode == "directory" and not entry:match("%.sdr$") then
+            epubsUnder(path, out)
+        elseif mode == "file" and entry:match("%.epub$") then
+            out[#out + 1] = path
+        end
+    end
+    return out
+end
+
+--- A book of the run by part of its file name: the fixture's folders first,
+--- then anything else under <run>/Books (a KOA_BOOKS copy), or a full path
 function S.book(part)
+    if part:sub(1, 1) == "/" and lfs.attributes(part, "mode") == "file" then return part end
     for _idx, folder in ipairs({ "Mock Series", "Mock Project", "Mock Shelf" }) do
         local dir = S.BOOKS .. "/" .. folder
         if lfs.attributes(dir, "mode") == "directory" then
@@ -156,13 +229,41 @@ function S.book(part)
             end
         end
     end
-    error("no fixture book matches " .. tostring(part))
+    for _idx, path in ipairs(epubsUnder(S.BOOKS)) do
+        if path:match("[^/]+$"):find(part, 1, true) then return path end
+    end
+    error("no book matches " .. tostring(part))
 end
 
-local current_ui
+-- The KOA_BOOKS copy and its roles (koassistant shots books: koashots.lua in
+-- that folder, untracked, names the files; tracked files never name them)
+do
+    local src = os.getenv("KOA_BOOKS")
+    if src and src ~= "" then
+        local dir = S.BOOKS .. "/" .. src:gsub("/+$", ""):match("[^/]+$")
+        if lfs.attributes(dir, "mode") == "directory" then
+            S.SHOTS_DIR = dir
+            local ok, roles = pcall(dofile, dir .. "/koashots.lua")
+            if ok and type(roles) == "table" then S.SHOTS = roles end
+        end
+    end
+end
+
+--- A shots book by its role ("series" with its place, 1 first; "standalone";
+--- "nonfiction"): its path in the run's copy, or nil without KOA_BOOKS
+function S.shotsBook(role, n)
+    local roles = S.SHOTS
+    if not roles then return nil end
+    local rel = roles[role]
+    if type(rel) == "table" then rel = rel[n or 1] end
+    return type(rel) == "string" and (S.SHOTS_DIR .. "/" .. rel) or nil
+end
+
+local current_ui, current_fm
 --- Open a book in the reader (the plugins load with it); returns the ReaderUI
 function S.open(part)
     if current_ui then S.close() end
+    if current_fm then S.closeFileManager() end
     local DocumentRegistry = require("document/documentregistry")
     local ReaderUI = require("apps/reader/readerui")
     local file = S.book(part)
@@ -183,6 +284,31 @@ function S.close()
     UIManager:close(current_ui)
     S.settle(1)
     current_ui, S.ui, S.plugin = nil, nil, nil
+end
+
+--- Open KOReader's file browser on a folder (the plugins load with it; the
+--- folder becomes the home folder, so its path shows as Home); returns it
+function S.fileManager(dir)
+    if current_ui then S.close() end
+    if current_fm then S.closeFileManager() end
+    dir = dir or S.SHOTS_DIR or S.BOOKS
+    G_reader_settings:saveSetting("home_dir", dir)
+    G_reader_settings:saveSetting("lastdir", dir)
+    local FileManager = require("apps/filemanager/filemanager")
+    FileManager:showFiles(dir)
+    S.settle()
+    UIManager:forceRePaint()
+    current_fm = FileManager.instance
+    S.fm = current_fm
+    S.plugin = current_fm and current_fm.koassistant
+    return current_fm
+end
+
+function S.closeFileManager()
+    if not current_fm then return end
+    current_fm:onClose()
+    S.settle(1)
+    current_fm, S.fm, S.plugin = nil, nil, nil
 end
 
 --- Go to the chapter of this title (its first page)
@@ -339,6 +465,151 @@ function S.find(text)
     end
 end
 
+-- ── KOReader's main menu (the reader's, or the file browser's) ───────────────
+local function itemText(item)
+    if type(item) ~= "table" then return nil end
+    if item.text_func then
+        local ok, t = pcall(item.text_func)
+        if ok then return t end
+    end
+    return item.text
+end
+S.itemText = itemText
+
+local function menuHolder()
+    local holder = (current_ui and current_ui.menu) or (current_fm and current_fm.menu)
+    return assert(holder, "no reader or file browser open")
+end
+
+--- The main menu's TouchMenu, when it is open
+function S.menu()
+    local holder = menuHolder()
+    local c = holder.menu_container
+    return c and UIManager:isWidgetShown(c) and c[1] or nil
+end
+
+-- A row's text matches with or without the emoji Emoji Menu Icons puts first
+local function hits(text, t)
+    if type(t) ~= "string" then return false end
+    local bare = t:gsub("^[\128-\255]+[\128-\255%s]*%s", "")
+    if type(text) == "table" then return t:find(text[1]) ~= nil or bare:find(text[1]) ~= nil end
+    return t == text or bare == text
+end
+
+-- Show the page of the menu's current list that holds this item
+local function showItemPage(menu, item)
+    for i, it in ipairs(menu.item_table) do
+        if it == item then
+            local per = menu.perpage or menu.max_per_page_default or 10
+            menu:updateItems(math.floor((i - 1) / per) + 1)
+            return
+        end
+    end
+end
+
+--- Open the main menu on the tab holding a row with this text (default:
+--- KOAssistant's), the page with that row shown; returns the TouchMenu
+function S.openMenu(row)
+    row = row or "KOAssistant"
+    local holder = menuHolder()
+    -- a container closed from outside (S.closeAll) is still referenced
+    if holder.menu_container and not UIManager:isWidgetShown(holder.menu_container) then
+        holder.menu_container = nil
+    end
+    if not holder.menu_container then holder:onShowMenu() end
+    S.settle()
+    local menu = holder.menu_container[1]
+    for i, tab in ipairs(menu.tab_item_table) do
+        for _j, item in ipairs(tab) do
+            if hits(row, itemText(item)) then
+                -- the tab icon's own tap: the bar marks it, the list switches
+                menu.bar:switchToTab(i)
+                showItemPage(menu, item)
+                S.settle()
+                UIManager:forceRePaint()
+                return menu
+            end
+        end
+    end
+    error("no main menu tab has a row " .. tostring(type(row) == "table" and row[1] or row))
+end
+
+--- Tap a row of the open main menu's current list by its text (or a Lua
+--- pattern given as { pattern }): a submenu opens in place, a row's own dialog
+--- over it; the page with the row is shown first. Returns the item.
+function S.menuTap(row)
+    local menu = assert(S.menu(), "the main menu is not open")
+    local seen = {}
+    for _idx, item in ipairs(menu.item_table) do
+        local t = itemText(item)
+        seen[#seen + 1] = tostring(t)
+        if hits(row, t) then
+            showItemPage(menu, item)
+            menu:onMenuSelect(item)
+            S.settle()
+            UIManager:forceRePaint()
+            return item
+        end
+    end
+    error("no menu row " .. tostring(type(row) == "table" and row[1] or row) .. "; there: " .. table.concat(seen, " | "))
+end
+
+--- Walk the main menu: S.menuPath({ "KOAssistant", "Privacy & Data" }) opens
+--- the tab of the first row and taps each in turn
+function S.menuPath(rows)
+    S.openMenu(rows[1])
+    for _idx, row in ipairs(rows) do S.menuTap(row) end
+    return S.menu()
+end
+
+--- The rows of the open main menu's current list (their texts)
+function S.menuRows()
+    local menu = S.menu()
+    local out = {}
+    for _idx, item in ipairs(menu and menu.item_table or {}) do out[#out + 1] = tostring(itemText(item)) end
+    return out
+end
+
+function S.closeMenu()
+    local holder = menuHolder()
+    if holder.menu_container then
+        local menu = holder.menu_container[1]
+        menu:closeMenu()
+        S.settle()
+    end
+end
+
+-- ── Wiki shots ──────────────────────────────────────────────────────────────
+local manifest
+local function manifestNames()
+    if manifest then return manifest end
+    manifest = {}
+    local f = io.open(PLUGIN .. "/docs/assets/wiki_shotlist.txt", "r")
+    if f then
+        for line in f:lines() do
+            local name = line:match("^%s*([^#|%s][^|]-)%s*|")
+            if name then manifest[name] = true end
+        end
+        f:close()
+    end
+    return manifest
+end
+
+--- A wiki shot: the screen as <run>/wiki/<name>, for a name of the manifest
+--- (docs/assets/wiki_shotlist.txt; another name is written too, with a note)
+function S.wiki(name)
+    lfs.mkdir(RUN .. "/wiki")
+    -- the whole stack painted again, bottom to top: nothing of a closed
+    -- window survives into a final
+    UIManager:setDirty("all", "full")
+    UIManager:forceRePaint()
+    if not manifestNames()[name] then S.note("not a manifest name:", name) end
+    local path = RUN .. "/wiki/" .. name
+    Screen.bb:writePNG(path)
+    print("    wiki: " .. path)
+    return path
+end
+
 --- A screenshot for the session to view
 function S.shot(name)
     lfs.mkdir(RUN .. "/shots")
@@ -353,6 +624,7 @@ function S.finish()
     S.check(#blocked == 0, "nothing tried the network" .. (#blocked > 0
         and (" (" .. table.concat(blocked, ", ") .. ")") or ""))
     pcall(S.close)
+    pcall(S.closeFileManager)
     print(string.format("%s: %d passed, %d failed", S.NAME, passed, failed))
     os.exit(failed == 0 and 0 or 1)
 end

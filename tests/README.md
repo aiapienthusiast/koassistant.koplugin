@@ -434,6 +434,15 @@ Each run makes a NEW folder under the one given (`run-<time>-<pid>/`): `home/` i
 
 A scenario is a short Lua file: `local S = dofile(os.getenv("KOA_PLUGIN") .. "/tests/scenarios/boot.lua")`, then `S.features{...}` (the plugin's settings, before the book opens), `S.open("Mock Series 3")`, `S.chapter("Rented Quiet")`, `S.marks()` (the visible page's X-Ray marks with the words under each), `S.settle()` (every scheduled task now: debounces, the marks' deferred scan), `S.check(cond, "what it shows")`, `S.shot("name")`, `S.finish()`. `S.texts()` / `S.tap(text)` read and tap a dialog's buttons or a menu's rows; in a window built by hand (the picture popup, s06) they reach every button and checkbox in its widget tree, radio rows included (`S.buttons()` gives each one's `checked`).
 
+#### Wiki screenshots: `tests/scenarios/wiki_shots.sh`
+
+```bash
+sh tests/scenarios/wiki_shots.sh /path/to/a/scratch/folder                     # every w_*.lua
+sh tests/scenarios/wiki_shots.sh /path/to/a/scratch/folder w_privacy_and_data  # one page's shots
+```
+
+The `w_<page>.lua` scenarios stage and shoot the shots of `docs/assets/wiki_shotlist.txt` (the wiki's manifest), each in a run of its own (a fresh home, so one scenario's settings never reach the next), on a Kobo Clara's screen: `KOA_SCREEN=1072x1448` (the dummy screen's size; off by default), `EMULATE_READER_DPI=300`, a device with no keyboard, keys or D-pad (no shortcut letters in lists, no focus frames), and `KOA_EMOJI` (the plugin's emoji font registered as a UI fallback when the desktop's user font folder has it, read only). The books come from the folder `KOA_BOOKS` names (none without it): `run.sh` COPIES it into the run, and its untracked `koashots.lua` names the files by role (`S.shotsBook("series", 2)`, `"standalone"`, `"nonfiction"`), so no tracked file names a book. At the end the script lists the manifest's names produced and not produced and copies the produced PNGs into `docs/assets/screenshots-src/wiki/` for review; nothing lands in `screenshots/` by itself. Helpers: `S.wiki("name.png")` (the whole stack repainted, then `<run>/wiki/name.png`; a name not in the manifest gets a note), `S.openMenu` / `S.menuTap` / `S.menuPath({ "KOAssistant", "Privacy & Data" })` / `S.menuRows()` (KOReader's main menu, rows matched with or without their emoji), `S.fileManager(dir)` (the file browser, the folder as Home); `tests/scenarios/wiki_lib.lua` stages in the run only: fake keys (`W.FAKE`, `W.fileKeys` for the apikeys.lua stand-in), `W.prose()` (the first full page of prose), `W.select(skip, count)` (words selected from the page's start, as a drag would, then `W.highlightMenu()`), `W.group(name, kind, books)`, `W.scrollTo(text)` in a long dialog.
+
 ## Prerequisites
 
 Lua 5.3+ with LuaSocket, LuaSec, and dkjson.

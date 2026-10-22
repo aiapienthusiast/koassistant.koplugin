@@ -12,6 +12,8 @@
 # the home), shots/ (screenshots) and one log per scenario. Nothing is
 # deleted, nothing of a real KOReader home is read, and boot.lua blocks the
 # network and keeps apikeys.lua out. Exit code: the number of failed scenarios.
+# KOA_BOOKS=<folder>: that folder is COPIED into Books/ too (read only at its
+# source); the wiki shots use it (wiki_shots.sh, which also sets KOA_SCREEN).
 
 TREE="$(cd "$(dirname "$0")/../.." && pwd)"
 APP="/Applications/KOReader.app/Contents/koreader"
@@ -30,6 +32,14 @@ if ! (cd "$TREE" && lua tests/fixtures/mock_series/gen.lua --out "$RUN/Books" --
         > "$RUN/gen.log" 2>&1; then
     echo "fixture generation failed, see $RUN/gen.log"
     exit 2
+fi
+
+if [ -n "$KOA_BOOKS" ]; then
+    if [ ! -d "$KOA_BOOKS" ]; then
+        echo "KOA_BOOKS is not a folder: $KOA_BOOKS"
+        exit 2
+    fi
+    cp -R "${KOA_BOOKS%/}" "$RUN/Books/" || exit 2
 fi
 
 if [ $# -eq 0 ]; then
