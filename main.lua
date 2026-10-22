@@ -9839,6 +9839,14 @@ function AskGPT:_showUnifiedActionPopup(action, action_id, opts)
       end
       return true
     end
+    -- Back closes it, as a ButtonDialog's does
+    if Device:hasKeys() then
+      current_dialog.key_events = { Close = { { Device.input.group.Back } } }
+    end
+    function current_dialog:onClose()
+      UIManager:close(self)
+      return true
+    end
     function current_dialog:onCloseWidget()
       UIManager:setDirty(nil, function()
         return "ui", widget_frame.dimen
@@ -12230,6 +12238,14 @@ function AskGPT:_showXrayCreationChooser(action, action_id, on_update, opts, for
       if ges_ev.pos:notIntersectWith(widget_frame.dimen) then
         UIManager:close(self)
       end
+      return true
+    end
+    -- Back closes it, as a ButtonDialog's does
+    if Device:hasKeys() then
+      current_dialog.key_events = { Close = { { Device.input.group.Back } } }
+    end
+    function current_dialog:onClose()
+      UIManager:close(self)
       return true
     end
     function current_dialog:onCloseWidget()
