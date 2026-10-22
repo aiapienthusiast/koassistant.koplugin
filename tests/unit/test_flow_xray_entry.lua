@@ -214,7 +214,7 @@ TestRunner:test("Illustrate… opens the picture popup: a note for this picture,
         ui:tap("Illustrate…", popup)
         TestRunner:assertEqual(spec.title, "Illustrate \"Gil Rook\"")
         TestRunner:assertTrue(spec.note == true and spec.writer == true, "a note row and the writer row")
-        TestRunner:assertTrue(spec.pickable == nil, "no picks: the entry is the subject")
+        TestRunner:assertTrue(spec.xray == nil, "no picks: the entry is the subject")
         TestRunner:assertEqual(#spec.actions, 1)
         TestRunner:assertEqual(spec.actions[1].text, "Illustrate")
         spec.state.note = "up the ladder, at dusk"
@@ -328,6 +328,9 @@ TestRunner:test("the note box: OK hands the note over, a blank one as none, Canc
         local note = ui:top()
         TestRunner:assertEqual(note.title, "Note for the picture")
         TestRunner:assertEqual(note.input, "from behind", "opens on the note so far")
+        TestRunner:assertTrue(note.description == nil and type(note.input_hint) == "string"
+            and note.input_hint:find("e.g.", 1, true) ~= nil, "the example is the gray hint inside the box")
+        TestRunner:assertTrue(note.text_height ~= nil, "a box the size of the chat's (text_height alone sizes it)")
         TestRunner:assertEqual(table.concat(ui:texts(note), " | "), "Cancel | OK")
         ui:type("at dusk", note)
         ui:tap("OK", note)
@@ -343,7 +346,7 @@ TestRunner:test("the note box: OK hands the note over, a blank one as none, Canc
     if not ok then error(err, 0) end
 end)
 
-TestRunner:test("the picker: a tap marks or clears, five at most, Done hands them back in order", function()
+TestRunner:test("the picker: picked, suggested, then by category; closing hands the list back (B537)", function()
     local saved_menu = package.loaded["ui/widget/menu"]
     local menu
     package.loaded["ui/widget/menu"] = { new = function(_cls, o)
@@ -351,11 +354,21 @@ TestRunner:test("the picker: a tap marks or clears, five at most, Done hands the
         o.switchItemTable = function(self_m, title, items) self_m.title, self_m.item_table = title, items end
         return o
     end }
-    local done
+    local done, called = nil, 0
     local ok, err = pcall(function()
         local rows = {}
-        for i = 1, 7 do rows[i] = { name = "Name " .. i } end
-        ImageGenerator.pickEntries(rows, { "Name 2" }, function(names) done = names end)
+        for i = 3, 7 do rows[#rows + 1] = { name = "Name " .. i } end
+        local tiers = {
+            picked = { { name = "Name 2", role = "a role" } },
+            suggested = { { name = "Name 1" } },
+            groups = { { label = "Cast", rows = rows } },
+        }
+        ImageGenerator.pickEntries(tiers, { "Name 2" }, function(names) done, called = names, called + 1 end)
+        local texts = {}
+        for _idx, it in ipairs(menu.item_table) do texts[#texts + 1] = it.text end
+        TestRunner:assertEqual(table.concat(texts, "|"),
+            "\u{2611} Name 2 \u{00B7} a role|Suggested|\u{2610} Name 1|Cast|\u{2610} Name 3|\u{2610} Name 4|\u{2610} Name 5|\u{2610} Name 6|\u{2610} Name 7",
+            "the picked first, then the suggested and each category under a heading; no Done row")
         local function tap(label)
             for _idx, it in ipairs(menu.item_table) do
                 if it.text:find(label, 1, true) then return menu.onMenuSelect(menu, it) end
@@ -363,14 +376,20 @@ TestRunner:test("the picker: a tap marks or clears, five at most, Done hands the
             error("no row " .. label)
         end
         TestRunner:assertTrue(menu.title:find("1 of 5", 1, true) ~= nil, menu.title)
+        tap("Suggested")
+        TestRunner:assertTrue(menu.title:find("1 of 5", 1, true) ~= nil, "a heading does nothing")
         tap("Name 4"); tap("Name 1"); tap("Name 2")
         TestRunner:assertTrue(menu.title:find("2 of 5", 1, true) ~= nil, "Name 2 cleared: " .. menu.title)
+        TestRunner:assertTrue(menu.item_table[1].text:find("Name 2", 1, true) ~= nil,
+            "a cleared row keeps its place")
         tap("Name 5"); tap("Name 6"); tap("Name 7")
         TestRunner:assertTrue(menu.title:find("5 of 5", 1, true) ~= nil, menu.title)
         tap("Name 3")
         TestRunner:assertTrue(menu.title:find("5 of 5", 1, true) ~= nil, "a sixth is refused")
-        tap("Done")
-        TestRunner:assertEqual(table.concat(done or {}, "|"), "Name 4|Name 1|Name 5|Name 6|Name 7")
+        TestRunner:assertEqual(called, 0, "nothing handed back while it is open")
+        menu.close_callback()
+        TestRunner:assertEqual(table.concat(done or {}, "|"), "Name 4|Name 1|Name 5|Name 6|Name 7",
+            "closing it (the X, Back) hands the list back in the order picked")
     end)
     package.loaded["ui/widget/menu"] = saved_menu
     if not ok then error(err, 0) end

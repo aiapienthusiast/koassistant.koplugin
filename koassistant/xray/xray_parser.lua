@@ -2655,6 +2655,8 @@ local function startsUpper(word)
     local ch = firstChar(word)
     return ch ~= "" and lowerChar(ch) ~= ch
 end
+-- Exported: the picture popup's entry suggestions read capitals too (B537)
+XrayParser.startsUpper = startsUpper
 
 --- Which words of a span start with a capital: bit k (from 0) for word k+1,
 --- set unless that word starts with a lowercase letter.

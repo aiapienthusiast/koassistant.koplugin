@@ -7569,7 +7569,7 @@ local function showChatGPTDialog(ui_instance, highlighted_text, config, prompt_t
             -- popup opens with it
             require("koassistant.ui.dialogs").executeDirectAction(
                 ui_instance, action, highlighted_text or "", configuration, plugin,
-                { document_path = document_path, run_variant = run_variant,
+                { document_path = document_path,
                   note = action.local_handler == "image_gen" and additional_input or nil })
             return
         end
@@ -13019,10 +13019,8 @@ local function handleLocalXrayLookup(ui, query, document_path, book_metadata, co
     end
 end
 
--- Dispatch a local (non-AI) action handler. opts (optional): run_variant (a
--- hold menu's run option: { image_now = true } draws Generate Image's picture
--- without its popup), note (the text typed in the input dialog: Generate
--- Image's note)
+-- Dispatch a local (non-AI) action handler. opts (optional): note (the text
+-- typed in the input dialog: Generate Image's note)
 local function handleLocalAction(handler_name, ui, highlighted_text, document_path, book_metadata, config, plugin, opts)
     local logger = require("koassistant.core.logger")
 
@@ -13081,35 +13079,41 @@ local function handleLocalAction(handler_name, ui, highlighted_text, document_pa
                 ImageGenerator.generate(highlighted_text, config, plugin and plugin.settings, book_info, gen_opts)
             end)
         end
-        local variant = opts and type(opts.run_variant) == "table" and opts.run_variant or {}
-        if variant.image_now or not (plugin and plugin.settings) then
+        if not (plugin and plugin.settings) then
             run()
         else
             -- B537: a tap opens the picture popup (the scope popup's shape):
             -- a note and X-Ray entries for this picture, then the settings it
             -- is drawn with (a pick is the setting), then Generate, from the
-            -- selection taken at the start. B535: the entries a passage does
-            -- not name can be picked by hand for the prompt writer
-            local pickable
+            -- selection taken at the start. B535: the entries the prompt
+            -- writer reads start as the ones the passage and the note name
+            -- and can be changed by hand
+            local xray_data
             if book_info and book_info.file then
                 local xray = require("koassistant.artifacts.action_cache").parsedXrayFor(book_info.file)
-                if xray then pickable = require("koassistant.images.prompt_writer").pickable(xray.data) end
+                xray_data = xray and xray.data or nil
             end
-            local state = { note = gen_opts.note, picked = gen_opts.picked }
-            local passage = type(highlighted_text) == "string"
-                and highlighted_text:gsub("%s+", " "):match("^%s*(.-)%s*$") or ""
-            if passage ~= "" then
-                local head = require("koassistant.request.scope_resolver").utf8Head(passage, 120)
-                passage = "\u{201C}" .. head .. (#head < #passage and "…" or "") .. "\u{201D}"
+            local state = { note = gen_opts.note }
+            if xray_data then
+                state.picked = {}
+                for _idx, e in ipairs(require("koassistant.images.prompt_writer").entriesFor(
+                        highlighted_text, xray_data)) do
+                    state.picked[#state.picked + 1] = e.name
+                end
+                -- the input dialog's note: its entries first, as a note's are
+                if gen_opts.note then
+                    require("koassistant.images.image_options").addNoteEntries(state, xray_data,
+                        gen_opts.note, highlighted_text)
+                end
             end
             -- the provider question first, when the chat provider cannot draw
             ImageGenerator.providerFirst(plugin, function()
                 require("koassistant.images.image_options").show(plugin, {
                     title = _("Generate Image"),
-                    subtitle = passage,
+                    passage = highlighted_text,
                     writer = true,
                     note = true,
-                    pickable = pickable,
+                    xray = xray_data,
                     state = state,
                     actions = {
                         { text = _("Generate"), callback = function()
@@ -13276,7 +13280,7 @@ local function executeDirectAction(ui, action, highlighted_text, configuration, 
     -- Handle local-only actions (no AI call)
     if action.local_handler then
         handleLocalAction(action.local_handler, ui, highlighted_text, document_path, book_metadata, configuration, plugin,
-            opts and { run_variant = opts.run_variant, note = opts.note } or nil)
+            opts and { note = opts.note } or nil)
         return
     end
 

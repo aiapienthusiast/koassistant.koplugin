@@ -199,50 +199,171 @@ function PromptWriter.pickedIn(names, data)
     return found
 end
 
---- What the reader can pick for a passage picture (B535): the installed
---- X-Ray's people and places, people first, each by name. Pure.
+--- What the reader can pick for a passage picture (B535, B537): the installed
+--- X-Ray's entries in the categories the matcher reads, each category in the
+--- X-Ray's order, its entries by name. Pure.
 --- @param data table parsed X-Ray
---- @return table { { name, role, key }, ... }
+--- @return table { { key, label, rows = { { name, role, key }, ... } }, ... }
 function PromptWriter.pickable(data)
     if type(data) ~= "table" then return {} end
     local XrayParser = require("koassistant.xray.xray_parser")
-    local people, places = {}, {}
+    local out = {}
     for _idx, cat in ipairs(XrayParser.getCategories(data) or {}) do
-        local family = XrayParser.CATEGORY_FAMILY[cat.key]
-        if family == "people" or family == "places" then
+        if not XrayParser.TEXT_MATCH_EXCLUDED[cat.key] then
+            local rows = {}
             for _j, item in ipairs(cat.items or {}) do
                 local name = type(item) == "table" and XrayParser.getItemName(item, cat.key)
                 if type(name) == "string" and name ~= "" and (name == item.name or name == item.term) then
-                    local list = family == "people" and people or places
-                    list[#list + 1] = { name = name, key = cat.key,
+                    rows[#rows + 1] = { name = name, key = cat.key,
                         role = type(item.role) == "string" and item.role ~= "" and item.role or nil }
+                end
+            end
+            table.sort(rows, function(a, b) return a.name:lower() < b.name:lower() end)
+            if #rows > 0 then out[#out + 1] = { key = cat.key, label = cat.label, rows = rows } end
+        end
+    end
+    return out
+end
+
+-- Quotes, dashes and the ellipsis, which end a word as ASCII punctuation does
+local WORD_BREAKS = { "\226\128\156", "\226\128\157", "\226\128\152", "\226\128\153",
+    "\194\171", "\194\187", "\226\128\148", "\226\128\147", "\226\128\166" }
+
+-- A text's words without the punctuation around them, case kept
+local function textWords(s)
+    local XrayParser = require("koassistant.xray.xray_parser")
+    s = XrayParser.matchNormalizeKeepCase(s)
+    for _idx, p in ipairs(WORD_BREAKS) do s = s:gsub(p, " ") end
+    s = s:gsub("[%c!\"#%$%%&%(%)%*%+,%./:;<=>%?@%[\\%]%^_`{|}~]", " ")
+    local out = {}
+    for raw in s:gmatch("%S+") do
+        local w = raw:gsub("^['%-]+", ""):gsub("['%-]+$", ""):gsub("'s$", "")
+        if w ~= "" then out[#out + 1] = w end
+    end
+    return out
+end
+
+-- The entries a text names by one word of their name (B537), as Look up in
+-- X-Ray would list them: a word of the text that starts with a capital is a
+-- word of an entry's name or alias that starts with one too (a first name
+-- alone for a full name). A word more than three entries share proposes
+-- nothing. Names, in the order the text gives the words.
+local function nameWordHits(data, texts)
+    local XrayParser = require("koassistant.xray.xray_parser")
+    local owners = {}
+    for _idx, cat in ipairs(XrayParser.getCategories(data) or {}) do
+        if not XrayParser.TEXT_MATCH_EXCLUDED[cat.key] then
+            for _j, item in ipairs(cat.items or {}) do
+                local name = type(item) == "table" and XrayParser.getItemName(item, cat.key)
+                if type(name) == "string" and name ~= "" and (name == item.name or name == item.term) then
+                    local seen = {}
+                    local forms = { name }
+                    for _k, a in ipairs(type(item.aliases) == "table" and item.aliases or {}) do
+                        if type(a) == "string" then forms[#forms + 1] = a end
+                    end
+                    for _k, form in ipairs(forms) do
+                        for _m, w in ipairs(textWords(form)) do
+                            local key = XrayParser.matchNormalize(w)
+                            if #w > 1 and XrayParser.startsUpper(w) and not seen[key] then
+                                seen[key] = true
+                                owners[key] = owners[key] or {}
+                                table.insert(owners[key], name)
+                            end
+                        end
+                    end
                 end
             end
         end
     end
-    local function byName(a, b) return a.name:lower() < b.name:lower() end
-    table.sort(people, byName)
-    table.sort(places, byName)
-    for _idx, row in ipairs(places) do people[#people + 1] = row end
-    return people
+    local out, taken = {}, {}
+    for _idx, text in ipairs(texts) do
+        if type(text) == "string" then
+            for _j, w in ipairs(textWords(text)) do
+                local list = XrayParser.startsUpper(w) and owners[XrayParser.matchNormalize(w)]
+                if list and #list <= 3 then
+                    for _k, name in ipairs(list) do
+                        if not taken[name] then
+                            taken[name] = true
+                            out[#out + 1] = name
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return out
+end
+
+--- The entry picker's list for a passage picture (B537), in tiers: the ones
+--- picked (at first those the passage and the note name), then the
+--- suggested ones (named past the first five, or by one word of their name:
+--- a first name alone), then every other entry under its category. Pure.
+--- @param data table parsed X-Ray
+--- @param passage string|nil the selection
+--- @param note string|nil the reader's note
+--- @param picked table|nil the names picked
+--- @return table { picked = { row }, suggested = { row }, groups = { { label, rows } } }
+function PromptWriter.pickerTiers(data, passage, note, picked)
+    local XrayParser = require("koassistant.xray.xray_parser")
+    local groups = PromptWriter.pickable(data)
+    local by_name = {}
+    for _idx, g in ipairs(groups) do
+        for _j, row in ipairs(g.rows) do
+            by_name[row.name:lower()] = by_name[row.name:lower()] or row
+        end
+    end
+    local out, taken = { picked = {}, suggested = {}, groups = {} }, {}
+    for _idx, n in ipairs(type(picked) == "table" and picked or {}) do
+        if type(n) == "string" and n ~= "" and not taken[n:lower()] then
+            taken[n:lower()] = true
+            out.picked[#out.picked + 1] = by_name[n:lower()] or { name = n }
+        end
+    end
+    local function suggest(name)
+        local low = type(name) == "string" and name:lower()
+        if low and by_name[low] and not taken[low] then
+            taken[low] = true
+            out.suggested[#out.suggested + 1] = by_name[low]
+        end
+    end
+    if type(data) == "table" then
+        for _idx, list in ipairs({ namedIn(note, data), namedIn(passage, data) }) do
+            for _j, f in ipairs(list) do suggest(XrayParser.getItemName(f.item, f.key)) end
+        end
+        local texts = {}
+        if type(note) == "string" then texts[#texts + 1] = note end
+        if type(passage) == "string" then texts[#texts + 1] = passage end
+        for _idx, name in ipairs(nameWordHits(data, texts)) do suggest(name) end
+    end
+    for _idx, g in ipairs(groups) do
+        local rows = {}
+        for _j, row in ipairs(g.rows) do
+            if not taken[row.name:lower()] then rows[#rows + 1] = row end
+        end
+        if #rows > 0 then out.groups[#out.groups + 1] = { label = g.label, rows = rows } end
+    end
+    return out
 end
 
 --- The entries of an installed X-Ray that a passage names (D10), found by THE
 --- text matcher (the one the marks use: names, aliases, their forms; a name
 --- inside a longer entry's name counts for that one), in the order the passage
 --- names them, at most five. The reader's note counts too (B535: "this is X"
---- for a passage that says "she"), and its entries come first; the entries the
---- reader picked by name (B535) come before both. Pure.
+--- for a passage that says "she"), and its entries come first. With the
+--- reader's list from the picture popup (B537: at first what the passage and
+--- the note name, then as the reader picks), that list alone. Pure.
 --- @param passage string the selection
 --- @param data table parsed X-Ray (ActionCache.parsedXrayFor(file).data)
 --- @param limit number|nil at most this many (five)
 --- @param note string|nil the reader's note for the picture
---- @param picked table|nil names the reader picked (PromptWriter.pickable)
+--- @param picked table|nil the reader's list (names), nil = none was shown
 --- @return table list of entryMaterial
 function PromptWriter.entriesFor(passage, data, limit, note, picked)
     if type(data) ~= "table" then return {} end
     local out, taken = {}, {}
-    for _idx, list in ipairs({ PromptWriter.pickedIn(picked, data), namedIn(note, data), namedIn(passage, data) }) do
+    local lists = type(picked) == "table" and { PromptWriter.pickedIn(picked, data) }
+        or { namedIn(note, data), namedIn(passage, data) }
+    for _idx, list in ipairs(lists) do
         for _j, f in ipairs(list) do
             if #out >= (limit or ENTRIES_MAX) then return out end
             if not taken[f.item] then

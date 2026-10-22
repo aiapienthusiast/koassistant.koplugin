@@ -1440,10 +1440,41 @@ local function runAll()
         TestRunner:assertEquals(ImageOptions.noteLabel("at dusk,\n one lit window"), "Note: at dusk, one lit window")
         local long = ImageOptions.noteLabel(string.rep("a", 50))
         TestRunner:assertEquals(long, "Note: " .. string.rep("a", 40) .. "…", "a long note is cut")
-        TestRunner:assertEquals(ImageOptions.picksLabel({}), "Pick X-Ray entries…")
-        TestRunner:assertEquals(ImageOptions.picksLabel({ "Gil Rook", "Hollowmere" }), "X-Ray entries: Gil Rook, Hollowmere")
+        TestRunner:assertEquals(ImageOptions.picksLabel({}), "X-Ray entries: none ▾")
+        TestRunner:assertEquals(ImageOptions.picksLabel({ "Gil Rook", "Hollowmere" }), "X-Ray entries: Gil Rook, Hollowmere ▾")
     end)
-    TestRunner:test("the picture popup's rows (B537): this picture, then the Settings rows, a pick saved", function()
+    TestRunner:test("addNoteEntries: a note's entries first, the earlier note's go, room made by the passage's (B537)", function()
+        local xray = { type = "fiction", characters = {
+            { name = "Gil Rook" }, { name = "Mara" }, { name = "Tam" }, { name = "Orrin" }, { name = "Hester" },
+            { name = "Cass" }, { name = "Jory" },
+        } }
+        local function list(st) return table.concat(st.picked, "|") end
+        local st = { picked = { "Gil Rook" } }
+        local left = ImageOptions.addNoteEntries(st, xray, "Mara holds the lamp", "Gil Rook waited.")
+        TestRunner:assertEquals(list(st), "Mara|Gil Rook", "the note's first")
+        TestRunner:assertEquals(#left, 0)
+        ImageOptions.addNoteEntries(st, xray, "Mara again", "Gil Rook waited.")
+        TestRunner:assertEquals(list(st), "Mara|Gil Rook", "never twice")
+        ImageOptions.addNoteEntries(st, xray, "Tam at dusk", "Gil Rook waited.")
+        TestRunner:assertEquals(list(st), "Tam|Gil Rook", "the earlier note's Mara goes with it")
+        ImageOptions.addNoteEntries(st, xray, nil, "Gil Rook waited.")
+        TestRunner:assertEquals(list(st), "Gil Rook", "a cleared note takes its entries along")
+        st = { picked = {} }
+        ImageOptions.addNoteEntries(st, xray, "at dusk", "Nobody here.")
+        TestRunner:assertEquals(list(st), "", "a note that names nobody adds nobody")
+        -- the passage named five: the note's entry takes a passage entry's place
+        local passage = "Gil Rook, Mara, Tam, Orrin and Hester."
+        st = { picked = { "Gil Rook", "Mara", "Tam", "Orrin", "Hester" } }
+        left = ImageOptions.addNoteEntries(st, xray, "and Cass", passage)
+        TestRunner:assertEquals(list(st), "Cass|Gil Rook|Mara|Tam|Orrin", "five at most, the passage's last gives way")
+        TestRunner:assertEquals(#left, 0)
+        -- five picked by hand: nothing gives way, the note's entry is reported
+        st = { picked = { "Gil Rook", "Mara", "Tam", "Orrin", "Hester" } }
+        left = ImageOptions.addNoteEntries(st, xray, "and Jory", "Nobody here.")
+        TestRunner:assertEquals(list(st), "Gil Rook|Mara|Tam|Orrin|Hester", "hand picks stay")
+        TestRunner:assertEquals(table.concat(left, "|"), "Jory", "left out, for the notice")
+    end)
+    TestRunner:test("the picture popup's rows (B537): this picture, then each setting by name and value, a pick saved", function()
         local features = { image_gen_provider = "openai", image_gen_style = "ink" }
         local popup
         local plugin = {
@@ -1464,42 +1495,53 @@ local function runAll()
                 popup = { title = title, items = items, on_close = on_close }
             end,
         }
+        local function pick(text)
+            for _idx, it in ipairs(popup.items) do
+                if it.text == text then
+                    it.callback()
+                    popup.on_close()
+                    return
+                end
+            end
+            error("no item " .. text)
+        end
         withApikeys({ openai = "sk-real-key" }, function()
             local rebuilt = 0
             local function rebuild() rebuilt = rebuilt + 1 end
             local state = {}
-            local spec = { writer = true, note = true, pickable = { { name = "Gil Rook" } }, state = state }
+            local xray = { type = "fiction", characters = { { name = "Gil Rook" } } }
+            local spec = { writer = true, note = true, xray = xray, passage = "Gil came in.", state = state }
             local rows = ImageOptions.rows(plugin, spec, rebuild)
             local ids, by = {}, {}
             for _idx, r in ipairs(rows) do ids[#ids + 1] = r.id; by[r.id] = r end
-            TestRunner:assertEquals(table.concat(ids, ","), "picture,style,shape,detail,drawn,writer")
+            TestRunner:assertEquals(table.concat(ids, ","), "picture,style,look,drawn,writer")
+            TestRunner:assert(by.picture.gap == nil and by.style.gap == true and by.look.gap == nil,
+                "the picture's own buttons, then the settings as one table below a space")
             TestRunner:assertEquals(by.picture.items[1].text, "Add a note…")
-            TestRunner:assertEquals(by.picture.items[2].text, "Pick X-Ray entries…")
-            TestRunner:assert(by.picture.items[2].enabled, "the picks row is live with the writer on")
-            local checked = {}
-            for _idx, it in ipairs(by.style.items) do if it.checked then checked[#checked + 1] = it.text end end
-            TestRunner:assertEquals(table.concat(checked, ","), "Ink drawing", "the style row on its value")
-            TestRunner:assertEquals(by.style.items[3].text, "Custom…", "a computed label")
-            TestRunner:assertEquals(by.shape.items[1].text, "Fit my screen")
-            TestRunner:assert(by.shape.items[1].checked, "Shape on its default")
-            TestRunner:assertEquals(#by.detail.items, 3)
-            TestRunner:assertEquals(by.drawn.items[1].text, "OpenAI", "the provider by its value")
-            TestRunner:assertEquals(by.drawn.items[2].text, "gpt-image-2.5-flare", "the model that draws, by its id")
+            TestRunner:assertEquals(by.picture.items[2].text, "X-Ray entries: none ▾")
+            TestRunner:assert(by.picture.items[2].enabled, "the picks button is live with the writer on")
+            TestRunner:assertEquals(by.style.items[1].text, "Style: Ink drawing ▾", "the creation form's dials: name, value, arrow")
+            TestRunner:assertEquals(by.look.items[1].text, "Shape: Fit my screen ▾", "Shape on its default")
+            TestRunner:assertEquals(by.look.items[2].text, "Detail: Draft ▾", "Detail on its default")
+            TestRunner:assertEquals(by.drawn.items[1].text, "Provider: OpenAI ▾")
+            TestRunner:assertEquals(by.drawn.items[2].text, "Model: gpt-image-2.5-flare ▾", "the model that draws, by its id")
             TestRunner:assert(by.writer.item.checked, "Write the prompt with AI, on by default")
-            -- a pick is the setting, then the popup rebuilds
-            by.shape.items[2].callback()
+            -- a value opens its list; a pick is the setting, then the popup rebuilds
+            by.look.items[1].callback()
+            TestRunner:assertEquals(popup.title, "Shape: Fit my screen", "titled as Settings titles the row")
+            TestRunner:assert(popup.on_close == rebuild, "the list comes back to the popup")
+            pick("Portrait")
             TestRunner:assertEquals(features.image_gen_shape, "portrait")
             TestRunner:assertEquals(rebuilt, 1)
             rows = ImageOptions.rows(plugin, spec, rebuild)
             for _idx, r in ipairs(rows) do by[r.id] = r end
-            TestRunner:assert(by.shape.items[2].checked and not by.shape.items[1].checked, "the rebuilt rows show the pick")
-            by.shape.items[2].callback()
-            TestRunner:assertEquals(rebuilt, 1, "the value already picked: nothing to do")
-            by.shape.items[1].callback()
-            TestRunner:assertEquals(rebuilt, 2, "a pick of another value")
+            TestRunner:assertEquals(by.look.items[1].text, "Shape: Portrait ▾", "the rebuilt row shows the pick")
             by.style.items[1].callback()
+            pick("Book illustration")
             TestRunner:assertEquals(features.image_gen_style, "illustration")
-            by.style.items[3].callback()
+            by.style.items[1].callback()
+            TestRunner:assertEquals(popup.items[3].text, "Custom…", "a computed label")
+            popup.items[3].callback()
             TestRunner:assertEquals(popup, "custom", "Custom… opens its own box (it rebuilds the popup itself)")
             -- the provider's picker, titled as Settings titles the row
             by.drawn.items[1].callback()
@@ -1510,27 +1552,31 @@ local function runAll()
             TestRunner:assertEquals(features.image_gen_writer, false)
             rows = ImageOptions.rows(plugin, spec, rebuild)
             for _idx, r in ipairs(rows) do by[r.id] = r end
-            TestRunner:assert(by.picture.items[2].enabled == false, "the picks row grays with the writer off")
+            TestRunner:assert(by.picture.items[2].enabled == false, "the picks button grays with the writer off")
             TestRunner:assert(not by.writer.item.checked)
             -- the picture's own state on the buttons
             state.note, state.picked = "at dusk", { "Gil Rook" }
             rows = ImageOptions.rows(plugin, spec, rebuild)
             TestRunner:assertEquals(rows[1].items[1].text, "Note: at dusk")
-            TestRunner:assertEquals(rows[1].items[2].text, "X-Ray entries: Gil Rook")
+            TestRunner:assertEquals(rows[1].items[2].text, "X-Ray entries: Gil Rook ▾")
+            -- no X-Ray entries to pick: no picks button
+            rows = ImageOptions.rows(plugin, { writer = true, note = true, xray = { type = "fiction" }, state = {} }, rebuild)
+            TestRunner:assertEquals(#rows[1].items, 1, "the note alone")
             -- the gallery's: settings only
             rows = ImageOptions.rows(plugin, {}, rebuild)
             ids = {}
             for _idx, r in ipairs(rows) do ids[#ids + 1] = r.id end
-            TestRunner:assertEquals(table.concat(ids, ","), "style,shape,detail,drawn")
+            TestRunner:assertEquals(table.concat(ids, ","), "style,look,drawn")
+            TestRunner:assert(rows[1].gap == nil, "no space over the first table")
             -- a retired id shows as the model that draws (the request's resolver)
             features.image_gen_provider = "xai"
             features.image_gen_model_xai = "grok-imagine-image-pro"
             withApikeys({ xai = "xai-real-key" }, function()
                 rows = ImageOptions.rows(plugin, {}, rebuild)
                 for _idx, r in ipairs(rows) do by[r.id] = r end
-                TestRunner:assertEquals(by.drawn.items[2].text, "grok-imagine-image-2.0")
+                TestRunner:assertEquals(by.drawn.items[2].text, "Model: grok-imagine-image-2.0 ▾")
             end)
-            -- a long typed style is cut on its radio row
+            -- a long typed style is cut on its button
             features.image_gen_provider = "openai"
             local long = string.rep("a 1920s travel poster ", 8)
             plugin.imageStyleItems = function(_self, _after)
@@ -1538,7 +1584,7 @@ local function runAll()
                     checked_func = function() return true end, callback = function() end, opens_dialog = true } }
             end
             rows = ImageOptions.rows(plugin, {}, rebuild)
-            TestRunner:assert(#rows[1].items[1].text <= 44 and rows[1].items[1].text:sub(-3) == "…",
+            TestRunner:assert(#rows[1].items[1].text <= 56 and rows[1].items[1].text:find("… ▾$") ~= nil,
                 "cut: " .. rows[1].items[1].text)
             -- a chat provider that cannot draw: no model
             features.image_gen_provider = "auto"
@@ -1546,7 +1592,7 @@ local function runAll()
             rows = ImageOptions.rows(plugin, {}, rebuild)
             for _idx, r in ipairs(rows) do by[r.id] = r end
             TestRunner:assertEquals(#by.drawn.items, 1, "no model button")
-            TestRunner:assertEquals(by.drawn.items[1].text, "Follow main provider")
+            TestRunner:assertEquals(by.drawn.items[1].text, "Provider: Follow main provider ▾")
         end)
     end)
 

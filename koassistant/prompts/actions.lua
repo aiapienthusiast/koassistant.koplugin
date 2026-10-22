@@ -709,7 +709,7 @@ Use plain language first, adding the technical term in parentheses when it helps
         description = _("Generate an image of the selected passage."),
         context = "highlight",
         local_handler = "image_gen",
-        local_note = _("This action skips the chat pipeline. With Write the prompt with AI on (the default) it sends two requests: your chat provider's fast model writes the prompt from the material below, then the image provider draws it; with it off, the framed prompt goes straight to the image provider. A tap opens the picture's options first (a note, X-Ray entries, the style, shape, detail, provider and model; a change there is the setting itself, as in Settings → Advanced → Image Generation); long-press for Generate now."),
+        local_note = _("This action skips the chat pipeline. With Write the prompt with AI on (the default) it sends two requests: your chat provider's fast model writes the prompt from the material below, then the image provider draws it; with it off, the framed prompt goes straight to the image provider. A tap opens the picture's options first (a note, X-Ray entries, the style, shape, detail, provider and model; a change there is the setting itself, as in Settings → Advanced → Image Generation)."),
         requires_image_provider = true,
         in_highlight_menu = 9,  -- A9 pare-down 2026-08-17: last, it is conditional (maintainer)
         exclude_from_compact = true,

@@ -1,16 +1,19 @@
 --[[--
 The picture popup (B537): what one picture is drawn with, on a tap of Generate
 Image, at Illustrate… and from a gallery picture's Image settings…, in the
-shape of the scope and source popup (labelled radio groups, the button that
-draws at the foot). For this picture: a note, and the X-Ray entries the prompt
-writer reads (a passage picture), both gone after the run. Then the settings
-(image round S9, B496): Style, Shape, Detail, the provider and model that
-draw, Write the prompt with AI where a prompt is written. Those are the
-Settings rows themselves, built from the schema through SettingsManager, so a
-pick is the setting, saved as Settings → Advanced → Image Generation saves it.
-The popup stays open under the pickers it opens (the note box, the entry
-list, the provider and model lists), so every exit of a picker returns to it;
-a change rebuilds it in place. docs/image_round_plan.md sections 12 and 13.
+shape of the scope and source popup (the button that draws at the foot). The
+passage first, up to four lines; then the note and the X-Ray entries the
+prompt writer reads (a passage picture: at first the entries the passage and
+the note name), both gone after the run. Then the settings (image round S9,
+B496), each a button that names it and shows its value, a tap opens its list
+(the X-Ray creation form's dials: "Shape: Portrait ▾", two to a row): Style,
+Shape and Detail, the provider and model that draw, Write the prompt with AI
+where a prompt is written. Those are the Settings rows themselves, built
+from the schema through SettingsManager, so a pick is the setting, saved as
+Settings → Advanced → Image Generation saves it. The popup stays open under
+the pickers it opens (the note box, the entry list, the setting lists), so
+every exit of a picker returns to it; a change rebuilds it in place.
+docs/image_round_plan.md sections 12 and 13.
 ]]
 
 local _ = require("koassistant.core.gettext")
@@ -28,6 +31,9 @@ local MODEL_ROW = {
 
 -- The longest a note, the picked names or a typed style show on their button
 local SHOWN_MAX = 40
+-- The passage's lines at most, and the most of it laid out
+local PASSAGE_LINES = 4
+local PASSAGE_MAX = 600
 
 --- A picker's items as the quick-settings popup shows them: a label for an
 --- item that only computes one (Custom…). Pure.
@@ -43,9 +49,9 @@ function ImageOptions.popupItems(items)
 end
 
 -- A text on one line, cut on a whole character
-local function shown(text)
+local function shown(text, max)
     local flat = text:gsub("%s+", " "):match("^%s*(.-)%s*$")
-    local head = require("koassistant.request.scope_resolver").utf8Head(flat, SHOWN_MAX)
+    local head = require("koassistant.request.scope_resolver").utf8Head(flat, max or SHOWN_MAX)
     if #head < #flat then head = head .. "…" end
     return head
 end
@@ -56,24 +62,90 @@ function ImageOptions.noteLabel(note)
     return T(_("Note: %1"), shown(note))
 end
 
---- The picks' button: Pick X-Ray entries…, or the names picked. Pure.
+--- The picks' button: the names on the list, or none. Pure.
 function ImageOptions.picksLabel(picked)
-    if type(picked) ~= "table" or #picked == 0 then return _("Pick X-Ray entries…") end
-    return T(_("X-Ray entries: %1"), shown(table.concat(picked, ", ")))
+    if type(picked) ~= "table" or #picked == 0 then return T(_("X-Ray entries: %1 ▾"), _("none")) end
+    return T(_("X-Ray entries: %1 ▾"), shown(table.concat(picked, ", ")))
+end
+
+--- A note's entries on the picture's list (B537: the popup shows what the
+--- writer reads), changed in place: the entries the note names come first
+--- (a note's "this is X" brings X, as before the list); the ones an earlier
+--- note brought go when this one does not name them; five at most, room made
+--- by the entries only the passage names, never by one picked by hand.
+--- Pure. Returns the names the note names that did not fit.
+--- @param state table { picked = names, from_note = names }
+--- @param data table parsed X-Ray
+--- @param note string|nil the note (nil = none now)
+--- @param passage string|nil the selection
+--- @return table names left out
+function ImageOptions.addNoteEntries(state, data, note, passage)
+    local PromptWriter = require("koassistant.images.prompt_writer")
+    local max = PromptWriter.ENTRIES_MAX
+    local function names(list)
+        local out = {}
+        for _idx, e in ipairs(list) do out[#out + 1] = e.name end
+        return out
+    end
+    local function set(list)
+        local out = {}
+        for _idx, n in ipairs(list or {}) do out[n:lower()] = true end
+        return out
+    end
+    local note_names = names(PromptWriter.entriesFor(nil, data, nil, note))
+    local new_note = set(note_names)
+    local by_passage = set(names(PromptWriter.entriesFor(passage, data, 100)))
+    local old_note = set(state.from_note)
+    -- The list without the earlier note's entries this note does not name,
+    -- sorted by what may give way: picked by hand, then named by the passage
+    local list, hand, passage_only = {}, {}, {}
+    for _idx, n in ipairs(type(state.picked) == "table" and state.picked or {}) do
+        local low = n:lower()
+        if not (old_note[low] and not new_note[low] and not by_passage[low]) then
+            list[#list + 1] = n
+            if not new_note[low] then
+                if by_passage[low] then passage_only[#passage_only + 1] = n else hand[#hand + 1] = n end
+            end
+        end
+    end
+    local take, room, left_out = {}, max, {}
+    for _idx, n in ipairs(hand) do
+        if room > 0 then take[n:lower()] = true; room = room - 1 end
+    end
+    for _idx, n in ipairs(note_names) do
+        if room > 0 then take[n:lower()] = true; room = room - 1 else left_out[#left_out + 1] = n end
+    end
+    for _idx, n in ipairs(passage_only) do
+        if room > 0 then take[n:lower()] = true; room = room - 1 end
+    end
+    local out, from_note = {}, {}
+    for _idx, n in ipairs(note_names) do
+        if take[n:lower()] then
+            out[#out + 1] = n
+            from_note[#from_note + 1] = n
+        end
+    end
+    for _idx, n in ipairs(list) do
+        if take[n:lower()] and not new_note[n:lower()] then out[#out + 1] = n end
+    end
+    state.picked, state.from_note = out, from_note
+    return left_out
 end
 
 --- The popup's rows in order, without widgets. Each:
----   { id, label, kind = "buttons", items = { { id, text, enabled, callback } } }
----   { id, label, kind = "radio", columns, items = { { text, checked, enabled, callback } } }
+---   { id, gap = true|nil, kind = "buttons", items = { { id, text, enabled, callback } } }
 ---   { id, kind = "check", item = { text, checked, callback } }
---- A callback changes a setting or the picture's state and then calls
---- rebuild; one that opens a picker leaves the popup open under it.
---- spec: { writer, note (offer the note row), pickable (PromptWriter.pickable's
---- rows, nil = no picks row), state = { note, picked } (the picture's own) }.
+--- Rows of buttons draw as one table; gap starts another below a space. A
+--- callback changes a setting or the picture's state and then calls rebuild;
+--- one that opens a picker leaves the popup open under it.
+--- spec: { writer, note (offer the note), passage (the selection), xray (the
+--- parsed X-Ray whose entries can be picked, nil = no picks), state =
+--- { note, picked, from_note } (the picture's own) }.
 function ImageOptions.rows(plugin, spec, rebuild)
     local SettingsSchema = require("koassistant.ui.settings_schema")
     local SettingsManager = require("koassistant.ui.settings_manager")
     local ImageGenerator = require("koassistant.images.image_generator")
+    local PromptWriter = require("koassistant.images.prompt_writer")
     spec = spec or {}
     local state = spec.state or {}
     local features = plugin.settings:readSetting("features") or {}
@@ -83,29 +155,23 @@ function ImageOptions.rows(plugin, spec, rebuild)
         local item = SettingsSchema:getItemById(id)
         return item and SettingsManager:createMenuItem(plugin, item, SettingsSchema), item
     end
+    local function titleOf(mi, fallback)
+        return mi and (mi.text_func and mi.text_func() or mi.text) or fallback
+    end
     local function picker(label, items)
         plugin:showQuickSettingsPopup(label, ImageOptions.popupItems(items), true, rebuild)
     end
-    -- A schema radio row's options as radio items
-    local function radioItems(mi, enabled)
-        local out = {}
-        for _idx, sub in ipairs(mi and mi.sub_item_table or {}) do
-            local s = sub
-            local checked = s.checked_func and s.checked_func() or false
-            out[#out + 1] = {
-                text = s.text, checked = checked, enabled = enabled,
-                callback = function()
-                    if checked then return end
-                    s.callback()
-                    rebuild()
-                end,
-            }
+    -- The value a list stands on: its checked item's words
+    local function valueOf(items)
+        for _idx, it in ipairs(items or {}) do
+            if it.checked_func and it.checked_func() then
+                return shown(it.text or (it.text_func and it.text_func()) or "")
+            end
         end
-        return out
     end
     local rows = {}
 
-    -- For this picture
+    -- The picture's own: the note, and the entries the writer reads
     local mine = {}
     if spec.note then
         mine[#mine + 1] = {
@@ -114,60 +180,70 @@ function ImageOptions.rows(plugin, spec, rebuild)
             callback = function()
                 ImageGenerator.askNote(state.note, function(text)
                     state.note = text
+                    if type(spec.xray) == "table" then
+                        local left = ImageOptions.addNoteEntries(state, spec.xray, text, spec.passage)
+                        if #left > 0 then
+                            require("ui/uimanager"):show(require("ui/widget/infomessage"):new{
+                                text = T(_("Not added (the prompt writer reads %1 entries at most): %2"),
+                                    PromptWriter.ENTRIES_MAX, table.concat(left, ", ")),
+                                timeout = 3,
+                            })
+                        end
+                    end
                     rebuild()
                 end)
             end,
         }
     end
-    if type(spec.pickable) == "table" and #spec.pickable > 0 then
+    if type(spec.xray) == "table" and #PromptWriter.pickable(spec.xray) > 0 then
         mine[#mine + 1] = {
             id = "picks",
             text = ImageOptions.picksLabel(state.picked),
             -- only the prompt writer reads them
             enabled = not spec.writer or features.image_gen_writer ~= false,
             callback = function()
-                ImageGenerator.pickEntries(spec.pickable, state.picked, function(names)
-                    state.picked = names
-                    rebuild()
-                end)
+                ImageGenerator.pickEntries(
+                    PromptWriter.pickerTiers(spec.xray, spec.passage, state.note, state.picked),
+                    state.picked, function(names)
+                        state.picked = names
+                        rebuild()
+                    end)
             end,
         }
     end
     if #mine > 0 then
-        rows[#rows + 1] = { id = "picture", label = _("For this picture"), kind = "buttons", items = mine }
+        rows[#rows + 1] = { id = "picture", kind = "buttons", items = mine }
     end
 
-    -- Style: the styles, then Custom…, which asks for the reader's words
-    local styles = {}
-    for _idx, it in ipairs(plugin:imageStyleItems(rebuild) or {}) do
-        local s = it
-        local checked = s.checked_func and s.checked_func() or false
-        styles[#styles + 1] = {
-            text = shown(s.text or (s.text_func and s.text_func()) or ""),
-            checked = checked,
-            callback = function()
-                if s.opens_dialog then
-                    s.callback()
-                    return
-                end
-                if checked then return end
-                s.callback()
-                rebuild()
-            end,
+    -- Style on a row of its own (a typed style runs long), then Shape and
+    -- Detail; a tap opens the list (Style's Custom… asks for the reader's
+    -- words in a box of its own)
+    local style_mi = menuItem("image_gen_style")
+    local styles = plugin:imageStyleItems(rebuild) or {}
+    rows[#rows + 1] = { id = "style", gap = #rows > 0 or nil, kind = "buttons", items = { {
+        id = "style",
+        text = T(_("Style: %1 ▾"), valueOf(styles) or ""),
+        callback = function() picker(titleOf(style_mi, _("Style")), styles) end,
+    } } }
+    local look = {}
+    local shape_mi = menuItem("image_gen_shape")
+    if shape_mi then
+        look[#look + 1] = { id = "shape", text = T(_("Shape: %1 ▾"), valueOf(shape_mi.sub_item_table) or ""),
+            callback = function() picker(titleOf(shape_mi), shape_mi.sub_item_table) end }
+    end
+    local detail_mi = menuItem("image_gen_detail")
+    if detail_mi then
+        look[#look + 1] = {
+            id = "detail",
+            text = T(_("Detail: %1 ▾"), valueOf(detail_mi.sub_item_table) or ""),
+            -- grayed in place while the model in use has a single setting
+            enabled = not detail_mi.enabled_func or detail_mi.enabled_func() ~= false,
+            callback = function() picker(titleOf(detail_mi), detail_mi.sub_item_table) end,
         }
     end
-    rows[#rows + 1] = { id = "style", label = _("Style"), kind = "radio", columns = 2, items = styles }
+    rows[#rows + 1] = { id = "look", kind = "buttons", items = look }
 
-    local shape_mi = menuItem("image_gen_shape")
-    rows[#rows + 1] = { id = "shape", label = _("Shape"), kind = "radio", columns = 2,
-        items = radioItems(shape_mi, true) }
-    local detail_mi = menuItem("image_gen_detail")
-    local detail_on = not (detail_mi and detail_mi.enabled_func) or detail_mi.enabled_func()
-    rows[#rows + 1] = { id = "detail", label = _("Detail"), kind = "radio", columns = 3,
-        items = radioItems(detail_mi, detail_on) }
-
-    -- Drawn by: the provider and the model that draws, side by side, each
-    -- by its value alone (the label says what they are); a tap opens the
+    -- The provider and the model that draws, side by side; a tap opens the
     -- Settings row's picker, titled as Settings titles it
     local drawn = {}
     local provider_mi, provider_item = menuItem("image_gen_provider")
@@ -178,9 +254,8 @@ function ImageOptions.rows(plugin, spec, rebuild)
         for _idx, o in ipairs(provider_item.options or {}) do
             if o.value == value then text = o.text end
         end
-        local title = provider_mi.text_func and provider_mi.text_func() or provider_mi.text
-        drawn[#drawn + 1] = { id = "provider", text = text or tostring(value), callback = function()
-            picker(title, provider_mi.sub_item_table)
+        drawn[#drawn + 1] = { id = "provider", text = T(_("Provider: %1 ▾"), text or tostring(value)), callback = function()
+            picker(titleOf(provider_mi), provider_mi.sub_item_table)
         end }
     end
     local model_id = MODEL_ROW[drawing]
@@ -188,8 +263,8 @@ function ImageOptions.rows(plugin, spec, rebuild)
     if model_mi then
         local value = require("koassistant.request.model_lists").resolveImageModel(drawing,
             features["image_gen_model_" .. drawing])
-        local title = model_mi.text_func and model_mi.text_func() or model_mi.text
-        drawn[#drawn + 1] = { id = "model", text = value or title, callback = function()
+        local title = titleOf(model_mi)
+        drawn[#drawn + 1] = { id = "model", text = T(_("Model: %1 ▾"), value or ""), callback = function()
             local items
             if model_id == "image_gen_model_openrouter" then
                 items = plugin:openRouterImageModelItems(rebuild)
@@ -199,7 +274,7 @@ function ImageOptions.rows(plugin, spec, rebuild)
             picker(title, items)
         end }
     end
-    rows[#rows + 1] = { id = "drawn", label = _("Drawn by"), kind = "buttons", items = drawn }
+    rows[#rows + 1] = { id = "drawn", kind = "buttons", items = drawn }
 
     if spec.writer then
         local writer_mi = menuItem("image_gen_writer")
@@ -217,12 +292,13 @@ function ImageOptions.rows(plugin, spec, rebuild)
     return rows
 end
 
---- Show the popup. spec = { title, subtitle (a gray line under the title: the
---- passage), writer (the Write the prompt with AI row), note (the note row),
---- pickable (the picks row's entries), state = { note, picked },
---- actions = { { text, callback }, ... } (each closes the popup first) }.
---- plugin = the KOAssistant instance (its settings, the quick-settings popup
---- and the Style and OpenRouter pickers). Returns the shown window.
+--- Show the popup. spec = { title, passage (the selection, shown in gray under
+--- the title and read for the entry suggestions), writer (the Write the prompt
+--- with AI row), note (the note), xray (the parsed X-Ray whose entries can be
+--- picked), state = { note, picked }, actions = { { text, callback }, ... }
+--- (each closes the popup first) }. plugin = the KOAssistant instance (its
+--- settings, the quick-settings popup and the Style and OpenRouter pickers).
+--- Returns the shown window.
 function ImageOptions.show(plugin, spec)
     local UIManager = require("ui/uimanager")
     local Blitbuffer = require("ffi/blitbuffer")
@@ -235,16 +311,20 @@ function ImageOptions.show(plugin, spec)
     local GestureRange = require("ui/gesturerange")
     local InputContainer = require("ui/widget/container/inputcontainer")
     local MovableContainer = require("ui/widget/container/movablecontainer")
-    local RadioButtonTable = require("ui/widget/radiobuttontable")
     local ScrollableContainer = require("ui/widget/container/scrollablecontainer")
     local Size = require("ui/size")
-    local TextWidget = require("ui/widget/textwidget")
+    local TextBoxWidget = require("ui/widget/textboxwidget")
     local TitleBar = require("ui/widget/titlebar")
     local VerticalGroup = require("ui/widget/verticalgroup")
     local VerticalSpan = require("ui/widget/verticalspan")
     local Screen = require("device").screen
     spec = spec or {}
     spec.state = spec.state or {}
+    -- The passage as shown: on one line of words, quoted
+    local passage
+    if type(spec.passage) == "string" and spec.passage:match("%S") then
+        passage = "\u{201C}" .. shown(spec.passage, PASSAGE_MAX) .. "\u{201D}"
+    end
 
     local Device = require("device")
     local current, first_frame_h, scrolled
@@ -252,8 +332,7 @@ function ImageOptions.show(plugin, spec)
         local screen_w, screen_h = Screen:getWidth(), Screen:getHeight()
         local dialog_w = math.floor(math.min(screen_w, screen_h) * 0.8)
         local content_w = dialog_w - 2 * Size.padding.large
-        local label_face = Font:getFace("cfont", 18)
-        local radio_face = Font:getFace("cfont", 20)
+        local check_face = Font:getFace("cfont", 20)
         local info_face = Font:getFace("cfont", 16)
         -- The window first: every widget in it repaints through it, so a row
         -- of the scrolled layout is cropped by the scroll
@@ -270,67 +349,56 @@ function ImageOptions.show(plugin, spec)
         -- The rows at a width: the column's, or narrower beside a scrollbar
         local function body(width)
             local vgroup = VerticalGroup:new{ align = "left" }
-            local function addLabel(text)
+            -- The passage in gray, up to four lines, then an ellipsis: what is
+            -- drawn, never the line that makes the popup scroll
+            if passage then
                 table.insert(vgroup, VerticalSpan:new{ width = Size.padding.default })
-                table.insert(vgroup, TextWidget:new{
-                    text = text, face = label_face, bold = true, fgcolor = Blitbuffer.COLOR_DARK_GRAY,
-                })
-                table.insert(vgroup, VerticalSpan:new{ width = Size.padding.small })
-            end
-            -- The passage on one line, cut with an ellipsis: a reminder of what
-            -- is drawn, never the line that makes the popup scroll
-            if type(spec.subtitle) == "string" and spec.subtitle ~= "" then
-                table.insert(vgroup, VerticalSpan:new{ width = Size.padding.default })
-                table.insert(vgroup, TextWidget:new{
-                    text = spec.subtitle, face = info_face, max_width = width,
+                local box = TextBoxWidget:new{
+                    text = passage, face = info_face, width = width,
                     fgcolor = Blitbuffer.COLOR_DARK_GRAY,
+                }
+                local max_h = PASSAGE_LINES * box:getLineHeight()
+                if box:getSize().h > max_h then
+                    box:free()
+                    box = TextBoxWidget:new{
+                        text = passage, face = info_face, width = width,
+                        fgcolor = Blitbuffer.COLOR_DARK_GRAY,
+                        height = max_h, height_overflow_show_ellipsis = true,
+                    }
+                end
+                table.insert(vgroup, box)
+            end
+            -- Rows of buttons in one table, in the creation form's smaller
+            -- type; a gap starts another table below a space
+            local pending = {}
+            local function flush()
+                if #pending == 0 then return end
+                table.insert(vgroup, VerticalSpan:new{ width = Size.padding.default })
+                table.insert(vgroup, ButtonTable:new{
+                    width = width, buttons = pending, zero_sep = true, show_parent = window,
                 })
+                pending = {}
             end
             for _idx, row in ipairs(rows) do
-                if row.label then addLabel(row.label) end
-                if row.kind == "radio" then
-                    local layout, line = {}, {}
+                if row.kind == "buttons" and #row.items > 0 then
+                    if row.gap then flush() end
+                    local line = {}
                     for _j, it in ipairs(row.items) do
-                        line[#line + 1] = { text = it.text, checked = it.checked, enabled = it.enabled ~= false, entry = it }
-                        if #line == row.columns then
-                            layout[#layout + 1] = line
-                            line = {}
-                        end
+                        line[#line + 1] = { text = it.text, id = it.id, enabled = it.enabled ~= false,
+                            callback = it.callback, font_size = 16, font_bold = false }
                     end
-                    if #line > 0 then layout[#layout + 1] = line end
-                    table.insert(vgroup, RadioButtonTable:new{
-                        radio_buttons = layout,
-                        width = width,
-                        no_sep = true,
-                        sep_width = 0,
-                        face = radio_face,
-                        show_parent = window,
-                        parent = window,
-                        button_select_callback = function(btn)
-                            if btn.enabled == false then return end
-                            btn.entry.callback()
-                        end,
-                    })
-                elseif row.kind == "buttons" then
-                    local buttons, line = {}, {}
-                    for _j, it in ipairs(row.items) do
-                        line[#line + 1] = { text = it.text, id = it.id, enabled = it.enabled ~= false, callback = it.callback }
-                    end
-                    if #line > 0 then buttons[#buttons + 1] = line end
-                    if #buttons > 0 then
-                        table.insert(vgroup, ButtonTable:new{
-                            width = width, buttons = buttons, zero_sep = true, show_parent = window,
-                        })
-                    end
+                    pending[#pending + 1] = line
                 elseif row.kind == "check" then
+                    flush()
                     table.insert(vgroup, VerticalSpan:new{ width = Size.padding.default })
                     table.insert(vgroup, CheckButton:new{
-                        text = row.item.text, checked = row.item.checked, face = radio_face,
+                        text = row.item.text, checked = row.item.checked, face = check_face,
                         width = width, parent = window, show_parent = window,
                         callback = row.item.callback,
                     })
                 end
             end
+            flush()
             table.insert(vgroup, VerticalSpan:new{ width = Size.padding.default })
             return vgroup
         end
@@ -366,8 +434,8 @@ function ImageOptions.show(plugin, spec)
             show_parent = window,
             close_callback = function() UIManager:close(window) end,
         }
-        -- Taller than the screen (a landscape screen): the rows scroll, the
-        -- title and the buttons that draw stay
+        -- Taller than the screen (a small screen held sideways): the rows
+        -- scroll, the title and the buttons that draw stay
         local fixed_h = title_bar:getSize().h + (actions and actions:getSize().h or 0) + 2 * Size.padding.default
         local max_body = math.floor(screen_h * 0.98) - fixed_h
         local body_h = vgroup:getSize().h

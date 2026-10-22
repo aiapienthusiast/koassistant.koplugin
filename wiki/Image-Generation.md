@@ -5,11 +5,12 @@ KOAssistant can turn a passage you highlight, or an entry of a book's X-Ray, int
 ## Generating an image
 
 1. Highlight a passage of any length.
-2. In the highlight menu, tap **Generate Image (KOA)**. A popup opens with the passage at the top and what the picture is drawn with, then **Generate** at the foot:
-   - **For this picture**: **Add a note…** asks what the picture should show, or how ("from behind", "at night, one lit window"). **Pick X-Ray entries…** (when the book has an X-Ray) lists its people and places, people first, with a search; tap an entry to mark it (or clear it), up to five, then **Done**. The prompt writer reads the picked entries first, for a passage that does not name them ("she", "the old man"), so the row is grayed while **Write the prompt with AI** is off. The note and the picks go with this picture only; the next one starts without them. In the highlight input dialog, whatever you typed is the note.
-   - **Style**, **Shape** and **Detail** as choices to tap, then **Drawn by**: the provider and the model (tap either to change it), and **Write the prompt with AI**. A change there is the setting itself, the same as in Settings → Advanced → Image Generation, so the next picture starts with it.
+2. In the highlight menu, tap **Generate Image (KOA)**. A popup opens with the passage at the top (up to four lines) and what the picture is drawn with, then **Generate** at the foot:
+   - **Add a note…** opens a box for what the picture should show, or how ("from behind", "at night, one lit window").
+   - **X-Ray entries: …** (when the book has an X-Ray) names the entries the prompt writer will read, at first the ones the passage names; a note that names someone puts them first (taking the place of the passage's own when the list is full). Tap it to change the list: the entries on it come first, ticked, then **Suggested** (entries the passage names by one word of their name, such as a first name alone), then every other entry under its category, with a search. Tap an entry to tick or clear it, up to five, and close the list to keep it. The button is grayed while **Write the prompt with AI** is off, since only the writer reads entries.
+   - **Style**, **Shape**, **Detail**, **Provider** and **Model**, each a button with its name and value (**Style: Book illustration ▾**): tap one for its choices. **Write the prompt with AI** below them. A change there is the setting itself, the same as in Settings → Advanced → Image Generation, so the next picture starts with it.
 
-   Long-press the button for **Generate now**, which draws at once with the settings as they are, without the popup.
+   The note and the entries go with this picture only; the next one starts afresh. In the highlight input dialog, whatever you typed is the note. A long-press on the button has the menu rows (remove it, move it) and no way to draw: what a picture is drawn with is all in the popup.
 3. By default your chat provider's fast model first writes the image prompt from the passage and what surrounds it ([the prompt writer](#the-prompt-writer), below); the progress window shows "Writing the prompt with … / …", then "Generating image with … / …", with an elapsed-seconds counter. **Stop** cancels whichever request is in flight.
 4. The finished image opens full screen in KOReader's image viewer, and is saved (below). Its caption (the triangle in the title bar) starts with who wrote the prompt and from what (when the prompt writer ran), then the prompt itself, cut short (the gallery's hold shows it whole). If the provider refuses the prompt or the request fails, an error message shows instead and nothing is saved. A refusal says why when the provider gives a reason: Google's safety filter and the reason it names, or OpenAI's moderation and whether it refused the prompt or the picture.
 
@@ -37,7 +38,7 @@ Image models draw what a prompt describes, and a passage from the middle of a bo
 - the passage (the picture shows it),
 - your note, when you add one (it is followed),
 - a short slice of the text around the passage (the side after it cut the way chat's context is),
-- the entries of this book's X-Ray that you picked, or that the passage or your note names, up to five, your picks first, then those your note names (so naming a character in the note helps a passage that only says "she"), with their descriptions as of the X-Ray you have installed (so nothing from further ahead than it), found by the same matching the X-Ray marks use,
+- the entries of this book's X-Ray on the popup's list, up to five: at first the ones the passage or your note names (so naming a character in the note helps a passage that only says "she"), then as you change it, with their descriptions as of the X-Ray you have installed (so nothing from further ahead than it), found by the same matching the X-Ray marks use,
 - the book's title and author, as far as Book info allows,
 - the book's Background (Book Settings), and
 - the Style and the Shape below; on a black-and-white screen it is also told the picture is for e-ink (clear shapes, strong contrast).
@@ -74,7 +75,7 @@ Generated images are kept, not temporary, in `koassistant_images` under KOReader
 
 ## The gallery
 
-A picture remembers the X-Ray entries it shows: the entry it was drawn from (Illustrate), or the entries the passage, your note and your picks name (found on the device, also with the prompt writer off; nothing is sent for it). An entry's **More…** then has **Pictures (N)…** beside **Illustrate…**: the gallery opened on that entry's pictures, newest first. A picture of an entry that was renamed or merged into another still shows there, since the old name stays one of its names.
+A picture remembers the X-Ray entries it shows: the entry it was drawn from (Illustrate), the entries on the popup's list that the prompt writer read, or with the writer off the ones the passage and your note name (found on the device; nothing is sent for it). An entry's **More…** then has **Pictures (N)…** beside **Illustrate…**: the gallery opened on that entry's pictures, newest first. A picture of an entry that was renamed or merged into another still shows there, since the old name stays one of its names.
 
 Open it from **Settings → Advanced → Image Generation → Generated images…** or the artifact browser's **Browse by type… → Generated Images**, or from any View Artifacts surface (below), which opens the book's own images. When your images come from more than one place (two books, or a book and outside one), the gallery first lists **All images**, then each book (the one with the newest image first), then **Without a book** (images made outside a book, or whose book was deleted), each with its count; tap one to see its images.
 

@@ -676,7 +676,13 @@ function XrayMarks._scanTick(plugin, pageno, token)
     local time = require("ui/time")
     local t0 = time.now()
     ensureIndex(plugin, pageno)
-    if not st.entities or #st.entities == 0 then return end
+    if not st.entities or #st.entities == 0 then
+      -- Nothing to mark (an X-Ray deleted under the page, refresh): what
+      -- was drawn goes
+      if st.paint_boxes and ui.dialog then UIManager:setDirty(ui.dialog, "ui") end
+      st.page_marks, st.paint_boxes, st.full_refresh = nil, nil, nil
+      return
+    end
     local idx_ms = time.to_ms(time.now() - t0)
     local doc = ui.document
     local total = doc.info and doc.info.number_of_pages or pageno
@@ -710,6 +716,9 @@ function XrayMarks._scanTick(plugin, pageno, token)
     if #marks > 0 then
       st.page_marks = dedupeMarks(marks)
       st.paint_boxes = mergeLineBoxes(st.page_marks)
+    else
+      -- (a refresh keeps the old marks drawn until here)
+      st.page_marks, st.paint_boxes = nil, nil
     end
     -- Timing line (the device-slowness arbiter): dbg level, and COUNTS,
     -- never the entity names (book content stays out of crash.log)
@@ -829,6 +838,29 @@ function XrayMarks.tapTarget(plugin, ges)
     end
   end
   return nil
+end
+
+--- The X-Ray changed under the open page (a name added, renamed or set to
+--- capitals, an entry merged or deleted, a write): the index reloads and the
+--- page scans again, the marks drawn staying until the new ones land (one
+--- repaint, no blink). Nothing while the marks are off: sync's teardown
+--- would stop the name index's background pass, which Mentions and Chapter
+--- Appearances may have queued.
+function XrayMarks.refresh(plugin)
+  local ui = plugin and plugin.ui
+  if not (st and ui and ui.document and ui.rolling and ui.document.file == st.file) then return end
+  st.stamps = nil
+  st.artifact_key = nil
+  st.page_memo, st.page_memo_order = nil, nil
+  st.full_refresh = true
+  local okp, pageno = pcall(ui.document.getCurrentPage, ui.document)
+  if not (okp and pageno) then return end
+  -- (a search session or the scroll view: the tick stands down itself)
+  st.scan_token = (st.scan_token or 0) + 1
+  local token = st.scan_token
+  UIManager:scheduleIn(SCAN_SETTLE_S, function()
+    XrayMarks._scanTick(plugin, pageno, token)
+  end)
 end
 
 --- Install/refresh/remove per settings + book state. Call on reader ready,

@@ -873,6 +873,16 @@ function ActionCache.getXrayCache(document_path)
     return ActionCache.get(document_path, ActionCache.XRAY_CACHE_KEY)
 end
 
+-- What a book's X-Ray matches changed (its live X-Ray written or deleted, a
+-- name the reader added, renamed, set to capitals or left unmatched): main.lua
+-- sets ActionCache.on_xray_edited, which redraws the open page's underlines
+-- now instead of at the next page turn
+local function notifyEdited(document_path)
+    if type(ActionCache.on_xray_edited) == "function" then
+        pcall(ActionCache.on_xray_edited, document_path)
+    end
+end
+
 --- Save X-Ray to reusable cache
 --- @param document_path string The document file path
 --- @param result string The X-Ray text
@@ -891,6 +901,7 @@ function ActionCache.setXrayCache(document_path, result, progress_decimal, metad
             and not ActionCache.suppress_write_hook then
         pcall(ActionCache.on_live_xray_written, document_path)
     end
+    if ok then notifyEdited(document_path) end
     return ok
 end
 
@@ -962,6 +973,7 @@ function ActionCache.deleteXray(document_path, opts)
     if not opts.keep_versions then
         ActionCache.clearXrayCheckpoints(document_path)
     end
+    notifyEdited(document_path)
     return true
 end
 
@@ -1236,6 +1248,7 @@ function ActionCache.setUserAliases(document_path, aliases_table)
     -- If nothing left, remove the file
     if not next(aliases_table) then
         os.remove(path)
+        notifyEdited(document_path)
         return true
     end
 
@@ -1327,6 +1340,7 @@ function ActionCache.setUserAliases(document_path, aliases_table)
     file:close()
 
     logger.dbg("KOAssistant ActionCache: Saved user aliases for", document_path)
+    notifyEdited(document_path)
     return true
 end
 

@@ -77,7 +77,7 @@ The action's own settings still apply: an action that turns reasoning off, or al
 - **Edit…** opens the settings editor of a built-in action, or the full editor of your own. For an action from `custom_actions.lua` it reads **Edit (custom_actions.lua)…** and reminds you to edit the file.
 - **More…** holds **Other placements…** (the action's details screen, with every placement button), **Duplicate as custom action…** (not for X-Ray, whose result needs the X-Ray browser), and **Reset to default** for a built-in you have changed. When only one of these applies, it shows directly instead.
 
-Look up in X-Ray, Generate Image and the model button run handlers of their own: their menu has the placement rows, with no Edit and no Duplicate. Generate Image has one run button, **Generate now**: a tap opens its popup (a note, X-Ray entries, the style and the rest), and this draws at once with the settings as they are ([Image Generation](Image-Generation)); the other two have none.
+Look up in X-Ray, Generate Image and the model button run handlers of their own: their menu has the placement rows, with no Edit and no Duplicate, and no run buttons. Generate Image's choices are all in the popup its tap opens (a note, X-Ray entries, the style and the rest: [Image Generation](Image-Generation)), as an action's with a scope popup are.
 
 A long-press on **Send** (in an input dialog, the reply window, or a chat about an artifact) offers the model buttons, **No reasoning** and **More models…** for that message and the rest of the chat: see [Contexts and Chat](Contexts-and-Chat#managing-the-input-dialog). To make a model a favorite, long-press it in any model list; ♥ marks favorites ([Providers and Models](Providers-and-Models#favorite-models)).
 

@@ -7685,6 +7685,32 @@ function AskGPT:_installGroupSeedingHooks()
     -- bring back what the book no longer takes from them
     self_ref:_scheduleCarryRefresh(file)
   end
+  -- An edit of the open book's X-Ray (a name added, renamed, set to
+  -- capitals or left unmatched; an entry merged, moved or deleted) shows in
+  -- the underlines at once, not at the next page turn
+  ActionCache.on_xray_edited = function(file)
+    self_ref:_refreshMarksSoon(file)
+  end
+end
+
+--- The open book's underlines redrawn shortly after its X-Ray changed: one
+--- redraw for the writes of one edit (an alias and the X-Ray, a rename's
+--- two files), none for another book's, none while the marks are off.
+function AskGPT:_refreshMarksSoon(file)
+  local doc = self.ui and self.ui.document
+  if not (doc and type(file) == "string"
+      and require("koassistant.storage.doc_settings").samePath(doc.file, file)) then
+    return
+  end
+  if self._marks_refresh_fn then UIManager:unschedule(self._marks_refresh_fn) end
+  local self_ref = self
+  self._marks_refresh_fn = function()
+    self_ref._marks_refresh_fn = nil
+    if self_ref.ui and self_ref.ui.document then
+      require("koassistant.xray.xray_marks").refresh(self_ref)
+    end
+  end
+  UIManager:scheduleIn(0.2, self._marks_refresh_fn)
 end
 
 --- Debounced automatic seeding of a group's carried lists (S4): every
@@ -7752,7 +7778,8 @@ function AskGPT:_runCarryRefreshSoon()
       end
     end
     ActionCache.suppress_write_hook = false
-    if wrote > 0 and self_ref.syncXrayMarks then pcall(function() self_ref:syncXrayMarks() end) end
+    -- (another group book's X-Ray may feed the open page's marks too)
+    if wrote > 0 then pcall(require("koassistant.xray.xray_marks").refresh, self_ref) end
   end
   UIManager:scheduleIn(2, self._reseed_fn)
 end
@@ -19969,8 +19996,7 @@ function AskGPT:registerHighlightMenuActions()
         reader_highlight_instance:onClose()
 
         if action.local_handler then
-          -- Local actions don't need network (a run option reaches them too:
-          -- Generate Image's "Generate now")
+          -- Local actions don't need network
           self:updateConfigFromSettings()
           self:executeQuickAction(action, selected_text, context, selection_data, sc_window, variant)
         else

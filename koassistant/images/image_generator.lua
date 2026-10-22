@@ -246,13 +246,15 @@ function ImageGenerator.providerFirst(plugin, on_ready)
     end)
 end
 
---- The note for one picture (S5, D9; the picture popup's Add a note…, B537).
+--- The note for one picture (S5, D9; the picture popup's Add a note…, B537):
+--- a box the size of the chat's, its example as the gray hint inside it.
 --- on_ok(text), or on_ok(nil) when the note was left empty (the picture goes
 --- without one); Cancel does nothing. opts.confirm_text names the button.
 function ImageGenerator.askNote(prefill, on_ok, opts)
     opts = opts or {}
     local UIManager = require("ui/uimanager")
     local InputDialog = require("ui/widget/inputdialog")
+    local Screen = require("device").screen
     local dialog
     local buttons = { {
         {
@@ -272,24 +274,26 @@ function ImageGenerator.askNote(prefill, on_ok, opts)
     } }
     dialog = InputDialog:new{
         title = _("Note for the picture"),
-        description = _("What the picture should show, or how. The prompt writer follows it; with the writer off, it is added to the prompt."),
         input = prefill or "",
+        input_hint = _("Details for the picture, e.g. at night, close up, in the rain"),
         allow_newline = true,
+        text_height = Screen:scaleBySize(96),
         buttons = buttons,
     }
     UIManager:show(dialog)
     dialog:onShowKeyboard()
 end
 
---- The X-Ray entries to give the prompt writer for a passage picture (B535),
---- picked by hand when the passage does not name them: the installed X-Ray's
---- people and places with a name search, each tap marks or clears one, five
---- at most (what the writer reads). Done hands the picks back in the order
---- picked; closing keeps the earlier picks.
---- @param rows table PromptWriter.pickable(data)
+--- The X-Ray entries the prompt writer reads for a passage picture (B535,
+--- B537): the reader's list, five at most. The ones picked first (at first
+--- those the passage and the note name), then the suggested ones, then every
+--- other entry under its category, with a name search; a tap marks or clears
+--- one, and the rows keep the places they opened in. Closing it (the X, Back)
+--- hands the list back in the order picked: there is no Done to find.
+--- @param tiers table PromptWriter.pickerTiers(...)
 --- @param picks table names picked so far
 --- @param on_done function(names)
-function ImageGenerator.pickEntries(rows, picks, on_done)
+function ImageGenerator.pickEntries(tiers, picks, on_done)
     local UIManager = require("ui/uimanager")
     local Menu = require("ui/widget/menu")
     local InfoMessage = require("ui/widget/infomessage")
@@ -306,42 +310,47 @@ function ImageGenerator.pickEntries(rows, picks, on_done)
     local function title()
         return T(_("Pick X-Ray entries (%1 of %2)"), #order, max)
     end
-    local function items()
-        local out = { {
-            text = _("Done"),
-            bold = true,
-            callback = function()
-                UIManager:close(menu)
-                on_done(order)
-            end,
-        } }
-        for _idx, row in ipairs(rows) do
-            local low = row.name:lower()
-            if not filter or low:find(filter, 1, true) then
+    local items
+    local function toggle(row)
+        local low = row.name:lower()
+        if chosen[low] then
+            chosen[low] = nil
+            for i = #order, 1, -1 do
+                if order[i]:lower() == low then table.remove(order, i) end
+            end
+        elseif #order >= max then
+            UIManager:show(InfoMessage:new{
+                text = T(_("The prompt writer reads %1 entries at most."), max),
+                timeout = 3,
+            })
+            return
+        else
+            chosen[low] = true
+            order[#order + 1] = row.name
+        end
+        menu:switchItemTable(title(), items(), -1)
+    end
+    items = function()
+        local out = {}
+        local function add(label, rows)
+            local shown = {}
+            for _idx, row in ipairs(rows or {}) do
+                if not filter or row.name:lower():find(filter, 1, true) then shown[#shown + 1] = row end
+            end
+            if #shown == 0 then return end
+            if label then out[#out + 1] = { text = label, bold = true, callback = function() end } end
+            for _idx, row in ipairs(shown) do
+                local r = row
                 out[#out + 1] = {
-                    text = (chosen[low] and "\u{2611} " or "\u{2610} ") .. row.name
-                        .. (row.role and (" \u{00B7} " .. row.role) or ""),
-                    callback = function()
-                        if chosen[low] then
-                            chosen[low] = nil
-                            for i = #order, 1, -1 do
-                                if order[i]:lower() == low then table.remove(order, i) end
-                            end
-                        elseif #order >= max then
-                            UIManager:show(InfoMessage:new{
-                                text = T(_("The prompt writer reads %1 entries at most."), max),
-                                timeout = 3,
-                            })
-                            return
-                        else
-                            chosen[low] = true
-                            order[#order + 1] = row.name
-                        end
-                        menu:switchItemTable(title(), items(), -1)
-                    end,
+                    text = (chosen[r.name:lower()] and "\u{2611} " or "\u{2610} ") .. r.name
+                        .. (r.role and (" \u{00B7} " .. r.role) or ""),
+                    callback = function() toggle(r) end,
                 }
             end
         end
+        add(nil, tiers.picked)
+        add(_("Suggested"), tiers.suggested)
+        for _idx, g in ipairs(tiers.groups or {}) do add(g.label, g.rows) end
         return out
     end
     menu = Menu:new{
@@ -355,12 +364,14 @@ function ImageGenerator.pickEntries(rows, picks, on_done)
             if item and item.callback then item.callback() end
             return true
         end,
+        close_callback = function() on_done(order) end,
         search_callback = function(search_string)
             filter = (type(search_string) == "string" and search_string ~= "") and search_string:lower() or nil
             menu:switchItemTable(title(), items(), 1)
         end,
     }
     UIManager:show(menu)
+    return menu
 end
 
 --- Resolve the image model: explicit per-provider setting (a retired id sent
@@ -1906,22 +1917,23 @@ function ImageGenerator._askAndRun(provider, description, config_table, settings
     local path = book_info and book_info.file
     -- The book's own installed X-Ray: the entries the passage or the reader's
     -- note names (the writer reads them, D10; B535: "this is X" brings X), or
-    -- the entry to draw; stored material, judged by the kinds it was built from
+    -- the reader's list from the picture popup (B537), or the entry to draw;
+    -- stored material, judged by the kinds it was built from
     local xray = path and require("koassistant.artifacts.action_cache").parsedXrayFor(path) or nil
     local entries = {}
     if writer_on and not opts.entry and xray then
         entries = PromptWriter.entriesFor(description, xray.data, nil, opts.note, opts.picked)
     end
     -- B486: what the picture shows, recorded with it (the entry drawn, or the
-    -- entries the passage, the note and the picks name; found with the writer
-    -- off too: a record on this device, nothing sent)
+    -- entries the writer read; with the writer off, the ones the passage and
+    -- the note name: a record on this device, nothing sent)
     local about
     if opts.entry then
         about = { opts.entry.name }
     elseif xray then
         about = {}
         local list = writer_on and entries
-            or PromptWriter.entriesFor(description, xray.data, nil, opts.note, opts.picked)
+            or PromptWriter.entriesFor(description, xray.data, nil, opts.note)
         for _idx, e in ipairs(list) do about[#about + 1] = e.name end
     end
     local stored = (#entries > 0) and xray.entry or nil

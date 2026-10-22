@@ -164,24 +164,60 @@ TestRunner:test("entriesFor: the note's entries come first (B535), never twice",
         "a note that names nobody adds nobody")
     TestRunner:assertEquals(#PromptWriter.entriesFor("Mara and Tom.", XRAY, 1, "the keeper"), 1, "the limit holds")
 end)
-TestRunner:test("pickable: the people, then the places, each by name (B535)", function()
-    local rows = PromptWriter.pickable(XRAY)
-    local names = {}
-    for _idx, r in ipairs(rows) do names[#names + 1] = r.name end
-    TestRunner:assertEquals(table.concat(names, "|"), "Elias Morrow|Mara|Tom|the Black Rocks")
-    TestRunner:assertEquals(rows[1].role, "Lighthouse keeper")
+TestRunner:test("pickable: each category the matcher reads, in the X-Ray's order, by name (B537)", function()
+    local groups = PromptWriter.pickable(XRAY)
+    local seen = {}
+    for _idx, g in ipairs(groups) do
+        local names = {}
+        for _j, r in ipairs(g.rows) do names[#names + 1] = r.name end
+        seen[#seen + 1] = g.label .. ": " .. table.concat(names, "|")
+    end
+    TestRunner:assertEquals(table.concat(seen, " / "),
+        "Cast: Elias Morrow|Mara|Tom / World: the Black Rocks / Ideas: Solitude", "no Story Arc")
+    TestRunner:assertEquals(groups[1].rows[1].role, "Lighthouse keeper")
     TestRunner:assertEquals(#PromptWriter.pickable(nil), 0)
 end)
-TestRunner:test("entriesFor: the reader's picks come first, in the order picked (B535)", function()
+TestRunner:test("entriesFor: the reader's list from the popup is the list (B537)", function()
     local list = PromptWriter.entriesFor("She ran down to the Black Rocks.", XRAY, nil,
         "this is Mara", { "Tom", "Elias Morrow" })
     local names = {}
     for _idx, e in ipairs(list) do names[#names + 1] = e.name end
-    TestRunner:assertEquals(table.concat(names, "|"), "Tom|Elias Morrow|Mara|the Black Rocks")
+    TestRunner:assertEquals(table.concat(names, "|"), "Tom|Elias Morrow",
+        "in the order picked; what the passage and the note name was on the list to clear")
     list = PromptWriter.entriesFor("Mara waved.", XRAY, nil, nil, { "Mara", "Nobody Here" })
-    TestRunner:assertEquals(#list, 1, "a pick the passage names too is listed once; an unknown pick is skipped")
-    TestRunner:assertEquals(#PromptWriter.entriesFor("Mara and Tom.", XRAY, 2, nil, { "the Black Rocks" }), 2,
+    TestRunner:assertEquals(#list, 1, "an unknown pick is skipped")
+    TestRunner:assertEquals(#PromptWriter.entriesFor("Mara waved.", XRAY, nil, nil, {}), 0,
+        "an emptied list sends none")
+    TestRunner:assertEquals(#PromptWriter.entriesFor("Mara and Tom.", XRAY, 2, nil, { "the Black Rocks", "Tom", "Mara" }), 2,
         "the limit holds")
+end)
+TestRunner:test("pickerTiers: the picked, then the suggested, then the rest by category (B537)", function()
+    local function names(rows)
+        local out = {}
+        for _idx, r in ipairs(rows) do out[#out + 1] = r.name end
+        return table.concat(out, "|")
+    end
+    local tiers = PromptWriter.pickerTiers(XRAY, "Elias waved to Tom from the Black Rocks.", nil, { "the Black Rocks" })
+    TestRunner:assertEquals(names(tiers.picked), "the Black Rocks")
+    TestRunner:assertEquals(names(tiers.suggested), "Tom|Elias Morrow",
+        "named and not picked, then by one word of the name, as a lookup of \"Elias\" finds him")
+    TestRunner:assertEquals(#tiers.groups, 2)
+    TestRunner:assertEquals(tiers.groups[1].label .. ": " .. names(tiers.groups[1].rows), "Cast: Mara",
+        "the rest, without the ones above")
+    TestRunner:assertEquals(tiers.groups[2].label, "Ideas", "a category left empty is gone")
+    tiers = PromptWriter.pickerTiers(XRAY, "She looked up.", "Mara at dusk", nil)
+    TestRunner:assertEquals(names(tiers.suggested), "Mara", "the note's names too")
+    tiers = PromptWriter.pickerTiers(XRAY, "elias waved", nil, nil)
+    TestRunner:assertEquals(#tiers.suggested, 0, "a word without its capital proposes nothing")
+    local houses = { type = "fiction", characters = {
+        { name = "House Arden" }, { name = "House Blane" }, { name = "House Corr" }, { name = "House Dale" },
+        { name = "Arden Vey" },
+    } }
+    tiers = PromptWriter.pickerTiers(houses, "House Arden rode out.", nil, {})
+    TestRunner:assertEquals(names(tiers.suggested), "House Arden|Arden Vey",
+        "named in full, then Arden; House, which four entries share, proposes nothing")
+    tiers = PromptWriter.pickerTiers(XRAY, nil, nil, { "Gone Now" })
+    TestRunner:assertEquals(names(tiers.picked), "Gone Now", "a pick the X-Ray no longer has stays to clear")
 end)
 TestRunner:test("entriesFor: five at most", function()
     local data = { type = "fiction", characters = {} }
