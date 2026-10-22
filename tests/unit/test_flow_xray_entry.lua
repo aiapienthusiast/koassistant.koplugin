@@ -9,6 +9,9 @@
 --   * B535: Illustrate… opens the image settings panel; Illustrate with a
 --     note… asks for the note and draws the entry with it
 --   * B535: a note that names an entry brings it to the prompt writer
+--   * Merge with another entry…: the entry page stays under the pick (Cancel,
+--     Back and a tap outside land on it); a merge, by hand or by the AI,
+--     lands on the kept entry
 --
 -- Run: lua tests/unit/test_flow_xray_entry.lua  (or lua tests/run_tests.lua --unit)
 
@@ -417,6 +420,153 @@ TestRunner:test("a rebuild that names the entry as the AI did gets the reader's 
     TestRunner:assertTrue(table.concat(gil.aliases, ","):find("Rook the Younger", 1, true) ~= nil,
         "the reader's other typed names as aliases")
     TestRunner:assertEqual(XrayParser.keepRenames(rebuilt, records), 0, "an update that carried it: nothing to do")
+end)
+
+print("")
+print("  [Merge with another entry]")
+
+-- The duplicate flow seeded from an entry, on an in-memory disk copy; the
+-- entry page is a shown widget, so the test sees whether it stays
+local UIManager = require("ui/uimanager")
+local function mergeHarness()
+    local data, file = KoaMock.xray("Mock Series 3")
+    local h = { disk = KoaMock.xray("Mock Series 3"), writes = 0 }
+    local WriteBack = require("koassistant.xray.artifact_writeback")
+    local saved_cache, saved_get, saved_set = ActionCache.getXrayCache, ActionCache.getUserAliases,
+        ActionCache.setUserAliases
+    local saved_ladder, saved_never, saved_commit = ActionCache.getXrayLadder, ActionCache.addNeverMergePair,
+        WriteBack.commitXray
+    ActionCache.getXrayCache = function()
+        return { result = XrayParser.serialize(h.disk), progress_decimal = 0.5 }
+    end
+    ActionCache.getUserAliases = function() return {} end
+    ActionCache.setUserAliases = function() return true end
+    ActionCache.getXrayLadder = function() return {} end
+    ActionCache.addNeverMergePair = function() h.never = true end
+    WriteBack.commitXray = function(_file, json_text)
+        h.disk = XrayParser.parse(json_text)
+        h.writes = h.writes + 1
+        return true
+    end
+    local b = browser(data, file)
+    b.reloadLiveMain = function(self)
+        self.xray_data = XrayParser.parse(XrayParser.serialize(h.disk))
+        return true
+    end
+    b._rebuildToDetail = function(_self, cat, name) h.rebuilt = cat .. "/" .. name end
+    -- the entry page: closes like the TextViewer it is
+    h.page = { onClose = function(w) UIManager:close(w) end }
+    h.b = b
+    function h.open()
+        ui.stack = {}
+        UIManager:show(h.page)
+        b._detail_viewer = h.page
+        b:_showEntityManagePopup(entry(b.xray_data, "characters", "Gil Rook"), "characters",
+            "Gil Rook", nil, nil, h.page, true, {})
+        ui:tap("Merge with another entry…")
+    end
+    function h.restore()
+        ActionCache.getXrayCache, ActionCache.getUserAliases = saved_cache, saved_get
+        ActionCache.setUserAliases, ActionCache.getXrayLadder = saved_set, saved_ladder
+        ActionCache.addNeverMergePair, WriteBack.commitXray = saved_never, saved_commit
+    end
+    return h
+end
+local PICK = "Pick the entry to pair with \"Gil Rook\""
+
+TestRunner:test("the entry page stays under the pick: Cancel, Back and a tap outside land on it", function()
+    local h = mergeHarness()
+    local ok, err = pcall(function()
+        h.open()
+        local pick = ui:top()
+        TestRunner:assertEqual(pick.title, PICK)
+        TestRunner:assertTrue(UIManager:isWidgetShown(h.page), "the entry page is still open")
+        TestRunner:assertTrue(ui:has("Jory", pick) and not ui:has("Gil Rook", pick), rowsOf(pick))
+        ui:tap("Cancel", pick)
+        TestRunner:assertTrue(ui:top() == h.page, "Cancel: the entry page")
+        -- the pair's Back and a tap outside it: the pick again, never the duplicates list
+        h.open()
+        ui:tap("Jory")
+        TestRunner:assertTrue(ui:has("Merge: keep \"Gil Rook\""), rowsOf())
+        ui:tap("Back")
+        TestRunner:assertEqual(ui:top().title, PICK)
+        ui:tap("Jory")
+        ui:tapOutside()
+        TestRunner:assertEqual(ui:top().title, PICK)
+        ui:tap("Cancel")
+        TestRunner:assertTrue(ui:top() == h.page and h.writes == 0, "nothing written, the page on top")
+        -- Never suggest: remembered, and back on the page
+        h.open()
+        ui:tap("Jory")
+        ui:tap("Never suggest this pair")
+        ui:tap("Never merge")
+        TestRunner:assertTrue(h.never, "the pair remembered")
+        TestRunner:assertTrue(UIManager:isWidgetShown(h.page) and h.rebuilt == nil, "the page stays")
+        TestRunner:assertTrue(not tostring(ui:top().title or ""):find("Possible duplicate", 1, true),
+            "no duplicates list")
+    end)
+    h.restore()
+    if not ok then error(err, 0) end
+end)
+
+TestRunner:test("a merge lands on the kept entry", function()
+    local h = mergeHarness()
+    local ok, err = pcall(function()
+        h.open()
+        ui:tap("Jory")
+        ui:tap("Merge: keep \"Gil Rook\"")
+        TestRunner:assertEqual(h.writes, 1, "the merge written")
+        TestRunner:assertTrue(not UIManager:isWidgetShown(h.page), "the old page closed")
+        TestRunner:assertEqual(h.rebuilt, "characters/Gil Rook", "rebuilt onto the kept entry")
+        local gil = entry(h.b.xray_data, "characters", "Gil Rook")
+        TestRunner:assertTrue(table.concat(gil.aliases or {}, ","):find("Jory", 1, true) ~= nil,
+            "Jory is one of his names now")
+        for _idx, w in ipairs(ui.stack) do
+            TestRunner:assertTrue(not tostring(w.title or ""):find("Possible duplicate", 1, true),
+                "no duplicates list")
+        end
+    end)
+    h.restore()
+    if not ok then error(err, 0) end
+end)
+
+TestRunner:test("an AI merge lands on the kept entry; one the AI declines leaves the page", function()
+    local XrayMerge = require("koassistant.xray.xray_merge")
+    local saved_access, saved_cfg = XrayMerge.withDataAccess, XrayMerge.buildHeadlessConfig
+    local saved_dialogs = package.loaded["koassistant.ui.dialogs"]
+    local answer
+    XrayMerge.withDataAccess = function(_opts, _books, _name, run) run({ features = features }) end
+    XrayMerge.buildHeadlessConfig = function() return {}, {} end
+    package.loaded["koassistant.ui.dialogs"] = {
+        executeActionForResult = function(_action, _text, _ui, _config, _plugin, _bm, done) done(answer) end,
+    }
+    local AI_ROW = "AI merge: combined description, keep \"Gil Rook\""
+    local ok, err = pcall(function()
+        local h = mergeHarness()
+        local ok2, err2 = pcall(function()
+            answer = "DIFFERENT ENTITIES\nA grafter and a boy who share an orchard."
+            h.open()
+            ui:tap("Jory")
+            ui:tap(AI_ROW)
+            ui:tap("Not now")
+            TestRunner:assertTrue(h.writes == 0 and h.rebuilt == nil, "declined: nothing written or rebuilt")
+            TestRunner:assertTrue(UIManager:isWidgetShown(h.page), "the page stays")
+            answer = "A grafter of the orchard, also called Jory."
+            h.open()
+            ui:tap("Jory")
+            ui:tap(AI_ROW)
+            TestRunner:assertEqual(h.writes, 1, "the merge written")
+            TestRunner:assertEqual(h.rebuilt, "characters/Gil Rook", "rebuilt onto the kept entry")
+            TestRunner:assertTrue(not UIManager:isWidgetShown(h.page), "the old page closed")
+            TestRunner:assertEqual(entry(h.b.xray_data, "characters", "Gil Rook").description,
+                "A grafter of the orchard, also called Jory.", "the combined description")
+        end)
+        h.restore()
+        if not ok2 then error(err2, 0) end
+    end)
+    XrayMerge.withDataAccess, XrayMerge.buildHeadlessConfig = saved_access, saved_cfg
+    package.loaded["koassistant.ui.dialogs"] = saved_dialogs
+    if not ok then error(err, 0) end
 end)
 
 -- ------------------------------------------------------------------ cleanup

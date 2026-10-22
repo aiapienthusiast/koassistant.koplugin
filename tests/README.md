@@ -414,6 +414,7 @@ local data, path = KoaMock.xray("Mock Series 3")
 ui:texts()                                  -- the top dialog's buttons
 ui:tap("Illustrate with a note…")           -- run that button's callback
 ui:type("at dusk"); ui:tap("Illustrate")    -- type into the note box, confirm
+ui:tapOutside()                             -- a tap outside the top dialog (or the Back key)
 ui:restore()                                -- at the end of the file
 ```
 

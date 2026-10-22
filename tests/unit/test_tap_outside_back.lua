@@ -122,7 +122,8 @@ local SITES = {
     { "koassistant/xray/xray_merge.lua", "buttons = chain_buttons,", 1, "back" },
     { "koassistant/xray/xray_merge.lua", 'other books with an X-Ray"), opts.title or "?")', 1, "XrayMerge.startCrossBookFlow(opts)" },
     -- Duplicates
-    { "koassistant/xray/xray_dedup.lua", "title = T(_(\"%1: %2\"), pair.cat_label, reasonLabel(pair.reason))", 1, "showList(false)" },
+    -- (back = the seeded pick for an entry's "Merge with another entry…", else the list)
+    { "koassistant/xray/xray_dedup.lua", "title = T(_(\"%1: %2\"), pair.cat_label, reasonLabel(pair.reason))", 1, "back" },
     { "koassistant/xray/xray_dedup.lua", 'title = _("Never-merge pairs: tap one to allow it again")', 1, "showList(false)" },
     -- Groups
     { "koassistant/books/book_groups_ui.lua", "tagged with the series \\\"%2\\\".\"),", 1, "done" },

@@ -805,8 +805,9 @@ local function commitEntityMerge(opts, state, pair, keep_side, merged_descriptio
 end
 
 --- Headless AI merge request (combined description), then the same commit.
---- on_finished(ok) — callers reopen the pair list only on success (a reopened
---- dialog would paint over the failure message).
+--- on_finished(ok, merged) — callers reopen the pair list only on success (a
+--- reopened dialog would paint over the failure message); merged = the
+--- entries were merged (a declined merge is ok without it).
 local function runAiMerge(opts, state, pair, keep_side, on_finished)
     local Dialogs = require("koassistant.ui.dialogs")
     local XrayMerge = require("koassistant.xray.xray_merge")
@@ -893,7 +894,7 @@ local function runAiMerge(opts, state, pair, keep_side, on_finished)
             else
                 UIManager:show(InfoMessage:new{ text = err, timeout = 4 })
             end
-            on_finished(ok)
+            on_finished(ok, ok)
         end)
 end
 
@@ -928,9 +929,11 @@ XrayDedup.snippet = snippet
 
 --- Entry point: scan → pair list → per-pair Merge / AI merge / Never.
 --- Operates on DISK truth (the caller closes any browser view first — a merge
---- rewrites the data such a view renders).
+--- rewrites the data such a view renders — or, seeded from an entry, keeps
+--- it and rebuilds in on_merged).
 --- @param opts table { file (required), ui, plugin, configuration (required),
----   title, author }
+---   title, author, close_browser, manual_seed = { cat_key, name },
+---   on_merged(keep_name) = a seeded merge landed }
 function XrayDedup.startFlow(opts)
     local ActionCache = require("koassistant.artifacts.action_cache")
     local XrayParser = require("koassistant.xray.xray_parser")
@@ -974,15 +977,24 @@ function XrayDedup.startFlow(opts)
         local rows = {}
         -- Failure paths show the error WITHOUT reopening the list — a
         -- reopened dialog would paint over the message (gate finding)
-        local function afterCommit(ok, err, success_text)
+        local function afterCommit(ok, err, success_text, keep_name)
             if ok then
                 UIManager:show(Notification:new{ text = success_text })
                 -- A Manage-seeded one-off ends here — the reader was never in
-                -- the scan list, so don't open one (2026-08-09)
-                if not opts.manual_seed then showList(true) end
+                -- the scan list, so don't open one (2026-08-09); the entry
+                -- page under the pick shows the kept entry instead
+                if not opts.manual_seed then
+                    showList(true)
+                elseif opts.on_merged then
+                    opts.on_merged(keep_name)
+                end
             else
                 UIManager:show(InfoMessage:new{ text = err, timeout = 4 })
             end
+        end
+        -- Back = where the pair came from: the seeded pick, or the list
+        local function back()
+            if opts.manual_seed then showManualPick(opts.manual_seed) else showList(false) end
         end
         local function mergeRow(keep_side)
             local keep_name = keep_side == "b" and pair.name_b or pair.name_a
@@ -993,7 +1005,7 @@ function XrayDedup.startFlow(opts)
                 callback = function()
                     UIManager:close(dialog)
                     local ok, err = commitEntityMerge(opts, state, pair, keep_side, nil)
-                    afterCommit(ok, err, T(_("Merged \"%1\" into \"%2\""), drop_name, keep_name))
+                    afterCommit(ok, err, T(_("Merged \"%1\" into \"%2\""), drop_name, keep_name), keep_name)
                 end,
             }}
         end
@@ -1050,7 +1062,7 @@ function XrayDedup.startFlow(opts)
                     local combined = XrayDedup.keepBothText(
                         keep_item.description, drop_item.description, drop_name)
                     local ok, err = commitEntityMerge(opts, state, pair, keep_side, combined)
-                    afterCommit(ok, err, T(_("Merged \"%1\" into \"%2\", both texts kept"), drop_name, keep_name))
+                    afterCommit(ok, err, T(_("Merged \"%1\" into \"%2\", both texts kept"), drop_name, keep_name), keep_name)
                 end,
             }}
         end
@@ -1063,7 +1075,7 @@ function XrayDedup.startFlow(opts)
                 callback = function()
                     UIManager:close(dialog)
                     local ok, err = commitEntityMerge(opts, state, pair, "a", nil)
-                    afterCommit(ok, err, T(_("Merged duplicate \"%1\""), pair.name_a))
+                    afterCommit(ok, err, T(_("Merged duplicate \"%1\""), pair.name_a), pair.name_a)
                 end,
             }}
             if AI_MERGE_CATEGORIES[pair.cat_key] then
@@ -1098,8 +1110,12 @@ function XrayDedup.startFlow(opts)
                         { { file = opts.file, title = opts.title, entry = entry or {} } },
                         _("AI merge"), function(run_cfg)
                             opts.configuration = run_cfg
-                            runAiMerge(opts, state, pair, "a", function(ok)
-                                if ok then showList(true) end
+                            runAiMerge(opts, state, pair, "a", function(ok, merged)
+                                if not opts.manual_seed then
+                                    if ok then showList(true) end
+                                elseif merged and opts.on_merged then
+                                    opts.on_merged(pair.name_a)
+                                end
                             end)
                         end)
                 end,
@@ -1122,7 +1138,7 @@ function XrayDedup.startFlow(opts)
                         UIManager:show(Notification:new{
                             text = T(_("\"%1\" and \"%2\" will stay separate"), pair.name_a, pair.name_b),
                         })
-                        showList(true)
+                        if not opts.manual_seed then showList(true) end
                     end,
                     cancel_callback = function()
                         showPairOptions(pair)
@@ -1134,7 +1150,7 @@ function XrayDedup.startFlow(opts)
             text = _("Back"),
             callback = function()
                 UIManager:close(dialog)
-                showList(false)
+                back()
             end,
         }}
         dialog = ButtonDialog:new{
@@ -1143,7 +1159,7 @@ function XrayDedup.startFlow(opts)
                 .. pair.name_b .. ": " .. snippet(pair.item_b),
             buttons = rows,
             -- A tap outside is Back (B360)
-            tap_close_callback = function() showList(false) end,
+            tap_close_callback = back,
         }
         UIManager:show(dialog)
     end

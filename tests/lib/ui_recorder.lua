@@ -13,6 +13,7 @@ runs the whole suite).
     ui:texts()               -- the top widget's buttons (or its text)
     ui:tap("Illustrate")     -- run that button's callback
     ui:type("at night")      -- what an InputDialog's getInputText returns
+    ui:tapOutside()          -- a tap outside the top dialog (or the Back key)
     ui:restore()
 ]]
 
@@ -128,6 +129,14 @@ end
 --- Type into an InputDialog (the top one by default).
 function R:type(text, w)
     (w or self:top())._typed = text
+end
+
+--- A tap outside a ButtonDialog (the top one by default), or the Back key:
+--- its tap_close_callback, then the close, as KOReader's onClose runs them.
+function R:tapOutside(w)
+    w = w or self:top()
+    if w.tap_close_callback then w.tap_close_callback() end
+    self.UIManager:close(w)
 end
 
 function R:restore()

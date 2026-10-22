@@ -3785,25 +3785,35 @@ function XrayBrowser:_showEntityManagePopup(item, category_key, title, source, n
     end
     -- Merge with another entry (2026-08-09 round): the dedup flow's manual
     -- picker, seeded with THIS entry — same keep/AI-merge options and the
-    -- same commit (+ ring archive). The browser unwinds to a fresh root
-    -- instead of closing (a merge rewrites the data the stacked pages hold);
-    -- the commit's reloadLiveMain then keeps that root honest.
+    -- same commit (+ ring archive). The entry page stays under the pick, so
+    -- Cancel and Back land on it; only a merge that lands rebuilds the
+    -- browser (it rewrote the data the stacked pages hold), onto the kept
+    -- entry, as rename and link do.
     if live_main and named and self.metadata.plugin then
         table.insert(buttons, {{
             text = _("Merge with another entry…"),
             callback = function()
                 UIManager:close(dialog)
-                self_ref:_dismissDetail(viewer)
-                self_ref:_unwindToRoot()
+                local book_file = self_ref.metadata.book_file
                 require("koassistant.xray.xray_dedup").startFlow({
-                    file = self_ref.metadata.book_file,
+                    file = book_file,
                     ui = self_ref.ui,
                     plugin = self_ref.metadata.plugin,
                     configuration = self_ref.metadata.configuration,
                     title = self_ref.metadata.title,
                     author = self_ref.metadata.book_author,
                     manual_seed = { cat_key = category_key, name = entry_name },
-                    close_browser = function() end, -- root stays; reloadLiveMain refreshes it
+                    on_merged = function(keep_name)
+                        -- Only while this browser still shows this book's
+                        -- live X-Ray (an AI merge lands seconds later); the
+                        -- reload reads the names the commit moved over
+                        if not self_ref:reloadLiveMain(book_file) then return end
+                        local shown = self_ref._detail_viewer
+                        if shown and UIManager:isWidgetShown(shown) then
+                            self_ref:_dismissDetail(shown)
+                        end
+                        self_ref:_rebuildToDetail(category_key, keep_name)
+                    end,
                 })
             end,
         }})
