@@ -106,6 +106,26 @@ function Attachments.clear()
     if #staged > 0 then staged = {} end
 end
 
+--- Whether an action takes no attachments (D12, B395 slice 5): one that
+--- writes an artifact, and the dictionary and translate family, whose
+--- answers are no chat about the attachment. Attachments ride a freeform
+--- Send and plain actions only. Pure.
+function Attachments.skippedBy(action)
+    return type(action) == "table" and (action.use_response_caching or action.cache_as_xray
+        or action.cache_as_analyze or action.cache_as_summary or action.dictionary_view
+        or action.translate_view or action.compact_view) and true or false
+end
+
+--- B525: an action that skips the staged attachments drops them, so they
+--- never ride the first reply of its result's chat. Returns how many it
+--- dropped (0 when the action takes them, or none were staged).
+function Attachments.dropFor(action)
+    if not Attachments.skippedBy(action) or #staged == 0 then return 0 end
+    local n = #staged
+    staged = {}
+    return n
+end
+
 --- The trusted-provider check, the gates module's (one copy).
 function Attachments.isTrustedProvider(features, provider)
     return require("koassistant.request.privacy_gates").isTrusted(features, provider)

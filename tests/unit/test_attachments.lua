@@ -124,6 +124,26 @@ function T:runAll()
             "clear should empty the staging list")
     end)
 
+    self:test("skippedBy: artifact writers and the dictionary and translate family take none (D12)", function()
+        for _idx, flag in ipairs({ "use_response_caching", "cache_as_xray", "cache_as_analyze",
+                "cache_as_summary", "dictionary_view", "translate_view", "compact_view" }) do
+            self:assert(Attachments.skippedBy({ [flag] = true }), flag)
+        end
+        self:assert(not Attachments.skippedBy({ id = "explain" }), "a plain action takes them")
+        self:assert(not Attachments.skippedBy(nil), "no action (a freeform Send) takes them")
+    end)
+
+    self:test("dropFor (B525): an action that skips them drops them, a plain one keeps them", function()
+        Attachments.clear()
+        Attachments.add({ type = "note", label = "a", text = "a" })
+        Attachments.add({ type = "note", label = "b", text = "b" })
+        self:assertEquals(Attachments.dropFor({ id = "explain" }), 0, "a plain action")
+        self:assertEquals(Attachments.count(), 2, "kept for it")
+        self:assertEquals(Attachments.dropFor({ use_response_caching = true }), 2, "an artifact action")
+        self:assertEquals(Attachments.count(), 0, "dropped: nothing rides the result chat's first reply")
+        self:assertEquals(Attachments.dropFor({ use_response_caching = true }), 0, "nothing left to drop")
+    end)
+
     self:test("isTrustedProvider matches the configured list", function()
         local features = { trusted_providers = { "ollama", "anthropic" } }
         self:assert(Attachments.isTrustedProvider(features, "anthropic"))

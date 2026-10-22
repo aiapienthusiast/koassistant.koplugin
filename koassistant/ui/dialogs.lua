@@ -3800,11 +3800,17 @@ handlePredefinedPrompt = function(prompt_type_or_action, highlightedText, ui, co
     end
     -- Attachments ride a freeform Send and plain actions only (D12, B395
     -- slice 5): never an action that writes an artifact, nor the dictionary
-    -- and translate family, whose answers are no chat about the attachment
-    if attachments_active and prompt and (prompt.use_response_caching or prompt.cache_as_xray
-            or prompt.cache_as_analyze or prompt.cache_as_summary
-            or prompt.dictionary_view or prompt.translate_view or prompt.compact_view) then
+    -- and translate family, whose answers are no chat about the attachment.
+    -- B525: such an action drops them and says so, or they rode the first
+    -- reply of its result's chat
+    if attachments_active and require("koassistant.request.attachments").skippedBy(prompt) then
         attachments_active = nil
+        if require("koassistant.request.attachments").dropFor(prompt) > 0 then
+            UIManager:show(require("ui/widget/notification"):new{
+                text = _("This action takes no attachments: they were not sent."),
+                timeout = 3,
+            })
+        end
     end
     -- Background auto-update (xray_background_plan.md §4): consume the dispatch flag
     -- (the fire path passes a config COPY, but consume defensively — same staleness
