@@ -74,12 +74,12 @@ function PromptWriter.styleLabel(features)
     return PromptWriter.STYLES[1].text
 end
 
---- The writer's provider and model (D8): the chat provider's fast model, a
---- global tier pin honored (it may name another provider); with Faster Models
---- for Quick Actions off, or no fast model known, the chat provider's own model
---- (nil = as configured).
+--- The writer's provider and model: the chat model (nil = as configured),
+--- unless Prompt writer is set to the fast model: then the chat provider's
+--- fast model, a global tier pin honored (it may name another provider), or
+--- the chat model where no fast model is known.
 function PromptWriter.target(features, main_provider)
-    if type(features) ~= "table" or features.use_action_tiers ~= false then
+    if type(features) == "table" and features.image_gen_writer_model == "fast" then
         local p, m = require("koassistant.request.model_lists").resolveTierTarget(main_provider, "fast")
         if p and m then return p, m end
     end

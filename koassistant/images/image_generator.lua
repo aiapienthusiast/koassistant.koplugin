@@ -1269,7 +1269,7 @@ function ImageGenerator.promptTemplateText(features)
         style = (PromptWriter.styleText(features)),
         shape = PromptWriter.shapeLine(features.image_gen_shape or "fit", 3 / 4, true),
     })
-    return T(_("Write the prompt with AI is on: your chat provider's fast model reads the material below and writes the prompt the image model receives (with \"The picture contains no text, letters, titles or captions.\" added). Its instructions:\n\n%1\n\nThe material (each block only when there is something for it):\n\n%2\n\nIf the writer fails, this prompt is sent instead:\n\n%3"),
+    return T(_("Write the prompt with AI is on: the prompt writer (your chat model, or its fast model if Prompt writer says so) reads the material below and writes the prompt the image model receives (with \"The picture contains no text, letters, titles or captions.\" added). Its instructions:\n\n%1\n\nThe material (each block only when there is something for it):\n\n%2\n\nIf the writer fails, this prompt is sent instead:\n\n%3"),
         PromptWriter.systemText({}), material, plain)
 end
 

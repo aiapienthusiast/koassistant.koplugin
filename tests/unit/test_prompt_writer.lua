@@ -91,8 +91,8 @@ TestRunner:test("Custom: the typed words, trimmed and capped; empty falls back",
     TestRunner:assertEquals(#PromptWriter.STYLES, 8, "eight styles, then Custom")
 end)
 
-print("  [The writer's model (D8)]")
-TestRunner:test("target: the chat provider's fast model; tiers off keeps the chat model", function()
+print("  [The writer's model]")
+TestRunner:test("target: the chat model by default; Prompt writer's Fast model takes the fast tier", function()
     local ModelLists = require("koassistant.request.model_lists")
     local real = ModelLists.resolveTierTarget
     ModelLists.resolveTierTarget = function(p, tier)
@@ -103,16 +103,19 @@ TestRunner:test("target: the chat provider's fast model; tiers off keeps the cha
     local ok, err = pcall(function()
         local p, m = PromptWriter.target({}, "anthropic")
         TestRunner:assertEquals(p, "anthropic")
+        TestRunner:assertEquals(m, nil, "the chat model as configured")
+        local fast = { image_gen_writer_model = "fast" }
+        p, m = PromptWriter.target(fast, "anthropic")
+        TestRunner:assertEquals(p, "anthropic")
         TestRunner:assertEquals(m, "claude-fast")
-        p, m = PromptWriter.target({}, "pinned")
+        p, m = PromptWriter.target(fast, "pinned")
         TestRunner:assertEquals(p, "gemini", "a global tier pin may name another provider")
         TestRunner:assertEquals(m, "gemini-fast")
-        p, m = PromptWriter.target({ use_action_tiers = false }, "anthropic")
-        TestRunner:assertEquals(p, "anthropic")
-        TestRunner:assertEquals(m, nil, "the chat model as configured")
-        p, m = PromptWriter.target({}, "ollama")
+        p, m = PromptWriter.target({ image_gen_writer_model = "fast", use_action_tiers = false }, "anthropic")
+        TestRunner:assertEquals(m, "claude-fast", "the writer's own setting decides, not Faster Models for Quick Actions")
+        p, m = PromptWriter.target(fast, "ollama")
         TestRunner:assertEquals(p, "ollama")
-        TestRunner:assertEquals(m, nil, "no fast model known")
+        TestRunner:assertEquals(m, nil, "no fast model known: the chat model")
     end)
     ModelLists.resolveTierTarget = real
     if not ok then error(err, 0) end

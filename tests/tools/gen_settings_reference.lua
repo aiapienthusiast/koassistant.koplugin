@@ -136,6 +136,7 @@ Gen.DYNAMIC_LABELS = {
     image_gen_model_openrouter = "OpenRouter model: … (the listed models, More models…)",
     image_gen_shape = "Shape: Fit my screen / Portrait / Landscape / Square / Let the model choose",
     image_gen_detail = "Detail: Draft / Standard / Best",
+    image_gen_writer_model = "Prompt writer: Chat model / Fast model",
     image_gen_style = "Style: Book illustration / Watercolor / Ink drawing / Pencil sketch / Woodcut / Photographic / Comic / Map or diagram / Custom…",
     zai_region = "Z.AI Region: International / China",
     zai_search_engine = "Z.AI Search Engine: …",

@@ -87,6 +87,11 @@ local IMAGE_DETAIL_OPTIONS = {
     { value = "best", text = _("Best") },
 }
 
+local IMAGE_WRITER_MODEL_OPTIONS = {
+    { value = "chat", text = _("Chat model") },
+    { value = "fast", text = _("Fast model") },
+}
+
 -- Helper: Build model list string from capabilities
 local function getModelList(provider, capability)
     local caps = ModelConstraints.capabilities[provider]
@@ -3160,7 +3165,23 @@ local SettingsSchema = {
                             text = _("Write the prompt with AI"),
                             path = "features.image_gen_writer",
                             default = true,
-                            help_text = _("Before each picture, your chat provider's fast model writes the prompt the image model receives: from the passage, the text around it, the book's title and author, the book's Background, the X-Ray entries the passage names and your note, under rules that keep it to what the book says (and, with spoiler protection on, to nothing later than the passage).\n\nIt adds one quick text request (a fraction of a cent) and sends that material to your chat provider (or to the provider a global Fast tier pin names) as well. The viewer's caption and the gallery say who wrote the prompt and from what.\n\nOff: the passage goes to the image model framed as before."),
+                            help_text = _("Before each picture, a text model (Prompt writer, below) writes the prompt the image model receives: from the passage, the text around it, the book's title and author, the book's Background, the X-Ray entries the passage names and your note, under rules that keep it to what the book says (and, with spoiler protection on, to nothing later than the passage).\n\nIt adds one text request (usually a fraction of a cent) and sends that material to your chat provider (or to the provider a global Fast tier pin names, with the fast model) as well. The viewer's caption and the gallery say who wrote the prompt and from what.\n\nOff: the passage goes to the image model framed as before."),
+                        },
+                        {
+                            id = "image_gen_writer_model",
+                            type = "radio",
+                            text_func = function(plugin)
+                                local f = plugin.settings:readSetting("features") or {}
+                                return T(_("Prompt writer: %1"), optionText(IMAGE_WRITER_MODEL_OPTIONS, f.image_gen_writer_model or "chat"))
+                            end,
+                            help_text = _("The model that writes the prompt when Write the prompt with AI is on.\n\nChat model (the default): the model you chat with. Fast model: your chat provider's fast model (or the one a global Fast tier pin names), quicker and cheaper but less careful with the writer's rules. A provider without a fast model uses the chat model either way."),
+                            path = "features.image_gen_writer_model",
+                            default = "chat",
+                            options = IMAGE_WRITER_MODEL_OPTIONS,
+                            enabled_func = function(plugin)
+                                local f = plugin.settings:readSetting("features") or {}
+                                return f.image_gen_writer ~= false
+                            end,
                         },
                         {
                             -- A submenu built when opened (main.lua
