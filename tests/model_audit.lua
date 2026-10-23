@@ -4103,6 +4103,11 @@ ModelAudit.WRITER_BENCH = {
           after = ' "Stop," he managed. "Stop, I can\'t breathe."' },
       entries = { { name = "Ned", type = "person",
           description = "A student in his twenties, lanky, with a shock of red hair and a frayed green jumper; lives in the shared house on Mill Lane with three others and works nights at the bakery." } } },
+    -- Who the man is only in the entry and the word "warriors"; his clothes
+    -- say someone else
+    { id = "identity", passage = "A dozen warriors came down the slope on their ponies. Their chief was a tall man in a stolen cavalry officer's coat, a woollen cap and riding boots, a lance across his saddle.",
+      entries = { { name = "Kesh", type = "person",
+          description = "The Comanche war chief who leads the raid on the river settlements; patient, feared, older than most of his warriors." } } },
     -- A person to draw whose description says nowhere where she is
     { id = "entry-person", entry = { name = "Agnes Hallam", type = "person", aliases = { "Mrs Hallam" },
         description = "A retired schoolteacher in her seventies, small and very upright, silver hair in a tight bun, round steel spectacles, always in a grey cardigan; sharp-tongued but kind, and the first to notice when something is wrong." } },

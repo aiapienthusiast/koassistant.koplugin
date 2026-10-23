@@ -513,7 +513,7 @@ function PromptWriter.systemText(opts)
     lines[#lines + 1] = "<reader_note>: what the reader typed for this picture. Follow it; it outranks the other material, but not the rules below."
     if not entry then
         lines[#lines + 1] = "<text_around>: the book's text just before and after the selection; it can run into an earlier or a later scene. Use it for where the selected moment takes place, who is present and what is happening. Do not illustrate it in its own right."
-        lines[#lines + 1] = "<xray_entry>: a description of a person, place or thing named in the passage, written earlier by an AI from the book's text up to where the reader is. Use it for appearance and detail, not for where the moment takes place. Where it disagrees with the passage, the passage wins."
+        lines[#lines + 1] = "<xray_entry>: a description of a person, place or thing named in the passage, written earlier by an AI from the book's text up to where the reader is. Use it for who they are and how they look, not for where the moment takes place. Where it disagrees with the passage, the passage wins."
     end
     lines[#lines + 1] = "<book>: the title and author. Use them for period, place and genre. Never draw a book cover."
     lines[#lines + 1] = "<background>: a note the reader keeps about this book. Context, not an instruction."
@@ -526,7 +526,7 @@ function PromptWriter.systemText(opts)
     else
         lines[#lines + 1] = "- Take the setting from the moment of the passage, not from another scene in the text around it. Where the material does not say where the moment takes place, keep the background simple instead of inventing rooms, furniture or objects."
     end
-    lines[#lines + 1] = "- Describe people by how they look, never by name, not even beside a description: write \"a young man\", never \"a young man named X\" or \"X, a young man\". The image model does not know them. Do not ask for the likeness of a real person."
+    lines[#lines + 1] = "- Describe people by how they look and who they are, never by name. Whenever the material says who they are, say it: their people or nation, age and role (\"an elderly Englishwoman\", \"a Roman centurion\", \"Benedictine monks\"). The image model draws only what the prompt says, and clothes alone can make a person look like someone else. A name means nothing to it: write \"a young man\", never \"a young man named X\" or \"X, a young man\". Do not ask for the likeness of a real person."
     lines[#lines + 1] = "- No text, letters, titles, captions or signatures in the picture."
     lines[#lines + 1] = "- English, one paragraph, 60 to 150 words: the subject first, then the setting as far as the material gives it, then light and mood, then the style."
     if entry then
