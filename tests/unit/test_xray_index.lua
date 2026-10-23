@@ -661,8 +661,8 @@ local function drownedSet(capitals)
     return XrayParser.matchTermSet(data.characters[1]), data
 end
 TestRunner:test("the index records each occurrence's capitals", function()
-    TestRunner:eq(CAPS_SCANNED["the drowned"], "1:18m2.45m0,1:16m0,1:1",
-        "the Drowned, the drowned; the drowned; THE DROWNED (every word capitalized: no mark)")
+    TestRunner:eq(CAPS_SCANNED["the drowned"], "1:18m2.45m0,1:16m0,1:1us",
+        "the Drowned, the drowned; the drowned; THE DROWNED (every word capitalized: no mark; in capitals, a sentence start)")
     local d = XrayIndex.decode(CAPS_LAYOUT, "the drowned")
     TestRunner:eq(table.concat(d.pages, ","), "1,2,3")
     TestRunner:eq(d.caps[1][1], 2)
@@ -730,6 +730,112 @@ TestRunner:test("the PDF hits and KOReader's search: the same capitals", functio
     TestRunner:eq(example, "the Drowned")
     TestRunner:eq(lower, "the drowned")
     TestRunner:eq(XrayParser.capsExample("the grafter"), nil, "nothing to offer")
+end)
+
+print("  [Automatic capitals (B533 S3)]")
+TestRunner:test("startsSentence: a paragraph's start or after a sentence end; abbreviations end none", function()
+    for _idx, before in ipairs({ "", "  \226\128\156", "It rained. ", "Who came? ", "He said: ",
+            "Wait\226\128\166 ", "\"Go home.\" ", "(It rained.) " }) do
+        TestRunner:ok(XrayParser.startsSentence(before), "starts after: " .. before)
+    end
+    for _idx, before in ipairs({ "past the ", "Mr. ", "J. ", "He met her, ", "a\226\128\148" }) do
+        TestRunner:ok(not XrayParser.startsSentence(before), "mid-sentence after: " .. before)
+    end
+end)
+TestRunner:test("allCaps and capsEvidence: what one occurrence says about a name", function()
+    TestRunner:ok(XrayParser.allCaps("THE DROWNED"))
+    TestRunner:ok(not XrayParser.allCaps("The Drowned"))
+    TestRunner:ok(not XrayParser.allCaps("A"), "one capital is a word, not capitals")
+    -- "The Drowned": its second word's capital required (2)
+    TestRunner:eq(XrayParser.capsEvidence(2, 2, false, false), "P", "the Drowned mid-sentence")
+    TestRunner:eq(XrayParser.capsEvidence(2, 0, false, false), "L", "the drowned")
+    TestRunner:eq(XrayParser.capsEvidence(2, 3, true, false), "P", "a sentence start leaves the second capital telling")
+    TestRunner:eq(XrayParser.capsEvidence(2, 3, false, true), nil, "THE DROWNED proves nothing")
+    -- "Summer": one word, its capital required (1)
+    TestRunner:eq(XrayParser.capsEvidence(1, 1, true, false), nil, "a sentence start proves nothing")
+    TestRunner:eq(XrayParser.capsEvidence(1, 1, false, false), "P")
+    TestRunner:eq(XrayParser.capsEvidence(1, 0, false, false), "L")
+    TestRunner:eq(XrayParser.capsEvidence(7, 5, false, false), nil, "some of the capitals, not all")
+end)
+TestRunner:test("autoCapsSwitch: written both ways, the capitalized way no stray", function()
+    TestRunner:ok(XrayParser.autoCapsSwitch(3, 1))
+    TestRunner:ok(not XrayParser.autoCapsSwitch(2, 1), "three at least")
+    TestRunner:ok(not XrayParser.autoCapsSwitch(9, 0), "never in lowercase: nothing to gain")
+    TestRunner:ok(XrayParser.autoCapsSwitch(3, 9), "a quarter")
+    TestRunner:ok(not XrayParser.autoCapsSwitch(3, 10), "under a quarter: a name the book writes in lowercase")
+end)
+TestRunner:test("paragraphStarts: each paragraph's place in the page's folded text", function()
+    local function starts(text)
+        local list = XrayIndex.paragraphStarts(text, #XrayParser.matchNormalize(text))
+        return list and table.concat(list, ",") or "nil"
+    end
+    TestRunner:eq(starts("A b.\nC d."), "1,6")
+    TestRunner:eq(starts("\nA"), "2", "a leading break is a space")
+    TestRunner:eq(starts("A\n"), "1")
+    TestRunner:eq(starts("A \n  B"), "1,3", "a space run across the break is one space")
+    TestRunner:eq(starts("A\n\n\nB"), "1,3")
+    TestRunner:eq(starts("A\n   \nB"), "1,3")
+    TestRunner:eq(starts("\195\132 b\n  \195\150"), "1,6", "folded letters keep their length")
+    TestRunner:eq(starts("One\194\160two\nThree"), "1,9", "a no-break space folds like the whole")
+    TestRunner:eq(XrayIndex.paragraphStarts("A\nB", 99), nil, "a sum that misses: unknown")
+end)
+local AUTO_PARAS = {
+    "THE DROWNED",
+    "Out on the water the Drowned lit fires past the drowned trees.",
+    "Tamsin said the Drowned had come back. The Drowned were singing.",
+    "Summer came late. In the summer the rows flooded, and summer rain fell on Summer and Tamsin.",
+}
+local auto_doc = newMockDoc(AUTO_PARAS, { { 1, 0 }, { 2, 0 }, { 3, 0 }, { 4, 0 } })
+local AUTO_DATA = { type = "fiction", characters = {
+    { name = "The Drowned" }, { name = "Summer" }, { name = "Tamsin" },
+}, __dormant = { { name = "the Hollow Men", category = "characters", source = "Vol 1" } } }
+local auto_forms = {}
+for _idx, item in ipairs(AUTO_DATA.characters) do
+    for _f, f in ipairs(XrayParser.matchTermSet(item).all) do auto_forms[#auto_forms + 1] = f end
+end
+local AUTO_LAYOUT = { stamp = "A1", forms = XrayIndex.scan(auto_doc, auto_forms, 1, 4) }
+TestRunner:test("capsEvidence: how the book writes a name, read from the index", function()
+    local set = XrayParser.matchTermSet({ name = "The Drowned", _caps = { ["the drowned"] = true } })
+    local p, l = XrayIndex.capsEvidence(AUTO_LAYOUT, set, nil)
+    TestRunner:eq(p .. "/" .. l, "3/1", "three with the capital (one opening a sentence), one without; the heading in capitals proves nothing")
+    set = XrayParser.matchTermSet({ name = "Summer", _caps = { summer = true } })
+    p, l = XrayIndex.capsEvidence(AUTO_LAYOUT, set, nil)
+    TestRunner:eq(p .. "/" .. l, "1/2", "the sentence start proves nothing")
+    TestRunner:eq(XrayIndex.capsEvidence({ forms = {} }, set, nil), nil, "not indexed: not judged")
+end)
+TestRunner:test("autoCaps: the names this book writes both ways switch to capitals only", function()
+    local auto = XrayIndex.autoCaps(AUTO_LAYOUT, AUTO_DATA)
+    local names = {}
+    for n in pairs(auto) do names[#names + 1] = n end
+    table.sort(names)
+    TestRunner:eq(table.concat(names, ","), "the drowned",
+        "Summer too few, Tamsin never in lowercase, the carried name not indexed yet")
+    -- the matchers: the automatic choice unless the reader picked
+    local data = { type = "fiction", characters = { { name = "The Drowned" }, { name = "Summer" } },
+        __dormant = { { name = "The Drowned Host", category = "characters" } } }
+    XrayParser.mergeUserAliases(data, { [XrayParser.AUTO_CAPS_KEY] = { ["the drowned"] = true, ["the drowned host"] = true } })
+    TestRunner:eq(XrayParser.matchTermSet(data.characters[1]).caps["the drowned"], 2, "set by the rule")
+    TestRunner:eq(XrayParser.matchTermSet(data.characters[2]).caps, nil)
+    TestRunner:eq(XrayParser.matchTermSet(data.__dormant[1]).caps["the drowned host"], 6, "a carried row takes it too")
+    local route = {}
+    XrayParser.foldLedgerHandles(data, route)
+    TestRunner:ok(not XrayParser.matchExactHandle(route, "the drowned host"), "a carried row routes only with its capitals")
+    TestRunner:ok(XrayParser.matchExactHandle(route, "the Drowned Host"))
+    TestRunner:eq(#XrayParser.searchLedger(data, "the drowned host", { exact = true }), 0, "no direct hit on the carried row")
+    TestRunner:eq(#XrayParser.searchLedger(data, "the Drowned Host", { exact = true }), 1)
+    TestRunner:eq(#XrayParser.searchLedger(data, "the drowned host"), 1, "the list still finds it")
+    data = { type = "fiction", characters = { { name = "The Drowned" } } }
+    XrayParser.mergeUserAliases(data, { ["The Drowned"] = { case = { ["the drowned"] = "any" } },
+        [XrayParser.AUTO_CAPS_KEY] = { ["the drowned"] = true } })
+    TestRunner:eq(XrayParser.matchTermSet(data.characters[1]).caps, nil, "Any case keeps the rule off the name")
+    local marks_state = { entities = XrayParser.buildMarkEntities(data), spacing = 0, file = auto_doc.file }
+    auto_doc.current_page = 2
+    local before = markNames(XrayMarks._computeMarks(marks_state, { document = auto_doc }, 2, 2, "none"))["The Drowned"]
+    data = { type = "fiction", characters = { { name = "The Drowned" } } }
+    XrayParser.mergeUserAliases(data, { [XrayParser.AUTO_CAPS_KEY] = { ["the drowned"] = true } })
+    marks_state = { entities = XrayParser.buildMarkEntities(data), spacing = 0, file = auto_doc.file }
+    local after = markNames(XrayMarks._computeMarks(marks_state, { document = auto_doc }, 2, 2, "none"))["The Drowned"]
+    TestRunner:eq(before .. " -> " .. after, "2 -> 1", "the underline leaves \"the drowned trees\"")
 end)
 
 os.execute('rm -rf "' .. SIDECAR .. '"')

@@ -147,25 +147,97 @@ function PromptWriter.entryMaterial(item, category_key)
         aliases = aliases,
         type = TYPE_WORDS[category_key] or "thing",
         description = clip(table.concat(parts, " "), ENTRY_MAX),
+        -- a carried entry (withCarried): its description comes from another
+        -- book's X-Ray, which the data question says
+        carried = item._carried or nil,
     }
 end
 
---- The entries a text names, in the order it names them: { item, key }.
+-- The categories that name their entries `term`
+local TERM_KEYS = { lexicon = true, terminology = true, technical_terms = true }
+
+--- The X-Ray with its carried entries among its own (B537): each carried row
+--- of the ledger after the book's own entries of its category
+--- (XrayParser.ledgerByCategory), a copy marked `_carried`, with `_from` =
+--- its book's label (opts.from(stub), else the source title). A row from a
+--- book in opts.skip (a source whose text is Never for a provider the
+--- material reaches) or named like one of this book's entries of its
+--- category stays out. A new table; the X-Ray's own tables are not changed.
+--- Pure.
+--- @param data table parsed X-Ray (the overlay merged)
+--- @param opts table|nil { skip = { [file] = true }, from = function(stub) -> label }
+--- @return table
+function PromptWriter.withCarried(data, opts)
+    if type(data) ~= "table" then return data end
+    local XrayParser = require("koassistant.xray.xray_parser")
+    local by_key = XrayParser.ledgerByCategory(data)
+    if not next(by_key) then return data end
+    opts = opts or {}
+    local out = {}
+    for k, v in pairs(data) do out[k] = v end
+    out[XrayParser.DORMANT_KEY] = nil
+    for key, rows in pairs(by_key) do
+        local list, own = {}, {}
+        for _idx, item in ipairs(type(data[key]) == "table" and data[key] or {}) do
+            list[#list + 1] = item
+            local n = type(item) == "table" and XrayParser.getItemName(item, key)
+            if type(n) == "string" then own[n:lower()] = true end
+        end
+        for _idx, r in ipairs(rows) do
+            local stub = r.stub
+            local skipped = type(stub.file) == "string" and opts.skip and opts.skip[stub.file]
+            if not skipped and not own[stub.name:lower()] then
+                local row = {}
+                for k, v in pairs(stub) do row[k] = v end
+                if TERM_KEYS[key] then row.term = row.term or stub.name end
+                row._carried = true
+                row._from = (opts.from and opts.from(stub)) or stub.source
+                list[#list + 1] = row
+            end
+        end
+        out[key] = list
+    end
+    return out
+end
+
+--- The entries a text names, in the order it names them: { item, key }. A
+--- carried entry (withCarried) counts only where none of this book's own
+--- entries is named: "the Warden" (carried) for "The Warden", the book's own
+--- "Warden" for "warden" alone.
 local function namedIn(text, data)
     if type(text) ~= "string" or text == "" then return {} end
     local XrayParser = require("koassistant.xray.xray_parser")
     local norm = XrayParser.matchNormalize(text)
-    local found = {}
-    for _idx, cat in ipairs(XrayParser.getCategories(data) or {}) do
-        if not XrayParser.TEXT_MATCH_EXCLUDED[cat.key] then
-            for _j, item in ipairs(cat.items or {}) do
-                local set = XrayParser.matchTermSet(item)
-                -- the cheap pass first: the containing forms of other entries
-                -- are worked out only for an entry the text names
-                if set and #XrayParser.occurrencesIn(norm, set) > 0 then
-                    local occ = XrayParser.occurrencesIn(norm, set, XrayParser.containingMatchHandles(data, item))
-                    if #occ > 0 then
-                        found[#found + 1] = { item = item, key = cat.key, first = occ[1][1], n = #occ }
+    local found, own_spans = {}, {}
+    for _pass, carried in ipairs({ false, true }) do
+        for _idx, cat in ipairs(XrayParser.getCategories(data) or {}) do
+            if not XrayParser.TEXT_MATCH_EXCLUDED[cat.key] then
+                for _j, item in ipairs(cat.items or {}) do
+                    local set = (type(item) == "table" and (item._carried == true) == carried)
+                        and XrayParser.matchTermSet(item) or nil
+                    -- the cheap pass first: the containing forms of other entries
+                    -- are worked out only for an entry the text names
+                    if set and #XrayParser.occurrencesIn(norm, set) > 0 then
+                        local occ = XrayParser.occurrencesIn(norm, set, XrayParser.containingMatchHandles(data, item))
+                        if carried then
+                            local kept = {}
+                            for _k, o in ipairs(occ) do
+                                local inside = false
+                                for _m, sp in ipairs(own_spans) do
+                                    if o[1] >= sp[1] and o[2] <= sp[2] then
+                                        inside = true
+                                        break
+                                    end
+                                end
+                                if not inside then kept[#kept + 1] = o end
+                            end
+                            occ = kept
+                        else
+                            for _k, o in ipairs(occ) do own_spans[#own_spans + 1] = { o[1], o[2] } end
+                        end
+                        if #occ > 0 then
+                            found[#found + 1] = { item = item, key = cat.key, first = occ[1][1], n = #occ }
+                        end
                     end
                 end
             end
@@ -201,24 +273,34 @@ end
 
 --- What the reader can pick for a passage picture (B535, B537): the installed
 --- X-Ray's entries in the categories the matcher reads, each category in the
---- X-Ray's order, its entries by name. Pure.
+--- X-Ray's order, its entries by name, then its carried entries by name
+--- (withCarried; `from` = the book a row is carried from). Pure.
 --- @param data table parsed X-Ray
---- @return table { { key, label, rows = { { name, role, key }, ... } }, ... }
+--- @return table { { key, label, rows = { { name, role, key, from }, ... } }, ... }
 function PromptWriter.pickable(data)
     if type(data) ~= "table" then return {} end
     local XrayParser = require("koassistant.xray.xray_parser")
     local out = {}
+    local function byName(a, b) return a.name:lower() < b.name:lower() end
     for _idx, cat in ipairs(XrayParser.getCategories(data) or {}) do
         if not XrayParser.TEXT_MATCH_EXCLUDED[cat.key] then
-            local rows = {}
+            local rows, carried = {}, {}
             for _j, item in ipairs(cat.items or {}) do
                 local name = type(item) == "table" and XrayParser.getItemName(item, cat.key)
                 if type(name) == "string" and name ~= "" and (name == item.name or name == item.term) then
-                    rows[#rows + 1] = { name = name, key = cat.key,
+                    local row = { name = name, key = cat.key,
                         role = type(item.role) == "string" and item.role ~= "" and item.role or nil }
+                    if item._carried then
+                        row.from = type(item._from) == "string" and item._from ~= "" and item._from or nil
+                        carried[#carried + 1] = row
+                    else
+                        rows[#rows + 1] = row
+                    end
                 end
             end
-            table.sort(rows, function(a, b) return a.name:lower() < b.name:lower() end)
+            table.sort(rows, byName)
+            table.sort(carried, byName)
+            for _j, row in ipairs(carried) do rows[#rows + 1] = row end
             if #rows > 0 then out[#out + 1] = { key = cat.key, label = cat.label, rows = rows } end
         end
     end
@@ -247,7 +329,9 @@ end
 -- X-Ray would list them: a word of the text that starts with a capital is a
 -- word of an entry's name or alias that starts with one too (a first name
 -- alone for a full name). A word more than three entries share proposes
--- nothing. Names, in the order the text gives the words.
+-- nothing, nor one the text also writes in lowercase (an ordinary word at a
+-- sentence start: "The" of "The Drowned"). Names, in the order the text
+-- gives the words.
 local function nameWordHits(data, texts)
     local XrayParser = require("koassistant.xray.xray_parser")
     local owners = {}
@@ -275,11 +359,20 @@ local function nameWordHits(data, texts)
             end
         end
     end
+    local ordinary = {}
+    for _idx, text in ipairs(texts) do
+        if type(text) == "string" then
+            for _j, w in ipairs(textWords(text)) do
+                if not XrayParser.startsUpper(w) then ordinary[XrayParser.matchNormalize(w)] = true end
+            end
+        end
+    end
     local out, taken = {}, {}
     for _idx, text in ipairs(texts) do
         if type(text) == "string" then
             for _j, w in ipairs(textWords(text)) do
-                local list = XrayParser.startsUpper(w) and owners[XrayParser.matchNormalize(w)]
+                local key = XrayParser.matchNormalize(w)
+                local list = XrayParser.startsUpper(w) and not ordinary[key] and owners[key]
                 if list and #list <= 3 then
                     for _k, name in ipairs(list) do
                         if not taken[name] then

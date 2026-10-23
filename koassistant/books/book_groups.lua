@@ -440,6 +440,30 @@ function BookGroups.positionOf(group, path)
     return indexOf(group, path)
 end
 
+--- The words a carried row gives the book it comes from (#116, B393): in a
+--- series the book's number ("Book 3"), short enough to sit whole beside a
+--- role; otherwise the source title. The X-Ray browser's carried rows and
+--- the picture popup's entry list (B537) share it.
+--- @param book_file string|nil the book holding the carried rows
+--- @return function label(stub) -> string text, boolean short
+function BookGroups.carriedSourceLabeler(book_file)
+    local _ = require("koassistant.core.gettext")
+    local T = require("ffi/util").template
+    local pos = {}
+    for _idx, g in ipairs(BookGroups.groupsFor(book_file or "")) do
+        if BookGroups.kindOf(g) == BookGroups.KIND_SERIES then
+            for i, p in ipairs(g.books or {}) do
+                if pos[p] == nil then pos[p] = i end
+            end
+        end
+    end
+    return function(stub)
+        local n = type(stub.file) == "string" and pos[stub.file]
+        if n then return T(_("Book %1"), n), true end
+        return type(stub.source) == "string" and stub.source or "", false
+    end
+end
+
 --- Ordered neighbors of a book in its FIRST containing group (a book in
 --- several groups navigates along the first one — documented limitation).
 --- @return string|nil prev_path, string|nil next_path, table|nil group

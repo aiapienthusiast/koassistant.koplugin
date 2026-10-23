@@ -11532,7 +11532,7 @@ local function mainLedgerData(document_path, maybe_main_data, best)
     if not (main and main.result and XrayParser.isJSON(main.result)) then return nil end
     local data = XrayParser.parse(main.result)
     if not data or data.error then return nil end
-    XrayParser.mergeUserAliases(data, ActionCache.getUserAliases(document_path))
+    XrayParser.mergeUserAliases(data, ActionCache.matchOverlay(document_path))
     return data
 end
 
@@ -11674,7 +11674,8 @@ local function showPredecessorEntity(opts)
     if live_data and live_data.error then live_data = nil end
     -- Q14 (device round 4): already here, in either form, is said instead
     -- of offered — the whole-chain list shows an earlier book's entry even
-    -- after it was carried
+    -- after it was carried. Both by the entry's family: the character "the
+    -- Warden" is not this book's term "Warden"
     local state
     if live_data then
         local names = { hit.name }
@@ -11685,7 +11686,7 @@ local function showPredecessorEntity(opts)
         end
         if XrayParser.findByIdentity(live_data, names, hit.category_key) then
             state = "live"
-        elseif XrayParser.findDormantByIdentity(live_data, names) then
+        elseif XrayParser.findDormantByIdentity(live_data, names, hit.category_key) then
             state = "carried"
         end
     end
@@ -12297,7 +12298,7 @@ local function showAliasTargetPicker(ctx)
             return
         end
         -- Fold into the caller's parsed data so open views show it now
-        XrayParser.mergeUserAliases(data, ActionCache.getUserAliases(document_path))
+        XrayParser.mergeUserAliases(data, ActionCache.matchOverlay(document_path))
         UIManager:show(InfoMessage:new{
             text = T(_("Added \"%1\" as alias of %2."), query, target_name),
             timeout = 3,
@@ -12787,7 +12788,7 @@ local function handleLocalXrayLookup(ui, query, document_path, book_metadata, co
 
     -- User search terms must match in lookup too, not only in the browser
     -- (F1, xray_marking_plan.md, ref #63)
-    XrayParser.mergeUserAliases(data, ActionCache.getUserAliases(document_path))
+    XrayParser.mergeUserAliases(data, ActionCache.matchOverlay(document_path))
 
     -- Carried card target (S1, ref #90): the card resolved a LEDGER stub —
     -- open its carried-detail page directly (a stale target falls through)
@@ -13085,29 +13086,39 @@ local function handleLocalAction(handler_name, ui, highlighted_text, document_pa
             -- B537: a tap opens the picture popup (the scope popup's shape):
             -- a note and X-Ray entries for this picture, then the settings it
             -- is drawn with (a pick is the setting), then Generate, from the
-            -- selection taken at the start. B535: the entries the prompt
-            -- writer reads start as the ones the passage and the note name
-            -- and can be changed by hand
-            local xray_data
-            if book_info and book_info.file then
-                local xray = require("koassistant.artifacts.action_cache").parsedXrayFor(book_info.file)
-                xray_data = xray and xray.data or nil
-            end
-            local state = { note = gen_opts.note }
-            if xray_data then
-                state.picked = {}
-                for _idx, e in ipairs(require("koassistant.images.prompt_writer").entriesFor(
-                        highlighted_text, xray_data)) do
-                    state.picked[#state.picked + 1] = e.name
-                end
-                -- the input dialog's note: its entries first, as a note's are
-                if gen_opts.note then
-                    require("koassistant.images.image_options").addNoteEntries(state, xray_data,
-                        gen_opts.note, highlighted_text)
-                end
-            end
-            -- the provider question first, when the chat provider cannot draw
+            -- selection taken at the start. The provider question first,
+            -- when the chat provider cannot draw
             ImageGenerator.providerFirst(plugin, function()
+                -- B535: the entries the prompt writer reads start as the
+                -- ones the passage and the note name and can be changed by
+                -- hand; carried entries among them, none from a book whose
+                -- text is Never for the providers set now (the run judges
+                -- again with the providers it goes to)
+                local xray_data
+                if book_info and book_info.file then
+                    local f = plugin.settings:readSetting("features") or {}
+                    local main = require("koassistant.core.config_helper").mainProvider(f)
+                    local providers = {}
+                    local drawing = ImageGenerator.effectiveProvider(f, main, plugin.settings)
+                    if drawing then providers[#providers + 1] = drawing end
+                    if f.image_gen_writer ~= false then
+                        providers[#providers + 1] = require("koassistant.images.prompt_writer").target(f, main)
+                    end
+                    xray_data = ImageGenerator.pictureXray(book_info.file, f, providers, ui)
+                end
+                local state = { note = gen_opts.note }
+                if xray_data then
+                    state.picked = {}
+                    for _idx, e in ipairs(require("koassistant.images.prompt_writer").entriesFor(
+                            highlighted_text, xray_data)) do
+                        state.picked[#state.picked + 1] = e.name
+                    end
+                    -- the input dialog's note: its entries first, as a note's are
+                    if gen_opts.note then
+                        require("koassistant.images.image_options").addNoteEntries(state, xray_data,
+                            gen_opts.note, highlighted_text)
+                    end
+                end
                 require("koassistant.images.image_options").show(plugin, {
                     title = _("Generate Image"),
                     passage = highlighted_text,

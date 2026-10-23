@@ -43,10 +43,12 @@ at 70%): see the plan doc §6.2. Short form:
   Warden           vol-3 live LEXICON term + ledger CHARACTER stub (chooser)
   Vex              vol-3 ledger stub WITH alias "the grey cat" (alias hit)
   The Drowned      vol-3 live faction (and in the 70% rung), the #120 shape
-                   (B533 S2): the text writes the faction "the Drowned" (ch 4)
-                   and the everyday "the drowned trees" (ch 4) and "the drowned
-                   rows" (ch 9). Any case marks all three; capitals only marks
-                   the faction alone
+                   (B533 S2, S3): the text writes the faction "the Drowned"
+                   (ch 4, 8, 10) and the everyday "the drowned trees" (ch 4)
+                   and "the drowned rows" (ch 9). Written both ways, the
+                   faction three times mid-sentence: the automatic capitals
+                   set it to capitals only, so the faction alone is marked
+                   once the name index has the book; Any case marks all five
   Jory / Jory Pell THE NAME-DRIFT PAIR (2026-10-03, picture doc section 10): vol 2
                    names her Jory Pell; vol 3's live X-Ray and its 70% rung hold
                    an entry "Jory" (the bare first name, in vol-3 text at ~15%)
@@ -353,9 +355,9 @@ local VOL3_CHAPTERS = {
     ch("A Face From the Water", "A poleman stood at the orchard gate, hat in hand. Elias Penrose had come a long way from the crossing, and Tamsin could not place him at first. He asked after work, then after the road to Saltmere, and left before the answer. A woman with rope over one shoulder waited by the wall, and Elias called her リオ.", 4),
     ch("The Inn Sign", "A painted sign came upriver on the cart: an inn changing hands. Dorrit Hale, the letters said, was selling. The Warden was named in the small print, and Gil read it twice. That evening a grey cat crossed the orchard wall as if it owned the deed. Behind the cart walked Orrin Blackwood, carrying nothing, and he would not say why he had come inland.", 4),
     ch("Old Ledgers", "A tide ledger arrived wrapped in oilcloth, in a hand Tamsin knew: Cass Merrow's. No note. Later a stranger asked at the gate for salvage work and gave the name Zeph Umber; Gil sent him upvalley. By dark a surveyor's lamp burned on the ridge, and someone said the name Hester Lune.", 4),
-    ch("Instruments", "Hester Lune walked the salt line with brass instruments and wrote to someone nightly. The man who carried her tripod kept his own counsel."),
+    ch("Instruments", "Hester Lune walked the salt line with brass instruments and wrote to someone nightly. The man who carried her tripod kept his own counsel. He said the Drowned paid him in reed rope."),
     ch("What the Salt Takes", "Tamsin and Gil counted the drowned rows. Hester's figures said the valley had three seasons left."),
-    ch("The Grove Warden", "Tamsin took the warden's oath under the oldest tree. The salt kept rising, and the story went on without asking."),
+    ch("The Grove Warden", "Tamsin took the warden's oath under the oldest tree. Across the water the Drowned lit one fire for her. The salt kept rising, and the story went on without asking."),
 }
 
 -- Vol 4: six chapters, so chapter 4 starts at 50%. No X-Ray is planted: a

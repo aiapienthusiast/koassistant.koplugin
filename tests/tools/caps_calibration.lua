@@ -33,16 +33,11 @@ local S = dofile(os.getenv("KOA_PLUGIN") .. "/tests/scenarios/boot.lua")
 local XrayParser = require("koassistant.xray.xray_parser")
 local bit = require("bit")
 
-local MIN_P = tonumber(os.getenv("KOA_CAPS_MIN_P") or "") or 3
-local MIN_L = tonumber(os.getenv("KOA_CAPS_MIN_L") or "") or 1
-local SHARE = tonumber(os.getenv("KOA_CAPS_SHARE") or "") or 0.25
+-- The shipped rule's numbers (XrayParser.AUTO_CAPS) unless a run asks others
+local MIN_P = tonumber(os.getenv("KOA_CAPS_MIN_P") or "") or XrayParser.AUTO_CAPS.min_p
+local MIN_L = tonumber(os.getenv("KOA_CAPS_MIN_L") or "") or XrayParser.AUTO_CAPS.min_l
+local SHARE = tonumber(os.getenv("KOA_CAPS_SHARE") or "") or XrayParser.AUTO_CAPS.share
 local CONTEXTS = tonumber(os.getenv("KOA_CAPS_CONTEXTS") or "") or 4
-
--- Abbreviations whose period ends no sentence (the card's list, xray_card.lua)
-local ABBREV = {}
-for w in ([[mr mrs ms dr prof sr jr st mt ft vs etc jan feb mar apr jun jul aug sep sept
-    oct nov dec no vol op ch ed gen col capt lt sgt rev hon sen rep gov pres inc co ltd univ
-    dept approx cf e i ie eg al ph]]):gmatch("%S+") do ABBREV[w] = true end
 
 local function readFile(path)
     local f = assert(io.open(path, "rb"), "cannot read " .. tostring(path))
@@ -62,37 +57,10 @@ local function paragraphs(text)
     return out
 end
 
--- Opening and closing marks around a sentence start (UTF-8 quotes, dashes)
-local OPENERS = { " ", "\"", "'", "(", "[", "\226\128\156", "\226\128\152", "\226\128\148", "\226\128\147" }
-local CLOSERS = { "\"", "'", ")", "]", "\226\128\157", "\226\128\153" }
-local function stripTail(s, marks)
-    local changed = true
-    while changed and s ~= "" do
-        changed = false
-        for _idx, m in ipairs(marks) do
-            if s:sub(-#m) == m then
-                s = s:sub(1, -#m - 1)
-                changed = true
-            end
-        end
-    end
-    return s
-end
-
---- Whether byte s of a paragraph starts a sentence: only opening marks before
---- it, or a sentence end before those (. ! ? … : and their closing marks; a
---- period after a listed abbreviation or a single letter is none).
+--- Whether byte s of a paragraph starts a sentence: the plugin's own rule
+--- (XrayParser.startsSentence, the one the name index records)
 local function sentenceInitial(para, s)
-    local before = stripTail(para:sub(1, s - 1), OPENERS)
-    if before == "" then return true end
-    before = stripTail(before, CLOSERS)
-    local last = before:sub(-1)
-    if before:sub(-3) == "\226\128\166" or last == "!" or last == "?" or last == ":" then return true end
-    if last ~= "." then return false end
-    local token = before:sub(1, -2):match("([%a]+)$")
-    if not token then return true end
-    if #token == 1 or ABBREV[token:lower()] then return false end
-    return true
+    return XrayParser.startsSentence(para:sub(1, s - 1))
 end
 
 local function hasLowerAscii(s) return s:find("%l") ~= nil end

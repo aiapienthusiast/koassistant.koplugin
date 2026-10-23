@@ -79,10 +79,24 @@ stub("ui/size", { padding = { default = 0, large = 0, fullscreen = 0 }, margin =
 -- The group the open book is in, and the dial's value, set per test
 local group_kind = "series"
 local GROUP_BOOKS = { "/b/vol1.epub", "/b/vol2.epub", "/b/vol3.epub" }
+local function stubGroups() return { { id = "g1", name = "The Saga", kind = group_kind, books = GROUP_BOOKS } } end
 stub("koassistant.books.book_groups", {
     KIND_SERIES = "series", KIND_PROJECT = "project", KIND_PLAIN = "plain",
-    groupsFor = function() return { { id = "g1", name = "The Saga", kind = group_kind, books = GROUP_BOOKS } } end,
+    groupsFor = stubGroups,
     kindOf = function(g) return g.kind end,
+    -- the store's rule over these groups (test_book_groups checks the real one)
+    carriedSourceLabeler = function()
+        local pos = {}
+        for _idx, g in ipairs(stubGroups()) do
+            if g.kind == "series" then
+                for i, p in ipairs(g.books or {}) do pos[p] = pos[p] or i end
+            end
+        end
+        return function(s)
+            if pos[s.file] then return "Book " .. pos[s.file], true end
+            return s.source or "", false
+        end
+    end,
 })
 local dial
 local SDS = require("koassistant.storage.doc_settings")

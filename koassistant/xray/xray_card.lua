@@ -36,17 +36,9 @@ local _ = require("koassistant.core.gettext")
 
 local XrayCard = {}
 
--- Terminator tokens that are abbreviations, not sentence ends (case-folded).
-local ABBREV = {
-    mr = true, mrs = true, ms = true, dr = true, prof = true, sr = true, jr = true,
-    st = true, mt = true, ft = true, vs = true, etc = true, jan = true, feb = true,
-    mar = true, apr = true, jun = true, jul = true, aug = true, sep = true, sept = true,
-    oct = true, nov = true, dec = true, no = true, vol = true, op = true, ch = true,
-    ed = true, gen = true, col = true, capt = true, lt = true, sgt = true, rev = true,
-    hon = true, sen = true, rep = true, gov = true, pres = true, inc = true, co = true,
-    ltd = true, univ = true, dept = true, approx = true, cf = true, e = true, i = true,
-    ie = true, eg = true, al = true, ph = true,
-}
+-- Terminator tokens that are abbreviations, not sentence ends (case-folded);
+-- one list with the automatic capitals' sentence starts (xray_parser.lua)
+local ABBREV = require("koassistant.xray.xray_parser").ABBREVIATIONS
 
 --- Position of the first sentence terminator that really ends a sentence,
 --- or nil. Skips abbreviations ("Mr.", "H.S.", "etc."): a period whose
@@ -319,7 +311,8 @@ function XrayCard.resolve(file, query, opts)
     if not file or type(query) ~= "string" or query == "" then return nil end
     local ActionCache = require("koassistant.artifacts.action_cache")
     local XrayParser = require("koassistant.xray.xray_parser")
-    local user_aliases = ActionCache.getUserAliases(file)
+    -- the reader's names and the automatic capitals (B533 S3)
+    local user_aliases = ActionCache.matchOverlay(file)
 
     local function findIn(result)
         if type(result) ~= "string" or not XrayParser.isJSON(result) then return nil end

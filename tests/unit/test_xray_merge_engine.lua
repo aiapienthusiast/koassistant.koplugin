@@ -1185,17 +1185,26 @@ local GROUP_NAV_JSON = [[{
   ]
 }]]
 
-TestRunner:test("findByIdentity: matches by alias and across categories", function()
+TestRunner:test("findByIdentity: matches by alias, across the categories of one family", function()
     local XrayParser = require("koassistant.xray.xray_parser")
     local data = XrayParser.parse(GROUP_NAV_JSON)
     local item, cat, idx = XrayParser.findByIdentity(data, { "Mira Alvsund", "the keeper" }, "characters")
     TestRunner:assertEqual(item and item.name, "Alvsund", "alias bridges the drifted name")
     TestRunner:assertEqual(cat, "characters", "owning category returned")
     TestRunner:assertEqual(idx, 1, "index returned for nav context")
-    -- Category drift: the reader was in Cast, the match lives in World
-    local item2, cat2 = XrayParser.findByIdentity(data, { "Saltrest" }, "characters")
-    TestRunner:assertEqual(item2 and item2.name, "Saltrest", "found outside the preferred category")
-    TestRunner:assertEqual(cat2, "locations", "reports where it actually lives")
+    -- Category drift inside a family: a key figure elsewhere is this book's character
+    local item1, cat1 = XrayParser.findByIdentity(data, { "Kell Damsgard" }, "key_figures")
+    TestRunner:assertEqual(item1 and item1.name, "Kell Damsgard", "found in the family's other category")
+    TestRunner:assertEqual(cat1, "characters", "reports where it actually lives")
+    -- Another family is another entry (the wake-pass's rule, round 26): a
+    -- person called "Saltrest" is not the town
+    TestRunner:assertTrue(XrayParser.findByIdentity(data, { "Saltrest" }, "characters") == nil,
+        "not across families")
+    local item2, cat2 = XrayParser.findByIdentity(data, { "Saltrest" }, nil)
+    TestRunner:assertEqual(item2 and item2.name, "Saltrest", "with no category: every category")
+    TestRunner:assertEqual(cat2, "locations")
+    TestRunner:assertTrue(XrayParser.findByIdentity(data, { "the Turning", "Turning" }, "characters") == nil,
+        "a character's alias is not this book's term")
     -- Lexicon uses term, not name
     local item3, cat3 = XrayParser.findByIdentity(data, { "Turning" }, nil)
     TestRunner:assertEqual(cat3, "lexicon", "term-keyed categories match too")
@@ -1225,6 +1234,34 @@ TestRunner:test("findDormantByIdentity: carried entity is the honest landing", f
     TestRunner:assertTrue(
         XrayParser.findDormantByIdentity({ type = "fiction" }, { "Toby" }) == nil,
         "no ledger -> nil")
+    TestRunner:assertEqual((XrayParser.findDormantByIdentity(data, { "Toby" }, "key_figures") or {}).name,
+        "Tobias Renn", "a category of the row's family finds it")
+    TestRunner:assertTrue(XrayParser.findDormantByIdentity(data, { "Toby" }, "lexicon") == nil,
+        "another family's category does not")
+end)
+
+TestRunner:test("populateDormant: a source entry is already here only as an entry of its family", function()
+    local XrayParser = require("koassistant.xray.xray_parser")
+    local XrayMerge = require("koassistant.xray.xray_merge")
+    -- the device fixture's pair: this book's term "Warden", the earlier
+    -- book's character "the Warden" (alias "Warden")
+    local base = XrayParser.parse([[{
+      "type": "fiction",
+      "characters": [{"name": "Gil Rook", "description": "Grafts the rows."}],
+      "lexicon": [{"term": "Warden", "definition": "The keeper of a flooded grove."}]
+    }]])
+    local source = XrayParser.parse([[{
+      "type": "fiction",
+      "characters": [
+        {"name": "the Warden", "aliases": ["Warden"], "description": "Inspects the ferry manifests."},
+        {"name": "Gil", "aliases": ["Gil Rook"], "description": "A grafter."}
+      ]
+    }]])
+    XrayMerge.populateDormant(base, nil, source, "Vol 2", "/b/v2.epub", nil, "/b/v3.epub")
+    local names = {}
+    for _idx, s in ipairs(base[XrayParser.DORMANT_KEY] or {}) do names[s.name] = s.category end
+    TestRunner:assertEqual(names["the Warden"], "characters", "carried beside the term it is not")
+    TestRunner:assertTrue(names["Gil"] == nil, "a person already here as a person stays out")
 end)
 
 print("")

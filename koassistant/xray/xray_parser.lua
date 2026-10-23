@@ -1199,7 +1199,9 @@ end
 
 --- Merge user-defined aliases into parsed X-Ray data (mutates in place)
 --- @param data table Parsed X-Ray data
---- @param user_aliases table Mapping of item name → array of alias strings
+--- @param user_aliases table Mapping of item name → array of alias strings,
+---   and under AUTO_CAPS_KEY the names the book's own usage sets to capitals
+---   only (B533 S3, ActionCache.matchOverlay)
 --- @return table data The mutated data (for chaining)
 function XrayParser.mergeUserAliases(data, user_aliases)
     if not user_aliases or not next(user_aliases) then
@@ -1208,11 +1210,13 @@ function XrayParser.mergeUserAliases(data, user_aliases)
     if not data or type(data) ~= "table" then
         return data
     end
+    local AUTO = XrayParser.AUTO_CAPS_KEY
+    local auto = type(user_aliases[AUTO]) == "table" and next(user_aliases[AUTO]) and user_aliases[AUTO] or nil
 
     -- Build case-insensitive lookup: name_lower → { add = {...}, ignore = {...} }
     local lookup = {}
     for name, entry in pairs(user_aliases) do
-        if name and type(entry) == "table" then
+        if name and name ~= AUTO and type(entry) == "table" then
             local add = entry.add or {}
             local ignore = entry.ignore or {}
             if #add > 0 or #ignore > 0 or (type(entry.case) == "table" and next(entry.case)) then
@@ -1221,7 +1225,32 @@ function XrayParser.mergeUserAliases(data, user_aliases)
             end
         end
     end
-    if not next(lookup) then return data end
+    if not next(lookup) and not auto then return data end
+
+    -- B533 S2/S3: the names set to capitals only, by the name as written,
+    -- lowered: the reader's choice ("capitals"; "any" keeps the automatic
+    -- rule off that name), else the automatic one. matchTermSet,
+    -- collectSearchTerms and the exact lookups read it; view-only, like
+    -- _name_off: merged data is never written back.
+    local function capsFor(names, case)
+        local caps
+        for term, how in pairs(case or {}) do
+            if how == "capitals" and type(term) == "string" then
+                caps = caps or {}
+                caps[term:lower()] = true
+            end
+        end
+        if auto then
+            for _idx, n in ipairs(names) do
+                local low = type(n) == "string" and n:lower()
+                if low and auto[low] and (case or {})[low] == nil then
+                    caps = caps or {}
+                    caps[low] = true
+                end
+            end
+        end
+        return caps
+    end
 
     local categories = XrayParser.getCategories(data)
     for _idx, cat in ipairs(categories) do
@@ -1254,17 +1283,6 @@ function XrayParser.mergeUserAliases(data, user_aliases)
                     -- foldExactHandles, searchAll exact). A view-only mark:
                     -- merged data is never written back.
                     item._name_off = ignore_set[item_name:lower()] or nil
-                    -- B533 S2: the names set to capitals only, by the name
-                    -- as written, lowered (matchTermSet, collectSearchTerms,
-                    -- the exact lookups read it); view-only like the above
-                    local caps
-                    for term, how in pairs(type(user_entry.case) == "table" and user_entry.case or {}) do
-                        if how == "capitals" and type(term) == "string" then
-                            caps = caps or {}
-                            caps[term:lower()] = true
-                        end
-                    end
-                    item._caps = caps
 
                     -- Add user aliases (dedup, case-insensitive)
                     local existing_lower = {}
@@ -1280,6 +1298,23 @@ function XrayParser.mergeUserAliases(data, user_aliases)
 
                     item.aliases = existing
                 end
+                if user_entry or auto then
+                    local names = { item_name }
+                    for _idx3, a in ipairs(ensure_array(item.aliases) or {}) do names[#names + 1] = a end
+                    item._caps = capsFor(names, user_entry and type(user_entry.case) == "table"
+                        and user_entry.case or nil)
+                end
+            end
+        end
+    end
+    -- Carried rows take the automatic rule too (their names are judged on
+    -- this book's text); the reader's overlay never applies to them
+    if auto and type(data[XrayParser.DORMANT_KEY]) == "table" then
+        for _idx, stub in ipairs(data[XrayParser.DORMANT_KEY]) do
+            if type(stub) == "table" and type(stub.name) == "string" then
+                local names = { stub.name }
+                for _idx2, a in ipairs(ensure_array(stub.aliases) or {}) do names[#names + 1] = a end
+                stub._caps = capsFor(names, nil)
             end
         end
     end
@@ -1918,9 +1953,15 @@ function XrayParser.searchLedger(data, query, opts)
         if s ~= query_lower and #s > 4 then query_stripped = s end
     end
     local qkeys = exact and XrayParser.exactQueryKeys(query)
-    local function matches(text)
+    -- a direct hit holds the capitals of a name set to capitals only (the
+    -- automatic rule reaches carried rows, B533 S3), as searchAll's does
+    local function matches(text, stub)
         if type(text) ~= "string" or text == "" then return false end
-        if exact then return XrayParser.exactHandleHit(text, qkeys) end
+        if exact then
+            if not XrayParser.exactHandleHit(text, qkeys) then return false end
+            local req, words = XrayParser.handleCaps(text, stub._caps)
+            return not req or XrayParser.textCapsOk(query, req, words)
+        end
         local t = normalize(text:lower())
         if t:find(query_lower, 1, true) then return true end
         return (query_stripped and t:find(query_stripped, 1, true)) and true or false
@@ -1929,13 +1970,13 @@ function XrayParser.searchLedger(data, query, opts)
     for i, stub in ipairs(ledger) do
         if type(stub) == "table" and type(stub.name) == "string" and stub.name ~= "" then
             local match_field
-            if matches(stub.name) then
+            if matches(stub.name, stub) then
                 match_field = "name"
             else
                 local aliases = ensure_array(stub.aliases)
                 if aliases then
                     for _idx, a in ipairs(aliases) do
-                        if matches(a) then
+                        if matches(a, stub) then
                             match_field = "alias"
                             break
                         end
@@ -2048,15 +2089,26 @@ end
 function XrayParser.foldLedgerHandles(data, set)
     local ledger = type(data) == "table" and data[XrayParser.DORMANT_KEY]
     if type(ledger) ~= "table" then return end
-    local function fold(h)
-        for _i, k in ipairs(XrayParser.exactKeys(h)) do set[k] = true end
+    -- a carried name set to capitals only by the automatic rule (B533 S3)
+    -- routes only with its capitals, as foldExactHandles folds an entry's
+    local function fold(h, caps_on)
+        local req, words = XrayParser.handleCaps(h, caps_on)
+        for _i, k in ipairs(XrayParser.exactKeys(h)) do
+            if not req then
+                set[k] = true
+            elseif set[k] ~= true then
+                set[k] = set[k] or {}
+                table.insert(set[k], { req, words })
+            end
+        end
     end
     for _idx, stub in ipairs(ledger) do
         if type(stub) == "table" then
-            fold(stub.name)
+            local caps_on = type(stub._caps) == "table" and stub._caps or nil
+            fold(stub.name, caps_on)
             local aliases = ensure_array(stub.aliases)
             if aliases then
-                for _idx2, a in ipairs(aliases) do fold(a) end
+                for _idx2, a in ipairs(aliases) do fold(a, caps_on) end
             end
         end
     end
@@ -2726,6 +2778,108 @@ function XrayParser.capsExample(name)
     if XrayParser.capsRequired(kept, true) == 0 then return nil end
     local shown = kept:gsub("^The (%S)", "the %1")
     return shown, foldCase(kept)
+end
+
+-- ── Automatic capitals (B533 S3, docs/xray_names_matching_plan.md 4.6) ─────
+-- A name the reader left to the book is set to capitals only when the book
+-- writes it both ways and the capitalized way is no stray: at least 3
+-- occurrences mid-sentence with its capitals (P), at least 1 with none of
+-- them (L), and P at least a quarter of P + L (the calibration of
+-- 2026-10-22, docs/caps_calibration_2026-10-22.md). A sentence start and
+-- text in capitals prove nothing. The name index records what each
+-- occurrence shows (xray_index.lua); the matchers read the result through
+-- the overlay (mergeUserAliases, AUTO_CAPS_KEY).
+
+XrayParser.AUTO_CAPS = { min_p = 3, min_l = 1, share = 0.25 }
+-- The overlay's key for the automatic choices (ActionCache.matchOverlay);
+-- never written to the sidecar
+XrayParser.AUTO_CAPS_KEY = "__auto_caps"
+
+-- Abbreviations whose period ends no sentence (case-folded); the card's
+-- first sentence reads them too (xray_card.lua)
+XrayParser.ABBREVIATIONS = {
+    mr = true, mrs = true, ms = true, dr = true, prof = true, sr = true, jr = true,
+    st = true, mt = true, ft = true, vs = true, etc = true, jan = true, feb = true,
+    mar = true, apr = true, jun = true, jul = true, aug = true, sep = true, sept = true,
+    oct = true, nov = true, dec = true, no = true, vol = true, op = true, ch = true,
+    ed = true, gen = true, col = true, capt = true, lt = true, sgt = true, rev = true,
+    hon = true, sen = true, rep = true, gov = true, pres = true, inc = true, co = true,
+    ltd = true, univ = true, dept = true, approx = true, cf = true, e = true, i = true,
+    ie = true, eg = true, al = true, ph = true,
+}
+
+-- The marks around a sentence start: what may open it (quotes, a bracket, a
+-- dash, spaces) and what may close the sentence before it
+local OPENERS = { " ", "\"", "'", "(", "[", "\226\128\156", "\226\128\152", "\226\128\148", "\226\128\147" }
+local CLOSERS = { "\"", "'", ")", "]", "\226\128\157", "\226\128\153" }
+local function stripTail(s, marks)
+    local changed = true
+    while changed and s ~= "" do
+        changed = false
+        for _idx, m in ipairs(marks) do
+            if s:sub(-#m) == m then
+                s = s:sub(1, -#m - 1)
+                changed = true
+            end
+        end
+    end
+    return s
+end
+
+--- Whether a word starts a sentence, from the text before it in its
+--- paragraph: nothing but opening marks, or a sentence end before them
+--- (. ! ? … : and their closing marks; a period after a listed
+--- abbreviation or a single letter ends none).
+--- @param before string the paragraph's text before the word (matchNormalizeKeepCase)
+function XrayParser.startsSentence(before)
+    if type(before) ~= "string" then return true end
+    before = stripTail(before, OPENERS)
+    if before == "" then return true end
+    before = stripTail(before, CLOSERS)
+    local last = before:sub(-1)
+    if before:sub(-3) == "\226\128\166" or last == "!" or last == "?" or last == ":" then return true end
+    if last ~= "." then return false end
+    local token = before:sub(1, -2):match("([%a]+)$")
+    if not token then return true end
+    return not (#token == 1 or XrayParser.ABBREVIATIONS[token:lower()])
+end
+
+--- Whether a span is written in capitals: no lowercase letter and at least
+--- two capitals ("THE DROWNED", not "A" or "Gil").
+function XrayParser.allCaps(span)
+    local upper = 0
+    for ch in tostring(span):gmatch("[\1-\127\194-\244][\128-\191]*") do
+        if upperChar(ch) ~= ch then return false end
+        if lowerChar(ch) ~= ch then upper = upper + 1 end
+    end
+    return upper >= 2
+end
+
+--- What one occurrence says about a name (B533 S3): "P" = mid-sentence with
+--- every capital the name requires, "L" = with none of them, nil = it proves
+--- nothing (a sentence start where only the first word's capital is
+--- required, text in capitals, some capitals but not all).
+--- @param required number capsRequired of the form
+--- @param mask number capsMask of the occurrence
+--- @param initial boolean the occurrence starts a sentence
+--- @param upper boolean the occurrence is written in capitals
+function XrayParser.capsEvidence(required, mask, initial, upper)
+    local evidence = required or 0
+    if initial and evidence % 2 == 1 then evidence = evidence - 1 end
+    if evidence == 0 or upper then return nil end
+    if XrayParser.capsPass(mask, evidence) then return "P" end
+    local m, e = mask, evidence
+    while e > 0 do
+        if e % 2 == 1 and m % 2 == 1 then return nil end
+        e, m = math.floor(e / 2), math.floor(m / 2)
+    end
+    return "L"
+end
+
+--- The automatic rule's switch: both ways, and the capitalized way no stray.
+function XrayParser.autoCapsSwitch(p, l)
+    local rule = XrayParser.AUTO_CAPS
+    return (p or 0) >= rule.min_p and (l or 0) >= rule.min_l and p >= rule.share * (p + l)
 end
 
 -- One character as a regex atom for crengine's search (SRELL, which reads
@@ -4421,8 +4575,11 @@ end
 --- Find an ACTIVE entity by any of several identity handles (round 25, cross-
 --- book group navigation): the same person can be "Mira Alvsund" in one volume
 --- and "the Keeper" in the next, and can drift category between volumes, so
---- match on name AND aliases across every category — preferred category first,
---- then the rest. Pure.
+--- match on name AND aliases — preferred category first, then the rest of its
+--- family (characters and key_figures are one; an unmapped category is its
+--- own), the wake-pass's rule (round 26): the character "the Warden" (alias
+--- "Warden") is not the term "Warden". With no category given, every category.
+--- Pure.
 --- @param data table Parsed X-Ray
 --- @param names table Identity handles to try (name + aliases of the source item)
 --- @param preferred_category string|nil Category key to search first
@@ -4460,8 +4617,11 @@ function XrayParser.findByIdentity(data, names, preferred_category)
             end
         end
     end
+    local family = preferred_category
+        and (XrayParser.CATEGORY_FAMILY[preferred_category] or preferred_category) or nil
     for _idx, cat in ipairs(categories) do
-        if cat.key ~= preferred_category then
+        if cat.key ~= preferred_category
+                and (not family or (XrayParser.CATEGORY_FAMILY[cat.key] or cat.key) == family) then
             local item, key, i = scan(cat)
             if item then return item, key, i end
         end
@@ -4471,11 +4631,14 @@ end
 
 --- Same identity match against the DORMANT ledger: an entity absent from this
 --- book's visible entries may still be carried here from an earlier volume,
---- which is a more honest landing than "not found". Pure.
+--- which is a more honest landing than "not found". With a category, only
+--- carried rows of its family (a row with no category recorded reads as a
+--- person, as ledgerByCategory files it). Pure.
 --- @param data table Parsed X-Ray
 --- @param names table Identity handles to try
+--- @param category_key string|nil the entity's category
 --- @return table|nil stub, number|nil index
-function XrayParser.findDormantByIdentity(data, names)
+function XrayParser.findDormantByIdentity(data, names, category_key)
     if type(data) ~= "table" or type(names) ~= "table" then return nil end
     local ledger = data[XrayParser.DORMANT_KEY]
     if type(ledger) ~= "table" then return nil end
@@ -4484,8 +4647,11 @@ function XrayParser.findDormantByIdentity(data, names)
         if type(n) == "string" and n ~= "" then wanted[n:lower()] = true end
     end
     if not next(wanted) then return nil end
+    local family = category_key and (XrayParser.CATEGORY_FAMILY[category_key] or category_key) or nil
     for i, stub in ipairs(ledger) do
-        if type(stub) == "table" then
+        local cat = type(stub) == "table" and type(stub.category) == "string" and stub.category ~= ""
+            and stub.category or "characters"
+        if type(stub) == "table" and (not family or (XrayParser.CATEGORY_FAMILY[cat] or cat) == family) then
             if type(stub.name) == "string" and wanted[stub.name:lower()] then return stub, i end
             if type(stub.aliases) == "table" then
                 for _idx2, a in ipairs(stub.aliases) do

@@ -65,6 +65,34 @@ S.check(from(V3, V2) > 0 and from(V3, v1) > 0, "book 3 carries books 2 and 1")
 local m = marked("A Face From the Water")
 S.check(m["Elias Penrose"] and m["Saltmere"], "Elias Penrose (book 2) and Saltmere are underlined")
 
+-- ── An earlier book's entry of another kind than this book's ──
+-- (book 2's character "the Warden", alias "Warden"; book 3's term "Warden"):
+-- found by the X-Ray's search, its read-only view says it is on the carried
+-- list, not "already in this book's X-Ray"
+local XrayBrowser = require("koassistant.xray.xray_browser")
+local view_data = XrayParser.parse(ActionCache.getXrayCache(V3).result)
+XrayParser.mergeUserAliases(view_data, ActionCache.matchOverlay(V3))
+XrayBrowser:show(view_data, { title = "Mock Series 3 - The Orchard", book_file = V3, plugin = S.plugin,
+    configuration = S.plugin.configuration, enable_emoji = false }, ui)
+S.settle()
+XrayBrowser:showSearchResults("Warden")
+S.settle()
+local verdict
+-- the rows under "From Mock Series 2 - The Ferry" are indented
+for _idx, it in ipairs(S.top().item_table or {}) do
+    if it.text == "  the Warden" and it.callback then
+        it.callback()
+        S.settle()
+        verdict = table.concat(S.texts(), " | ")
+        break
+    end
+end
+S.note("book 2's \"the Warden\":", tostring(verdict))
+S.check(verdict and verdict:find("Already on this book's carried list", 1, true) ~= nil
+    and not verdict:find("Already in this book's X-Ray", 1, true),
+    "book 2's character \"the Warden\" is on the carried list, not this book's term \"Warden\"")
+S.closeAll()
+
 -- ── Book 2 leaves the series ──
 BookGroups.removeBook(series.id, V2)
 S.settle()

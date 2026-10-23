@@ -15,6 +15,10 @@ local Actions = require("koassistant.prompts.actions")
 local ActionCache = require("koassistant.artifacts.action_cache")
 local XrayBrowser = require("koassistant.xray.xray_browser")
 
+-- The run folder's books are shared with the scenarios after this one: the
+-- names added here are taken back at the end
+local aliases_before = ActionCache.getUserAliases(file)
+
 local function lookup(text)
     Dialogs.executeDirectAction(ui, Actions.highlight.xray_lookup, text, S.plugin.configuration, S.plugin)
     S.settle()
@@ -89,4 +93,5 @@ S.settle()
 XrayIndex.stop = real_stop
 S.check(stops == 0, "with the underlines off, an X-Ray edit stops nothing")
 
+ActionCache.setUserAliases(file, aliases_before)
 S.finish()

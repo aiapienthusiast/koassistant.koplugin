@@ -80,6 +80,8 @@ stub("koassistant.books.book_groups", {
     groupsFor = function() return {} end,
     kindOf = function(g) return g.kind end,
     displayTitle = function(path) return path end,
+    -- no groups here: a carried row names its source title
+    carriedSourceLabeler = function() return function(s) return s.source or "", false end end,
 })
 local SDS = require("koassistant.storage.doc_settings")
 local saved_resolve, saved_overlay = SDS.resolve, SDS.overlayCustomProps
@@ -329,7 +331,9 @@ TestRunner:test("the note box: OK hands the note over, a blank one as none, Canc
         TestRunner:assertEqual(note.title, "Note for the picture")
         TestRunner:assertEqual(note.input, "from behind", "opens on the note so far")
         TestRunner:assertTrue(note.description == nil and type(note.input_hint) == "string"
-            and note.input_hint:find("e.g.", 1, true) ~= nil, "the example is the gray hint inside the box")
+            and note.input_hint:find("in the rain", 1, true) ~= nil
+            and note.input_hint:find("what to include", 1, true) ~= nil,
+            "the examples are the gray hint inside the box")
         TestRunner:assertTrue(note.text_height ~= nil, "a box the size of the chat's (text_height alone sizes it)")
         TestRunner:assertEqual(table.concat(ui:texts(note), " | "), "Cancel | OK")
         ui:type("at dusk", note)
@@ -413,19 +417,24 @@ local function namesHarness()
     -- Gil Rook gets an alias from the AI, on both copies
     entry(data, "characters", "Gil Rook").aliases = { "the grafter" }
     entry(disk, "characters", "Gil Rook").aliases = { "the grafter" }
-    local store, replays = {}, {}
+    local store, replays, auto = {}, {}, {}
     local saved_get, saved_set, saved_wiki = ActionCache.getUserAliases, ActionCache.setUserAliases,
         ActionCache.getWikiEntry
+    local saved_auto = ActionCache.autoCaps
     ActionCache.getUserAliases = function() return deepcopy(store) end
     ActionCache.setUserAliases = function(_file, t) store = deepcopy(t) return true end
     ActionCache.getWikiEntry = function() return nil end
+    -- the book's usage, as the name index would report it (B533 S3)
+    ActionCache.autoCaps = function() return auto, "" end
     local WriteBack = require("koassistant.xray.artifact_writeback")
     local saved_replay = WriteBack.replayIntoRungs
     WriteBack.replayIntoRungs = function(_file, fn) replays[#replays + 1] = fn return 0 end
     local b = browser(data, file)
     local function view()
         local v = XrayParser.parse(XrayParser.serialize(disk))
-        XrayParser.mergeUserAliases(v, store)
+        local overlay = deepcopy(store)
+        if next(auto) then overlay[XrayParser.AUTO_CAPS_KEY] = auto end
+        XrayParser.mergeUserAliases(v, overlay)
         return v
     end
     b.showItemDetail = function() end
@@ -440,11 +449,13 @@ local function namesHarness()
         self.xray_data = view()
         return true
     end
-    local h = { b = b, disk = disk, replays = replays }
+    local h = { b = b, disk = disk, replays = replays, view = view }
     function h.store() return store end
+    function h.setAuto(t) auto = t end
     function h.restore()
         ActionCache.getUserAliases, ActionCache.setUserAliases = saved_get, saved_set
         ActionCache.getWikiEntry = saved_wiki
+        ActionCache.autoCaps = saved_auto
         WriteBack.replayIntoRungs = saved_replay
     end
     return h
@@ -549,13 +560,16 @@ TestRunner:test("a rename keeps the AI's name matched, asks nothing, and Reset u
     if not ok then error(err, 0) end
 end)
 
-TestRunner:test("capitals only: the option names its example, the row says it, Reset clears it (S2)", function()
+TestRunner:test("capitals: automatic, capitals only, any case; the row says which, Reset clears it (S2, S3)", function()
     local h = namesHarness()
     local ok, err = pcall(function()
         local CAPS = "Match capitals only (\"the Drowned\", not \"the drowned\")"
+        local AUTO = "Back to automatic capitals"
         ui.stack = {}
         h.b:editSearchTerms(entry(h.b.xray_data, "characters", "The Drowned"), "characters", "The Drowned")
         ui:tap("The Drowned · main name · matched")
+        TestRunner:assertTrue(ui:has(CAPS) and ui:has("Match any case") and not ui:has(AUTO),
+            "automatic now: the two picks, no way back to where it is: " .. rowsOf())
         ui:tap(CAPS)
         TestRunner:assertEqual(h.store()["The Drowned"].case["the drowned"], "capitals", "written to the alias file")
         TestRunner:assertTrue(ui:has("The Drowned · main name · capitals only"), rowsOf())
@@ -564,20 +578,36 @@ TestRunner:test("capitals only: the option names its example, the row says it, R
         local fresh = XrayParser.parse(XrayParser.serialize(h.disk))
         XrayParser.mergeUserAliases(fresh, h.store())
         TestRunner:assertEqual(XrayParser.matchTermSet(entry(fresh, "characters", "The Drowned")).caps["the drowned"], 2)
-        -- and back
+        -- any case, picked: the record says so, the row too
         ui:tap("The Drowned · main name · capitals only")
-        TestRunner:assertTrue(ui:has("Match any case") and ui:has("Stop matching"), rowsOf())
+        TestRunner:assertTrue(ui:has("Match any case") and ui:has(AUTO) and not ui:has(CAPS)
+            and ui:has("Stop matching"), rowsOf())
         ui:tap("Match any case")
-        TestRunner:assertTrue(ui:has("The Drowned · main name · matched"), rowsOf())
-        TestRunner:assertEqual(h.store()["The Drowned"].case, nil, "out of the alias file")
-        -- Reset clears it with the rest
-        ui:tap("The Drowned · main name · matched")
-        ui:tap(CAPS)
+        TestRunner:assertEqual(h.store()["The Drowned"].case["the drowned"], "any", "kept as the reader's pick")
+        TestRunner:assertTrue(ui:has("The Drowned · main name · any case"), rowsOf())
+        -- the book writes it both ways: the rule sets capitals only, unless picked otherwise
+        h.setAuto({ ["the drowned"] = true })
+        fresh = h.view()
+        TestRunner:assertTrue(XrayParser.matchTermSet(entry(fresh, "characters", "The Drowned")).caps == nil,
+            "Any case keeps the automatic rule off the name")
+        ui:tap("The Drowned · main name · any case")
+        ui:tap(AUTO)
+        TestRunner:assertEqual(h.store()["The Drowned"].case, nil, "out of the alias file: automatic again")
+        TestRunner:assertTrue(ui:has("The Drowned · main name · capitals only (automatic)"), rowsOf())
+        fresh = h.view()
+        TestRunner:assertEqual(XrayParser.matchTermSet(entry(fresh, "characters", "The Drowned")).caps["the drowned"], 2,
+            "the automatic choice reaches the matcher")
+        ui:tap("The Drowned · main name · capitals only (automatic)")
+        TestRunner:assertTrue(ui:has(CAPS) and ui:has("Match any case") and not ui:has(AUTO), rowsOf())
+        ui:tap("Match any case")
+        TestRunner:assertTrue(ui:has("The Drowned · main name · any case"), rowsOf())
+        -- Reset clears the pick with the rest: automatic again
         ui:tap("Reset to the AI's names")
         ui:tap("Reset")
         TestRunner:assertEqual(h.store()["The Drowned"], nil, "the record cleared")
-        TestRunner:assertTrue(ui:has("The Drowned · main name · matched") and not ui:has("Reset to the AI's names"),
-            rowsOf())
+        TestRunner:assertTrue(ui:has("The Drowned · main name · capitals only (automatic)")
+            and not ui:has("Reset to the AI's names"), rowsOf())
+        h.setAuto({})
         -- a one-word term names itself; a name with no capital is offered nothing
         ui.stack = {}
         h.b:editSearchTerms(entry(h.b.xray_data, "lexicon", "Warden"), "lexicon", "Warden")

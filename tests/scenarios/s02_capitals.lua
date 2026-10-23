@@ -1,9 +1,13 @@
--- B533 S2, capitals only, on the real reader: The Drowned (Mock Series 3) is
--- written "the drowned trees" and "the Drowned" in "Rented Quiet", and "the
--- drowned rows" in "What the Salt Takes". Set to capitals only, it keeps
--- only "the Drowned": in the underlines, in the name index's counts
--- (Chapter Appearances, Mentions) and in KOReader's own search after a
--- mention (the case-sensitive pattern on crengine's regex engine).
+-- B533 S2 and S3, capitals on the real reader: The Drowned (Mock Series 3)
+-- is written "the drowned trees" and "the Drowned" in "Rented Quiet", "the
+-- Drowned" in "Instruments" and "The Grove Warden", and "the drowned rows" in
+-- "What the Salt Takes". Until the name index has the book every name
+-- matches any case. Once it has, the automatic capitals (S3) set The Drowned
+-- to capitals only (three times mid-sentence with its capital, twice
+-- without), so only "the Drowned" is underlined and counted, and KOReader's
+-- own search after a mention gets the case-sensitive pattern (crengine's
+-- regex engine). Any case, picked, overrides the rule; Capitals only,
+-- picked, holds; back to automatic restores it.
 local S = dofile(os.getenv("KOA_PLUGIN") .. "/tests/scenarios/boot.lua")
 S.features({ xray_marking_density = "all" }) -- every occurrence marked
 
@@ -13,6 +17,7 @@ local XrayIndex = require("koassistant.xray.xray_index")
 local XrayBrowser = require("koassistant.xray.xray_browser")
 local ActionCache = require("koassistant.artifacts.action_cache")
 local file = ui.document.file
+local total = ui.document.info.number_of_pages
 
 local function drownedMarks()
     local out = {}
@@ -21,13 +26,32 @@ local function drownedMarks()
     end
     return out
 end
+-- whether "the drowned trees" and "the Drowned" are underlined
+local function cases(marks)
+    local lower, cap = false, false
+    for _idx, w in ipairs(marks) do
+        if w:find("drowned", 1, true) then lower = true end
+        if w:find("Drowned", 1, true) then cap = true end
+    end
+    return lower, cap
+end
 
+-- The entry as every surface reads it: the reader's names and the automatic capitals
 local function theDrowned()
     local data = XrayParser.parse(ActionCache.getXrayCache(file).result)
-    XrayParser.mergeUserAliases(data, ActionCache.getUserAliases(file))
+    XrayParser.mergeUserAliases(data, ActionCache.matchOverlay(file))
     for _idx, item in ipairs(data.characters or {}) do
         if item.name == "The Drowned" then return item end
     end
+end
+
+-- The reader's pick on the names screen: "capitals", "any", or nil (automatic)
+local function pick(how)
+    local all = ActionCache.getUserAliases(file)
+    local entry = all["The Drowned"] or { add = {}, ignore = {} }
+    entry.case = how and { ["the drowned"] = how } or nil
+    all["The Drowned"] = entry
+    ActionCache.setUserAliases(file, all)
 end
 
 local rented = S.chapter("Rented Quiet")
@@ -36,46 +60,55 @@ for _idx, t in ipairs(ui.toc.toc or {}) do
     if t.title and t.title:find("What the Salt Takes", 1, true) then salt = t.page end
 end
 
--- ── Any case (the default) ──
-local before = drownedMarks()
-S.note("marked, any case:", table.concat(before, " | "))
-local any_lower, any_cap = false, false
-for _idx, w in ipairs(before) do
-    if w:find("drowned", 1, true) then any_lower = true end
-    if w:find("Drowned", 1, true) then any_cap = true end
-end
-S.check(any_lower and any_cap, "any case: \"the drowned trees\" and \"the Drowned\" are both underlined")
+-- ── Before the name index has the book: any case ──
+local lower, cap = cases(drownedMarks())
+S.check(lower and cap, "no index yet: \"the drowned trees\" and \"the Drowned\" are both underlined")
 S.shot("any_case")
+
+-- ── The name index learns the book (the pass the marks ask for, run here
+-- at once over every form of the X-Ray's names and its carried rows) ──
+local data = XrayParser.parse(ActionCache.getXrayCache(file).result)
+XrayParser.mergeUserAliases(data, ActionCache.getUserAliases(file))
+local forms, seen = {}, {}
+local function addForms(item)
+    local set = XrayParser.matchTermSet(item)
+    for _idx, f in ipairs(set and set.all or {}) do
+        if not seen[f] then
+            seen[f] = true
+            forms[#forms + 1] = f
+        end
+    end
+end
+for _idx, cat in ipairs(XrayParser.getCategories(data)) do
+    if not XrayParser.TEXT_MATCH_EXCLUDED[cat.key] then
+        for _i, item in ipairs(cat.items or {}) do addForms(item) end
+    end
+end
+for _idx, stub in ipairs(data[XrayParser.DORMANT_KEY] or {}) do addForms(stub) end
+local stamp = XrayIndex.stamp(ui)
+S.check(stamp ~= nil, "the layout has a stamp")
+XrayIndex.store(file, stamp, XrayIndex.scan(ui.document, forms, 1, total))
+
+local auto = ActionCache.autoCaps(file)
+local switched = {}
+for n in pairs(auto) do switched[#switched + 1] = n end
+table.sort(switched)
+S.note("automatic capitals:", table.concat(switched, ", "))
+S.check(auto["the drowned"] == true, "the book writes \"the Drowned\" both ways: capitals only, automatically")
+S.check(not auto["gil rook"] and not auto["tamsin vael"], "names never written in lowercase stay any case")
+
+S.chapter("Rented Quiet")
+lower, cap = cases(drownedMarks())
+S.check(cap and not lower, "automatic: only \"the Drowned\" is underlined")
+S.shot("automatic")
 
 local item = theDrowned()
 local set = XrayParser.matchTermSet(item)
-local layout = { forms = XrayIndex.scan(ui.document, set.all, 1, ui.document.info.number_of_pages) }
-local counts = XrayIndex.entityPages(layout, set, nil)
-S.check(counts and counts[rented] and counts[salt], "any case: the index counts \"Rented Quiet\" and \"What the Salt Takes\"")
-
--- ── Match capitals only, recorded as the names screen records it ──
-local all = ActionCache.getUserAliases(file)
-local entry = all["The Drowned"] or { add = {}, ignore = {} }
-entry.case = { ["the drowned"] = "capitals" }
-all["The Drowned"] = entry
-ActionCache.setUserAliases(file, all)
-
-S.chapter("Rented Quiet")
-local after = drownedMarks()
-S.note("marked, capitals only:", table.concat(after, " | "))
-local only_cap = #after > 0
-for _idx, w in ipairs(after) do
-    if not w:find("Drowned", 1, true) then only_cap = false end
-end
-S.check(only_cap, "capitals only: only \"the Drowned\" is underlined")
-S.shot("capitals_only")
-
-item = theDrowned()
-set = XrayParser.matchTermSet(item)
 S.check(set and set.caps ~= nil, "the matcher holds the capitals rule")
-counts = XrayIndex.entityPages(layout, set, nil)
+local layout = XrayIndex.layout(file, stamp)
+local counts = XrayIndex.entityPages(layout, set, nil)
 S.check(counts and counts[rented] == 1 and counts[salt] == nil,
-    "capitals only: the index counts one in \"Rented Quiet\", none in \"What the Salt Takes\"")
+    "automatic: the index counts one in \"Rented Quiet\", none in \"What the Salt Takes\"")
 
 -- ── KOReader's search after a mention: the browser's pattern ──
 local pattern, cased = XrayBrowser._buildSearchPattern(XrayParser.collectSearchTerms(item))
@@ -88,19 +121,16 @@ end
 local plain = ui.document:findAllText("the drowned", true, 3, 100, false, 0x00FF) or {}
 local hits = pattern and ui.document:findAllText(pattern, false, 3, 100, true, flags) or {}
 S.note("any-case search:", #plain, "| the pattern:", #hits)
-S.check(#plain == 3, "any case, KOReader's search finds three")
-S.check(#hits == 1, "the pattern, case-sensitive, finds one: \"the Drowned\"")
-if hits[1] then
-    S.note("the hit:", tostring(hits[1].matched_text or hits[1].text))
-end
+S.check(#plain == 5, "any case, KOReader's search finds five")
+S.check(#hits == 3, "the pattern, case-sensitive, finds the three \"the Drowned\"")
 
 -- ── A mention's search window: its magnifier opens on the entry's name ──
 -- (not on the reader's own last search, and never on the pattern)
 ui.search.last_search_text = "orchard"
 local own_type = ui.search.current_search_type
-local data = XrayParser.parse(ActionCache.getXrayCache(file).result)
-XrayParser.mergeUserAliases(data, ActionCache.getUserAliases(file))
-XrayBrowser:show(data, { title = "Mock Series 3 - The Orchard", book_file = file, plugin = S.plugin,
+local view = XrayParser.parse(ActionCache.getXrayCache(file).result)
+XrayParser.mergeUserAliases(view, ActionCache.matchOverlay(file))
+XrayBrowser:show(view, { title = "Mock Series 3 - The Orchard", book_file = file, plugin = S.plugin,
     configuration = S.plugin.configuration, enable_emoji = false }, ui)
 S.settle()
 XrayBrowser:_gotoMentionAndSearch("characters", "The Drowned", { page = rented },
@@ -122,16 +152,24 @@ S.check(ui.search.current_search_type == own_type, "the search type stays the re
 S.shot("search_box")
 S.closeAll()
 
--- ── Match any case puts both back ──
-entry.case = nil
-all["The Drowned"] = entry
-ActionCache.setUserAliases(file, all)
+-- ── Any case, picked: the rule stays off the name ──
+pick("any")
 S.chapter("Rented Quiet")
-local again = drownedMarks()
-local back_lower = false
-for _idx, w in ipairs(again) do
-    if w:find("drowned", 1, true) then back_lower = true end
-end
-S.check(back_lower, "Match any case: \"the drowned trees\" is underlined again")
+lower, cap = cases(drownedMarks())
+S.check(lower and cap, "Any case: \"the drowned trees\" is underlined again")
+S.check(XrayParser.matchTermSet(theDrowned()).caps == nil, "and the matcher takes any case")
+
+-- ── Capitals only, picked ──
+pick("capitals")
+S.chapter("Rented Quiet")
+lower, cap = cases(drownedMarks())
+S.check(cap and not lower, "Capitals only: only \"the Drowned\"")
+S.shot("capitals_only")
+
+-- ── Back to automatic ──
+pick(nil)
+S.chapter("Rented Quiet")
+lower, cap = cases(drownedMarks())
+S.check(cap and not lower, "back to automatic: the book's usage decides again")
 
 S.finish()

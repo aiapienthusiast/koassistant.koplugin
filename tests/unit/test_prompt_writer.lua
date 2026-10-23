@@ -216,8 +216,70 @@ TestRunner:test("pickerTiers: the picked, then the suggested, then the rest by c
     tiers = PromptWriter.pickerTiers(houses, "House Arden rode out.", nil, {})
     TestRunner:assertEquals(names(tiers.suggested), "House Arden|Arden Vey",
         "named in full, then Arden; House, which four entries share, proposes nothing")
+    local drowned = { type = "fiction", characters = { { name = "The Drowned" }, { name = "Mara" } } }
+    tiers = PromptWriter.pickerTiers(drowned, "The rows flooded. Mara saw the boats.", nil, {})
+    TestRunner:assertEquals(names(tiers.suggested), "Mara",
+        "\"The\" opening a sentence, which the text also writes in lowercase, proposes nothing")
     tiers = PromptWriter.pickerTiers(XRAY, nil, nil, { "Gone Now" })
     TestRunner:assertEquals(names(tiers.picked), "Gone Now", "a pick the X-Ray no longer has stays to clear")
+end)
+-- The device fixture's shape (Mock Series 3): the term "Warden" in this
+-- book, the character "the Warden" and Dorrit Hale carried from book 2,
+-- Zeph Umber from book 1
+local CARRIED = { type = "fiction",
+    characters = { { name = "Gil Rook", role = "Grafter", description = "Grafts the rows." } },
+    lexicon = { { term = "Warden", definition = "The keeper of a flooded grove." } },
+    __dormant = {
+        { name = "the Warden", aliases = { "Warden" }, category = "characters", role = "Harbor official",
+          description = "Inspects the ferry manifests.", source = "Vol 2", file = "/b/v2.epub" },
+        { name = "Dorrit Hale", category = "characters", role = "Innkeeper",
+          description = "Keeps the ferry inn.", source = "Vol 2", file = "/b/v2.epub" },
+        { name = "Zeph Umber", category = "characters", description = "A diver.",
+          source = "Vol 1", file = "/b/v1.epub" },
+        { name = "Gil Rook", category = "characters", description = "An older Gil.", source = "Vol 2",
+          file = "/b/v2.epub" },
+    },
+}
+TestRunner:test("withCarried: carried rows among the book's own, a copy (B537)", function()
+    local labels = { ["/b/v2.epub"] = "Book 2", ["/b/v1.epub"] = "Book 1" }
+    local data = PromptWriter.withCarried(CARRIED, { from = function(s) return labels[s.file] end })
+    local names = {}
+    for _idx, it in ipairs(data.characters) do
+        names[#names + 1] = it.name .. (it._carried and ("<" .. it._from .. ">") or "")
+    end
+    TestRunner:assertEquals(table.concat(names, "|"), "Gil Rook|Dorrit Hale<Book 2>|the Warden<Book 2>|Zeph Umber<Book 1>",
+        "after the book's own, by name; a carried row named like an entry of this book stays out")
+    TestRunner:assertEquals(#CARRIED.characters, 1, "the X-Ray's own lists unchanged")
+    TestRunner:assert(data.__dormant == nil, "the carried list is folded in, not kept beside")
+    data = PromptWriter.withCarried(CARRIED, { skip = { ["/b/v2.epub"] = true } })
+    names = {}
+    for _idx, it in ipairs(data.characters) do names[#names + 1] = it.name end
+    TestRunner:assertEquals(table.concat(names, "|"), "Gil Rook|Zeph Umber",
+        "none from a book whose text is Never for a provider here")
+    TestRunner:assert(PromptWriter.withCarried({ type = "fiction", characters = {} }).__dormant == nil)
+end)
+TestRunner:test("carried entries: named, picked and sent like the book's own, the book's own first (B537)", function()
+    local data = PromptWriter.withCarried(CARRIED, { from = function() return "Book 2" end })
+    local function names(list)
+        local out = {}
+        for _idx, e in ipairs(list) do out[#out + 1] = e.name end
+        return table.concat(out, "|")
+    end
+    TestRunner:assertEquals(names(PromptWriter.entriesFor(
+        "Dorrit Hale, the letters said, was selling. The Warden was named in the small print, and Gil Rook read it twice.",
+        data)), "Dorrit Hale|the Warden|Gil Rook", "\"The Warden\" is the carried character, not the term")
+    TestRunner:assertEquals(names(PromptWriter.entriesFor("A warden's first job is to notice.", data)), "Warden",
+        "\"warden\" alone is this book's term: a carried entry only where none of the book's own is named")
+    local list = PromptWriter.entriesFor("x", data, nil, nil, { "Dorrit Hale" })
+    TestRunner:assert(list[1] and list[1].carried == true and list[1].description == "Innkeeper. Keeps the ferry inn.",
+        "picked by name, sent with its description and marked carried")
+    local groups = PromptWriter.pickable(data)
+    local cast = {}
+    for _idx, r in ipairs(groups[1].rows) do cast[#cast + 1] = r.name .. (r.from and (" · " .. r.from) or "") end
+    TestRunner:assertEquals(table.concat(cast, "|"), "Gil Rook|Dorrit Hale · Book 2|the Warden · Book 2|Zeph Umber · Book 2",
+        "the book's own by name, then the carried by name, each naming its book")
+    local tiers = PromptWriter.pickerTiers(data, "Dorrit closed the inn.", nil, {})
+    TestRunner:assertEquals(names(tiers.suggested), "Dorrit Hale", "a carried entry is suggested by one word too")
 end)
 TestRunner:test("entriesFor: five at most", function()
     local data = { type = "fiction", characters = {} }

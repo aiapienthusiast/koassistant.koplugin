@@ -381,9 +381,15 @@ TestRunner:test("B533 S2: names set to capitals only round-trip, alone or beside
     local all = ActionCache.getUserAliases(DOC_PATH)
     all["The Reed Folk"] = { case = { ["the reed folk"] = "capitals" } }
     all["Marrow"] = { add = { "the Marrow" }, case = { ["marrow"] = "capitals", ['the "old" marrow'] = "capitals" } }
+    -- S3: Any case picked is the reader's too; the automatic choices never land here
+    all["The Summer Court"] = { case = { ["the summer court"] = "any" } }
+    all[require("koassistant.xray.xray_parser").AUTO_CAPS_KEY] = { ["the reed folk"] = true }
     TestRunner:assertEqual(ActionCache.setUserAliases(DOC_PATH, all), true, "save")
     local back = ActionCache.getUserAliases(DOC_PATH)
     TestRunner:assertEqual(back["The Reed Folk"].case["the reed folk"], "capitals", "a record with only capitals is kept")
+    TestRunner:assertEqual(back["The Summer Court"].case["the summer court"], "any", "Any case round-trips")
+    TestRunner:assertEqual(back[require("koassistant.xray.xray_parser").AUTO_CAPS_KEY], nil, "nothing automatic stored")
+    back["The Summer Court"] = nil
     TestRunner:assertEqual(#(back["The Reed Folk"].add or {}), 0, "never read as the old list format")
     TestRunner:assertEqual(back["Marrow"].case['the "old" marrow'], "capitals", "quotes survive")
     TestRunner:assertEqual(back["Marrow"].add[1], "the Marrow", "search terms beside it")

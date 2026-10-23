@@ -145,6 +145,10 @@ local function diskStamps(ActionCache, file)
   local lpath = ActionCache.getXrayLadderPath and ActionCache.getXrayLadderPath(file)
   local lattr = lpath and lfs.attributes(lpath)
   parts[#parts + 1] = lattr and (tostring(lattr.modification) .. ":" .. tostring(lattr.size)) or "-"
+  -- the names the book's usage sets to capitals only (B533 S3), which change
+  -- when the name index learns the book
+  local _auto, auto_sig = ActionCache.autoCaps(file)
+  parts[#parts + 1] = auto_sig
   return table.concat(parts, "|")
 end
 
@@ -172,11 +176,15 @@ local function onNameIndexReady()
   if not st then return end
   st.index_rev = (st.index_rev or 0) + 1
   st.page_memo, st.page_memo_order = nil, nil
-  -- The spacing may now hide marks already drawn: repaint the whole page
+  -- The spacing may now hide marks already drawn, and what the index learned
+  -- may set names to capitals only (B533 S3), at any spacing: repaint the
+  -- whole page
   st.full_refresh = true
   local plugin = st.plugin
   local ui = plugin and plugin.ui
-  if st.spacing and st.spacing > 1 and ui and ui.document then
+  local _auto, auto_sig = require("koassistant.artifacts.action_cache").autoCaps(st.file)
+  local caps_changed = auto_sig ~= st.auto_sig
+  if ((st.spacing and st.spacing > 1) or caps_changed) and ui and ui.document then
     local okp, pg = pcall(ui.document.getCurrentPage, ui.document)
     if okp and pg then XrayMarks.onPageTurn(plugin, pg) end
   end
@@ -277,7 +285,9 @@ local function ensureIndex(plugin, pageno)
   key = key .. "|group:" .. group_stamp
   if st.artifact_key == key and st.entities then return end
   local XrayParser = require("koassistant.xray.xray_parser")
-  local user_aliases = ActionCache.getUserAliases(st.file)
+  -- the reader's names and the automatic capitals (B533 S3); a group book's
+  -- entities keep their own book's (ActionCache.parsedXrayFor)
+  local user_aliases = ActionCache.matchOverlay(st.file)
   local ents = {}
   local seen_names, seen_terms = {}, {}
   -- First writer wins by IDENTITY within a family, not by name alone (#90
@@ -400,6 +410,9 @@ local function ensureIndex(plugin, pageno)
   end
   st.entities = #ents > 0 and ents or nil
   st.artifact_key = key
+  -- the automatic capitals these entities were built with (onNameIndexReady)
+  local _auto, auto_sig = ActionCache.autoCaps(st.file)
+  st.auto_sig = auto_sig
   st.page_memo, st.page_memo_order = nil, nil
   -- The per-book name index behind the spacing (and Chapter Appearances):
   -- every form of every marked entity, found in the background

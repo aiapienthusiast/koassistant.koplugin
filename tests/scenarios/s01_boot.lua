@@ -18,7 +18,9 @@ for _idx, m in ipairs(marks) do names[m.name] = (m.words or "?") end
 S.note("marks on \"The Grafter\":", #marks)
 for name, words in pairs(names) do S.note(name, "->", words) end
 S.check(names["Gil Rook"] ~= nil, "Gil Rook is marked")
-S.check(names["Jory"] == "Jory,", "Jory is marked, the mark on his name alone")
+-- (the words read back under the mark may take the comma after it, by the
+-- screen's pixels)
+S.check(names["Jory"] ~= nil and names["Jory"]:match("^Jory,?$") ~= nil, "Jory is marked, the mark on his name alone")
 S.check(names["Tamsin Vael"] == nil, "\"Tamsin\" alone is not one of Tamsin Vael's names: no mark")
 S.shot("grafter")
 

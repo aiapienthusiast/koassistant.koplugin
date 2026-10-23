@@ -1094,7 +1094,7 @@ function XrayBrowser:show(xray_data, metadata, ui, on_delete)
     -- Merge user-defined search terms into item aliases
     if metadata.book_file then
         local ActionCache = require("koassistant.artifacts.action_cache")
-        local user_aliases = ActionCache.getUserAliases(metadata.book_file)
+        local user_aliases = ActionCache.matchOverlay(metadata.book_file)
         if next(user_aliases) then
             XrayParser.mergeUserAliases(self.xray_data, user_aliases)
         end
@@ -1632,20 +1632,7 @@ end
 --- sit whole beside the role; otherwise the source title.
 --- @return function label(stub) -> string text, boolean short
 function XrayBrowser:_carriedSourceLabeler()
-    local BookGroups = require("koassistant.books.book_groups")
-    local pos = {}
-    for _idx, g in ipairs(BookGroups.groupsFor(self.metadata.book_file or "") or {}) do
-        if BookGroups.kindOf(g) == BookGroups.KIND_SERIES then
-            for i, p in ipairs(g.books or {}) do
-                if pos[p] == nil then pos[p] = i end
-            end
-        end
-    end
-    return function(stub)
-        local n = type(stub.file) == "string" and pos[stub.file]
-        if n then return T(_("Book %1"), n), true end
-        return type(stub.source) == "string" and stub.source or "", false
-    end
+    return require("koassistant.books.book_groups").carriedSourceLabeler(self.metadata.book_file)
 end
 
 --- Menu rows for carried entries: the ONE row grammar every carried list
@@ -2404,7 +2391,7 @@ function XrayBrowser:reloadLiveMain(file)
     if not (entry and entry.result and XrayParser.isJSON(entry.result)) then return false end
     local data = XrayParser.parse(entry.result)
     if not data or data.error then return false end
-    local user_aliases = ActionCache.getUserAliases(file)
+    local user_aliases = ActionCache.matchOverlay(file)
     if next(user_aliases) then
         XrayParser.mergeUserAliases(data, user_aliases)
     end
@@ -2456,7 +2443,7 @@ function XrayBrowser:_commitDormantOp(apply_fn, success_text)
     -- The view keeps the reader's own aliases (the fresh parse holds none):
     -- entry pages show them, search finds by them, and the review of likely
     -- matches reads them
-    local user_aliases = require("koassistant.artifacts.action_cache").getUserAliases(self.metadata.book_file)
+    local user_aliases = require("koassistant.artifacts.action_cache").matchOverlay(self.metadata.book_file)
     if next(user_aliases) then
         XrayParser.mergeUserAliases(data, user_aliases)
     end
@@ -4285,13 +4272,16 @@ local NAME_KINDS = {
 
 --- The rows of an entry's names screen (B533), pure: the main name, the
 --- aliases it matches (the AI's, the AI's own name after a rename, the names
---- the reader typed or added), then the names set to not matched; `caps` on
---- a name set to capitals only (S2).
+--- the reader typed or added), then the names set to not matched. Capitals:
+--- `case` = the reader's pick ("capitals" | "any", S2/S3), `caps` = the name
+--- matches capitals only (the pick, or the automatic rule: `auto`, S3).
 --- @param item table The entry as the browser holds it (the overlay merged)
 --- @param category_key string
 --- @param rec table|nil The entry's record in the user-aliases sidecar
---- @return table rows { { name, kind = "main"|"ai"|"ai_name"|"typed"|"added", matched, caps } }
-function XrayBrowser.nameRows(item, category_key, rec)
+--- @param auto table|nil the names the book's usage sets to capitals only
+---   (ActionCache.autoCaps), lowered
+--- @return table rows { { name, kind = "main"|"ai"|"ai_name"|"typed"|"added", matched, case, caps, auto } }
+function XrayBrowser.nameRows(item, category_key, rec, auto)
     rec = type(rec) == "table" and rec or {}
     local function set(list)
         local s = {}
@@ -4310,15 +4300,22 @@ function XrayBrowser.nameRows(item, category_key, rec)
         return "ai"
     end
     local case = type(rec.case) == "table" and rec.case or {}
-    local function capsOf(n) return case[n:lower()] == "capitals" or nil end
+    auto = type(auto) == "table" and auto or {}
+    local function row(n, kind, matched)
+        local low = n:lower()
+        local pick = (case[low] == "capitals" or case[low] == "any") and case[low] or nil
+        local by_rule = not pick and auto[low] == true
+        return { name = n, kind = kind, matched = matched, case = pick,
+            caps = pick == "capitals" or by_rule or nil, auto = by_rule or nil }
+    end
     local main = XrayParser.getItemName(item, category_key)
-    local rows = { { name = main, kind = "main", matched = not item._name_off, caps = capsOf(main) } }
+    local rows = { row(main, "main", not item._name_off) }
     local seen = { [main:lower()] = true }
     local function add(list, matched)
         for _idx, n in ipairs(type(list) == "table" and list or {}) do
             if type(n) == "string" and n ~= "" and not seen[n:lower()] then
                 seen[n:lower()] = true
-                rows[#rows + 1] = { name = n, kind = kindOf(n), matched = matched, caps = capsOf(n) }
+                rows[#rows + 1] = row(n, kindOf(n), matched)
             end
         end
     end
@@ -4351,10 +4348,15 @@ function XrayBrowser:editSearchTerms(item, category_key, item_title, source, nav
     -- Search terms belong to the categories matched in the text
     local matchable = not DISTRIBUTION_EXCLUDED[category_key]
     local buttons = {}
-    for _idx, row in ipairs(XrayBrowser.nameRows(item, category_key, rec)) do
+    local auto = ActionCache.autoCaps(self.metadata.book_file)
+    for _idx, row in ipairs(XrayBrowser.nameRows(item, category_key, rec, auto)) do
         local captured = row
+        -- capitals: the reader's pick, or the book's usage (S3)
         local state = not row.matched and _("not matched")
-            or row.caps and _("capitals only") or _("matched")
+            or row.auto and _("capitals only (automatic)")
+            or row.caps and _("capitals only")
+            or row.case == "any" and _("any case")
+            or _("matched")
         table.insert(buttons, {{
             text = T(_("%1 · %2 · %3"), row.name, NAME_KINDS[row.kind], state),
             callback = function()
@@ -4431,21 +4433,27 @@ function XrayBrowser:_showNameOptions(item, category_key, item_title, source, na
             self_ref:_commitRename(category_key, item_name, row.name, self_ref._detail_viewer)
         end)
     end
-    -- Capitals only (S2): the option names its own example
-    if matchable and row.matched then
-        if row.caps then
+    -- Capitals (S2, S3): automatic until the reader picks; each choice but
+    -- the one in force, capitals only naming its own example
+    local shown, lower = XrayParser.capsExample(row.name)
+    if matchable and row.matched and shown then
+        if row.case ~= "capitals" then
+            add(T(_("Match capitals only (\"%1\", not \"%2\")"), shown, lower), function()
+                self_ref:_editSearchTermAction(item, category_key, item_title, source, item_name,
+                    row.name, "capitals", nav_context)
+            end)
+        end
+        if row.case ~= "any" then
             add(_("Match any case"), function()
                 self_ref:_editSearchTermAction(item, category_key, item_title, source, item_name,
                     row.name, "anycase", nav_context)
             end)
-        else
-            local shown, lower = XrayParser.capsExample(row.name)
-            if shown then
-                add(T(_("Match capitals only (\"%1\", not \"%2\")"), shown, lower), function()
-                    self_ref:_editSearchTermAction(item, category_key, item_title, source, item_name,
-                        row.name, "capitals", nav_context)
-                end)
-            end
+        end
+        if row.case then
+            add(_("Back to automatic capitals"), function()
+                self_ref:_editSearchTermAction(item, category_key, item_title, source, item_name,
+                    row.name, "autocase", nav_context)
+            end)
         end
     end
     -- A name the reader added is deleted rather than set aside
@@ -4533,7 +4541,7 @@ function XrayBrowser:_confirmResetNames(item, category_key, item_title, source, 
     local self_ref = self
     local ConfirmBox = require("ui/widget/confirmbox")
     UIManager:show(ConfirmBox:new{
-        text = T(_("Give \"%1\" the AI's names again?\nThe names you typed or added are deleted, and every name the AI gave it is matched again, with or without capitals."),
+        text = T(_("Give \"%1\" the AI's names again?\nThe names you typed or added are deleted, and every name the AI gave it is matched again, with capitals decided automatically."),
             XrayParser.getItemName(item, category_key)),
         ok_text = _("Reset"),
         ok_callback = function()
@@ -4652,14 +4660,20 @@ function XrayBrowser:_editSearchTermAction(item, category_key, item_title, sourc
             table.insert(item.aliases, alias)
         end
 
-    elseif action == "capitals" or action == "anycase" then
-        -- B533 S2: the record by the name as written, lowered; the view's
+    elseif action == "capitals" or action == "anycase" or action == "autocase" then
+        -- B533 S2/S3: the record by the name as written, lowered ("any" keeps
+        -- the automatic rule off the name; no record = automatic); the view's
         -- `_caps` the same way (mergeUserAliases)
+        local pick = (action == "capitals" and "capitals") or (action == "anycase" and "any") or nil
         local case = type(entry.case) == "table" and entry.case or {}
-        case[alias_lower] = action == "capitals" and "capitals" or nil
+        case[alias_lower] = pick
         entry.case = next(case) and case or nil
         local caps = type(item._caps) == "table" and item._caps or {}
-        caps[alias_lower] = action == "capitals" or nil
+        if pick then
+            caps[alias_lower] = pick == "capitals" or nil
+        else
+            caps[alias_lower] = ActionCache.autoCaps(self.metadata.book_file)[alias_lower] or nil
+        end
         item._caps = next(caps) and caps or nil
     end
 
@@ -7414,7 +7428,7 @@ function XrayBrowser:_openOtherXrayAtItem(group, result)
 
     -- Merge user aliases
     if self.metadata.book_file then
-        local user_aliases = ActionCache.getUserAliases(self.metadata.book_file)
+        local user_aliases = ActionCache.matchOverlay(self.metadata.book_file)
         if next(user_aliases) then
             XrayParser.mergeUserAliases(data, user_aliases)
         end

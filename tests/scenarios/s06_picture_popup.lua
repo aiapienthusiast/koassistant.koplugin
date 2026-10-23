@@ -1,14 +1,16 @@
 -- B537 on the real widgets: a tap of Generate Image opens the picture popup
--- (the scope popup's shape). The passage up to four lines; a note and the
--- X-Ray entries the prompt writer reads (at first the ones the passage names);
--- then each setting as the X-Ray creation form's dials show theirs ("Shape:
--- Portrait ▾", a tap opens its list): Style, Shape, Detail, the provider and
--- model that draw; Write the prompt with AI; Generate at the foot. A pick is the setting; the note and the entries
--- go with this picture only. The entry list: the picked, the suggested, then
--- each category, and closing it keeps what is ticked. The long-press offers
--- no run buttons. Illustrate… and a gallery picture's Image settings… open
--- the same popup. Nothing is drawn: the generator is replaced by a recorder
--- (the network is blocked anyway).
+-- (the scope popup's shape). The passage is not repeated; a note and the
+-- X-Ray entries the prompt writer reads (at first the ones the passage names,
+-- carried entries among them); then each setting as the X-Ray creation
+-- form's dials show theirs ("Shape: Portrait ▾", a tap opens its list):
+-- Prompt (Write the prompt with AI) beside Style, Shape beside Detail, the
+-- provider beside the model that draws; Generate at the foot. A pick is the
+-- setting; the note and the entries go with this picture only. The entry
+-- list: the picked, the suggested, then each category, a carried entry
+-- naming its book, and closing it keeps what is ticked. The long-press
+-- offers no run buttons. Illustrate… and a gallery picture's Image
+-- settings… open the same popup. Nothing is drawn: the generator is
+-- replaced by a recorder (the network is blocked anyway).
 local S = dofile(os.getenv("KOA_PLUGIN") .. "/tests/scenarios/boot.lua")
 -- An image provider with a key (a fake key in the run's own settings)
 S.features({ image_gen_provider = "openai", api_keys = { openai = "sk-scenario-not-a-key" } })
@@ -60,19 +62,15 @@ local all = table.concat(S.texts(), " | ")
 S.note("popup:", all)
 S.check(title() == "Generate Image", "a tap opens the picture popup")
 local drawn_texts = drawnTexts()
-S.check(drawn_texts:find("Gil Rook handed Tamsin", 1, true) ~= nil, "the passage under the title")
+S.check(not drawn_texts:find("Gil Rook handed Tamsin", 1, true), "the passage just selected is not repeated")
 S.check(not drawn_texts:find("For this picture", 1, true), "no heading over the picture's own buttons")
 S.check(all:find("Add a note… | X-Ray entries: Gil Rook ▾", 1, true) ~= nil,
     "a note, and the entry the passage names already on the list")
-S.check(all:find("Style: Book illustration ▾ | Shape: Fit my screen ▾ | Detail: Draft ▾", 1, true) ~= nil,
-    "each setting by its name and value, as the creation form's dials")
+S.check(all:find("Prompt: Written by AI ▾ | Style: Book illustration ▾ | Shape: Fit my screen ▾ | Detail: Draft ▾", 1, true) ~= nil,
+    "each setting by its name and value, two to a row, as the creation form's dials")
 S.check(all:find("Provider: OpenAI ▾ | Model: gpt-image-2.5-flare ▾", 1, true) ~= nil,
     "the provider and the model that draw")
-local writer_on
-for _idx, b in ipairs(S.buttons()) do
-    if b.text == "Write the prompt with AI" then writer_on = b.checked end
-end
-S.check(writer_on == true, "Write the prompt with AI, on")
+S.check(not all:find("Write the prompt with AI", 1, true), "no check box: the Prompt dial says it")
 S.check(all:find("Generate", 1, true) ~= nil, "Generate at the foot")
 S.check(drawn == nil, "nothing drawn yet")
 local frame = S.top()._frame
@@ -81,27 +79,13 @@ S.check(frame.dimen.h <= S.Screen:getHeight() and S.top()._scroll == nil,
     "the popup fits the screen without scrolling")
 S.shot("popup")
 
--- ── A long passage takes four lines at most: the popup still fits ──
+-- ── A long passage: the popup keeps its size (the passage is not shown) ──
 S.closeAll()
 local long_passage = string.rep("He handed Tamsin the knife by way of hello, and the cart came up the lane. ", 6)
 Dialogs.executeDirectAction(ui, Actions.highlight.image_gen, long_passage, S.plugin.configuration, S.plugin)
 S.settle()
-local passage_box
-local function findBox(node, seen)
-    seen = seen or {}
-    if type(node) ~= "table" or seen[node] or passage_box then return end
-    seen[node] = true
-    if node.vertical_string_list and type(node.text) == "string" and node.text:find("He handed", 1, true) then
-        passage_box = node
-        return
-    end
-    for i = 1, #node do findBox(node[i], seen) end
-end
-findBox(S.top()._frame)
-S.check(passage_box and passage_box.lines_per_page == 4 and passage_box.line_with_ellipsis == 4,
-    "a 450-character passage: four lines, an ellipsis on the fourth")
-S.check(S.top()._scroll == nil and S.top()._frame.dimen.h <= S.Screen:getHeight(), "and no scrolling")
-S.shot("long_passage")
+S.check(S.top()._scroll == nil and S.top()._frame.dimen.h == frame.dimen.h,
+    "a 450-character passage: the same popup, no scrolling")
 S.closeAll()
 Dialogs.executeDirectAction(ui, Actions.highlight.image_gen, passage, S.plugin.configuration, S.plugin)
 S.settle()
@@ -127,8 +111,9 @@ for i = #S.UIManager._window_stack, 1, -1 do
     if not box and w.title == "Note for the picture" then box = w end
 end
 S.check(box ~= nil, "the note box opens over the popup")
-S.check(box and box.description == nil and type(box.input_hint) == "string",
-    "no explanation over the box: the example is its gray hint")
+S.check(box and box.description == nil and type(box.input_hint) == "string"
+    and box.input_hint:find("what to include", 1, true) ~= nil,
+    "no explanation over the box: the examples are its gray hint")
 S.shot("note_box")
 box:setInputText("at dusk, Jory at the gate")
 S.tap("OK")
@@ -140,7 +125,8 @@ S.tap({ "^X%-Ray entries:" })
 local rows = S.texts()
 S.note("picker:", table.concat(rows, " | "))
 S.check(rows[1]:find("^\u{2611} Jory") and rows[2]:find("^\u{2611} Gil Rook"), "the picked first, ticked")
-S.check(rows[3] == "Suggested" and rows[4]:find("^\u{2610} Tamsin Vael"),
+local suggested = table.concat(rows, "|"):match("|Suggested|(.-)|Cast|") or ""
+S.check(rows[3] == "Suggested" and suggested:find("\u{2610} Tamsin Vael", 1, true) ~= nil,
     "then the suggested: Tamsin, named by one word of her name")
 S.check(table.concat(rows, "|"):find("|Cast|", 1, true) ~= nil, "then the rest under their categories")
 S.check(not table.concat(rows, "|"):find("Done", 1, true), "no Done to find")
@@ -154,13 +140,18 @@ S.settle()
 S.check(S.find("X-Ray entries: Gil Rook, Hollowmere ▾") ~= nil, "closing the list keeps what is ticked, in the order picked")
 S.shot("popup_filled")
 
--- ── The writer off: nothing reads the entries ──
-S.tap("Write the prompt with AI")
+-- ── The writer off, picked in the Prompt list: nothing reads the entries ──
+S.tap("Prompt: Written by AI ▾")
+S.check(S.find("The passage as is, with your note and the style") ~= nil, "Prompt opens its two choices")
+S.shot("prompt_list")
+S.tap("The passage as is, with your note and the style")
 S.check(features().image_gen_writer == false, "Write the prompt with AI is saved off")
+S.check(S.find("Prompt: Passage as is ▾") ~= nil, "the dial shows it")
 local pb = picksButton()
 S.check(pb and pb.button.enabled == false, "the entries button is grayed while the writer is off")
-S.tap("Write the prompt with AI")
-S.check(features().image_gen_writer ~= false, "and back on")
+S.tap("Prompt: Passage as is ▾")
+S.tap("Written by AI, from the passage, the entries and your note")
+S.check(features().image_gen_writer ~= false and S.find("Prompt: Written by AI ▾") ~= nil, "and back on")
 
 -- ── Generate: the note and the entries go with this picture ──
 local drawn_from = S.top()
@@ -249,6 +240,34 @@ S.tap("Illustrate")
 S.check(drawn and drawn.gen_opts.entry and drawn.gen_opts.entry.name == "Gil Rook", "Illustrate draws the entry")
 S.closeAll()
 
+-- ── Carried entries: named, listed with their book, picked like the book's own ──
+-- (the carried list refreshed from the series first, as any X-Ray change does)
+require("koassistant.xray.xray_merge").refreshCarried(file, features(), "anthropic", ui)
+S.settle()
+S.chapter("The Inn Sign")
+drawn = nil
+Dialogs.executeDirectAction(ui, Actions.highlight.image_gen,
+    "Dorrit Hale, the letters said, was selling. The Warden was named in the small print.",
+    S.plugin.configuration, S.plugin)
+S.settle()
+S.check(S.find("X-Ray entries: Dorrit Hale, the Warden ▾") ~= nil,
+    "the carried Dorrit Hale and the Warden: \"The Warden\" is the carried character, not this book's term")
+S.tap({ "^X%-Ray entries:" })
+rows = S.texts()
+S.note("picker:", table.concat(rows, " | "))
+S.check(rows[1]:find("^\u{2611} Dorrit Hale") and rows[1]:find("Book 2", 1, true),
+    "a carried entry names its book, as the X-Ray's category pages do")
+S.check(table.concat(rows, "|"):find("Elias Penrose", 1, true) ~= nil, "every carried entry can be picked")
+S.check(not (table.concat(rows, "|"):match("|Suggested|(.-)|Cast|") or ""):find("The Drowned", 1, true),
+    "the sentence's opening \"The\" suggests nothing")
+S.shot("picker_carried")
+S.top():onClose()
+S.settle()
+S.tap("Generate")
+S.check(drawn and table.concat(drawn.gen_opts.picked or {}, "|") == "Dorrit Hale|the Warden", "they go to the writer")
+S.closeAll()
+S.chapter("The Grafter")
+
 -- ── The chat provider cannot draw: the provider question first ──
 local f = S.plugin.settings:readSetting("features")
 f.image_gen_provider, f.provider = "auto", "anthropic"
@@ -314,7 +333,7 @@ S.settle()
 all = table.concat(S.texts(), " | ")
 S.note("Image settings:", all)
 S.check(title() == "Image settings" and not all:find("Add a note", 1, true)
-    and not all:find("Write the prompt with AI", 1, true), "the gallery's: settings only")
+    and not all:find("Prompt:", 1, true), "the gallery's: settings only, no prompt to write")
 S.check(all:find("Regenerate and replace", 1, true) ~= nil, "with the two Regenerates")
 S.shot("image_settings")
 S.closeAll()

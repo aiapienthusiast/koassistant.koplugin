@@ -102,7 +102,7 @@ Carried entries are what the other books of a group know that this book has not 
 - The carried list follows the group as it is now. When a book leaves the group, the group is deleted, the books are put in another order or the kind changes, each book drops the carried entries, and the "From" lines on its own entries, of the books it no longer takes from: a book that left, every book of a deleted group, in a series a book that now comes after it, everything in a plain group. What an AI merge added stays, and so do an entry you carried by hand (**Add to this book's carried list**), an entry you added from the carried list, and the ones you removed. Putting a book back brings its entries back.
 - In a series, a book's list comes from the nearest earlier book with an X-Ray, and that book's own carried list comes along with it, so one book passes on everything before it. In a project it comes from every other book with an X-Ray.
 - A book holds a carried list once it has its own main X-Ray. Only X-Rays your privacy settings let the AI read are used: text extraction allowed for that book, or a trusted provider (see [Privacy and Data](Privacy-and-Data)).
-- An entry this book already has gets what the other book says about it attached as a line naming that book, also at no cost.
+- An entry this book already has gets what the other book says about it attached as a line naming that book, also at no cost. "Already has" means an entry of the same kind (a person as a person, a place as a place): the earlier book's character "the Warden" is carried even when this book has the term "Warden".
 - A book's timeline (or argument development) and its status block are never carried: they belong to that book.
 - When the earlier books name one character differently (a short name in one volume, the full name in the next), the list still shows one row, with the other volume's description as a "From earlier books" line. When two books carry the same entry, each book's text is kept as that book's line.
 - Japanese names that a model wrote with "_" or "-" in place of "・" are read as one name, so one character does not become two entries.
@@ -153,7 +153,7 @@ In an entry's **More…** popup, **Link with a group member's entry…** asks fo
 
 ### Adding another book's entry to this book
 
-An entry found in another book of the group (by a lookup, a card or the search) opens read-only with **Open in *Title*'s X-Ray** and **Add to this book's carried list**: it then waits on this book's carried list like any carried entry, at no cost. The row reads **Already in this book's X-Ray** or **Already on this book's carried list** when that is so. Adding needs text extraction allowed for the other book, or a trusted provider.
+An entry found in another book of the group (by a lookup, a card or the search) opens read-only with **Open in *Title*'s X-Ray** and **Add to this book's carried list**: it then waits on this book's carried list like any carried entry, at no cost. The row reads **Already in this book's X-Ray** or **Already on this book's carried list** when that is so, judged by an entry of the same kind. Adding needs text extraction allowed for the other book, or a trusted provider.
 
 ## AI merge (paid)
 

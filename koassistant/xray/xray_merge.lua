@@ -691,25 +691,37 @@ function XrayMerge.populateDormant(base_parsed, delta, source_parsed, source_tit
         return bg
     end
     -- Everything the target can already match: its actives + the delta's
-    -- arriving entities (they become actives in the merge right after this)
-    local present = buildEntityLookup(base_parsed)
+    -- arriving entities (they become actives in the merge right after this),
+    -- by family, the wake-pass's rule (round 26): a source entry is already
+    -- here only as an entry of its family, so the character "the Warden"
+    -- (alias "Warden") is carried beside the term "Warden"
+    local present = {}
+    local function learn(key, name, entry)
+        if type(name) ~= "string" or name == "" then return end
+        local family = XrayParser.CATEGORY_FAMILY[key] or key
+        present[family] = present[family] or {}
+        if present[family][name:lower()] == nil then present[family][name:lower()] = entry end
+    end
+    for _idx, cat in ipairs(XrayParser.getCategories(base_parsed)) do
+        if not PROTECTED_CATEGORIES[cat.key] and type(cat.items) == "table" then
+            for _idx2, item in ipairs(cat.items) do
+                if type(item) == "table" then
+                    learn(cat.key, XrayParser.getItemName(item, cat.key), item)
+                    for _idx3, alias in ipairs(type(item.aliases) == "table" and item.aliases or {}) do
+                        learn(cat.key, alias, item)
+                    end
+                end
+            end
+        end
+    end
     if type(delta) == "table" then
         for key, arr in pairs(delta) do
             if not PROTECTED_CATEGORIES[key] and type(arr) == "table" then
                 for _idx, entry in ipairs(arr) do
                     if type(entry) == "table" then
-                        local name = entry.name or entry.term
-                        if type(name) == "string" and name ~= ""
-                            and present[name:lower()] == nil then
-                            present[name:lower()] = entry
-                        end
-                        if type(entry.aliases) == "table" then
-                            for _idx2, alias in ipairs(entry.aliases) do
-                                if type(alias) == "string" and alias ~= ""
-                                    and present[alias:lower()] == nil then
-                                    present[alias:lower()] = entry
-                                end
-                            end
+                        learn(key, entry.name or entry.term, entry)
+                        for _idx2, alias in ipairs(type(entry.aliases) == "table" and entry.aliases or {}) do
+                            learn(key, alias, entry)
                         end
                     end
                 end
@@ -816,11 +828,13 @@ function XrayMerge.populateDormant(base_parsed, delta, source_parsed, source_tit
             added = added + 1
         end
     end
-    local function isPresent(name, aliases)
-        if type(name) == "string" and name ~= "" and present[name:lower()] then return true end
+    local function isPresent(name, aliases, key)
+        local here = present[XrayParser.CATEGORY_FAMILY[key] or key]
+        if not here then return false end
+        if type(name) == "string" and name ~= "" and here[name:lower()] then return true end
         if type(aliases) == "table" then
             for _idx, a in ipairs(aliases) do
-                if type(a) == "string" and a ~= "" and present[a:lower()] then return true end
+                if type(a) == "string" and a ~= "" and here[a:lower()] then return true end
             end
         end
         return false
@@ -864,7 +878,7 @@ function XrayMerge.populateDormant(base_parsed, delta, source_parsed, source_tit
                             -- Only cleanly attributable carried lines ride along
                             background = stubLines(item.background),
                         }
-                        if not isPresent(name, item.aliases) then
+                        if not isPresent(name, item.aliases, cat.key) then
                             stash(stub)
                         elseif enrich then
                             present_stubs[#present_stubs + 1] = stub

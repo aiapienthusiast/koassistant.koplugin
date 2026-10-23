@@ -275,7 +275,7 @@ function ImageGenerator.askNote(prefill, on_ok, opts)
     dialog = InputDialog:new{
         title = _("Note for the picture"),
         input = prefill or "",
-        input_hint = _("Details for the picture, e.g. at night, close up, in the rain"),
+        input_hint = _("Details for the picture (at night, close up, in the rain), what to include, or other instructions"),
         allow_newline = true,
         text_height = Screen:scaleBySize(96),
         buttons = buttons,
@@ -341,9 +341,12 @@ function ImageGenerator.pickEntries(tiers, picks, on_done)
             if label then out[#out + 1] = { text = label, bold = true, callback = function() end } end
             for _idx, row in ipairs(shown) do
                 local r = row
+                -- a carried entry names its book, as the X-Ray's category
+                -- pages do ("Innkeeper · Book 2")
                 out[#out + 1] = {
                     text = (chosen[r.name:lower()] and "\u{2611} " or "\u{2610} ") .. r.name
-                        .. (r.role and (" \u{00B7} " .. r.role) or ""),
+                        .. (r.role and (" \u{00B7} " .. r.role) or "")
+                        .. (r.from and (" \u{00B7} " .. r.from) or ""),
                     callback = function() toggle(r) end,
                 }
             end
@@ -1894,6 +1897,30 @@ function ImageGenerator._regenerateImpl(spec, config_table, settings)
     end)
 end
 
+--- The X-Ray a passage picture's entries come from (B537): the book's own
+--- installed X-Ray with its carried entries among its own entries
+--- (PromptWriter.withCarried, each carried row naming its book), minus the
+--- rows carried from a book whose text is Never for a provider the material
+--- reaches (the entity index's rule: XrayMerge.neverSourceFiles). Returns
+--- that data and ActionCache.parsedXrayFor's answer; nil without an X-Ray.
+--- @param path string|nil the book
+--- @param features table
+--- @param providers table the providers the material reaches
+--- @param ui table|nil
+function ImageGenerator.pictureXray(path, features, providers, ui)
+    local xray = path and require("koassistant.artifacts.action_cache").parsedXrayFor(path) or nil
+    if not xray then return nil end
+    local XrayMerge = require("koassistant.xray.xray_merge")
+    local skip = {}
+    for _idx, p in ipairs(providers or {}) do
+        for file in pairs(XrayMerge.neverSourceFiles(xray.data, features or {}, p, ui)) do skip[file] = true end
+    end
+    return require("koassistant.images.prompt_writer").withCarried(xray.data, {
+        skip = skip,
+        from = require("koassistant.books.book_groups").carriedSourceLabeler(path),
+    }), xray
+end
+
 --- What a run sends and to whom, the question for it, then the run (S5, D12):
 --- with the prompt writer on, the text around the passage and the X-Ray
 --- descriptions reach two providers (the writer's, which reads them, and the
@@ -1918,11 +1945,13 @@ function ImageGenerator._askAndRun(provider, description, config_table, settings
     -- The book's own installed X-Ray: the entries the passage or the reader's
     -- note names (the writer reads them, D10; B535: "this is X" brings X), or
     -- the reader's list from the picture popup (B537), or the entry to draw;
-    -- stored material, judged by the kinds it was built from
-    local xray = path and require("koassistant.artifacts.action_cache").parsedXrayFor(path) or nil
+    -- stored material, judged by the kinds it was built from. Its carried
+    -- entries count too, but none from a book whose text is Never for a
+    -- provider here (a pick made before the provider changed included)
+    local picture_data, xray = ImageGenerator.pictureXray(path, features, recipients, opts.ui)
     local entries = {}
     if writer_on and not opts.entry and xray then
-        entries = PromptWriter.entriesFor(description, xray.data, nil, opts.note, opts.picked)
+        entries = PromptWriter.entriesFor(description, picture_data, nil, opts.note, opts.picked)
     end
     -- B486: what the picture shows, recorded with it (the entry drawn, or the
     -- entries the writer read; with the writer off, the ones the passage and
@@ -1933,7 +1962,7 @@ function ImageGenerator._askAndRun(provider, description, config_table, settings
     elseif xray then
         about = {}
         local list = writer_on and entries
-            or PromptWriter.entriesFor(description, xray.data, nil, opts.note)
+            or PromptWriter.entriesFor(description, picture_data, nil, opts.note)
         for _idx, e in ipairs(list) do about[#about + 1] = e.name end
     end
     local stored = (#entries > 0) and xray.entry or nil
@@ -1965,9 +1994,15 @@ function ImageGenerator._askAndRun(provider, description, config_table, settings
         if opts.entry then
             amounts.book_text = _("this entry's description from the book's X-Ray (made from its text)")
         else
-            local names = {}
-            for _idx, e in ipairs(entries) do names[#names + 1] = e.name end
-            amounts.book_text = T(_("the X-Ray descriptions of %1 (made from the book's text)"), table.concat(names, ", "))
+            local names, carried = {}, false
+            for _idx, e in ipairs(entries) do
+                names[#names + 1] = e.name
+                carried = carried or e.carried == true
+            end
+            amounts.book_text = carried
+                and T(_("the X-Ray descriptions of %1 (made from the text of this book and of the books they are carried from)"),
+                    table.concat(names, ", "))
+                or T(_("the X-Ray descriptions of %1 (made from the book's text)"), table.concat(names, ", "))
         end
         amounts.highlights = _("X-Ray descriptions made with your highlights")
         amounts.annotations = _("X-Ray descriptions made with your notes on highlights")

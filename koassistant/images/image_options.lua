@@ -1,14 +1,14 @@
 --[[--
 The picture popup (B537): what one picture is drawn with, on a tap of Generate
 Image, at Illustrate… and from a gallery picture's Image settings…, in the
-shape of the scope and source popup (the button that draws at the foot). The
-passage first, up to four lines; then the note and the X-Ray entries the
-prompt writer reads (a passage picture: at first the entries the passage and
-the note name), both gone after the run. Then the settings (image round S9,
+shape of the scope and source popup (the button that draws at the foot).
+First the note and the X-Ray entries the prompt writer reads (a passage
+picture: at first the entries the passage and the note name, carried entries
+among them), both gone after the run. Then the settings (image round S9,
 B496), each a button that names it and shows its value, a tap opens its list
-(the X-Ray creation form's dials: "Shape: Portrait ▾", two to a row): Style,
-Shape and Detail, the provider and model that draw, Write the prompt with AI
-where a prompt is written. Those are the Settings rows themselves, built
+(the X-Ray creation form's dials: "Shape: Portrait ▾", two to a row): Prompt
+(Write the prompt with AI) beside Style, Shape beside Detail, the provider
+beside the model that draws. Those are the Settings rows themselves, built
 from the schema through SettingsManager, so a pick is the setting, saved as
 Settings → Advanced → Image Generation saves it. The popup stays open under
 the pickers it opens (the note box, the entry list, the setting lists), so
@@ -29,11 +29,10 @@ local MODEL_ROW = {
     openrouter = "image_gen_model_openrouter",
 }
 
--- The longest a note, the picked names or a typed style show on their button
+-- The longest a note, the picked names or a value show on their button; a
+-- typed style shares its row with Prompt
 local SHOWN_MAX = 40
--- The passage's lines at most, and the most of it laid out
-local PASSAGE_LINES = 4
-local PASSAGE_MAX = 600
+local STYLE_MAX = 20
 
 --- A picker's items as the quick-settings popup shows them: a label for an
 --- item that only computes one (Custom…). Pure.
@@ -134,13 +133,13 @@ end
 
 --- The popup's rows in order, without widgets. Each:
 ---   { id, gap = true|nil, kind = "buttons", items = { { id, text, enabled, callback } } }
----   { id, kind = "check", item = { text, checked, callback } }
 --- Rows of buttons draw as one table; gap starts another below a space. A
 --- callback changes a setting or the picture's state and then calls rebuild;
 --- one that opens a picker leaves the popup open under it.
---- spec: { writer, note (offer the note), passage (the selection), xray (the
---- parsed X-Ray whose entries can be picked, nil = no picks), state =
---- { note, picked, from_note } (the picture's own) }.
+--- spec: { writer (the Prompt button), note (offer the note), passage (the
+--- selection, read for the entry suggestions), xray (the X-Ray whose entries
+--- can be picked, carried ones folded in by PromptWriter.withCarried; nil =
+--- no picks), state = { note, picked, from_note } (the picture's own) }.
 function ImageOptions.rows(plugin, spec, rebuild)
     local SettingsSchema = require("koassistant.ui.settings_schema")
     local SettingsManager = require("koassistant.ui.settings_manager")
@@ -162,10 +161,10 @@ function ImageOptions.rows(plugin, spec, rebuild)
         plugin:showQuickSettingsPopup(label, ImageOptions.popupItems(items), true, rebuild)
     end
     -- The value a list stands on: its checked item's words
-    local function valueOf(items)
+    local function valueOf(items, max)
         for _idx, it in ipairs(items or {}) do
             if it.checked_func and it.checked_func() then
-                return shown(it.text or (it.text_func and it.text_func()) or "")
+                return shown(it.text or (it.text_func and it.text_func()) or "", max)
             end
         end
     end
@@ -215,16 +214,43 @@ function ImageOptions.rows(plugin, spec, rebuild)
         rows[#rows + 1] = { id = "picture", kind = "buttons", items = mine }
     end
 
-    -- Style on a row of its own (a typed style runs long), then Shape and
-    -- Detail; a tap opens the list (Style's Custom… asks for the reader's
-    -- words in a box of its own)
+    -- How the prompt is made (where a prompt is written) beside the Style,
+    -- then Shape and Detail; a tap opens the list (Style's Custom… asks for
+    -- the reader's words in a box of its own). Without the Prompt button the
+    -- Style has the row to itself.
+    local first = {}
+    local writer_mi = spec.writer and menuItem("image_gen_writer")
+    if writer_mi then
+        -- the Write the prompt with AI setting as two choices; a pick that
+        -- matches the setting leaves it
+        local function choose(on)
+            return function()
+                if (writer_mi.checked_func() and true or false) ~= on then writer_mi.callback() end
+            end
+        end
+        first[#first + 1] = {
+            id = "prompt",
+            text = T(_("Prompt: %1 ▾"), writer_mi.checked_func() and _("Written by AI") or _("Passage as is")),
+            callback = function()
+                picker(_("Prompt"), {
+                    { text = _("Written by AI, from the passage, the entries and your note"),
+                      checked_func = function() return writer_mi.checked_func() and true or false end,
+                      callback = choose(true) },
+                    { text = _("The passage as is, with your note and the style"),
+                      checked_func = function() return not writer_mi.checked_func() end,
+                      callback = choose(false) },
+                })
+            end,
+        }
+    end
     local style_mi = menuItem("image_gen_style")
     local styles = plugin:imageStyleItems(rebuild) or {}
-    rows[#rows + 1] = { id = "style", gap = #rows > 0 or nil, kind = "buttons", items = { {
+    first[#first + 1] = {
         id = "style",
-        text = T(_("Style: %1 ▾"), valueOf(styles) or ""),
+        text = T(_("Style: %1 ▾"), valueOf(styles, writer_mi and STYLE_MAX or nil) or ""),
         callback = function() picker(titleOf(style_mi, _("Style")), styles) end,
-    } } }
+    }
+    rows[#rows + 1] = { id = "style", gap = #rows > 0 or nil, kind = "buttons", items = first }
     local look = {}
     local shape_mi = menuItem("image_gen_shape")
     if shape_mi then
@@ -275,37 +301,21 @@ function ImageOptions.rows(plugin, spec, rebuild)
         end }
     end
     rows[#rows + 1] = { id = "drawn", kind = "buttons", items = drawn }
-
-    if spec.writer then
-        local writer_mi = menuItem("image_gen_writer")
-        if writer_mi then
-            rows[#rows + 1] = { id = "writer", kind = "check", item = {
-                text = writer_mi.text,
-                checked = writer_mi.checked_func(),
-                callback = function()
-                    writer_mi.callback()
-                    rebuild()
-                end,
-            } }
-        end
-    end
     return rows
 end
 
---- Show the popup. spec = { title, passage (the selection, shown in gray under
---- the title and read for the entry suggestions), writer (the Write the prompt
---- with AI row), note (the note), xray (the parsed X-Ray whose entries can be
---- picked), state = { note, picked }, actions = { { text, callback }, ... }
---- (each closes the popup first) }. plugin = the KOAssistant instance (its
---- settings, the quick-settings popup and the Style and OpenRouter pickers).
---- Returns the shown window.
+--- Show the popup. spec = { title, passage (the selection, read for the entry
+--- suggestions; the reader has just selected it, so it is not shown again),
+--- writer (the Prompt button), note (the note), xray (the X-Ray whose entries
+--- can be picked), state = { note, picked }, actions = { { text, callback },
+--- ... } (each closes the popup first) }. plugin = the KOAssistant instance
+--- (its settings, the quick-settings popup and the Style and OpenRouter
+--- pickers). Returns the shown window.
 function ImageOptions.show(plugin, spec)
     local UIManager = require("ui/uimanager")
     local Blitbuffer = require("ffi/blitbuffer")
     local ButtonTable = require("ui/widget/buttontable")
     local CenterContainer = require("ui/widget/container/centercontainer")
-    local CheckButton = require("ui/widget/checkbutton")
-    local Font = require("ui/font")
     local FrameContainer = require("ui/widget/container/framecontainer")
     local Geom = require("ui/geometry")
     local GestureRange = require("ui/gesturerange")
@@ -313,18 +323,12 @@ function ImageOptions.show(plugin, spec)
     local MovableContainer = require("ui/widget/container/movablecontainer")
     local ScrollableContainer = require("ui/widget/container/scrollablecontainer")
     local Size = require("ui/size")
-    local TextBoxWidget = require("ui/widget/textboxwidget")
     local TitleBar = require("ui/widget/titlebar")
     local VerticalGroup = require("ui/widget/verticalgroup")
     local VerticalSpan = require("ui/widget/verticalspan")
     local Screen = require("device").screen
     spec = spec or {}
     spec.state = spec.state or {}
-    -- The passage as shown: on one line of words, quoted
-    local passage
-    if type(spec.passage) == "string" and spec.passage:match("%S") then
-        passage = "\u{201C}" .. shown(spec.passage, PASSAGE_MAX) .. "\u{201D}"
-    end
 
     local Device = require("device")
     local current, first_frame_h, scrolled
@@ -332,8 +336,6 @@ function ImageOptions.show(plugin, spec)
         local screen_w, screen_h = Screen:getWidth(), Screen:getHeight()
         local dialog_w = math.floor(math.min(screen_w, screen_h) * 0.8)
         local content_w = dialog_w - 2 * Size.padding.large
-        local check_face = Font:getFace("cfont", 20)
-        local info_face = Font:getFace("cfont", 16)
         -- The window first: every widget in it repaints through it, so a row
         -- of the scrolled layout is cropped by the scroll
         local window = InputContainer:new{ dimen = Geom:new{ x = 0, y = 0, w = screen_w, h = screen_h } }
@@ -349,25 +351,6 @@ function ImageOptions.show(plugin, spec)
         -- The rows at a width: the column's, or narrower beside a scrollbar
         local function body(width)
             local vgroup = VerticalGroup:new{ align = "left" }
-            -- The passage in gray, up to four lines, then an ellipsis: what is
-            -- drawn, never the line that makes the popup scroll
-            if passage then
-                table.insert(vgroup, VerticalSpan:new{ width = Size.padding.default })
-                local box = TextBoxWidget:new{
-                    text = passage, face = info_face, width = width,
-                    fgcolor = Blitbuffer.COLOR_DARK_GRAY,
-                }
-                local max_h = PASSAGE_LINES * box:getLineHeight()
-                if box:getSize().h > max_h then
-                    box:free()
-                    box = TextBoxWidget:new{
-                        text = passage, face = info_face, width = width,
-                        fgcolor = Blitbuffer.COLOR_DARK_GRAY,
-                        height = max_h, height_overflow_show_ellipsis = true,
-                    }
-                end
-                table.insert(vgroup, box)
-            end
             -- Rows of buttons in one table, in the creation form's smaller
             -- type; a gap starts another table below a space
             local pending = {}
@@ -388,14 +371,6 @@ function ImageOptions.show(plugin, spec)
                             callback = it.callback, font_size = 16, font_bold = false }
                     end
                     pending[#pending + 1] = line
-                elseif row.kind == "check" then
-                    flush()
-                    table.insert(vgroup, VerticalSpan:new{ width = Size.padding.default })
-                    table.insert(vgroup, CheckButton:new{
-                        text = row.item.text, checked = row.item.checked, face = check_face,
-                        width = width, parent = window, show_parent = window,
-                        callback = row.item.callback,
-                    })
                 end
             end
             flush()

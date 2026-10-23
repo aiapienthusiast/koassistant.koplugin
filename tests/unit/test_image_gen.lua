@@ -987,6 +987,51 @@ local function runAll()
         package.loaded["koassistant.artifacts.action_cache"], Gates.bookOverrides = real_ac, real_overrides
         if not ok then error(err, 0) end
     end)
+    TestRunner:test("carried entries reach the writer too, none from a book whose text is Never (B537)", function()
+        local Gates = require("koassistant.request.privacy_gates")
+        local real_ac, real_overrides = package.loaded["koassistant.artifacts.action_cache"], Gates.bookOverrides
+        package.loaded["koassistant.artifacts.action_cache"] = { parsedXrayFor = function()
+            return { data = { type = "fiction", characters = { { name = "Mara", description = "A red scarf." } },
+                __dormant = {
+                    { name = "Dorrit Hale", category = "characters", description = "Keeps the inn.",
+                      source = "Vol 2", file = "/books/v2.epub" },
+                    { name = "Zeph Umber", category = "characters", description = "A diver.",
+                      source = "Vol 1", file = "/books/never.epub" },
+                } }, entry = { used_book_text = true } }
+        end }
+        Gates.bookOverrides = function(path)
+            if path == "/books/never.epub" then return { book_text = false } end
+            return {}
+        end
+        local passage = "Mara met Dorrit Hale and Zeph Umber."
+        local ok, err = pcall(withApikeys, { openai = "sk-real-key" }, function()
+            withRun("A scene.", function(cap)
+                ImageGenerator._askAndRun("openai", passage, config({ enable_book_text_extraction = true }),
+                    mockSettings({}), { file = "/books/b.epub", title = "B" }, {})
+                local material = cap.writer.messages[#cap.writer.messages].content
+                TestRunner:assert(material:find('<xray_entry name="Dorrit Hale" type="person">Keeps the inn.</xray_entry>', 1, true),
+                    material)
+                TestRunner:assert(not material:find("A diver.", 1, true), "the Never book's entry stays out: " .. material)
+            end)
+            withRun("A scene.", function(cap)
+                -- a pick made in the popup: the run judges it again
+                ImageGenerator._askAndRun("openai", passage, config({ enable_book_text_extraction = true }),
+                    mockSettings({}), { file = "/books/b.epub", title = "B" }, { picked = { "Zeph Umber", "Dorrit Hale" } })
+                local material = cap.writer.messages[#cap.writer.messages].content
+                TestRunner:assert(not material:find("A diver.", 1, true), material)
+                TestRunner:assert(material:find("Keeps the inn.", 1, true), material)
+            end)
+            withRun("A scene.", function(cap)
+                ImageGenerator._askAndRun("openai", passage, config({}),
+                    mockSettings({}), { file = "/books/b.epub", title = "B" }, {})
+                TestRunner:assert(cap.shown[1] and cap.shown[1].title:find("the books they are carried from", 1, true),
+                    "the question says where carried descriptions come from: "
+                    .. tostring(cap.shown[1] and cap.shown[1].title))
+            end)
+        end)
+        package.loaded["koassistant.artifacts.action_cache"], Gates.bookOverrides = real_ac, real_overrides
+        if not ok then error(err, 0) end
+    end)
 
     print("  [The gallery: thumbnails, the index, Regenerate (S7)]")
     local function list(t) return table.concat(t or {}, ",") end
@@ -1514,18 +1559,19 @@ local function runAll()
             local rows = ImageOptions.rows(plugin, spec, rebuild)
             local ids, by = {}, {}
             for _idx, r in ipairs(rows) do ids[#ids + 1] = r.id; by[r.id] = r end
-            TestRunner:assertEquals(table.concat(ids, ","), "picture,style,look,drawn,writer")
+            TestRunner:assertEquals(table.concat(ids, ","), "picture,style,look,drawn")
             TestRunner:assert(by.picture.gap == nil and by.style.gap == true and by.look.gap == nil,
                 "the picture's own buttons, then the settings as one table below a space")
             TestRunner:assertEquals(by.picture.items[1].text, "Add a note…")
             TestRunner:assertEquals(by.picture.items[2].text, "X-Ray entries: none ▾")
             TestRunner:assert(by.picture.items[2].enabled, "the picks button is live with the writer on")
-            TestRunner:assertEquals(by.style.items[1].text, "Style: Ink drawing ▾", "the creation form's dials: name, value, arrow")
+            TestRunner:assertEquals(by.style.items[1].text, "Prompt: Written by AI ▾",
+                "Write the prompt with AI as a dial, on by default")
+            TestRunner:assertEquals(by.style.items[2].text, "Style: Ink drawing ▾", "the creation form's dials: name, value, arrow")
             TestRunner:assertEquals(by.look.items[1].text, "Shape: Fit my screen ▾", "Shape on its default")
             TestRunner:assertEquals(by.look.items[2].text, "Detail: Draft ▾", "Detail on its default")
             TestRunner:assertEquals(by.drawn.items[1].text, "Provider: OpenAI ▾")
             TestRunner:assertEquals(by.drawn.items[2].text, "Model: gpt-image-2.5-flare ▾", "the model that draws, by its id")
-            TestRunner:assert(by.writer.item.checked, "Write the prompt with AI, on by default")
             -- a value opens its list; a pick is the setting, then the popup rebuilds
             by.look.items[1].callback()
             TestRunner:assertEquals(popup.title, "Shape: Fit my screen", "titled as Settings titles the row")
@@ -1536,10 +1582,10 @@ local function runAll()
             rows = ImageOptions.rows(plugin, spec, rebuild)
             for _idx, r in ipairs(rows) do by[r.id] = r end
             TestRunner:assertEquals(by.look.items[1].text, "Shape: Portrait ▾", "the rebuilt row shows the pick")
-            by.style.items[1].callback()
+            by.style.items[2].callback()
             pick("Book illustration")
             TestRunner:assertEquals(features.image_gen_style, "illustration")
-            by.style.items[1].callback()
+            by.style.items[2].callback()
             TestRunner:assertEquals(popup.items[3].text, "Custom…", "a computed label")
             popup.items[3].callback()
             TestRunner:assertEquals(popup, "custom", "Custom… opens its own box (it rebuilds the popup itself)")
@@ -1547,13 +1593,19 @@ local function runAll()
             by.drawn.items[1].callback()
             TestRunner:assertEquals(popup.title, "Provider: OpenAI")
             TestRunner:assert(popup.on_close == rebuild, "the picker comes back to the popup")
-            -- the writer off: nothing reads the picks
-            by.writer.item.callback()
+            -- the writer off, picked in the Prompt list: nothing reads the picks
+            by.style.items[1].callback()
+            TestRunner:assertEquals(popup.title, "Prompt")
+            TestRunner:assert(popup.items[1].checked_func() and not popup.items[2].checked_func(),
+                "the list stands on Written by AI")
+            pick("Written by AI, from the passage, the entries and your note")
+            TestRunner:assert(features.image_gen_writer ~= false, "picking the value it has changes nothing")
+            pick("The passage as is, with your note and the style")
             TestRunner:assertEquals(features.image_gen_writer, false)
             rows = ImageOptions.rows(plugin, spec, rebuild)
             for _idx, r in ipairs(rows) do by[r.id] = r end
             TestRunner:assert(by.picture.items[2].enabled == false, "the picks button grays with the writer off")
-            TestRunner:assert(not by.writer.item.checked)
+            TestRunner:assertEquals(by.style.items[1].text, "Prompt: Passage as is ▾")
             -- the picture's own state on the buttons
             state.note, state.picked = "at dusk", { "Gil Rook" }
             rows = ImageOptions.rows(plugin, spec, rebuild)
@@ -1562,12 +1614,13 @@ local function runAll()
             -- no X-Ray entries to pick: no picks button
             rows = ImageOptions.rows(plugin, { writer = true, note = true, xray = { type = "fiction" }, state = {} }, rebuild)
             TestRunner:assertEquals(#rows[1].items, 1, "the note alone")
-            -- the gallery's: settings only
+            -- the gallery's: settings only, the Style alone on its row
             rows = ImageOptions.rows(plugin, {}, rebuild)
             ids = {}
             for _idx, r in ipairs(rows) do ids[#ids + 1] = r.id end
             TestRunner:assertEquals(table.concat(ids, ","), "style,look,drawn")
             TestRunner:assert(rows[1].gap == nil, "no space over the first table")
+            TestRunner:assertEquals(#rows[1].items, 1, "no Prompt button where no prompt is written")
             -- a retired id shows as the model that draws (the request's resolver)
             features.image_gen_provider = "xai"
             features.image_gen_model_xai = "grok-imagine-image-pro"

@@ -1220,6 +1220,8 @@ end
 function ActionCache.setUserAliases(document_path, aliases_table)
     local path = ActionCache.getUserAliasesPath(document_path)
     if not path then return false end
+    -- the automatic capitals ride the matchers' copy only (matchOverlay)
+    aliases_table[require("koassistant.xray.xray_parser").AUTO_CAPS_KEY] = nil
 
     -- Remove entries with no content (the reserved pair-list keys hold
     -- arrays of pairs, not add/ignore lists — judged on their own emptiness)
@@ -1318,17 +1320,20 @@ function ActionCache.setUserAliases(document_path, aliases_table)
                 file:write(", typed = ")
                 write_array(file, entry.typed)
             end
-            -- B533 S2: the names set to capitals only
+            -- B533 S2/S3: the reader's capitals per name ("capitals", or
+            -- "any", which keeps the automatic rule off the name)
             if type(entry.case) == "table" and next(entry.case) then
                 local terms = {}
                 for term, how in pairs(entry.case) do
-                    if type(term) == "string" and how == "capitals" then terms[#terms + 1] = term end
+                    if type(term) == "string" and (how == "capitals" or how == "any") then
+                        terms[#terms + 1] = term
+                    end
                 end
                 table.sort(terms)
                 if #terms > 0 then
                     file:write(", case = {")
                     for _ti, term in ipairs(terms) do
-                        file:write(string.format(" [%q] = \"capitals\",", term))
+                        file:write(string.format(" [%q] = %q,", term, entry.case[term]))
                     end
                     file:write(" }")
                 end
@@ -1342,6 +1347,73 @@ function ActionCache.setUserAliases(document_path, aliases_table)
     logger.dbg("KOAssistant ActionCache: Saved user aliases for", document_path)
     notifyEdited(document_path)
     return true
+end
+
+-- path -> { key, set, sig }: the automatic capitals, per the files they read
+local auto_caps_memo = {}
+
+local function fileKey(path)
+    local attr = path and lfs.attributes(path)
+    return attr and (tostring(attr.modification) .. ":" .. tostring(attr.size)) or "-"
+end
+
+--- The names this book's own usage sets to capitals only (B533 S3, the
+--- automatic default; XrayIndex.autoCaps over the stored layout holding the
+--- most forms: every layout reads the same text), memoized on the name
+--- index, the X-Ray and the reader's overlay. Empty until the index has the
+--- book: every name then matches any case, as before.
+--- @param document_path string
+--- @param parsed table|nil the book's X-Ray already parsed with the reader's
+---   overlay merged (parsedXrayFor's), read instead of parsing it again
+--- @return table { [name lowered] = true }, string sig (the names, for memo keys)
+function ActionCache.autoCaps(document_path, parsed)
+    if not document_path then return {}, "" end
+    local XrayIndex = require("koassistant.xray.xray_index")
+    local key = fileKey(XrayIndex.path(document_path)) .. "|" .. fileKey(ActionCache.getPath(document_path))
+        .. "|" .. fileKey(ActionCache.getUserAliasesPath(document_path))
+    local memo = auto_caps_memo[document_path]
+    if memo and memo.key == key then return memo.set, memo.sig end
+    local set = {}
+    local stored = XrayIndex.load(document_path)
+    local best, most
+    for _idx, layout in ipairs(stored and stored.layouts or {}) do
+        local n = 0
+        for _f in pairs(type(layout.forms) == "table" and layout.forms or {}) do n = n + 1 end
+        if not most or n > most then best, most = layout, n end
+    end
+    if best and type(parsed) == "table" then
+        set = XrayIndex.autoCaps(best, parsed)
+    elseif best then
+        local entry = ActionCache.getXrayCache(document_path)
+        if entry and type(entry.result) == "string" and entry.source_mode ~= "ai_knowledge" then
+            local XrayParser = require("koassistant.xray.xray_parser")
+            local data = XrayParser.isJSON(entry.result) and XrayParser.parse(entry.result)
+            if type(data) == "table" and not data.error then
+                XrayParser.mergeUserAliases(data, ActionCache.getUserAliases(document_path))
+                set = XrayIndex.autoCaps(best, data)
+            end
+        end
+    end
+    local names = {}
+    for n in pairs(set) do names[#names + 1] = n end
+    table.sort(names)
+    local sig = table.concat(names, "\0")
+    auto_caps_memo[document_path] = { key = key, set = set, sig = sig }
+    return set, sig
+end
+
+--- The reader's overlay as the matchers read it (B533 S3): the stored records
+--- (getUserAliases) and, under XrayParser.AUTO_CAPS_KEY, the automatic
+--- capitals, for XrayParser.mergeUserAliases. A copy for reading: what the
+--- names screen edits and saves is getUserAliases'.
+--- @param document_path string
+--- @return table overlay, string sig (autoCaps' names)
+function ActionCache.matchOverlay(document_path)
+    local out = {}
+    for k, v in pairs(ActionCache.getUserAliases(document_path)) do out[k] = v end
+    local auto, sig = ActionCache.autoCaps(document_path)
+    if next(auto) then out[require("koassistant.xray.xray_parser").AUTO_CAPS_KEY] = auto end
+    return out, sig
 end
 
 --- A reserved name list of the aliases sidecar as a lowercased-name set; the
@@ -2779,8 +2851,11 @@ function ActionCache.parsedXrayFor(file)
     if not ca then return nil end
     local ap = ActionCache.getUserAliasesPath(file)
     local aa = ap and lfs.attributes(ap)
+    -- the name index joins the stamp: the book's automatic capitals change
+    -- when it learns the book (B533 S3)
     local stamp = tostring(ca.modification) .. ":" .. tostring(ca.size) .. "|"
-        .. (aa and (tostring(aa.modification) .. ":" .. tostring(aa.size)) or "-")
+        .. (aa and (tostring(aa.modification) .. ":" .. tostring(aa.size)) or "-") .. "|"
+        .. fileKey(require("koassistant.xray.xray_index").path(file))
     local m = parsed_xray_memo[file]
     if m and m.stamp == stamp then return m.res or nil end
     local XrayParser = require("koassistant.xray.xray_parser")
@@ -2790,7 +2865,15 @@ function ActionCache.parsedXrayFor(file)
             and XrayParser.isJSON(entry.result) then
         local data = XrayParser.parse(entry.result)
         if data and not data.error then
-            XrayParser.mergeUserAliases(data, ActionCache.getUserAliases(file))
+            local overlay = ActionCache.getUserAliases(file)
+            XrayParser.mergeUserAliases(data, overlay)
+            -- the automatic capitals from this same parse; merging again with
+            -- them is the reader's names unchanged and the capitals settled
+            local auto = ActionCache.autoCaps(file, data)
+            if next(auto) then
+                overlay[XrayParser.AUTO_CAPS_KEY] = auto
+                XrayParser.mergeUserAliases(data, overlay)
+            end
             local ok_bg, BookGroups = pcall(require, "koassistant.books.book_groups")
             res = {
                 file = file,
@@ -3087,11 +3170,14 @@ function ActionCache.matchAnyXrayExact(document_path, query, opts)
     -- Rank-free here by design — the SET only routes; the card router owns
     -- the order (live -> sections -> carried -> predecessor -> ahead).
     key = key .. "|group:" .. group_stamp
+    -- B533 S3: the names the book's usage sets to capitals only
+    local _auto, auto_sig = ActionCache.autoCaps(document_path)
+    key = key .. "|caps:" .. auto_sig
     if not (exact_route_index and exact_route_index.path == path
             and exact_route_index.key == key) then
         local XrayParser = require("koassistant.xray.xray_parser")
         local set = {}
-        local user_aliases = ActionCache.getUserAliases(document_path)
+        local user_aliases = ActionCache.matchOverlay(document_path)
         local live_p = 0
         local main = ActionCache.getXrayCache(document_path)
         if main and main.result then
@@ -3163,8 +3249,9 @@ function ActionCache.searchAllXrays(document_path, query, doc, opts)
     local all_results = {}
     -- User search terms must match here too, not only in the browser — this is
     -- the matcher behind highlight-menu lookup AND the #63 conditional bypass
-    -- (F1, xray_marking_plan.md; one sidecar read serves every parse below)
-    local user_aliases = ActionCache.getUserAliases(document_path)
+    -- (F1, xray_marking_plan.md; one sidecar read serves every parse below),
+    -- with the automatic capitals (B533 S3)
+    local user_aliases = ActionCache.matchOverlay(document_path)
 
     -- Search main X-Ray
     if main and main.result then
