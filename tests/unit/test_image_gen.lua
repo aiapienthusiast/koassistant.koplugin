@@ -820,6 +820,9 @@ local function runAll()
                 cap.status = o
                 return { setText = function(t) cap.status_text = t end, close = function() cap.closed = true end }
             end,
+            createWaitingAnimation = function()
+                return { getNextFrame = function() return "." end, reset = function() end }
+            end,
         }
         UIManager.show = function(_self, w) cap.shown[#cap.shown + 1] = w end
         ffiutil.runInSubProcess = function() return nil end

@@ -2153,8 +2153,13 @@ function ImageGenerator._run(st)
     local phase_text = ""
     local status, tick
     local ticking = false
+    -- The chat window's waiting dots, at its pace (0.4 s): an Onyx Boox
+    -- stopped waking KOReader about 10 s into a picture while this window
+    -- redrew every 5 s (frozen until a tap, the picture waiting in the pipe);
+    -- the chat and quiz windows, redrawn every 0.4 s, never froze
+    local dots = StreamHandler:createWaitingAnimation()
     local function statusText()
-        return phase_text .. "\n\n" .. T(_("Elapsed: %1 s"), os.time() - start_ts)
+        return phase_text .. "\n\n" .. T(_("Elapsed: %1 s"), os.time() - start_ts) .. "  " .. dots.getNextFrame()
     end
     local function stopTicker()
         if ticking then
@@ -2165,7 +2170,7 @@ function ImageGenerator._run(st)
     tick = function()
         if not ticking then return end
         status.setText(statusText())
-        UIManager:scheduleIn(5, tick)
+        UIManager:scheduleIn(0.4, tick)
     end
     local function cancelRequest()
         cancelled = true
@@ -2189,7 +2194,7 @@ function ImageGenerator._run(st)
             on_stop = cancelRequest,
         })
         ticking = true
-        UIManager:scheduleIn(5, tick)
+        UIManager:scheduleIn(0.4, tick)
     end
 
     -- pollSubprocess callbacks run from the UI task queue, outside generate()'s
