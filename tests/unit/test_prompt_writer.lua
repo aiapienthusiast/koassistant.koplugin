@@ -306,6 +306,7 @@ TestRunner:test("systemText: the passage's blocks; the spoiler rule only when pr
     TestRunner:assert(not has(s, "<entry_to_draw>"), "no entry block")
     TestRunner:assert(not has(s, "has not finished the book"), "no spoiler rule")
     TestRunner:assert(has(s, "never by name"), "people by how they look")
+    TestRunner:assert(has(s, 'never "a young man named X" or "X, a young man"'), "not even beside a description")
     s = PromptWriter.systemText({ spoiler = true })
     TestRunner:assert(has(s, "Show nothing from later in the story than the passage."), "spoiler rule")
 end)

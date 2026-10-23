@@ -4103,6 +4103,9 @@ ModelAudit.WRITER_BENCH = {
           after = ' "Stop," he managed. "Stop, I can\'t breathe."' },
       entries = { { name = "Ned", type = "person",
           description = "A student in his twenties, lanky, with a shock of red hair and a frayed green jumper; lives in the shared house on Mill Lane with three others and works nights at the bakery." } } },
+    -- A person to draw whose description says nowhere where she is
+    { id = "entry-person", entry = { name = "Agnes Hallam", type = "person", aliases = { "Mrs Hallam" },
+        description = "A retired schoolteacher in her seventies, small and very upright, silver hair in a tight bun, round steel spectacles, always in a grey cardigan; sharp-tongued but kind, and the first to notice when something is wrong." } },
     { id = "entry-place", entry = { name = "the Black Rocks", type = "place",
         description = "Jagged basalt at the mouth of the bay where the lighthouse stands; covered at high tide, black and slick with weed." } },
     { id = "entry-idea", entry = { name = "Solitude", type = "idea",

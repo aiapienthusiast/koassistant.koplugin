@@ -524,7 +524,7 @@ function PromptWriter.systemText(opts)
     if not entry then
         lines[#lines + 1] = "- Take the setting from the moment of the passage, not from another scene in the text around it. Where the material does not say where the moment takes place, keep the background simple instead of inventing rooms, furniture or objects."
     end
-    lines[#lines + 1] = "- Describe people by how they look, never by name; the image model does not know them. Do not ask for the likeness of a real person."
+    lines[#lines + 1] = "- Describe people by how they look, never by name, not even beside a description: write \"a young man\", never \"a young man named X\" or \"X, a young man\". The image model does not know them. Do not ask for the likeness of a real person."
     lines[#lines + 1] = "- No text, letters, titles, captions or signatures in the picture."
     if entry then
         lines[#lines + 1] = "- English, one paragraph, 60 to 150 words: the subject first, then the setting, then light and mood, then the style."
