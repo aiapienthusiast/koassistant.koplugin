@@ -149,6 +149,24 @@ function XrayIndex.layout(file, stamp)
     return nil
 end
 
+--- The stored layouts of the book file as it is now: a stamp ends with the
+--- file's size (XrayIndex.stamp), and every layout of that file reads the
+--- same text; one from an earlier version of the file (replaced, generated
+--- again) reads another text and is left out.
+function XrayIndex.currentLayouts(file)
+    local out = {}
+    local data = XrayIndex.load(file)
+    local size = data and lfs.attributes(file, "size")
+    if not size then return out end
+    local tail = ":" .. tostring(size)
+    for _i, l in ipairs(data.layouts) do
+        if type(l.stamp) == "string" and type(l.forms) == "table" and l.stamp:sub(-#tail) == tail then
+            out[#out + 1] = l
+        end
+    end
+    return out
+end
+
 --- Forms of `forms` (array or set) the layout does not hold.
 function XrayIndex.missing(layout, forms)
     local out = {}

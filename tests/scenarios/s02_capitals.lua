@@ -9,7 +9,7 @@
 -- regex engine). Any case, picked, overrides the rule; Capitals only,
 -- picked, holds; back to automatic restores it. Last, the name index read
 -- in the background as on a device: the page repaints on its own when it
--- lands.
+-- lands, and a layout left from an earlier text of the book is not read.
 local S = dofile(os.getenv("KOA_PLUGIN") .. "/tests/scenarios/boot.lua")
 S.features({ xray_marking_density = "all" }) -- every occurrence marked
 
@@ -192,5 +192,14 @@ S.check(landed, "the background pass lands")
 S.settle()
 lower, cap = cases(drownedMarks({ as_drawn = true }))
 S.check(cap and not lower, "the page repaints on its own: only \"the Drowned\" underlined")
+
+-- ── The index also holding an earlier version of the book's text (the book
+-- replaced, or the fixture generated again over an indexed copy): that
+-- layout, though it holds more forms, is left out ──
+local older = { ["an older form"] = "" }
+for f in pairs(XrayIndex.layout(file, XrayIndex.stamp(ui)).forms) do older[f] = "" end
+XrayIndex.store(file, "1:1:1", older)
+S.check(ActionCache.autoCaps(file)["the drowned"] == true,
+    "an earlier text's layout with more forms changes nothing: capitals only, automatically")
 
 S.finish()

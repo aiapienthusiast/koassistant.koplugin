@@ -1359,8 +1359,9 @@ end
 
 --- The names this book's own usage sets to capitals only (B533 S3, the
 --- automatic default; XrayIndex.autoCaps over the stored layout holding the
---- most forms: every layout reads the same text), memoized on the name
---- index, the X-Ray and the reader's overlay. Empty until the index has the
+--- most forms among those of the book file as it is now, which read the same
+--- text: XrayIndex.currentLayouts), memoized on the name index, the X-Ray,
+--- the reader's overlay and the book file. Empty until the index has the
 --- book: every name then matches any case, as before.
 --- @param document_path string
 --- @param parsed table|nil the book's X-Ray already parsed with the reader's
@@ -1370,13 +1371,12 @@ function ActionCache.autoCaps(document_path, parsed)
     if not document_path then return {}, "" end
     local XrayIndex = require("koassistant.xray.xray_index")
     local key = fileKey(XrayIndex.path(document_path)) .. "|" .. fileKey(ActionCache.getPath(document_path))
-        .. "|" .. fileKey(ActionCache.getUserAliasesPath(document_path))
+        .. "|" .. fileKey(ActionCache.getUserAliasesPath(document_path)) .. "|" .. fileKey(document_path)
     local memo = auto_caps_memo[document_path]
     if memo and memo.key == key then return memo.set, memo.sig end
     local set = {}
-    local stored = XrayIndex.load(document_path)
     local best, most
-    for _idx, layout in ipairs(stored and stored.layouts or {}) do
+    for _idx, layout in ipairs(XrayIndex.currentLayouts(document_path)) do
         local n = 0
         for _f in pairs(type(layout.forms) == "table" and layout.forms or {}) do n = n + 1 end
         if not most or n > most then best, most = layout, n end
@@ -2851,11 +2851,12 @@ function ActionCache.parsedXrayFor(file)
     if not ca then return nil end
     local ap = ActionCache.getUserAliasesPath(file)
     local aa = ap and lfs.attributes(ap)
-    -- the name index joins the stamp: the book's automatic capitals change
-    -- when it learns the book (B533 S3)
+    -- the name index and the book file join the stamp: the book's automatic
+    -- capitals change when the index learns the book, and read only the
+    -- book file as it is now (B533 S3)
     local stamp = tostring(ca.modification) .. ":" .. tostring(ca.size) .. "|"
         .. (aa and (tostring(aa.modification) .. ":" .. tostring(aa.size)) or "-") .. "|"
-        .. fileKey(require("koassistant.xray.xray_index").path(file))
+        .. fileKey(require("koassistant.xray.xray_index").path(file)) .. "|" .. fileKey(file)
     local m = parsed_xray_memo[file]
     if m and m.stamp == stamp then return m.res or nil end
     local XrayParser = require("koassistant.xray.xray_parser")

@@ -803,6 +803,42 @@ TestRunner:test("capsEvidence: how the book writes a name, read from the index",
     TestRunner:eq(p .. "/" .. l, "1/2", "the sentence start proves nothing")
     TestRunner:eq(XrayIndex.capsEvidence({ forms = {} }, set, nil), nil, "not indexed: not judged")
 end)
+TestRunner:test("automatic capitals read only the book file as it is now (replaced, generated again)", function()
+    -- a folder of its own: the index file the other tests share stays as it is
+    local ds = package.loaded["docsettings"]
+    local saved_dir = ds.getSidecarDir
+    local dir = SIDECAR .. "/regenerated"
+    os.execute('mkdir -p "' .. dir .. '"')
+    ds.getSidecarDir = function() return dir end
+    local ok, err = pcall(function()
+        XrayIndex.stop(true)
+        local ActionCache = require("koassistant.artifacts.action_cache")
+        local book = dir .. "/book.epub"
+        local f = io.open(book, "wb")
+        f:write(string.rep("x", 7761))
+        f:close()
+        -- the earlier text, indexed first and holding more forms, never wrote
+        -- the name with its capitals
+        local old = { ["grey cat"] = "" }
+        for k in pairs(AUTO_LAYOUT.forms) do old[k] = "" end
+        XrayIndex.store(book, "H0:4:7711", old)
+        XrayIndex.store(book, "H1:4:7761", AUTO_LAYOUT.forms)
+        local cur = XrayIndex.currentLayouts(book)
+        TestRunner:eq(#cur, 1, "one layout of the file as it is now")
+        TestRunner:eq(cur[1].stamp, "H1:4:7761")
+        TestRunner:ok(ActionCache.autoCaps(book, AUTO_DATA)["the drowned"],
+            "this text decides, though the earlier text's layout holds more forms")
+        -- replaced again: nothing indexed for this text yet, so any case
+        f = io.open(book, "wb")
+        f:write(string.rep("x", 7800))
+        f:close()
+        TestRunner:eq(#XrayIndex.currentLayouts(book), 0)
+        TestRunner:eq(next((ActionCache.autoCaps(book, AUTO_DATA))), nil, "until the index has this text")
+    end)
+    ds.getSidecarDir = saved_dir
+    XrayIndex.stop(true)
+    if not ok then error(err, 0) end
+end)
 TestRunner:test("autoCaps: the names this book writes both ways switch to capitals only", function()
     local auto = XrayIndex.autoCaps(AUTO_LAYOUT, AUTO_DATA)
     local names = {}
