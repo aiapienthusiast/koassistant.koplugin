@@ -675,6 +675,21 @@ local function runAll()
         p = ImageGenerator.buildPrompt("sel", { window = window }, {})
         TestRunner:assert(p:find("Next paragraph.", 1, true), "no limit: all of it")
     end)
+    TestRunner:test("the frame keeps about 400 characters a side; the writer reads more of the same window", function()
+        local window = { prev = string.rep("b", 3000), next = string.rep("c", 3000) }
+        -- the mock's util answers nil to everything; ASCII needs no repair
+        local util = require("util")
+        local had = rawget(util, "fixUtf8")
+        util.fixUtf8 = function(s) return s end
+        local p = ImageGenerator.buildPrompt("sel", { window = window }, {})
+        util.fixUtf8 = had
+        TestRunner:assert(p:find("…" .. string.rep("b", 400) .. " […] " .. string.rep("c", 400) .. "…", 1, true)
+            and not p:find(string.rep("b", 401), 1, true), "the frame's slice: " .. #p)
+        local m = require("koassistant.images.prompt_writer").material({ passage = "sel",
+            around = { before = window.prev, after = window.next } })
+        TestRunner:assert(m:find(string.rep("b", 1000), 1, true) and not m:find(string.rep("b", 1001), 1, true),
+            "the writer's block: " .. #m)
+    end)
     TestRunner:test("allowedMaterial: the text around goes only where nearby_text is allowed for every recipient", function()
         local spec = { features = {}, recipients = { "anthropic", "openai" }, window = true }
         TestRunner:assertEquals(ImageGenerator.allowedMaterial(spec).around, true, "Allow by default")

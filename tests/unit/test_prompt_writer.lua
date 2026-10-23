@@ -309,6 +309,16 @@ TestRunner:test("systemText: the passage's blocks; the spoiler rule only when pr
     s = PromptWriter.systemText({ spoiler = true })
     TestRunner:assert(has(s, "Show nothing from later in the story than the passage."), "spoiler rule")
 end)
+TestRunner:test("systemText: the setting from the passage's moment, none invented where none is given", function()
+    local s = PromptWriter.systemText({})
+    TestRunner:assert(has(s, "Take the setting from the moment of the passage, not from another scene"), "the moment's setting")
+    TestRunner:assert(has(s, "keep the background simple instead of inventing rooms, furniture or objects"), "no invented interior")
+    TestRunner:assert(has(s, "Use it for appearance and detail, not for where the moment takes place."), "an entry is not the setting")
+    TestRunner:assert(has(s, "then the setting as far as the material gives it,"), "the length line")
+    local e = PromptWriter.systemText({ subject = "entry" })
+    TestRunner:assert(not has(e, "moment of the passage") and not has(e, "as far as the material gives it"),
+        "an entry to draw keeps its rules")
+end)
 TestRunner:test("systemText for an X-Ray entry (S8): the entry to draw, no passage", function()
     local s = PromptWriter.systemText({ subject = "entry", spoiler = true })
     TestRunner:assert(has(s, "<entry_to_draw>"), "entry block")
@@ -348,9 +358,12 @@ TestRunner:test("material: the tags stay the only markup; long text is cut", fun
     TestRunner:assert(has(m, "&lt;b&gt;bold&lt;/b&gt;"), m)
     TestRunner:assert(has(m, 'title="Say &quot;hi&quot;"'), m)
     local long = PromptWriter.material({ passage = string.rep("a", 9000),
-        around = { before = string.rep("b", 2000), after = string.rep("c", 2000) } })
-    TestRunner:assert(#long < 5200, "passage and the text around are capped: " .. #long)
-    TestRunner:assert(has(long, "…" .. string.rep("b", 400) .. "</before>"), "the end of the text before")
+        around = { before = string.rep("b", 3000), after = string.rep("c", 3000) } })
+    TestRunner:assert(#long < 6200, "passage and the text around are capped: " .. #long)
+    -- the text around: chat's own most a side, so never more in all than its hard cap
+    local side = math.floor(require("koassistant.request.scope_resolver").MAX_CONTEXT_CHARS / 2)
+    TestRunner:assert(has(long, "<before>…" .. string.rep("b", side) .. "</before>"), "the end of the text before")
+    TestRunner:assert(has(long, "<after>" .. string.rep("c", side) .. "…</after>"), "the start of the text after")
 end)
 TestRunner:test("material for an X-Ray entry: the entry to draw instead of a passage", function()
     local m = PromptWriter.material({ entry = { name = "Mara", type = "person", description = "A red scarf." },

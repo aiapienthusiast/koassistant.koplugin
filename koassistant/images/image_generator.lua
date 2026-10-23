@@ -275,7 +275,7 @@ function ImageGenerator.askNote(prefill, on_ok, opts)
     dialog = InputDialog:new{
         title = _("Note for the picture"),
         input = prefill or "",
-        input_hint = _("Details for the picture (at night, close up, in the rain), what to include, or other instructions"),
+        input_hint = _("The setting or context, details for the picture (at night, close up, in the rain), what to include, or other instructions"),
         allow_newline = true,
         text_height = Screen:scaleBySize(96),
         buttons = buttons,
