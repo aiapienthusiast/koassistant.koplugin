@@ -151,9 +151,16 @@ do
     -- (the name index's background pass is refused too; it says so and the
     -- marks fall back to once per page)
     local ffiutil = require("ffi/util")
+    local real_fork = ffiutil.runInSubProcess
     ffiutil.runInSubProcess = function()
         S.forks_refused = (S.forks_refused or 0) + 1
         return false
+    end
+    --- Child processes allowed from here on, for a scenario that needs the
+    --- name index's background pass as a device runs it (the child inherits
+    --- every block above)
+    function S.allowForks()
+        ffiutil.runInSubProcess = real_fork
     end
     local NetworkMgr = require("ui/network/manager")
     NetworkMgr.isOnline = function() return false end
@@ -211,6 +218,19 @@ function S.settle(rounds)
         UIManager:setInputTimeout(0)
         UIManager:handleInput()
     end
+end
+
+--- Settle until cond() holds, in real time (a child process at work), at
+--- most `seconds`; returns whether it held
+function S.waitFor(cond, seconds)
+    local ffi = require("ffi")
+    pcall(ffi.cdef, "int usleep(unsigned int usec);")
+    for _i = 1, math.ceil((seconds or 10) * 5) do
+        S.settle(1)
+        if cond() then return true end
+        ffi.C.usleep(200000)
+    end
+    return cond() and true or false
 end
 
 -- The EPUB files under a folder, at any depth, in a stable order
@@ -345,11 +365,14 @@ function S.chapter(title)
 end
 
 --- The visible page's X-Ray marks, after the deferred scan: { {name, text, x, y, w, h, words} }
---- with `words` = the text under the mark, read back from the page
-function S.marks()
+--- with `words` = the text under the mark, read back from the page.
+--- opts.as_drawn: the marks the page holds now, with no fresh scan
+function S.marks(opts)
     local XrayMarks = require("koassistant.xray.xray_marks")
-    XrayMarks.sync(S.plugin)
-    S.settle()
+    if not (opts and opts.as_drawn) then
+        XrayMarks.sync(S.plugin)
+        S.settle()
+    end
     local out = {}
     for _idx, m in ipairs(XrayMarks._pageMarks() or {}) do
         local words

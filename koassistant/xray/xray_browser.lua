@@ -4274,13 +4274,14 @@ local NAME_KINDS = {
 --- aliases it matches (the AI's, the AI's own name after a rename, the names
 --- the reader typed or added), then the names set to not matched. Capitals:
 --- `case` = the reader's pick ("capitals" | "any", S2/S3), `caps` = the name
---- matches capitals only (the pick, or the automatic rule: `auto`, S3).
+--- matches capitals only (the pick, or the automatic rule: `auto`, S3),
+--- `rule` = what the automatic rule sets, whatever the pick.
 --- @param item table The entry as the browser holds it (the overlay merged)
 --- @param category_key string
 --- @param rec table|nil The entry's record in the user-aliases sidecar
 --- @param auto table|nil the names the book's usage sets to capitals only
 ---   (ActionCache.autoCaps), lowered
---- @return table rows { { name, kind = "main"|"ai"|"ai_name"|"typed"|"added", matched, case, caps, auto } }
+--- @return table rows { { name, kind = "main"|"ai"|"ai_name"|"typed"|"added", matched, case, caps, auto, rule } }
 function XrayBrowser.nameRows(item, category_key, rec, auto)
     rec = type(rec) == "table" and rec or {}
     local function set(list)
@@ -4306,7 +4307,7 @@ function XrayBrowser.nameRows(item, category_key, rec, auto)
         local pick = (case[low] == "capitals" or case[low] == "any") and case[low] or nil
         local by_rule = not pick and auto[low] == true
         return { name = n, kind = kind, matched = matched, case = pick,
-            caps = pick == "capitals" or by_rule or nil, auto = by_rule or nil }
+            caps = pick == "capitals" or by_rule or nil, auto = by_rule or nil, rule = auto[low] == true or nil }
     end
     local main = XrayParser.getItemName(item, category_key)
     local rows = { row(main, "main", not item._name_off) }
@@ -4351,12 +4352,16 @@ function XrayBrowser:editSearchTerms(item, category_key, item_title, source, nav
     local auto = ActionCache.autoCaps(self.metadata.book_file)
     for _idx, row in ipairs(XrayBrowser.nameRows(item, category_key, rec, auto)) do
         local captured = row
-        -- capitals: the reader's pick, or the book's usage (S3)
+        -- capitals: the reader's pick, or the book's usage (S3), named either
+        -- way for a name with a capital to require (the name's options say
+        -- the same)
+        local cased = matchable and row.matched and XrayParser.capsExample(row.name)
         local state = not row.matched and _("not matched")
-            or row.auto and _("capitals only (automatic)")
-            or row.caps and _("capitals only")
+            or not cased and _("matched")
+            or row.case == "capitals" and _("capitals only")
             or row.case == "any" and _("any case")
-            or _("matched")
+            or row.auto and _("capitals only (automatic)")
+            or _("any case (automatic)")
         table.insert(buttons, {{
             text = T(_("%1 · %2 · %3"), row.name, NAME_KINDS[row.kind], state),
             callback = function()
@@ -4405,9 +4410,11 @@ function XrayBrowser:editSearchTerms(item, category_key, item_title, source, nav
     UIManager:show(self._edit_dialog)
 end
 
---- One name's options on the names screen (B533). Nothing the AI wrote is
---- deleted (R4): its names are renamed away or set to not matched, and Reset
---- brings them back; the reader's own names delete.
+--- One name's options on the names screen (B533): how it is matched, one
+--- choice with the one in force marked (a pick applies at once and the list
+--- stays, the mark moved), then what else the name allows. Nothing the AI
+--- wrote is deleted (R4): its names are renamed away or set to not matched,
+--- and Reset brings them back; the reader's own names delete.
 function XrayBrowser:_showNameOptions(item, category_key, item_title, source, nav_context, row)
     local item_name = XrayParser.getItemName(item, category_key)
     local self_ref = self
@@ -4424,6 +4431,50 @@ function XrayBrowser:_showNameOptions(item, category_key, item_title, source, na
     local function back()
         self_ref:editSearchTerms(item, category_key, item_title, source, nav_context)
     end
+    -- The row as it is now: a pick, or the name index landing, changes it
+    local ActionCache = require("koassistant.artifacts.action_cache")
+    local book_file = self.metadata.book_file
+    local low = row.name:lower()
+    for _idx, r in ipairs(XrayBrowser.nameRows(item, category_key,
+            ActionCache.getUserAliases(book_file)[item_name], ActionCache.autoCaps(book_file))) do
+        if r.name:lower() == low then
+            row = r
+            break
+        end
+    end
+    -- How it is matched (S1 to S3): capitals automatic until the reader
+    -- picks, each choice a state; a name with no capital has none to choose,
+    -- and a name the reader added is deleted rather than set aside
+    local shown, lower = XrayParser.capsExample(row.name)
+    local choices = {}
+    if matchable then
+        if shown then
+            choices = {
+                { "auto", row.rule and _("Automatic (now capitals only)") or _("Automatic (now any case)") },
+                { "capitals", T(_("Capitals only (\"%1\", not \"%2\")"), shown, lower) },
+                { "any", T(_("Any case (\"%1\" and \"%2\")"), shown, lower) },
+            }
+        elseif row.kind ~= "added" then
+            choices = { { "auto", _("Matched") } }
+        end
+        if row.kind ~= "added" then
+            choices[#choices + 1] = { "off", _("Not matched (no underline, count or lookup)") }
+        end
+    end
+    if #choices > 1 then
+        local current = not row.matched and "off" or row.case or "auto"
+        for _idx, c in ipairs(choices) do
+            local how = c[1]
+            add((how == current and "● " or "○ ") .. c[2], function()
+                if how == current then
+                    self_ref:_showNameOptions(item, category_key, item_title, source, nav_context, row)
+                else
+                    self_ref:_setNameMatching(item, category_key, item_title, source, nav_context, row, how)
+                end
+            end)
+        end
+        table.insert(buttons, {})
+    end
     if row.kind == "main" then
         if live_main then
             add(_("Rename…"), function() self_ref:_renameEntity(item, category_key, self_ref._detail_viewer) end)
@@ -4432,43 +4483,6 @@ function XrayBrowser:_showNameOptions(item, category_key, item_title, source, na
         add(_("Make it the main name"), function()
             self_ref:_commitRename(category_key, item_name, row.name, self_ref._detail_viewer)
         end)
-    end
-    -- Capitals (S2, S3): automatic until the reader picks; each choice but
-    -- the one in force, capitals only naming its own example
-    local shown, lower = XrayParser.capsExample(row.name)
-    if matchable and row.matched and shown then
-        if row.case ~= "capitals" then
-            add(T(_("Match capitals only (\"%1\", not \"%2\")"), shown, lower), function()
-                self_ref:_editSearchTermAction(item, category_key, item_title, source, item_name,
-                    row.name, "capitals", nav_context)
-            end)
-        end
-        if row.case ~= "any" then
-            add(_("Match any case"), function()
-                self_ref:_editSearchTermAction(item, category_key, item_title, source, item_name,
-                    row.name, "anycase", nav_context)
-            end)
-        end
-        if row.case then
-            add(_("Back to automatic capitals"), function()
-                self_ref:_editSearchTermAction(item, category_key, item_title, source, item_name,
-                    row.name, "autocase", nav_context)
-            end)
-        end
-    end
-    -- A name the reader added is deleted rather than set aside
-    if matchable and row.kind ~= "added" then
-        if row.matched then
-            add(_("Stop matching"), function()
-                self_ref:_editSearchTermAction(item, category_key, item_title, source, item_name,
-                    row.name, "ignore", nav_context)
-            end)
-        else
-            add(_("Match again"), function()
-                self_ref:_editSearchTermAction(item, category_key, item_title, source, item_name,
-                    row.name, "restore", nav_context)
-            end)
-        end
     end
     if row.kind == "added" and matchable then
         add(_("Delete"), function()
@@ -4480,16 +4494,39 @@ function XrayBrowser:_showNameOptions(item, category_key, item_title, source, na
             self_ref:_deleteTypedName(item, category_key, item_title, source, nav_context, row.name)
         end)
     end
-    table.insert(buttons, {{ text = _("Cancel"), id = "close", callback = function()
+    table.insert(buttons, {{ text = _("Back"), id = "close", callback = function()
         UIManager:close(dialog)
         back()
     end }})
+    local title = T(_("%1 · %2"), row.name, NAME_KINDS[row.kind])
+    if shown and #choices > 1 then
+        title = title .. "\n" .. _("Automatic decides from how the book writes the name.")
+    end
     dialog = ButtonDialog:new{
-        title = row.name,
+        title = title,
         buttons = buttons,
         tap_close_callback = back,
     }
     UIManager:show(dialog)
+end
+
+--- A name's matching picked (B533): "auto" | "capitals" | "any" | "off".
+--- The record and the view change, then the name's options show again with
+--- the new choice marked.
+function XrayBrowser:_setNameMatching(item, category_key, item_title, source, nav_context, row, how)
+    local item_name = XrayParser.getItemName(item, category_key)
+    local actions
+    if how == "off" then
+        actions = { "ignore" }
+    else
+        actions = { (how == "capitals" and "capitals") or (how == "any" and "anycase") or "autocase" }
+        if not row.matched then table.insert(actions, 1, "restore") end
+    end
+    local self_ref = self
+    self:_editSearchTermAction(item, category_key, item_title, source, item_name, row.name, actions, nav_context,
+        function()
+            self_ref:_showNameOptions(item, category_key, item_title, source, nav_context, row)
+        end)
 end
 
 --- Delete a name the reader typed (B533): out of the live X-Ray's aliases and
@@ -4597,9 +4634,10 @@ end
 --- @param source table|nil Navigation source
 --- @param item_name string The item display name (storage key)
 --- @param alias string The alias being acted on
---- @param action string "remove"|"ignore"|"restore"|"capitals"|"anycase"
+--- @param action string|table "remove"|"ignore"|"restore"|"capitals"|"anycase"|"autocase", or a list of them
 --- @param nav_context table|nil Category navigation context
-function XrayBrowser:_editSearchTermAction(item, category_key, item_title, source, item_name, alias, action, nav_context)
+--- @param after function|nil what shows next (default: the names screen)
+function XrayBrowser:_editSearchTermAction(item, category_key, item_title, source, item_name, alias, action, nav_context, after)
     local ActionCache = require("koassistant.artifacts.action_cache")
     local all_data = ActionCache.getUserAliases(self.metadata.book_file)
     local entry = all_data[item_name] or { add = {}, ignore = {} }
@@ -4607,74 +4645,76 @@ function XrayBrowser:_editSearchTermAction(item, category_key, item_title, sourc
     entry.ignore = entry.ignore or {}
     local alias_lower = alias:lower()
 
-    if action == "remove" then
-        -- Remove user-added alias from storage
-        for i = #entry.add, 1, -1 do
-            if entry.add[i]:lower() == alias_lower then
-                table.remove(entry.add, i)
-            end
-        end
-        -- Remove from in-memory
-        if type(item.aliases) == "table" then
-            for i = #item.aliases, 1, -1 do
-                if item.aliases[i]:lower() == alias_lower then
-                    table.remove(item.aliases, i)
+    for _step, act in ipairs(type(action) == "table" and action or { action }) do
+        if act == "remove" then
+            -- Remove user-added alias from storage
+            for i = #entry.add, 1, -1 do
+                if entry.add[i]:lower() == alias_lower then
+                    table.remove(entry.add, i)
                 end
             end
-        end
-
-    elseif action == "ignore" then
-        -- Add to ignore list (if not already there)
-        local already = false
-        for _idx, ign in ipairs(entry.ignore) do
-            if ign:lower() == alias_lower then already = true; break end
-        end
-        if not already then
-            table.insert(entry.ignore, alias)
-        end
-        -- Remove from in-memory
-        if type(item.aliases) == "table" then
-            for i = #item.aliases, 1, -1 do
-                if item.aliases[i]:lower() == alias_lower then
-                    table.remove(item.aliases, i)
+            -- Remove from in-memory
+            if type(item.aliases) == "table" then
+                for i = #item.aliases, 1, -1 do
+                    if item.aliases[i]:lower() == alias_lower then
+                        table.remove(item.aliases, i)
+                    end
                 end
             end
-        end
-        -- B533: the main name stays the entry's; it only stops matching
-        if alias_lower == item_name:lower() then item._name_off = true end
 
-    elseif action == "restore" then
-        -- Remove from ignore list
-        for i = #entry.ignore, 1, -1 do
-            if entry.ignore[i]:lower() == alias_lower then
-                table.remove(entry.ignore, i)
+        elseif act == "ignore" then
+            -- Add to ignore list (if not already there)
+            local already = false
+            for _idx, ign in ipairs(entry.ignore) do
+                if ign:lower() == alias_lower then already = true; break end
             end
-        end
-        if alias_lower == item_name:lower() then
-            item._name_off = nil
-        else
-            -- Add back to in-memory aliases
-            if type(item.aliases) ~= "table" then
-                item.aliases = item.aliases and { item.aliases } or {}
+            if not already then
+                table.insert(entry.ignore, alias)
             end
-            table.insert(item.aliases, alias)
-        end
+            -- Remove from in-memory
+            if type(item.aliases) == "table" then
+                for i = #item.aliases, 1, -1 do
+                    if item.aliases[i]:lower() == alias_lower then
+                        table.remove(item.aliases, i)
+                    end
+                end
+            end
+            -- B533: the main name stays the entry's; it only stops matching
+            if alias_lower == item_name:lower() then item._name_off = true end
 
-    elseif action == "capitals" or action == "anycase" or action == "autocase" then
-        -- B533 S2/S3: the record by the name as written, lowered ("any" keeps
-        -- the automatic rule off the name; no record = automatic); the view's
-        -- `_caps` the same way (mergeUserAliases)
-        local pick = (action == "capitals" and "capitals") or (action == "anycase" and "any") or nil
-        local case = type(entry.case) == "table" and entry.case or {}
-        case[alias_lower] = pick
-        entry.case = next(case) and case or nil
-        local caps = type(item._caps) == "table" and item._caps or {}
-        if pick then
-            caps[alias_lower] = pick == "capitals" or nil
-        else
-            caps[alias_lower] = ActionCache.autoCaps(self.metadata.book_file)[alias_lower] or nil
+        elseif act == "restore" then
+            -- Remove from ignore list
+            for i = #entry.ignore, 1, -1 do
+                if entry.ignore[i]:lower() == alias_lower then
+                    table.remove(entry.ignore, i)
+                end
+            end
+            if alias_lower == item_name:lower() then
+                item._name_off = nil
+            else
+                -- Add back to in-memory aliases
+                if type(item.aliases) ~= "table" then
+                    item.aliases = item.aliases and { item.aliases } or {}
+                end
+                table.insert(item.aliases, alias)
+            end
+
+        elseif act == "capitals" or act == "anycase" or act == "autocase" then
+            -- B533 S2/S3: the record by the name as written, lowered ("any" keeps
+            -- the automatic rule off the name; no record = automatic); the view's
+            -- `_caps` the same way (mergeUserAliases)
+            local pick = (act == "capitals" and "capitals") or (act == "anycase" and "any") or nil
+            local case = type(entry.case) == "table" and entry.case or {}
+            case[alias_lower] = pick
+            entry.case = next(case) and case or nil
+            local caps = type(item._caps) == "table" and item._caps or {}
+            if pick then
+                caps[alias_lower] = pick == "capitals" or nil
+            else
+                caps[alias_lower] = ActionCache.autoCaps(self.metadata.book_file)[alias_lower] or nil
+            end
+            item._caps = next(caps) and caps or nil
         end
-        item._caps = next(caps) and caps or nil
     end
 
     -- Save
@@ -4693,6 +4733,10 @@ function XrayBrowser:_editSearchTermAction(item, category_key, item_title, sourc
     end
     self:showItemDetail(item, category_key, item_title, source, nav_context)
 
+    if after then
+        after()
+        return
+    end
     -- Re-open edit dialog to reflect changes
     self:editSearchTerms(item, category_key, item_title, source, nav_context)
 end

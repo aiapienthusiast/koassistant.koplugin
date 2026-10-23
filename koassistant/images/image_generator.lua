@@ -1014,14 +1014,20 @@ end
 --- O_NONBLOCK constants differ between Linux and macOS).
 local function pollSubprocess(pid, parent_read_fd, on_done)
     local UIManager = require("ui/uimanager")
+    local time = require("ui/time")
     local chunksize = 1024 * 64
     local buf = ffi.new("char[?]", chunksize)
     local buf_ptr = ffi.cast("void*", buf)
     local response_parts = {}
     local poll_task
+    local first_at -- when the answer started coming through the pipe
 
     local function finish()
         ffi.C.close(parent_read_fd)
+        local size = 0
+        for _idx, part in ipairs(response_parts) do size = size + #part end
+        logger.dbg("KOAssistant: image subprocess answer:", size, "bytes, through the pipe in",
+            first_at and time.to_ms(time.now() - first_at) or 0, "ms")
         -- Reap the child so it doesn't linger as a zombie (EOF can arrive a
         -- moment before the process is collectable)
         if not ffiutil.isSubProcessDone(pid) then
@@ -1042,6 +1048,7 @@ local function pollSubprocess(pid, parent_read_fd, on_done)
             if readsize > 0 then
                 local bytes = tonumber(ffi.C.read(parent_read_fd, buf_ptr, chunksize))
                 if bytes and bytes > 0 then
+                    first_at = first_at or time.now()
                     table.insert(response_parts, ffi.string(buf_ptr, bytes))
                 else
                     finish()  -- 0 = EOF, negative = read error
@@ -1061,7 +1068,12 @@ local function pollSubprocess(pid, parent_read_fd, on_done)
                 finish()
                 return
             else
-                UIManager:scheduleIn(0.15, poll_task)
+                -- Once the answer is flowing, drain it quickly: the child
+                -- holds it whole and waits on a full pipe (64 KB) until we
+                -- read. A picture's answer runs to megabytes, and on a
+                -- one-core reader each poll moved one pipe-full: half a
+                -- minute for 10 MB.
+                UIManager:scheduleIn(#response_parts > 0 and 0.01 or 0.15, poll_task)
                 return
             end
         end
@@ -2209,6 +2221,19 @@ function ImageGenerator._run(st)
     local function draw(final_prompt, provenance, note, kinds, written, style)
         local meta = { provider = provider, model = resolved_model, kinds = kinds, written = written, style = style,
             entries = st.about }
+        -- The answer in hand: the picture is decoded, saved and shown on the UI
+        -- thread, a few seconds on a slow reader while the clock cannot tick,
+        -- so the window says so first
+        local function saveAndShow(bytes)
+            stopTicker()
+            setPhase(_("Saving the picture…"))
+            UIManager:forceRePaint()
+            local time = require("ui/time")
+            local t0 = time.now()
+            status.close()
+            showImage(bytes, description, opts.on_viewer_close, book_info, final_prompt, provenance, meta, opts.on_saved)
+            logger.dbg("KOAssistant: image saved and shown in", time.to_ms(time.now() - t0), "ms")
+        end
         local request = ImageGenerator.buildRequest(provider, resolved_model, final_prompt, features, screen)
         local request_body_str = BaseHandler.encodeBody(request.body)
         setPhase((note and (note .. "\n\n") or "")
@@ -2246,9 +2271,7 @@ function ImageGenerator._run(st)
                 return
             end
             if result.bytes then
-                stopTicker()
-                status.close()
-                showImage(result.bytes, description, opts.on_viewer_close, book_info, final_prompt, provenance, meta, opts.on_saved)
+                saveAndShow(result.bytes)
                 return
             end
             -- Download phase: same window, same elapsed clock
@@ -2270,9 +2293,7 @@ function ImageGenerator._run(st)
                     return
                 end
                 -- "OK:" prefix + binary
-                stopTicker()
-                status.close()
-                showImage(dl_raw:sub(4), description, opts.on_viewer_close, book_info, final_prompt, provenance, meta, opts.on_saved)
+                saveAndShow(dl_raw:sub(4))
             end))
         end))
     end

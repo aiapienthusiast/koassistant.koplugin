@@ -463,6 +463,8 @@ end
 local function rowsOf(w)
     return table.concat(ui:texts(w), " | ")
 end
+-- a name's choices (the one in force marked ●, the others ○)
+local NOT_MATCHED = "Not matched (no underline, count or lookup)"
 
 TestRunner:test("every name with what it is and whether it is matched", function()
     local h = namesHarness()
@@ -471,8 +473,9 @@ TestRunner:test("every name with what it is and whether it is matched", function
         h.b:editSearchTerms(entry(h.b.xray_data, "characters", "Gil Rook"), "characters", "Gil Rook")
         local names = ui:top()
         TestRunner:assertEqual(names.title, "Names of \"Gil Rook\"")
-        TestRunner:assertTrue(ui:has("Gil Rook · main name · matched", names), rowsOf(names))
-        TestRunner:assertTrue(ui:has("the grafter · from the AI · matched", names), rowsOf(names))
+        TestRunner:assertTrue(ui:has("Gil Rook · main name · any case (automatic)", names), rowsOf(names))
+        TestRunner:assertTrue(ui:has("the grafter · from the AI · matched", names),
+            "a name with no capital is just matched: " .. rowsOf(names))
         TestRunner:assertTrue(ui:has("Add a name…", names) and ui:has("Close", names), rowsOf(names))
         TestRunner:assertTrue(not ui:has("Reset to the AI's names", names), "nothing differs yet")
     end)
@@ -486,11 +489,15 @@ TestRunner:test("the main name stops matching: no form, no direct hit, still the
         local gil = entry(h.b.xray_data, "characters", "Gil Rook")
         ui.stack = {}
         h.b:editSearchTerms(gil, "characters", "Gil Rook")
-        ui:tap("Gil Rook · main name · matched")
-        TestRunner:assertTrue(ui:has("Rename…") and ui:has("Stop matching"), rowsOf())
+        ui:tap("Gil Rook · main name · any case (automatic)")
+        TestRunner:assertTrue(ui:has("Rename…") and ui:has("● Automatic (now any case)")
+            and ui:has("○ " .. NOT_MATCHED), rowsOf())
         TestRunner:assertTrue(not ui:has("Delete"), "the AI's name is never deleted")
-        ui:tap("Stop matching")
+        ui:tap("○ " .. NOT_MATCHED)
         TestRunner:assertEqual(h.store()["Gil Rook"].ignore[1], "Gil Rook", "written to the alias file")
+        TestRunner:assertTrue(ui:has("● " .. NOT_MATCHED) and ui:has("○ Automatic (now any case)"),
+            "the choice stays open, the mark moved: " .. rowsOf())
+        ui:tap("Back")
         TestRunner:assertTrue(ui:has("Gil Rook · main name · not matched"), rowsOf())
         TestRunner:assertTrue(ui:has("Reset to the AI's names"), rowsOf())
         -- a fresh read of the book, as every surface does
@@ -508,8 +515,9 @@ TestRunner:test("the main name stops matching: no form, no direct hit, still the
         TestRunner:assertTrue(not XrayParser.matchExactHandle(handles, "gil rook"), "the selection intercept too")
         -- and back
         ui:tap("Gil Rook · main name · not matched")
-        ui:tap("Match again")
-        TestRunner:assertTrue(ui:has("Gil Rook · main name · matched"), rowsOf())
+        ui:tap("○ Automatic (now any case)")
+        ui:tap("Back")
+        TestRunner:assertTrue(ui:has("Gil Rook · main name · any case (automatic)"), rowsOf())
         TestRunner:assertEqual(#(h.store()["Gil Rook"] or { ignore = {} }).ignore, 0, "out of the alias file")
     end)
     h.restore()
@@ -521,13 +529,13 @@ TestRunner:test("a rename keeps the AI's name matched, asks nothing, and Reset u
     local ok, err = pcall(function()
         ui.stack = {}
         h.b:editSearchTerms(entry(h.b.xray_data, "characters", "Gil Rook"), "characters", "Gil Rook")
-        ui:tap("Gil Rook · main name · matched")
+        ui:tap("Gil Rook · main name · any case (automatic)")
         ui:tap("Rename…")
         ui:type("Gil Rookwood")
         ui:tap("Rename")
         local names = ui:top()
         TestRunner:assertEqual(names.title, "Names of \"Gil Rookwood\"", "the screen of the renamed entry, no question")
-        TestRunner:assertTrue(ui:has("Gil Rook · the AI's name · matched", names), rowsOf(names))
+        TestRunner:assertTrue(ui:has("Gil Rook · the AI's name · any case (automatic)", names), rowsOf(names))
         local rec = h.store()["Gil Rookwood"]
         TestRunner:assertEqual(rec.ai_name, "Gil Rook", "the record holds the AI's name")
         TestRunner:assertEqual(rec.typed[1], "Gil Rookwood", "and the typed one")
@@ -537,11 +545,11 @@ TestRunner:test("a rename keeps the AI's name matched, asks nothing, and Reset u
         ui:tap("Make it the main name")
         names = ui:top()
         TestRunner:assertEqual(names.title, "Names of \"the grafter\"")
-        TestRunner:assertTrue(ui:has("Gil Rookwood · your name · matched", names), rowsOf(names))
+        TestRunner:assertTrue(ui:has("Gil Rookwood · your name · any case (automatic)", names), rowsOf(names))
         TestRunner:assertEqual(h.store()["the grafter"].ai_name, "Gil Rook", "the AI's name kept through renames")
         TestRunner:assertEqual(#h.store()["the grafter"].typed, 1, "the AI's alias is not a typed name")
         -- the reader's own name deletes
-        ui:tap("Gil Rookwood · your name · matched", names)
+        ui:tap("Gil Rookwood · your name · any case (automatic)", names)
         ui:tap("Delete")
         local grafter = entry(h.disk, "characters", "the grafter")
         for _idx, a in ipairs(grafter.aliases or {}) do
@@ -560,18 +568,23 @@ TestRunner:test("a rename keeps the AI's name matched, asks nothing, and Reset u
     if not ok then error(err, 0) end
 end)
 
-TestRunner:test("capitals: automatic, capitals only, any case; the row says which, Reset clears it (S2, S3)", function()
+TestRunner:test("capitals: automatic, capitals only, any case; one choice marked, the row says which, Reset clears it (S2, S3)", function()
     local h = namesHarness()
     local ok, err = pcall(function()
-        local CAPS = "Match capitals only (\"the Drowned\", not \"the drowned\")"
-        local AUTO = "Back to automatic capitals"
+        local CAPS = "Capitals only (\"the Drowned\", not \"the drowned\")"
+        local ANY = "Any case (\"the Drowned\" and \"the drowned\")"
         ui.stack = {}
         h.b:editSearchTerms(entry(h.b.xray_data, "characters", "The Drowned"), "characters", "The Drowned")
-        ui:tap("The Drowned · main name · matched")
-        TestRunner:assertTrue(ui:has(CAPS) and ui:has("Match any case") and not ui:has(AUTO),
-            "automatic now: the two picks, no way back to where it is: " .. rowsOf())
-        ui:tap(CAPS)
+        ui:tap("The Drowned · main name · any case (automatic)")
+        TestRunner:assertTrue(ui:has("● Automatic (now any case)") and ui:has("○ " .. CAPS) and ui:has("○ " .. ANY)
+            and ui:has("○ " .. NOT_MATCHED), "every choice, automatic marked: " .. rowsOf())
+        TestRunner:assertTrue(ui:top().title:find("Automatic decides from how the book writes the name.", 1, true) ~= nil,
+            "the title says what automatic is: " .. tostring(ui:top().title))
+        ui:tap("○ " .. CAPS)
         TestRunner:assertEqual(h.store()["The Drowned"].case["the drowned"], "capitals", "written to the alias file")
+        TestRunner:assertTrue(ui:has("● " .. CAPS) and ui:has("○ Automatic (now any case)"),
+            "the choice stays open, the mark moved: " .. rowsOf())
+        ui:tap("Back")
         TestRunner:assertTrue(ui:has("The Drowned · main name · capitals only"), rowsOf())
         TestRunner:assertTrue(ui:has("Reset to the AI's names"), rowsOf())
         -- a fresh read of the book, as every surface does: the matcher asks the capitals
@@ -580,10 +593,9 @@ TestRunner:test("capitals: automatic, capitals only, any case; the row says whic
         TestRunner:assertEqual(XrayParser.matchTermSet(entry(fresh, "characters", "The Drowned")).caps["the drowned"], 2)
         -- any case, picked: the record says so, the row too
         ui:tap("The Drowned · main name · capitals only")
-        TestRunner:assertTrue(ui:has("Match any case") and ui:has(AUTO) and not ui:has(CAPS)
-            and ui:has("Stop matching"), rowsOf())
-        ui:tap("Match any case")
+        ui:tap("○ " .. ANY)
         TestRunner:assertEqual(h.store()["The Drowned"].case["the drowned"], "any", "kept as the reader's pick")
+        ui:tap("Back")
         TestRunner:assertTrue(ui:has("The Drowned · main name · any case"), rowsOf())
         -- the book writes it both ways: the rule sets capitals only, unless picked otherwise
         h.setAuto({ ["the drowned"] = true })
@@ -591,15 +603,24 @@ TestRunner:test("capitals: automatic, capitals only, any case; the row says whic
         TestRunner:assertTrue(XrayParser.matchTermSet(entry(fresh, "characters", "The Drowned")).caps == nil,
             "Any case keeps the automatic rule off the name")
         ui:tap("The Drowned · main name · any case")
-        ui:tap(AUTO)
+        TestRunner:assertTrue(ui:has("● " .. ANY) and ui:has("○ Automatic (now capitals only)"),
+            "automatic says what it would do: " .. rowsOf())
+        ui:tap("○ Automatic (now capitals only)")
         TestRunner:assertEqual(h.store()["The Drowned"].case, nil, "out of the alias file: automatic again")
+        TestRunner:assertTrue(ui:has("● Automatic (now capitals only)"), rowsOf())
+        ui:tap("Back")
         TestRunner:assertTrue(ui:has("The Drowned · main name · capitals only (automatic)"), rowsOf())
         fresh = h.view()
         TestRunner:assertEqual(XrayParser.matchTermSet(entry(fresh, "characters", "The Drowned")).caps["the drowned"], 2,
             "the automatic choice reaches the matcher")
+        -- not matched, then a capitals choice: matched again with that choice, in one tap
         ui:tap("The Drowned · main name · capitals only (automatic)")
-        TestRunner:assertTrue(ui:has(CAPS) and ui:has("Match any case") and not ui:has(AUTO), rowsOf())
-        ui:tap("Match any case")
+        ui:tap("○ " .. NOT_MATCHED)
+        TestRunner:assertEqual(h.store()["The Drowned"].ignore[1], "The Drowned", "not matched")
+        ui:tap("○ " .. ANY)
+        TestRunner:assertEqual(#h.store()["The Drowned"].ignore, 0, "matched again")
+        TestRunner:assertEqual(h.store()["The Drowned"].case["the drowned"], "any", "with the choice")
+        ui:tap("Back")
         TestRunner:assertTrue(ui:has("The Drowned · main name · any case"), rowsOf())
         -- Reset clears the pick with the rest: automatic again
         ui:tap("Reset to the AI's names")
@@ -608,17 +629,20 @@ TestRunner:test("capitals: automatic, capitals only, any case; the row says whic
         TestRunner:assertTrue(ui:has("The Drowned · main name · capitals only (automatic)")
             and not ui:has("Reset to the AI's names"), rowsOf())
         h.setAuto({})
-        -- a one-word term names itself; a name with no capital is offered nothing
+        -- a one-word term names itself; a name with no capital is matched or not, nothing else
         ui.stack = {}
         h.b:editSearchTerms(entry(h.b.xray_data, "lexicon", "Warden"), "lexicon", "Warden")
-        ui:tap("Warden · main name · matched")
-        TestRunner:assertTrue(ui:has("Match capitals only (\"Warden\", not \"warden\")"), rowsOf())
+        ui:tap("Warden · main name · any case (automatic)")
+        TestRunner:assertTrue(ui:has("○ Capitals only (\"Warden\", not \"warden\")"), rowsOf())
         ui.stack = {}
         h.b:editSearchTerms(entry(h.b.xray_data, "characters", "Gil Rook"), "characters", "Gil Rook")
         ui:tap("the grafter · from the AI · matched")
+        TestRunner:assertTrue(ui:has("● Matched") and ui:has("○ " .. NOT_MATCHED), rowsOf())
         for _idx, t in ipairs(ui:texts()) do
-            TestRunner:assertTrue(not t:find("capitals", 1, true), "no capital to require: " .. rowsOf())
+            TestRunner:assertTrue(not t:find("apitals", 1, true) and not t:find("case", 1, true),
+                "no capital to require: " .. rowsOf())
         end
+        TestRunner:assertTrue(not ui:top().title:find("Automatic", 1, true), "nor a word about it in the title")
     end)
     h.restore()
     if not ok then error(err, 0) end

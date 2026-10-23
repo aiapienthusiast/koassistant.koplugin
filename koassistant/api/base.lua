@@ -785,7 +785,10 @@ function BaseHandler.fetchAsync(url, opts, on_done)
                 finish()
                 return
             else
-                UIManager:scheduleIn(0.15, poll)
+                -- Once the answer is flowing, drain it quickly: the child
+                -- waits on a full pipe until we read (a catalog runs to
+                -- megabytes, one pipe-full per poll on a one-core reader)
+                UIManager:scheduleIn(#parts > 0 and 0.01 or 0.15, poll)
                 return
             end
         end

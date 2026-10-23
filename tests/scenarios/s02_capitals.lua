@@ -7,7 +7,9 @@
 -- without), so only "the Drowned" is underlined and counted, and KOReader's
 -- own search after a mention gets the case-sensitive pattern (crengine's
 -- regex engine). Any case, picked, overrides the rule; Capitals only,
--- picked, holds; back to automatic restores it.
+-- picked, holds; back to automatic restores it. Last, the name index read
+-- in the background as on a device: the page repaints on its own when it
+-- lands.
 local S = dofile(os.getenv("KOA_PLUGIN") .. "/tests/scenarios/boot.lua")
 S.features({ xray_marking_density = "all" }) -- every occurrence marked
 
@@ -19,9 +21,9 @@ local ActionCache = require("koassistant.artifacts.action_cache")
 local file = ui.document.file
 local total = ui.document.info.number_of_pages
 
-local function drownedMarks()
+local function drownedMarks(opts)
     local out = {}
-    for _idx, m in ipairs(S.marks()) do
+    for _idx, m in ipairs(S.marks(opts)) do
         if m.name == "The Drowned" then out[#out + 1] = m.words or "?" end
     end
     return out
@@ -171,5 +173,24 @@ pick(nil)
 S.chapter("Rented Quiet")
 lower, cap = cases(drownedMarks())
 S.check(cap and not lower, "back to automatic: the book's usage decides again")
+
+-- ── The background pass, as on a device: the index gone, the book opened
+-- again (child processes refused: the pass cannot start), then allowed and
+-- asked again; the page repaints when it lands, with no page turn ──
+S.close()
+os.remove(XrayIndex.path(file))
+ui = S.open("Mock Series 3")
+S.chapter("Rented Quiet")
+lower, cap = cases(drownedMarks())
+S.check(lower and cap, "the index gone: any case again")
+S.allowForks()
+XrayIndex.request(ui, {}) -- the marks' request from the opening, asked again
+local landed = S.waitFor(function()
+    return XrayIndex.layout(file, XrayIndex.stamp(ui)) ~= nil and not XrayIndex.busy(file)
+end, 30)
+S.check(landed, "the background pass lands")
+S.settle()
+lower, cap = cases(drownedMarks({ as_drawn = true }))
+S.check(cap and not lower, "the page repaints on its own: only \"the Drowned\" underlined")
 
 S.finish()
