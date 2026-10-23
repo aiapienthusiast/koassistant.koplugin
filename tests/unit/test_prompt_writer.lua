@@ -317,8 +317,12 @@ TestRunner:test("systemText: the setting from the passage's moment, none invente
     TestRunner:assert(has(s, "Use it for appearance and detail, not for where the moment takes place."), "an entry is not the setting")
     TestRunner:assert(has(s, "then the setting as far as the material gives it,"), "the length line")
     local e = PromptWriter.systemText({ subject = "entry" })
-    TestRunner:assert(not has(e, "moment of the passage") and not has(e, "as far as the material gives it"),
-        "an entry to draw keeps its rules")
+    TestRunner:assert(not has(e, "moment of the passage"), "an entry to draw has no passage")
+    TestRunner:assert(has(e, "Where the description does not say where the subject is, keep the background simple")
+        and has(e, "A place is its own setting.") and has(e, "then the setting as far as the material gives it,"),
+        "an entry's background as far as its description gives it")
+    TestRunner:assert(has(e, "If the subject is abstract (an idea, an argument, a feeling), choose a scene"),
+        "an idea still gets its scene")
 end)
 TestRunner:test("systemText for an X-Ray entry (S8): the entry to draw, no passage", function()
     local s = PromptWriter.systemText({ subject = "entry", spoiler = true })

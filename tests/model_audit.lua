@@ -4113,7 +4113,7 @@ ModelAudit.WRITER_BENCH = {
       style = "woodcut" },
 }
 
-local function runWriterBench(providers, apikeys)
+local function runWriterBench(providers, apikeys, chat_model)
     local PromptWriter = require("koassistant.images.prompt_writer")
     local ImageGenerator = require("koassistant.images.image_generator")
     local ResponseParser = require("koassistant.api.response_parser")
@@ -4121,8 +4121,10 @@ local function runWriterBench(providers, apikeys)
     local failures = 0
     local saved = {}
     for _i, main in ipairs(providers) do
-        local provider, model = PromptWriter.target({}, main)
-        banner("IMAGE PROMPT WRITER " .. tostring(provider) .. " / " .. tostring(model))
+        -- --chat-model: each provider's chat model (its default) instead of its fast one
+        local provider, model = PromptWriter.target(chat_model and { use_action_tiers = false } or {}, main)
+        banner("IMAGE PROMPT WRITER " .. tostring(provider) .. " / " .. tostring(model
+            or require("koassistant.request.model_constraints").dispatchModel({ provider = provider })))
         local key = keyFor(apikeys, provider)
         local hok, Handler = pcall(require, "koassistant.api." .. tostring(provider))
         if not TestConfig.isValidApiKey(key) then
@@ -4271,6 +4273,7 @@ local function main()
     local mode, probe_provider, probe_model = "discover", nil, nil
     local image_shape, image_detail
     local recheck_ceilings = false
+    local writer_chat = false
     local i = 1
     while i <= #arg do
         local a = arg[i]
@@ -4278,7 +4281,7 @@ local function main()
             print("Usage: lua tests/model_audit.lua [providers...] [--probe <provider> <model>] " ..
                   "[--probe-new] [--recheck [--ceilings]] [--pins] [--keys] [--images] " ..
                   "[--image-probe <provider> <model> [--shape fit|portrait|landscape|square|auto] " ..
-                  "[--detail draft|standard|best]] [--image-writer [providers]] [--verbose]")
+                  "[--detail draft|standard|best]] [--image-writer [providers] [--chat-model]] [--verbose]")
             os.exit(0)
         elseif a == "--verbose" or a == "-v" then
             verbose = true
@@ -4304,6 +4307,8 @@ local function main()
             mode = "images"
         elseif a == "--image-writer" then
             mode = "image-writer"
+        elseif a == "--chat-model" then
+            writer_chat = true
         elseif a == "--image-probe" then
             mode = "image-probe"
             probe_provider, probe_model = arg[i + 1], arg[i + 2]
@@ -4356,7 +4361,7 @@ local function main()
 
     if mode == "image-writer" then
         if #providers == 0 then providers = { "anthropic", "gemini" } end
-        finish(runWriterBench(providers, apikeys) > 0 and 1 or 0)
+        finish(runWriterBench(providers, apikeys, writer_chat) > 0 and 1 or 0)
     end
 
     if mode == "image-probe" then
