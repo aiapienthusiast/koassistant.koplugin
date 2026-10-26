@@ -642,9 +642,13 @@ end
 --- the reader set to not matched neither. Pure against the layout.
 --- @param layout table a stored layout ({ forms })
 --- @param data table parsed X-Ray, the reader's names merged (mergeUserAliases)
+--- @param judged table|nil the names (lowered) judged already, skipped here and
+---   added to: one judgement per name across the live X-Ray and the next
+---   checkpoint (ActionCache.autoCaps)
 --- @return table { [name lowered] = true }
-function XrayIndex.autoCaps(layout, data)
-    local out, judged = {}, {}
+function XrayIndex.autoCaps(layout, data, judged)
+    local out = {}
+    judged = judged or {}
     if not (layout and type(layout.forms) == "table" and type(data) == "table") then return out end
     local function judge(name, entry)
         if type(name) ~= "string" or #name <= 2 then return end

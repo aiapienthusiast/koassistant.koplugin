@@ -20685,25 +20685,29 @@ function AskGPT:openXrayCard(query, opts)
       })
       return
     end
-    -- Ahead-only entity: the full entry crosses the reading position
+    -- Ahead-only entity: the full entry crosses the reading position, so
+    -- the confirm is asked whatever the spoiler setting (an upcoming entity
+    -- exists only while the install waits: protection on, or the book kept
+    -- on Follow my position; #120). Its page offers Matching…, the names
+    -- screen's choices for an entry the browser cannot hold yet.
     local function reveal()
-      XrayCard.showFullDetail(h)
-    end
-    local f2 = self_ref.settings:readSetting("features") or {}
-    local ds = self_ref:_openBookDS()
-    local protected = ds and require("koassistant.books.book_settings")
-      .resolveSpoilerPosture(ds, f2).protected
-    if protected then
-      local ConfirmBox = require("ui/widget/confirmbox")
-      UIManager:show(ConfirmBox:new{
-        text = T(_("This entry comes from the next checkpoint (to %1%), ahead of your reading position, and may contain spoilers.\n\nReveal the full entry?"),
-          math.floor((h.ahead_progress or 0) * 100 + 0.5)),
-        ok_text = _("Reveal"),
-        ok_callback = reveal,
+      XrayCard.showFullDetail(h, {
+        add_default_buttons = true,
+        buttons_table = {{{
+          text = _("Matching…"),
+          callback = function()
+            require("koassistant.xray.xray_browser").showUpcomingNames(h, file)
+          end,
+        }}},
       })
-    else
-      reveal()
     end
+    local ConfirmBox = require("ui/widget/confirmbox")
+    UIManager:show(ConfirmBox:new{
+      text = T(_("This entry comes from the next checkpoint (to %1%), ahead of your reading position, and may contain spoilers.\n\nReveal the full entry?"),
+        math.floor((h.ahead_progress or 0) * 100 + 0.5)),
+      ok_text = _("Reveal"),
+      ok_callback = reveal,
+    })
   end
   -- Round 5: landing + style resolve per book (book three-way > global pair).
   -- B269: the card-content dials ride the same resolver.

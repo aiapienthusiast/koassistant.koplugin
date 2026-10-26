@@ -119,6 +119,14 @@ end)
 TestRunner:test("missing query never counts", function()
     assert(XrayCard.isAliasHit({ name = "X" }) == false)
 end)
+TestRunner:test("a word of the entry's own name is the same identity, not an alias hit (#120)", function()
+    assert(XrayCard.isAliasHit({ query = "Mishal", name = "Mishal Sufyan" }) == false, "a first name")
+    assert(XrayCard.isAliasHit({ query = "Lord Snow", name = "Jon Snow" }) == false, "a shared surname")
+    assert(XrayCard.isAliasHit({ query = "lady", name = "Lady" }) == false, "the name itself, any case")
+    assert(XrayCard.isAliasHit({ query = "Snow,", name = "Jon Snow" }) == false, "punctuation counts for nothing")
+    assert(XrayCard.isAliasHit({ query = "the Hound", name = "Sandor Clegane" }) == true, "a hidden identity")
+    assert(XrayCard.isAliasHit({ query = "the Imp", name = "The Others" }) == true, "a shared article counts for nothing")
+end)
 
 -- ---- resolve-order tests (S1, ref #90): real ActionCache under the
 -- docsettings shim (test_xray_auto.lua pattern) — the card requires it

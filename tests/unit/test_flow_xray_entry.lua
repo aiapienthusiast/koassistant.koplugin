@@ -420,12 +420,15 @@ local function namesHarness()
     local store, replays, auto = {}, {}, {}
     local saved_get, saved_set, saved_wiki = ActionCache.getUserAliases, ActionCache.setUserAliases,
         ActionCache.getWikiEntry
-    local saved_auto = ActionCache.autoCaps
+    local saved_auto, saved_counts = ActionCache.autoCaps, ActionCache.capsCounts
     ActionCache.getUserAliases = function() return deepcopy(store) end
     ActionCache.setUserAliases = function(_file, t) store = deepcopy(t) return true end
     ActionCache.getWikiEntry = function() return nil end
-    -- the book's usage, as the name index would report it (B533 S3)
+    -- the book's usage, as the name index would report it (B533 S3), and the
+    -- rule's counts for one name (nil = not indexed yet)
+    local counts
     ActionCache.autoCaps = function() return auto, "" end
+    ActionCache.capsCounts = function() if counts then return counts[1], counts[2] end return nil end
     local WriteBack = require("koassistant.xray.artifact_writeback")
     local saved_replay = WriteBack.replayIntoRungs
     WriteBack.replayIntoRungs = function(_file, fn) replays[#replays + 1] = fn return 0 end
@@ -452,10 +455,11 @@ local function namesHarness()
     local h = { b = b, disk = disk, replays = replays, view = view }
     function h.store() return store end
     function h.setAuto(t) auto = t end
+    function h.setCounts(p, l) counts = p and { p, l } or nil end
     function h.restore()
         ActionCache.getUserAliases, ActionCache.setUserAliases = saved_get, saved_set
         ActionCache.getWikiEntry = saved_wiki
-        ActionCache.autoCaps = saved_auto
+        ActionCache.autoCaps, ActionCache.capsCounts = saved_auto, saved_counts
         WriteBack.replayIntoRungs = saved_replay
     end
     return h
@@ -568,6 +572,36 @@ TestRunner:test("a rename keeps the AI's name matched, asks nothing, and Reset u
     if not ok then error(err, 0) end
 end)
 
+TestRunner:test("an upcoming entity's names and matching from its full entry (#120): the same rows, choices and record", function()
+    local h = namesHarness()
+    local ok, err = pcall(function()
+        local CAPS = "Capitals only (\"Lady\", not \"lady\")"
+        local hit = { source = "ahead", ahead_progress = 0.5, query = "lady", name = "Lady", category_key = "characters",
+            item = { name = "Lady", description = "A direwolf.", aliases = { "the she-wolf" } } }
+        ui.stack = {}
+        XrayBrowser.showUpcomingNames(hit, "/mock/book.epub")
+        TestRunner:assertEqual(ui:top().title, "Names of \"Lady\" (from the next checkpoint)")
+        TestRunner:assertTrue(ui:has("Lady · main name · any case (automatic)") and ui:has("the she-wolf · from the AI · matched"),
+            rowsOf())
+        TestRunner:assertTrue(not ui:has("Add a name…") and not ui:has("Reset to the AI's names"), "nothing that edits the X-Ray: " .. rowsOf())
+        ui:tap("Lady · main name · any case (automatic)")
+        TestRunner:assertTrue(ui:has("● Automatic (now any case)") and ui:has("○ " .. CAPS) and ui:has("○ " .. NOT_MATCHED), rowsOf())
+        TestRunner:assertTrue(not ui:has("Rename…") and not ui:has("Delete"), "no rename or delete on an upcoming entity: " .. rowsOf())
+        ui:tap("○ " .. CAPS)
+        TestRunner:assertEqual(h.store()["Lady"].case["lady"], "capitals", "written to the alias file, by the entry's name")
+        TestRunner:assertTrue(hit.item._caps and hit.item._caps["lady"] == true, "the entry in hand follows")
+        TestRunner:assertTrue(ui:has("● " .. CAPS) and ui:has("○ Automatic (now any case)"), "the list stays open, the mark moved: " .. rowsOf())
+        ui:tap("○ " .. NOT_MATCHED)
+        TestRunner:assertEqual(h.store()["Lady"].ignore[1], "Lady", "not matched")
+        TestRunner:assertTrue(hit.item._name_off == true)
+        ui:tap("Back")
+        TestRunner:assertTrue(ui:has("Lady · main name · not matched"), rowsOf())
+        ui:tap("Close")
+        TestRunner:assertEqual(ui:top(), nil, "closed")
+    end)
+    h.restore()
+    if not ok then error(err, 0) end
+end)
 TestRunner:test("capitals: automatic, capitals only, any case; one choice marked, the row says which, Reset clears it (S2, S3)", function()
     local h = namesHarness()
     local ok, err = pcall(function()
@@ -578,8 +612,15 @@ TestRunner:test("capitals: automatic, capitals only, any case; one choice marked
         ui:tap("The Drowned · main name · any case (automatic)")
         TestRunner:assertTrue(ui:has("● Automatic (now any case)") and ui:has("○ " .. CAPS) and ui:has("○ " .. ANY)
             and ui:has("○ " .. NOT_MATCHED), "every choice, automatic marked: " .. rowsOf())
-        TestRunner:assertTrue(ui:top().title:find("Automatic decides from how the book writes the name.", 1, true) ~= nil,
-            "the title says what automatic is: " .. tostring(ui:top().title))
+        TestRunner:assertTrue(ui:top().title:find("Automatic decides from how the book writes the name, once the book's names are indexed.", 1, true) ~= nil,
+            "the title says what automatic is, and that the index has no counts yet: " .. tostring(ui:top().title))
+        -- the index has the book: the rule's own counts (#120)
+        h.setCounts(3, 1)
+        ui:tap("Back")
+        ui:tap("The Drowned · main name · any case (automatic)")
+        TestRunner:assertTrue(ui:top().title:find("Automatic decides from how the book writes the name: its capitals in 3 of 4 counted uses.", 1, true) ~= nil,
+            "the counts: " .. tostring(ui:top().title))
+        h.setCounts(nil)
         ui:tap("○ " .. CAPS)
         TestRunner:assertEqual(h.store()["The Drowned"].case["the drowned"], "capitals", "written to the alias file")
         TestRunner:assertTrue(ui:has("● " .. CAPS) and ui:has("○ Automatic (now any case)"),

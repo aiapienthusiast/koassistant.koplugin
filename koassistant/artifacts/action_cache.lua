@@ -1357,12 +1357,43 @@ local function fileKey(path)
     return attr and (tostring(attr.modification) .. ":" .. tostring(attr.size)) or "-"
 end
 
+--- The stored layout of the name index this book is judged on: among the
+--- layouts of the book file as it is now (XrayIndex.currentLayouts, which
+--- read the same text) the one holding the most forms. nil until the index
+--- has the book.
+local function bestLayout(document_path)
+    local XrayIndex = require("koassistant.xray.xray_index")
+    local best, most
+    for _idx, layout in ipairs(XrayIndex.currentLayouts(document_path)) do
+        local n = 0
+        for _f in pairs(type(layout.forms) == "table" and layout.forms or {}) do n = n + 1 end
+        if not most or n > most then best, most = layout, n end
+    end
+    return best
+end
+
+--- The book's live X-Ray parsed with the reader's overlay merged, or nil
+--- (none, prose, an error).
+local function parsedLive(document_path)
+    local entry = ActionCache.getXrayCache(document_path)
+    if not (entry and type(entry.result) == "string" and entry.source_mode ~= "ai_knowledge") then return nil end
+    local XrayParser = require("koassistant.xray.xray_parser")
+    local data = XrayParser.isJSON(entry.result) and XrayParser.parse(entry.result)
+    if type(data) ~= "table" or data.error then return nil end
+    XrayParser.mergeUserAliases(data, ActionCache.getUserAliases(document_path))
+    return data, entry
+end
+
 --- The names this book's own usage sets to capitals only (B533 S3, the
 --- automatic default; XrayIndex.autoCaps over the stored layout holding the
 --- most forms among those of the book file as it is now, which read the same
---- text: XrayIndex.currentLayouts), memoized on the name index, the X-Ray,
---- the reader's overlay and the book file. Empty until the index has the
---- book: every name then matches any case, as before.
+--- text: bestLayout), memoized on the name index, the X-Ray, the ladder, the
+--- reader's overlay and the book file. Empty until the index has the
+--- book: every name then matches any case, as before. The upcoming entities
+--- are judged too (#120: an entry known from the next checkpoint only, marked
+--- and matched while the install waits, "Lady" matching "my lady"): the
+--- newest built checkpoint ahead of the live X-Ray, which holds every earlier
+--- checkpoint's names, parsed once, the names judged already skipped.
 --- @param document_path string
 --- @param parsed table|nil the book's X-Ray already parsed with the reader's
 ---   overlay merged (parsedXrayFor's), read instead of parsing it again
@@ -1372,25 +1403,45 @@ function ActionCache.autoCaps(document_path, parsed)
     local XrayIndex = require("koassistant.xray.xray_index")
     local key = fileKey(XrayIndex.path(document_path)) .. "|" .. fileKey(ActionCache.getPath(document_path))
         .. "|" .. fileKey(ActionCache.getUserAliasesPath(document_path)) .. "|" .. fileKey(document_path)
+        .. "|" .. fileKey(ActionCache.getXrayLadderPath(document_path))
     local memo = auto_caps_memo[document_path]
     if memo and memo.key == key then return memo.set, memo.sig end
     local set = {}
-    local best, most
-    for _idx, layout in ipairs(XrayIndex.currentLayouts(document_path)) do
-        local n = 0
-        for _f in pairs(type(layout.forms) == "table" and layout.forms or {}) do n = n + 1 end
-        if not most or n > most then best, most = layout, n end
-    end
-    if best and type(parsed) == "table" then
-        set = XrayIndex.autoCaps(best, parsed)
-    elseif best then
-        local entry = ActionCache.getXrayCache(document_path)
-        if entry and type(entry.result) == "string" and entry.source_mode ~= "ai_knowledge" then
+    local best = bestLayout(document_path)
+    if best then
+        local judged = {}
+        local function judge(data)
+            for n in pairs(XrayIndex.autoCaps(best, data, judged)) do set[n] = true end
+        end
+        local live_p = 0
+        if type(parsed) == "table" then
+            judge(parsed)
+            local entry = ActionCache.getXrayCache(document_path)
+            live_p = entry and (entry.full_document and 1.0 or tonumber(entry.progress_decimal)) or 0
+        else
+            local data, entry = parsedLive(document_path)
+            if data then
+                judge(data)
+                live_p = entry.full_document and 1.0 or tonumber(entry.progress_decimal) or 0
+            end
+        end
+        -- the newest built checkpoint past the live X-Ray (the one the peek
+        -- reads lies between them and its names are in it)
+        local XrayAuto = require("koassistant.xray.xray_auto")
+        local newest, newest_p
+        for _idx, rung in ipairs(ActionCache.getXrayLadder(document_path)) do
+            local p = rung.full_document and 1.0 or tonumber(rung.progress_decimal)
+            if p and type(rung.result) == "string" and not rung.intro
+                    and p > live_p + XrayAuto.LADDER_TOLERANCE and (not newest_p or p > newest_p) then
+                newest, newest_p = rung, p
+            end
+        end
+        if newest then
             local XrayParser = require("koassistant.xray.xray_parser")
-            local data = XrayParser.isJSON(entry.result) and XrayParser.parse(entry.result)
+            local data = XrayParser.isJSON(newest.result) and XrayParser.parse(newest.result)
             if type(data) == "table" and not data.error then
                 XrayParser.mergeUserAliases(data, ActionCache.getUserAliases(document_path))
-                set = XrayIndex.autoCaps(best, data)
+                judge(data)
             end
         end
     end
@@ -1400,6 +1451,31 @@ function ActionCache.autoCaps(document_path, parsed)
     local sig = table.concat(names, "\0")
     auto_caps_memo[document_path] = { key = key, set = set, sig = sig }
     return set, sig
+end
+
+--- How the book writes one name, for the names screen (#120): P, the
+--- occurrences mid-sentence with every capital the name requires, and L,
+--- those with none of them (XrayIndex.capsEvidence, the automatic rule's
+--- own counts). nil until the index has the book and this name's forms.
+--- @param document_path string
+--- @param name string the name as written
+--- @param data table|nil the parsed X-Ray the entry belongs to (its other
+---   entries' longer names leave the count, as the rule does)
+--- @param entry table|nil the entry
+--- @return number|nil P, number L
+function ActionCache.capsCounts(document_path, name, data, entry)
+    if not (document_path and type(name) == "string" and name ~= "") then return nil end
+    local XrayIndex = require("koassistant.xray.xray_index")
+    local XrayParser = require("koassistant.xray.xray_parser")
+    local best = bestLayout(document_path)
+    if not best then return nil end
+    local set = XrayParser.matchTermSet({ name = name, _caps = { [name:lower()] = true } })
+    if not (set and set.caps) then return nil end
+    for _idx, f in ipairs(set.all) do
+        if best.forms[f] == nil then return nil end
+    end
+    local handles = type(data) == "table" and entry and XrayParser.containingMatchHandles(data, entry) or nil
+    return XrayIndex.capsEvidence(best, set, handles)
 end
 
 --- The reader's overlay as the matchers read it (B533 S3): the stored records

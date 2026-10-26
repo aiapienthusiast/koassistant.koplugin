@@ -206,12 +206,31 @@ end
 
 --- True when the tapped handle differs from the entry's own name (the hit
 --- came through an alias). Case- and whitespace-insensitive. Pure.
+--- Whether the tapped handle hides the entry's identity (B269): it shares no
+--- word with the entry's own name. "Mishal" tapped on "Mishal Sufyan" is the
+--- same person named in part, so the card may add its first sentence; "the
+--- stranger" tapped on "Jaqen H'ghar" would name the identity the next
+--- checkpoint learned, so the card skips to the full entry behind its
+--- confirm (#120: the whole-name comparison took every first name for a
+--- hidden identity). A leading "the" and punctuation count for nothing.
 function XrayCard.isAliasHit(hit)
     local q = type(hit.query) == "string" and hit.query or ""
     local n = type(hit.name) == "string" and hit.name or ""
     if q == "" or n == "" then return false end
-    local function fold(x) return x:lower():gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "") end
-    return fold(q) ~= fold(n)
+    local XrayParser = require("koassistant.xray.xray_parser")
+    local function words(x)
+        local set = {}
+        for w in XrayParser.matchNormalize(x):gmatch("%S+") do
+            local bare = w:gsub("^%p+", ""):gsub("%p+$", "")
+            if bare ~= "" and bare ~= "the" then set[bare] = true end
+        end
+        return set
+    end
+    local own = words(n)
+    for w in pairs(words(q)) do
+        if own[w] then return false end
+    end
+    return true
 end
 
 --- B269 STAGED card content, one place for both styles.
@@ -612,7 +631,9 @@ end
 --- connections/significance per category) plus the cross-book background
 --- lines, headed by checkpoint provenance. Still a TextViewer host — the
 --- browser stack renders the LIVE artifact and cannot hold this entity yet
---- (browser-hosted ahead view = recorded follow-up).
+--- (browser-hosted ahead view = recorded follow-up). fd_opts.buttons_table
+--- = rows before the viewer's own (Find, top, bottom, Close) when
+--- fd_opts.add_default_buttons is set (the router's Matching… row, #120).
 function XrayCard.showFullDetail(hit, fd_opts)
     local TextViewer = require("ui/widget/textviewer")
     local XrayParser = require("koassistant.xray.xray_parser")
@@ -650,6 +671,7 @@ function XrayCard.showFullDetail(hit, fd_opts)
         text = table.concat(parts, "\n\n"),
         justified = false,
         buttons_table = fd_opts and fd_opts.buttons_table or nil,
+        add_default_buttons = fd_opts and fd_opts.add_default_buttons or nil,
     }
     UIManager:show(viewer)
     return viewer

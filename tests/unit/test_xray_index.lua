@@ -839,6 +839,53 @@ TestRunner:test("automatic capitals read only the book file as it is now (replac
     XrayIndex.stop(true)
     if not ok then error(err, 0) end
 end)
+TestRunner:test("automatic capitals judge the upcoming entities too: the newest built checkpoint past the live X-Ray (#120)", function()
+    local ds = package.loaded["docsettings"]
+    local saved_dir = ds.getSidecarDir
+    local dir = SIDECAR .. "/upcoming"
+    os.execute('mkdir -p "' .. dir .. '"')
+    ds.getSidecarDir = function() return dir end
+    local ok, err = pcall(function()
+        XrayIndex.stop(true)
+        local ActionCache = require("koassistant.artifacts.action_cache")
+        local book = dir .. "/book.epub"
+        local f = io.open(book, "wb")
+        f:write(string.rep("x", 8123))
+        f:close()
+        -- the Warden is known from the next checkpoint only; the book writes
+        -- it four times with its capital mid-sentence and once without
+        local paras = {
+            "Out on the water the Drowned lit fires past the drowned trees.",
+            "Tamsin said the Drowned had come back. The Drowned were singing.",
+            "At the gate the Warden waited; a warden of the marsh is no lord. Then the Warden spoke, and the Warden left, and the Warden slept.",
+        }
+        local doc = newMockDoc(paras, { { 1, 0 }, { 2, 0 }, { 3, 0 } })
+        local live = { type = "fiction", characters = { { name = "The Drowned" }, { name = "Tamsin" } } }
+        local rung = { type = "fiction", characters = { { name = "The Drowned" }, { name = "Tamsin" }, { name = "Warden" } } }
+        local forms = {}
+        for _idx, item in ipairs(rung.characters) do
+            for _f, fm in ipairs(XrayParser.matchTermSet(item).all) do forms[#forms + 1] = fm end
+        end
+        XrayIndex.store(book, "H1:3:8123", XrayIndex.scan(doc, forms, 1, 3))
+        TestRunner:eq(ActionCache.autoCaps(book, live)["warden"], nil, "no checkpoint built: the live names alone")
+        ActionCache.pushXrayLadderRung(book, { result = XrayParser.serialize(rung), progress_decimal = 0.6, timestamp = 1700000000 })
+        local auto = ActionCache.autoCaps(book, live)
+        TestRunner:ok(auto["the drowned"], "the live name as before")
+        TestRunner:ok(auto["warden"], "the upcoming entity's name judged from the checkpoint")
+        -- an introduction is no checkpoint
+        ActionCache.clearXrayLadder(book)
+        ActionCache.pushXrayLadderRung(book, { result = XrayParser.serialize(rung), progress_decimal = 0, intro = true, timestamp = 1700000001 })
+        TestRunner:eq(ActionCache.autoCaps(book, live)["warden"], nil, "an intro rung is skipped")
+        ActionCache.clearXrayLadder(book)
+        -- the rule's counts, as the names screen shows them
+        local p, l = ActionCache.capsCounts(book, "Warden", rung, rung.characters[3])
+        TestRunner:eq(tostring(p) .. "/" .. tostring(l), "4/1", "capsCounts: the automatic rule's own numbers")
+        TestRunner:eq(ActionCache.capsCounts(book, "Nobody", rung, nil), nil, "not indexed: no counts")
+    end)
+    ds.getSidecarDir = saved_dir
+    XrayIndex.stop(true)
+    if not ok then error(err, 0) end
+end)
 TestRunner:test("autoCaps: the names this book writes both ways switch to capitals only", function()
     local auto = XrayIndex.autoCaps(AUTO_LAYOUT, AUTO_DATA)
     local names = {}
