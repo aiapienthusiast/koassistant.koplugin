@@ -56,10 +56,16 @@ local function loadUI()
     Languages = require("koassistant.core.languages")
 end
 
--- Session flag to prevent multiple auto-checks per session
--- (NetworkMgr:runWhenOnline can fire multiple times if network state changes)
+-- Session state of the automatic check. This module is loaded once per KOReader
+-- run and shared by the file browser's and the reader's plugin instances, each
+-- of whose init schedules a check: DONE after a parsed answer (a failed check is
+-- retried), INFLIGHT while one runs, and the time of the last attempt, success
+-- or failure, so a broken network (Wi-Fi on, GitHub's name unresolvable) costs
+-- one fork per AUTO_CHECK_COOLDOWN, not one per file browser / reader switch (#121).
 local _session_auto_check_done = false
 local _session_auto_check_inflight = false
+local _session_auto_last_attempt = nil
+local AUTO_CHECK_COOLDOWN = 30 * 60 -- seconds between automatic attempts
 
 -- CSS for markdown rendering (matches chatgptviewer style)
 local RELEASE_NOTES_CSS = [[
@@ -1950,17 +1956,44 @@ performUpdate = function(update_info)
     end)
 end
 
-function UpdateChecker.checkForUpdates(auto, include_prereleases)
-    -- Prevent duplicate/concurrent auto-checks within the same session. The DONE
-    -- flag is only set on a successful check (see the fetch callback) so a failed
-    -- check gets retried on the next plugin init; INFLIGHT guards concurrency
-    -- (FileManager and ReaderUI both init and may schedule a check).
-    if auto and (_session_auto_check_done or _session_auto_check_inflight) then
-        logger.dbg("UpdateChecker: skipping duplicate auto-check this session")
-        return
+--- Why an automatic check is skipped right now: "done" (one succeeded this
+--- session), "inflight" (one is running), "cooldown" (one was attempted less
+--- than AUTO_CHECK_COOLDOWN ago, whatever its outcome), or nil when it may run.
+--- Pure over the session state; manual checks never ask.
+function UpdateChecker.autoCheckSkipReason(now)
+    if _session_auto_check_done then return "done" end
+    if _session_auto_check_inflight then return "inflight" end
+    if _session_auto_last_attempt
+        and (now or os.time()) - _session_auto_last_attempt < AUTO_CHECK_COOLDOWN then
+        return "cooldown"
     end
+    return nil
+end
+
+--- Test seam: set the session state (a field left out resets).
+function UpdateChecker._setAutoState(state)
+    state = state or {}
+    _session_auto_check_done = state.done or false
+    _session_auto_check_inflight = state.inflight or false
+    _session_auto_last_attempt = state.last_attempt
+end
+
+UpdateChecker.AUTO_CHECK_COOLDOWN = AUTO_CHECK_COOLDOWN
+
+function UpdateChecker.checkForUpdates(auto, include_prereleases)
+    -- One automatic check per session once one succeeded (the DONE flag is set
+    -- only by a parsed answer, see the fetch callback, so a failed check is
+    -- retried), never two at once (INFLIGHT: FileManager and ReaderUI both init
+    -- and may schedule a check), and no retry within the cooldown of the last
+    -- attempt (#121: a persistent failure used to fork again at every switch).
     if auto then
+        local skip = UpdateChecker.autoCheckSkipReason()
+        if skip then
+            logger.dbg("UpdateChecker: skipping auto-check this session:", skip)
+            return
+        end
         _session_auto_check_inflight = true
+        _session_auto_last_attempt = os.time()
     end
 
     -- Default to including prereleases since we're in alpha/beta

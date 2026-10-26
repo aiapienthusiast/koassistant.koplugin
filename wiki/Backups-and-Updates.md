@@ -61,11 +61,11 @@ Keys entered in Settings are stored elsewhere and survive a clean install; only 
 
 By default KOAssistant checks for updates at most once a day, about 20 seconds after KOReader starts and only when Wi-Fi is on, deferred so it never competes with opening your book.
 
-1. About 20 seconds after start, the check runs silently in a subprocess with an 8-second timeout; a check that already succeeded within the last 24 hours is skipped before any network work; with Wi-Fi off it is skipped entirely.
+1. About 20 seconds after start, the check runs silently in a subprocess with an 8-second timeout; a check that already succeeded within the last 24 hours is skipped before any network work; with Wi-Fi off it is skipped entirely. Opening or closing a book starts the plugin again and can schedule another check, under the same rules.
 2. If a new version exists, a dialog shows the current and the latest version, the full release notes with clickable links, **Update Now** (hidden for git checkouts and when the release has no zip), **Visit Release Page**, **Translate** (shown when you have a non-English interaction language) and **Later**.
 3. If a response is streaming when the update is found, the dialog waits until streaming ends.
 
-The check compares your installed version with GitHub's releases, pre-releases included, by semantic version (it strips `v` and `v.` prefixes and picks the highest version, not the newest entry). A failed check is retried at the next start; the timestamp is recorded only on success.
+The check compares your installed version with GitHub's releases, pre-releases included, by semantic version (it strips `v` and `v.` prefixes and picks the highest version, not the newest entry). A failed check (Wi-Fi on, but GitHub unreachable) is tried again at the next KOReader start, or when you next open or close a book once 30 minutes have passed, never sooner; the 24-hour timestamp is recorded only on success, and a manual check is never held back.
 
 To turn the automatic check off: **Settings → Auto-check for updates on startup** (near the bottom of the KOAssistant menu, beside About KOAssistant and Check for Updates). Or set `auto_check_updates = false` in the `features` table of `configuration.lua` and restart KOReader; a choice made in the menu wins over the file ([Advanced Configuration and Development](Advanced-Configuration-and-Development#configurationlua)).
 

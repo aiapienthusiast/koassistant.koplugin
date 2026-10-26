@@ -306,6 +306,7 @@ The 104 files, with what each one pins:
 - `test_web_search.lua` - web-search request building, response parsing, streaming detection
 - `test_web_tools.lua` - the SearXNG / Tavily backend module (built but not wired into the plugin yet): request and parse, null sentinels, result formatting
 - `test_update_versions.lua` - update checker version order: SemVer pre-release identifiers (rc.11 > rc.9), one-to-three-part tags, a release beats its rc
+- `test_update_cooldown.lua` - the automatic update check's session gate: one check after a success, never two at once, a failed attempt tried again only after the 30-minute cooldown, and the gate sits before the fork (#121)
 - `test_user_input_placeholder.lua` - `{user_input}` puts the typed text in the prompt in place of the tail block
 - `test_xai_responses.lua` - the xAI Responses routing and request builder
 - `test_xray_auto.lua` - the background auto-update gate matrix and the checkpoint ring

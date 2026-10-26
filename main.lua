@@ -259,6 +259,8 @@ function AskGPT:init()
     -- 24h min-interval (timestamp written by the checker on SUCCESS only): skips the
     -- fork + GitHub call + JSON parse — and even loading the checker module — on most
     -- starts. Cheap G_reader_settings read; registered in the storage registry.
+    -- A failed attempt is retried no sooner than the checker's 30-minute cooldown
+    -- (UpdateChecker.autoCheckSkipReason; #121).
     local last_check = G_reader_settings:readSetting("koassistant_last_update_check")
     if type(last_check) == "number" and os.time() - last_check < 24 * 60 * 60 then
       logger.dbg("KOAssistant: Skipping auto update check (checked within 24h)")
