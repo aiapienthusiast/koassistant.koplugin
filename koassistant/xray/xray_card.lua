@@ -204,35 +204,6 @@ local function alsoLine(hit)
     return T(_("Also in the X-Rays of: %1"), table.concat(names, ", "))
 end
 
---- True when the tapped handle differs from the entry's own name (the hit
---- came through an alias). Case- and whitespace-insensitive. Pure.
---- Whether the tapped handle hides the entry's identity (B269): it shares no
---- word with the entry's own name. "Tamsin" tapped on "Tamsin Vell" is the
---- same person named in part, so the card may add its first sentence; "the
---- stranger" tapped on "Osric Dunmere" would name the identity the next
---- checkpoint learned, so the card skips to the full entry behind its
---- confirm (#120: the whole-name comparison took every first name for a
---- hidden identity). A leading "the" and punctuation count for nothing.
-function XrayCard.isAliasHit(hit)
-    local q = type(hit.query) == "string" and hit.query or ""
-    local n = type(hit.name) == "string" and hit.name or ""
-    if q == "" or n == "" then return false end
-    local XrayParser = require("koassistant.xray.xray_parser")
-    local function words(x)
-        local set = {}
-        for w in XrayParser.matchNormalize(x):gmatch("%S+") do
-            local bare = w:gsub("^%p+", ""):gsub("%p+$", "")
-            if bare ~= "" and bare ~= "the" then set[bare] = true end
-        end
-        return set
-    end
-    local own = words(n)
-    for w in pairs(words(q)) do
-        if own[w] then return false end
-    end
-    return true
-end
-
 --- B269 STAGED card content, one place for both styles.
 --- Ahead (upcoming) hits show the TAPPED handle as the name line (the
 --- entry's primary name may itself be the reveal — an alias folded onto the
@@ -241,22 +212,18 @@ end
 --- warning and a tap hint; stage "sentence" = role + first sentence; the
 --- next tap is the full entry (router-owned, behind its confirm). Installed
 --- hits start at the sentence stage (opts.card_length "full" = whole
---- description, opt-in). An ahead hit reached through an ALIAS (the tapped
---- handle is not the entry's own name — "A is actually B" folded in the
---- next checkpoint) never gets the sentence stage: the sentence names B,
---- so the next tap is the full entry behind its confirm (2026-08-25, ref #90).
+--- description, opt-in). Every ahead hit stages the same way, a nickname
+--- included: the sentence names the entry, so for a nickname it says whose
+--- it is, and the full entry stays behind its confirm (the rule that skipped
+--- the sentence stage for a tapped handle unlike the entry's name, 2026-08-25,
+--- was dropped 2026-10-26: one rule the reader can predict, #120).
 --- @return table { name, kind, line, body, hint, next_stage }
 local function cardContent(hit, opts)
     opts = opts or {}
     if hit.source == "ahead" then
         local name = (type(hit.query) == "string" and hit.query ~= "") and hit.query or hit.name or ""
-        local alias_hit = XrayCard.isAliasHit(hit)
-        local stage = opts.stage or ((opts.ahead_card == "entry" and not alias_hit) and "sentence" or "name")
+        local stage = opts.stage or (opts.ahead_card == "entry" and "sentence" or "name")
         if stage == "name" then
-            if alias_hit then
-                return { name = name, kind = kindLabel(hit, true), line = aheadLine(hit), warn = true,
-                    body = "", hint = _("Tap for the full entry") }
-            end
             return { name = name, kind = kindLabel(hit, true), line = aheadLine(hit), warn = true,
                 body = "", hint = _("Tap to show a one-line description"), next_stage = "sentence" }
         end

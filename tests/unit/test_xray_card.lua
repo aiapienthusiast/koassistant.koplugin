@@ -109,23 +109,33 @@ TestRunner:test("cap never splits a multibyte character", function()
     assert(#body % 3 == 0, "whole 3-byte characters only")
 end)
 
-TestRunner:suite("isAliasHit")
-TestRunner:test("same handle is not an alias hit", function()
-    assert(XrayCard.isAliasHit({ query = "The  Black", name = "the black" }) == false)
+TestRunner:suite("staged ahead card (B269, #120)")
+local function aheadHit(query)
+    return { source = "ahead", query = query, name = "Osric Dunmere", category_key = "characters",
+        category_label = "Character", ahead_progress = 0.5,
+        item = { name = "Osric Dunmere", role = "Supporting",
+            description = "A ferryman of the marsh. He keeps a secret." } }
+end
+TestRunner:test("the name stage shows the tapped word and offers the one line, a nickname included", function()
+    for _idx, q in ipairs({ "Osric", "the Ferryman" }) do
+        local c = XrayCard._cardContent(aheadHit(q))
+        TestRunner:eq(c.name, q, "the tapped word is the name line")
+        TestRunner:eq(c.body, "", "no description yet")
+        TestRunner:eq(c.next_stage, "sentence", "the one line is one tap away for " .. q)
+        TestRunner:eq(c.kind, "Character", "the category alone, no role")
+        assert(c.warn and c.line and c.line:find("50%", 1, true), "the next-checkpoint warning")
+    end
 end)
-TestRunner:test("different handle is an alias hit", function()
-    assert(XrayCard.isAliasHit({ query = "the black", name = "Jackson, John" }) == true)
+TestRunner:test("the sentence stage adds the role and the first sentence; the next tap is the full entry", function()
+    local c = XrayCard._cardContent(aheadHit("the Ferryman"), { stage = "sentence" })
+    TestRunner:eq(c.body, "A ferryman of the marsh.", "the first sentence")
+    TestRunner:eq(c.kind, "Character (Supporting)", "the role shows at the sentence stage")
+    TestRunner:eq(c.next_stage, nil, "the next tap is the full entry")
+    TestRunner:eq(c.hint, "Tap for the full entry", "the hint says so")
 end)
-TestRunner:test("missing query never counts", function()
-    assert(XrayCard.isAliasHit({ name = "X" }) == false)
-end)
-TestRunner:test("a word of the entry's own name is the same identity, not an alias hit (#120)", function()
-    assert(XrayCard.isAliasHit({ query = "Tamsin", name = "Tamsin Vell" }) == false, "a first name")
-    assert(XrayCard.isAliasHit({ query = "Lord Vell", name = "Corwin Vell" }) == false, "a shared surname")
-    assert(XrayCard.isAliasHit({ query = "lady", name = "Lady" }) == false, "the name itself, any case")
-    assert(XrayCard.isAliasHit({ query = "Vell,", name = "Corwin Vell" }) == false, "punctuation counts for nothing")
-    assert(XrayCard.isAliasHit({ query = "the Ferryman", name = "Osric Dunmere" }) == true, "a hidden identity")
-    assert(XrayCard.isAliasHit({ query = "the Pale", name = "The Drowned" }) == true, "a shared article counts for nothing")
+TestRunner:test("Upcoming Entity Cards set to the first sentence start there, a nickname included", function()
+    local c = XrayCard._cardContent(aheadHit("the Ferryman"), { ahead_card = "entry" })
+    TestRunner:eq(c.body, "A ferryman of the marsh.", "starts at the sentence stage")
 end)
 
 -- ---- resolve-order tests (S1, ref #90): real ActionCache under the
