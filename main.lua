@@ -20688,17 +20688,17 @@ function AskGPT:openXrayCard(query, opts)
     -- Ahead-only entity: the full entry crosses the reading position, so
     -- the confirm is asked whatever the spoiler setting (an upcoming entity
     -- exists only while the install waits: protection on, or the book kept
-    -- on Follow my position; #120). Its page offers Matching…, the names
-    -- screen's choices for an entry the browser cannot hold yet.
+    -- on Follow my position; #120). The box and its page both offer
+    -- Matching…, the names screen's choices for an entry the browser cannot
+    -- hold yet: from the box a wrong underline is switched off without
+    -- reading the entry (ConfirmBox closes itself after an extra row's tap).
+    local function matching()
+      require("koassistant.xray.xray_browser").showUpcomingNames(h, file)
+    end
     local function reveal()
       XrayCard.showFullDetail(h, {
         add_default_buttons = true,
-        buttons_table = {{{
-          text = _("Matching…"),
-          callback = function()
-            require("koassistant.xray.xray_browser").showUpcomingNames(h, file)
-          end,
-        }}},
+        buttons_table = {{{ text = _("Matching…"), callback = matching }}},
       })
     end
     local ConfirmBox = require("ui/widget/confirmbox")
@@ -20707,6 +20707,7 @@ function AskGPT:openXrayCard(query, opts)
         math.floor((h.ahead_progress or 0) * 100 + 0.5)),
       ok_text = _("Reveal"),
       ok_callback = reveal,
+      other_buttons = {{{ text = _("Matching…"), callback = matching }}},
     })
   end
   -- Round 5: landing + style resolve per book (book three-way > global pair).

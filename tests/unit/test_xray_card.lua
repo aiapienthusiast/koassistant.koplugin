@@ -138,6 +138,21 @@ TestRunner:test("Upcoming Entity Cards set to the first sentence start there, a 
     TestRunner:eq(c.body, "A ferryman of the marsh.", "starts at the sentence stage")
 end)
 
+TestRunner:test("the reveal box and the full entry both open the names list (structural, #120)", function()
+    local here = debug.getinfo(1, "S").source:match("@?(.*)")
+    local root = here:gsub("/?tests/unit/[^/]+$", "")
+    if root == "" then root = "." end
+    local f = assert(io.open(root .. "/main.lua", "r"))
+    local src = f:read("*all"); f:close()
+    local at = assert(src:find('ok_text = _("Reveal")', 1, true), "the ahead confirm")
+    local block = src:sub(math.max(1, at - 1200), at + 400)
+    assert(block:find('other_buttons = {{{ text = _("Matching…"), callback = matching }}}', 1, true),
+        "the box's Matching… row")
+    assert(block:find('buttons_table = {{{ text = _("Matching…"), callback = matching }}}', 1, true),
+        "the full entry's Matching… row")
+    assert(block:find("showUpcomingNames(h, file)", 1, true), "both open the names list")
+end)
+
 -- ---- resolve-order tests (S1, ref #90): real ActionCache under the
 -- docsettings shim (test_xray_auto.lua pattern) — the card requires it
 -- lazily inside resolve, so the shim installs before the first call.
