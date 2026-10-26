@@ -207,9 +207,9 @@ end
 --- True when the tapped handle differs from the entry's own name (the hit
 --- came through an alias). Case- and whitespace-insensitive. Pure.
 --- Whether the tapped handle hides the entry's identity (B269): it shares no
---- word with the entry's own name. "Mishal" tapped on "Mishal Sufyan" is the
+--- word with the entry's own name. "Tamsin" tapped on "Tamsin Vell" is the
 --- same person named in part, so the card may add its first sentence; "the
---- stranger" tapped on "Jaqen H'ghar" would name the identity the next
+--- stranger" tapped on "Osric Dunmere" would name the identity the next
 --- checkpoint learned, so the card skips to the full entry behind its
 --- confirm (#120: the whole-name comparison took every first name for a
 --- hidden identity). A leading "the" and punctuation count for nothing.
